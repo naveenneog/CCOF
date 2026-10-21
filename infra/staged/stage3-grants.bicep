@@ -1,4 +1,4 @@
-// Stage 4: runtime access grants for the Stage 1 identities, and nothing else.
+// Stage 3: runtime access grants for the Stage 1 identities, and nothing else.
 //   Azure RBAC: each app on its own deployment storage (Storage Blob Data Owner) and Application
 //   Insights (Monitoring Metrics Publisher); reconciler and admin on the workspace (Log Analytics
 //   Reader); the APIM identity on each Foundry account (Cognitive Services User, cross-scope).
@@ -84,7 +84,7 @@ resource workspaceReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 }]
 
 module foundryRoles '../quickstart/modules/foundry-role.bicep' = [for b in backends: if (!empty(apimPrincipalId) && (b.?assignCognitiveServicesUser ?? true)) {
-  name: '${names.deploymentPrefix}-stage4-foundry-${b.id}'
+  name: '${names.deploymentPrefix}-stage3-foundry-${b.id}'
   scope: resourceGroup(b.subscriptionId, b.resourceGroup)
   params: { accountName: b.accountName, principalId: apimPrincipalId, apimResourceId: apimResourceId }
 }]

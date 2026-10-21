@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-10-21 — Network is the last setup stage
+
+- New stage order: 0 checks, 1 resources, 2 schema, 3 grants, 4 Entra, 5 configuration,
+  **6 network**, 7 code and data, 8 acceptance. As in the manual deployment, the customer usually
+  builds the network; stages 2-5 do not need it, and Stage 7 requires it.
+- `network.mode: verify` is the default: Stage 6 changes nothing and runs
+  `scripts/manual/Test-NetworkConfiguration.ps1` (read-only) against the Stage 1 resources; a FAIL
+  row stops it. `existing` and `create` (lab) remain opt-in.
+- Templates and ARM deployment names follow the numbers: `stage2-schema`, `stage3-grants`,
+  `stage5-config` (+ `stage5-api-telemetry`), `stage6-network`. An existing `state.json` moves to
+  the new keys on first read (backup `state.layout1.json`).
+- Fixes found on the way: the network check never reached Azure (`& az` recursed into its own
+  `Az` function), failed on unrelated same-named DNS zones, and changed the CLI default
+  subscription (`az account set`); the schema stage could not be rerun after grants; Stage 7 could
+  not be rerun after a successful snapshot ([B-16 to B-20](../BUGS-FOUND.md)).
+- Portal walkthrough steps and screenshots renumbered to match.
+
 ## 2026-10-21 — Portal walkthrough on both Standard v2 deployments
 
 - Playwright walked the guide's 20 Portal steps on the signed-in FDPO/SASET and Contoso Portals:

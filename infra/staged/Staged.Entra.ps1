@@ -55,7 +55,7 @@ function Set-StgScope { param($App, [string]$Value, [string]$Type, [string]$Text
     return @{ id = $id; scopes = @($others) + @(@{ id = $id; value = $Value; type = $Type; isEnabled = $true; adminConsentDisplayName = $Text; adminConsentDescription = $Text; userConsentDisplayName = $Text; userConsentDescription = $Text }) }
 }
 
-function Invoke-Stage5 {
+function Invoke-Stage4 {
     param($Cfg, [switch]$Apply)
     $e = $Cfg.entra; $s1 = Get-StgStage $Cfg 1
     $me = Get-StgGraph 'me?$select=id'
@@ -135,6 +135,6 @@ function Invoke-Stage5 {
     $result = @{ registrations = $registrations; gatewayIdentifierUri = "api://$($gw.appId)"; gatewayServicePrincipalId = $gwSp.id
         resolverServicePrincipalId = $resSp.id; admin = $admin; groups = $groups; azureCliClientAllowed = [bool]$e.allowAzureCliClient
         graphApplicationPermission = 'not granted (sync.mode delegated-snapshot)' }
-    $null = Write-StgEvidence 'stage5.verify.json' $result
+    $null = Write-StgEvidence 'stage4.verify.json' $result
     return $result
 }

@@ -11,7 +11,18 @@ function Read-StgConfig {
     foreach ($k in 'tenantId', 'subscriptionId') { if ($c[$k] -notmatch $script:Guid) { $problems.Add("$k must be a GUID") } }
     if ($c.resourceGroup -notmatch '^[A-Za-z0-9_.-]{1,90}$') { $problems.Add('resourceGroup is invalid') }
     if ($c.stage1.prefix -cnotmatch '^[a-z0-9]{3,8}$') { $problems.Add('stage1.prefix must be 3-8 lowercase letters or digits') }
-    if ($c.network.mode -notin 'create', 'existing') { $problems.Add('network.mode must be create or existing') }
+    if ($c.network.mode -notin 'verify', 'existing', 'create') { $problems.Add('network.mode must be verify (customer-built, checked only), existing or create') }
+    $subnetPattern = '^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$'
+    if ($c.network.mode -eq 'verify') {
+        # The customer builds the network; Stage 6 only reads it. The checks need the subnets, all in one VNet.
+        $subnets = @($c.network.existing.privateEndpointSubnetId, $c.network.existing.functionsSubnetId)
+        if ($c.stage1.approveNewPublicApimBootstrap -and $c.stage1.apimSku -in 'StandardV2', 'PremiumV2') { $subnets += $c.network.existing.apimSubnetId }
+        if (@($subnets | Where-Object { -not $_ -or $_ -notmatch $subnetPattern }).Count) {
+            $problems.Add('network.mode verify requires network.existing.privateEndpointSubnetId, functionsSubnetId and (for a new Standard v2/Premium v2 APIM) apimSubnetId as full subnet resource IDs')
+        } elseif (@($subnets | ForEach-Object { ($_ -replace '/subnets/[^/]+$', '').ToLowerInvariant() } | Select-Object -Unique).Count -ne 1) {
+            $problems.Add('network.mode verify requires every network.existing subnet to be in the same VNet')
+        }
+    }
     if ($c.network.mode -eq 'existing') {
         foreach ($id in @($c.network.existing.privateEndpointSubnetId, $c.network.existing.functionsSubnetId)) {
             if (-not $id -or $id -notmatch '^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$') {
@@ -39,9 +50,9 @@ function Read-StgConfig {
     }
     if (-not $c.cosmos.databaseName) { $problems.Add('cosmos.databaseName is required') }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
-    foreach ($b in @($c.backends | Where-Object privateEndpoint)) {
+    foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {
         if ($b.subscriptionId -ine $c.subscriptionId -or $b.resourceGroup -ine $c.resourceGroup) {
-            $problems.Add("backend $($b.id) requests privateEndpoint but Stage 2 currently only creates endpoints for accounts in the deployment subscription and resource group")
+            $problems.Add("backend $($b.id) requests privateEndpoint but Stage 6 creates endpoints (modes existing/create) only for accounts in the deployment subscription and resource group")
         }
     }
     foreach ($g in @($c.groups)) {
@@ -97,9 +108,34 @@ function Read-StgState { param($Cfg)
         if ($state.target -and (($state.target.tenantId -ne $t.tenantId) -or ($state.target.subscriptionId -ne $t.subscriptionId) -or ($state.target.resourceGroup -ne $t.resourceGroup))) {
             throw "state_target_mismatch: $p belongs to $($state.target.tenantId)/$($state.target.subscriptionId)/$($state.target.resourceGroup), not this configuration's $($t.tenantId)/$($t.subscriptionId)/$($t.resourceGroup). Use -StateDirectory for each target."
         }
+        if (-not $state.stageLayout -or $state.stageLayout -lt 2) { $state = Convert-StgStateLayout $state $p }
         return $state
     }
-    return @{ schemaVersion = 1; target = (Get-StgTarget $Cfg); stages = @{} }
+    return @{ schemaVersion = 1; stageLayout = 2; target = (Get-StgTarget $Cfg); stages = @{} }
+}
+# Layout 1 numbered network as Stage 2. Layout 2 runs it last (Stage 6), after schema 2, grants 3,
+# Entra 4 and configuration 5, because the customer usually builds the network. Stage outputs and
+# hashes are unchanged; only the stage keys move. The original file is kept as state.layout1.json.
+function Convert-StgStateLayout {
+    param($State, [string]$Path)
+    $map = @{ '0' = '0'; '1' = '1'; '2' = '6'; '3' = '2'; '4' = '3'; '5' = '4'; '6' = '5'; '7' = '7'; '8' = '8' }
+    $stages = @{}
+    foreach ($old in @($State.stages.Keys)) {
+        if (-not $map.ContainsKey("$old")) { throw "state_layout_unknown_stage: $old in $Path" }
+        $record = $State.stages[$old]
+        if ($null -ne $record.dependencyHashes) {
+            $deps = [ordered]@{}
+            foreach ($d in @($record.dependencyHashes.Keys)) { $deps[$map["$d"]] = $record.dependencyHashes[$d] }
+            $record.dependencyHashes = $deps
+        }
+        $stages[$map["$old"]] = $record
+    }
+    $backup = Join-Path (Split-Path $Path -Parent) 'state.layout1.json'
+    if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $Path -Destination $backup }
+    $State.stages = $stages; $State.stageLayout = 2
+    $State | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $Path -Encoding utf8NoBOM
+    Write-Host "state migration: stage keys moved to the network-last order (backup $backup)."
+    return $State
 }
 function ConvertTo-StgCanonical {
     param($Value)
@@ -119,11 +155,11 @@ function Get-StgStageInput {
     switch ($Number) {
         0 { $input += @{ location=$Cfg.location; stage1=$Cfg.stage1; backends=$Cfg.backends; groups=$Cfg.groups } }
         1 { $input += @{ location=$Cfg.location; tags=$Cfg.tags; sharedResourceGroup=$Cfg.sharedResourceGroup; stage1=$Cfg.stage1 } }
-        2 { $input += @{ location=$Cfg.location; tags=$Cfg.tags; stage1=$Cfg.stage1; network=$Cfg.network; backends=@($Cfg.backends | ForEach-Object { @{subscriptionId=$_.subscriptionId;resourceGroup=$_.resourceGroup;accountName=$_.accountName;privateEndpoint=$_.privateEndpoint} }) } }
-        3 { $input += @{ stage1=$Cfg.stage1; cosmos=$Cfg.cosmos } }
-        4 { $input += @{ stage1=$Cfg.stage1; cosmos=$Cfg.cosmos; syncMode=$Cfg.sync.mode; backends=$Cfg.backends } }
-        5 { $input += @{ stage1=$Cfg.stage1; entra=$Cfg.entra; groups=$Cfg.groups } }
-        6 { $input += @{ stage1=$Cfg.stage1; apim=$Cfg.apim; backends=$Cfg.backends; resolver=$Cfg.resolver; sync=$Cfg.sync; reconciler=$Cfg.reconciler; budgetState=$Cfg.budgetState; syncTimerEnabled=$Cfg.syncTimerEnabled; gateway=$Cfg.gateway; workbook=$Cfg.workbook; rateCard=$Cfg.rateCard; admin=$Cfg.admin; groups=$Cfg.groups } }
+        2 { $input += @{ stage1=$Cfg.stage1; cosmos=$Cfg.cosmos } }
+        3 { $input += @{ stage1=$Cfg.stage1; cosmos=$Cfg.cosmos; syncMode=$Cfg.sync.mode; backends=$Cfg.backends } }
+        4 { $input += @{ stage1=$Cfg.stage1; entra=$Cfg.entra; groups=$Cfg.groups } }
+        6 { $input += @{ location=$Cfg.location; tags=$Cfg.tags; stage1=$Cfg.stage1; network=$Cfg.network; backends=@($Cfg.backends | ForEach-Object { @{subscriptionId=$_.subscriptionId;resourceGroup=$_.resourceGroup;accountName=$_.accountName;privateEndpoint=$_.privateEndpoint} }) } }
+        5 { $input += @{ stage1=$Cfg.stage1; apim=$Cfg.apim; backends=$Cfg.backends; resolver=$Cfg.resolver; sync=$Cfg.sync; reconciler=$Cfg.reconciler; budgetState=$Cfg.budgetState; syncTimerEnabled=$Cfg.syncTimerEnabled; gateway=$Cfg.gateway; workbook=$Cfg.workbook; rateCard=$Cfg.rateCard; admin=$Cfg.admin; groups=$Cfg.groups } }
         7 { $input += @{ stage1=$Cfg.stage1; groups=$Cfg.groups; client=$Cfg.client; rateCard=$Cfg.rateCard; sync=$Cfg.sync; entra=$Cfg.entra } }
         8 { $input += @{ stage1=$Cfg.stage1; acceptance=$Cfg.acceptance; gateway=$Cfg.gateway; admin=$Cfg.admin } }
         default { throw "invalid stage number $Number" }
@@ -137,30 +173,30 @@ function Get-StgStageDependencies {
         0 { @() }
         1 { @() }
         2 { @(1) }
-        3 { @(1) }
-        4 { @(1,3) }
-        5 { @(1) }
-        6 { @(1,4,5) }
-        7 { @(1,2,5,6) }
-        8 { @(1,5,6,7) }
+        3 { @(1,2) }
+        4 { @(1) }
+        5 { @(1,3,4) }
+        6 { @(1) }
+        7 { @(1,4,5,6) }
+        8 { @(1,4,5,7) }
         default { throw "invalid stage number $Number" }
     }
 }
-function Get-StgStage2NetworkAction {
+function Get-StgNetworkAction {
     param([string]$Mode, [bool]$VnetExists, [bool]$StageStateExists)
     if ($Mode -eq 'create' -and $VnetExists) {
         if (-not $StageStateExists) {
-            throw 'stage2_create_existing_vnet: create mode owns an authoritative subnet list. The VNet exists without matching Stage 2 state; stop and recover with network.mode existing and explicit resource IDs.'
+            throw 'network_create_existing_vnet: create mode owns an authoritative subnet list. The VNet exists without matching Stage 6 state; stop and recover with network.mode verify (customer-built) or existing, with explicit resource IDs.'
         }
         return 'reuse'
     }
     return 'deploy'
 }
-function Get-StgStage2DnsTargets {
+function Get-StgNetworkDnsTargets {
     param($Cfg, $Outputs, [bool]$HasFoundry)
     $vnetId = if ($Outputs.vnetId) { [string]$Outputs.vnetId } else { [string]($Outputs.functionsSubnetId -replace '/subnets/[^/]+$', '') }
     if ($vnetId -notmatch '^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+$') {
-        throw 'stage2_vnet_output: cannot determine a valid VNet ID from the Stage 2 outputs.'
+        throw 'network_vnet_output: cannot determine a valid VNet ID from the Stage 6 outputs.'
     }
     $foundryZones = @($Outputs.foundryPrivateDnsZoneIds | Where-Object { $_ })
     if ($HasFoundry -and -not $foundryZones.Count) {
@@ -176,22 +212,25 @@ function Get-StgStage2DnsTargets {
     $zoneIds = @($Outputs.privateDnsZoneIds.cosmos, $Outputs.privateDnsZoneIds.blob) + $foundryZones
     return [ordered]@{ vnetId = $vnetId; zoneIds = @($zoneIds | Where-Object { $_ }) }
 }
+# Dependency hashes cover a stage's operational outputs only: `verify` (read-back snapshots, which
+# change when later stages add resources) and `durationSeconds` are excluded.
+function Get-StgOutputHash {
+    param($Outputs, [string[]]$Exclude = @('durationSeconds', 'verify'))
+    $stable = [ordered]@{}
+    foreach ($key in $Outputs.Keys) { if ($Exclude -cnotcontains $key) { $stable[$key] = $Outputs[$key] } }
+    $canonical = ConvertTo-StgCanonical $stable | ConvertTo-Json -Depth 100 -Compress
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
+}
 function Get-StgDependencyHashes {
     param($State, [int]$Number)
     $result = [ordered]@{}
     foreach ($dependency in Get-StgStageDependencies $Number) {
         $record = $State.stages["$dependency"]
         if (-not $record) { throw "stage_order: stage $Number requires stage $dependency to be completed first." }
-        $stableOutput = [ordered]@{}
-        foreach ($key in $record.outputs.Keys) {
-            if ($key -cne 'durationSeconds' -and -not ($dependency -eq 1 -and $key -ceq 'verify')) { $stableOutput[$key] = $record.outputs[$key] }
-        }
-        $canonical = ConvertTo-StgCanonical $stableOutput | ConvertTo-Json -Depth 100 -Compress
-        $result["$dependency"] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
+        $result["$dependency"] = Get-StgOutputHash $record.outputs
     }
     return $result
-}
-function Save-StgStage { param($Cfg, [int]$Number, $Outputs)
+}function Save-StgStage { param($Cfg, [int]$Number, $Outputs)
     $state = Read-StgState $Cfg
     $state.target = Get-StgTarget $Cfg
     $state.stages["$Number"] = @{ completedAt = [DateTime]::UtcNow.ToString('o'); configHash=(Get-StgStageInput $Cfg $Number); dependencyHashes=(Get-StgDependencyHashes $state $Number); outputs = $Outputs }
@@ -207,73 +246,16 @@ function Get-StgStage { param($Cfg, [int]$Number)
     if ($null -ne $s.dependencyHashes) {
         foreach ($dependency in $currentDependencies.Keys) {
             if ($s.dependencyHashes[$dependency] -cne $currentDependencies[$dependency]) {
-                $rebased = $false
-                # Older dependency hashes included durationSeconds. Rebase only when the complete
-                # currently saved output reproduces that legacy hash exactly.
-                $dependencyRecord = $state.stages["$dependency"]
-                $legacyOutput = [ordered]@{}
-                foreach ($key in $dependencyRecord.outputs.Keys) { $legacyOutput[$key] = $dependencyRecord.outputs[$key] }
-                $legacyJson = ConvertTo-StgCanonical $legacyOutput | ConvertTo-Json -Depth 100 -Compress
-                $legacyHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($legacyJson))).ToLowerInvariant()
-                if ($legacyHash -ceq $s.dependencyHashes[$dependency]) {
+                # Earlier versions hashed every output, or every output except durationSeconds. A
+                # saved hash is accepted only if the dependency's current outputs reproduce it exactly
+                # under one of those rules, which means the outputs have not changed.
+                $record = $state.stages["$dependency"]
+                $rebased = (Get-StgOutputHash $record.outputs -Exclude @()) -ceq $s.dependencyHashes[$dependency] -or
+                    (Get-StgOutputHash $record.outputs -Exclude @('durationSeconds')) -ceq $s.dependencyHashes[$dependency]
+                if ($rebased) {
                     $s.dependencyHashes[$dependency] = $currentDependencies[$dependency]
                     $state | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Get-StgStatePath $Cfg) -Encoding utf8NoBOM
-                    Write-Host "state migration: Stage $dependency output exactly matches its legacy hash."
-                    $rebased = $true
-                }
-                if (-not $rebased -and $dependency -eq '1') {
-                    # Older Stage 1 state included a verification snapshot in its dependency hash.
-                    # The snapshot naturally changes after networking/schema/grants are installed;
-                    # only rebase when the business outputs still exactly match the succeeded ARM deployment.
-                    $stage1 = Get-StgStage $Cfg 1
-                    $deployment = Get-StgStage1Deployment $Cfg
-                    if ($deployment -and $deployment.properties.provisioningState -ceq 'Succeeded') {
-                        Assert-StgStage1Parameters $deployment $Cfg
-                        $armStable = Get-StgStage1StableOutput (Get-StgStage1Outputs $deployment)
-                        $savedStable = [ordered]@{}
-                        foreach ($key in $stage1.Keys) { if ($key -cne 'verify' -and $key -cne 'durationSeconds') { $savedStable[$key] = $stage1[$key] } }
-                        $actualJson = ConvertTo-StgCanonical $savedStable | ConvertTo-Json -Depth 100 -Compress
-                        $expectedJson = ConvertTo-StgCanonical $armStable | ConvertTo-Json -Depth 100 -Compress
-                        if ($actualJson -ceq $expectedJson) {
-                            $s.dependencyHashes[$dependency] = $currentDependencies[$dependency]
-                            $state | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Get-StgStatePath $Cfg) -Encoding utf8NoBOM
-                            Write-Host 'state migration: Stage 1 verification snapshot changed; resource names, principals and endpoints match the succeeded ARM deployment.'
-                            $rebased = $true
-                        }
-                    }
-                } elseif (-not $rebased -and $dependency -eq '4') {
-                    # Stage 4's verification details are read-back snapshots; its operational outputs
-                    # (Cosmos assignment IDs and the APIM principal) can be reconciled to ARM.
-                    $stage4 = $state.stages['4']
-                    if ($stage4 -and $stage4.configHash -ceq (Get-StgStageInput $Cfg 4)) {
-                        $armStable = Get-StgStage4StableOutput $Cfg
-                        $savedStable = [ordered]@{}
-                        foreach ($key in $stage4.outputs.Keys) { if ($key -cne 'verify' -and $key -cne 'durationSeconds') { $savedStable[$key] = $stage4.outputs[$key] } }
-                        $actualJson = ConvertTo-StgCanonical $savedStable | ConvertTo-Json -Depth 100 -Compress
-                        $expectedJson = ConvertTo-StgCanonical $armStable | ConvertTo-Json -Depth 100 -Compress
-                        if ($actualJson -ceq $expectedJson) {
-                            $s.dependencyHashes[$dependency] = $currentDependencies[$dependency]
-                            $state | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Get-StgStatePath $Cfg) -Encoding utf8NoBOM
-                            Write-Host 'state migration: Stage 4 grant IDs and APIM principal match the succeeded ARM deployment.'
-                            $rebased = $true
-                        }
-                    }
-                } elseif (-not $rebased -and $dependency -eq '2') {
-                    # Stage 2 read-back details can change while its network deployment outputs remain stable.
-                    $stage2 = $state.stages['2']
-                    if ($stage2 -and $stage2.configHash -ceq (Get-StgStageInput $Cfg 2)) {
-                        $armStable = Get-StgStage2StableOutput $Cfg
-                        $savedStable = [ordered]@{}
-                        foreach ($key in $stage2.outputs.Keys) { if ($key -cne 'verify' -and $key -cne 'durationSeconds') { $savedStable[$key] = $stage2.outputs[$key] } }
-                        $actualJson = ConvertTo-StgCanonical $savedStable | ConvertTo-Json -Depth 100 -Compress
-                        $expectedJson = ConvertTo-StgCanonical $armStable | ConvertTo-Json -Depth 100 -Compress
-                        if ($actualJson -ceq $expectedJson) {
-                            $s.dependencyHashes[$dependency] = $currentDependencies[$dependency]
-                            $state | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Get-StgStatePath $Cfg) -Encoding utf8NoBOM
-                            Write-Host 'state migration: Stage 2 network outputs match the succeeded ARM deployment.'
-                            $rebased = $true
-                        }
-                    }
+                    Write-Host "state migration: stage $dependency outputs are unchanged; dependency hash moved to the current rule."
                 }
                 if (-not $rebased) { throw "stage_dependency_changed: stage $dependency was re-run or its verified output changed; preview and apply stage $Number again." }
             }
@@ -416,14 +398,14 @@ function Send-StgGraph {
 # and the completed stages, so the quickstart's functions work unchanged.
 function Get-StgQuickstartParameters {
     param($Cfg)
-    $s1 = Get-StgStage $Cfg 1; $s5 = Get-StgStage $Cfg 5
+    $s1 = Get-StgStage $Cfg 1; $entra = Get-StgStage $Cfg 4
     $names = $s1.names | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
     $names.cosmosDatabase = $Cfg.cosmos.databaseName
     $names.cosmosRoles = $Cfg.cosmos.roleNames
     $names.resourceGroupMode = 'existing'
     $groups = foreach ($g in $Cfg.groups) {
         $copy = $g | ConvertTo-Json -Depth 30 | ConvertFrom-Json -AsHashtable
-        $copy.groupId = $s5.groups["$($g.projectId)/$($g.classification)"].id
+        $copy.groupId = $entra.groups["$($g.projectId)/$($g.classification)"].id
         $copy.Remove('groupDisplayName'); $copy.Remove('members')
         $copy
     }
@@ -431,7 +413,7 @@ function Get-StgQuickstartParameters {
     return @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; tags = $Cfg.tags; names = $names
         apim = (Get-StgApim $Cfg); network = $Cfg.network; groups = @($groups); client = $Cfg.client
-        registrations = $s5.registrations; backends = @($Cfg.backends); cosmos = $Cfg.cosmos
+        registrations = $entra.registrations; backends = @($Cfg.backends); cosmos = $Cfg.cosmos
         resolver = $Cfg.resolver; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         gateway = $Cfg.gateway; rateCard = $rate; workbook = $Cfg.workbook; runner = @{ enabled = $false }
         logRetentionDays = $Cfg.stage1.retentionInDays

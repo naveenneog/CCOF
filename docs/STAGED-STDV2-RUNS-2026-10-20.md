@@ -2,7 +2,7 @@
 
 Two independent runs of [`Invoke-StagedDeployment.ps1`](../infra/staged/Invoke-StagedDeployment.ps1)
 with a **Standard v2** API Management instance, a **new private Foundry account** created by Stage 1,
-and a separate configuration and state directory each. Runbook:
+and a separate configuration and state directory each. Stage numbers in this report are the order\nbefore 2026-10-21 (network = Stage 2, schema 3, grants 4, Entra 5, configuration 6); the runbook now\nruns the network as Stage 6. Runbook:
 [configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
 
 | | SASET MSFT FDPO | Contoso |
@@ -85,6 +85,27 @@ local paths are replaced by `<config-dir>`; no token or setting value is shown.
 - Offline checks passed: 344 staged contract checks; the staged customer deployment compile/parse
   checks; 88 quickstart checks; and the public-manual artifact checks.
 
+## Network-last recheck — 2026-10-21 (new stage numbers)
+
+The stages were renumbered so that the network is Stage 6, the last setup stage, and both
+deployments were rechecked with the new driver. Both `state.json` files moved to the new keys on
+first read (backup `state.layout1.json`).
+
+| | SASET MSFT FDPO | Contoso |
+| --- | --- | --- |
+| `network.mode` | `create` (lab) | `verify` (default): the existing VNet treated as customer-built |
+| Stages rerun | 2 schema (210 s, deployment `stage2-schema`), 3 grants (65 s, `stage3-grants`), 5 configuration (99 s, `stage5-config`), 6 network (117 s; VNet deployment skipped, integrations verified), 8 | 6 network (91 s), 7 code and data (1306 s), 8 |
+| Stage 6 result | Endpoints, DNS links, 4 apps and APIM integration verified | `Test-NetworkConfiguration.ps1`: 19 PASS, 0 FAIL; nothing changed |
+| Stage 8 | Anonymous/resolver 401; 200, 200; 403, 403; admin 302/200/401; 2 of 2 request IDs in telemetry | Anonymous/resolver 401; 403, 403; admin 302/200/401; telemetry not applicable (no model) |
+
+Live negative control (Contoso, separate state copy): `functionsSubnetId` pointed at `snet-apim`.
+Stage 6 reported 5 FAIL rows and stopped with `verify_failed`; the saved state kept `snet-functions`.
+
+Found during this recheck and fixed ([B-16 to B-20](../BUGS-FOUND.md)): the network check recursed
+into its own `Az` function and never reached Azure; it failed on an unrelated same-named DNS zone in
+`ccof-poc-rg`; the schema stage could not be rerun after grants; Stage 7 could not be rerun after a
+successful snapshot. One Contoso Stage 7 attempt stopped at `graph_unauthorized`; Azure CLI and a
+direct snapshot run read the same groups with HTTP 200 minutes later, and the rerun passed.
 ## Portal walkthrough with Playwright
 
 The guide's manual Portal steps were turned into 20 Portal steps per run (generated from each
