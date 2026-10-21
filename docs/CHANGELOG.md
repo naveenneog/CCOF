@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-10-21 — Portal walkthrough on both Standard v2 deployments
+
+- Playwright walked the guide's 20 Portal steps on the signed-in FDPO/SASET and Contoso Portals:
+  20/20 and 19/20 pass; the remaining Contoso step is the APIs blade staying on "Service is getting
+  ready..." while ARM lists the API ([report](STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)).
+- Walker fixes in `tests/playwright`: blade-menu navigation for sub-blades without a stable deep
+  link, IAM **Role assignments** tab and list filters, reuse of the signed-in tab and its Portal
+  host, one re-read for slow blades, literal-string masking. Two weak expectations were tightened;
+  a negative control shows the resolver Authentication check fails on the wrong blade.
+- The staged guide embeds 13 masked Contoso captures (`docs/runbooks/images/staged-portal`).
+  Pages that list people are not published.
+
 ## 2026-10-20 — Staged deployment bug bash and live recheck
 
 - Stage 1 shared-RG ownership now uses exact prior deployment resource IDs; the inventory verifier

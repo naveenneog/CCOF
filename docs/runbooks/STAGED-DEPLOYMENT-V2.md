@@ -212,9 +212,12 @@ API 401 without a token. Telemetry: every allowed response's `x-ccof-request-id`
 
 ### Evidence and scope
 
-Each Portal step below lists the blade that shows the result of a stage. The five historical
-Portal images are middle-masked captures from the earlier manual guide and show navigation, not
-a new deployment's result ([image manifest](images/portal/screenshots.json)). The
+Each Portal step below lists the blade that shows the result of a stage. Images under
+`images/staged-portal/` are captures of the Contoso Standard v2 deployment (2026-10-21), taken by
+the Playwright walkthrough from the signed-in Portal; GUIDs, the signed-in account, the directory
+name and the subscription name are masked. The five historical images are middle-masked captures
+from the earlier manual guide and show navigation, not a new deployment's result
+([image manifest](images/portal/screenshots.json)). The
 [Standard v2 and Foundry run report](../STAGED-STDV2-RUNS-2026-10-20.md) holds the read-back
 evidence of the SASET MSFT FDPO and Contoso runs and the status of the Playwright Portal
 walkthrough, which visits each step's blade on those runs' real resources.
@@ -258,6 +261,10 @@ wrong directory.
 
 ![Historical Portal resource-group creation form; not a new deployment result](images/portal/02-2-middle-masked.png)
 
+![Resource group Deployments: stage1-services through stage6-config succeeded](images/staged-portal/01-rg-deployments.png)
+
+![API Management Managed identities: system assigned identity on](images/staged-portal/01-apim-identity.png)
+
 ### Foundry prerequisite: account, deployment and endpoint
 
 Stage 1 can create the account and its Claude deployments (`stage1.foundry`); Stage 2 creates its
@@ -285,6 +292,8 @@ country, industry) are required for Claude. Microsoft Q&A reports cases where th
 show them; the Bicep path sends them as `modelProviderData`. An internal or sandbox subscription
 cannot purchase the offer at all.
 
+![Foundry Networking: public access Disabled; private endpoints are the only path](images/staged-portal/02-foundry-networking.png)
+
 ### 2. Connect the caller networks
 
 1. Open the VNet's **Subnets**. Functions and APIM use separate integration subnets.
@@ -306,6 +315,12 @@ cannot purchase the offer at all.
 
 Stage 2 performs steps 2-4 for a Stage 1 Standard v2 APIM and for backends marked
 `privateEndpoint`. Outbound APIM integration does not make its ingress private.
+
+![API Management Network: inbound public access, outbound virtual network integration enabled](images/staged-portal/02-apim-network.png)
+
+![Function App Networking: outbound VNet integration on snet-functions. Inbound public access is Enabled because both lab runs set stage1.functionsPublicNetworkAccess to Enabled; the default is Disabled](images/staged-portal/02-function-networking.png)
+
+![Private DNS zone Virtual network links: linked to the deployment VNet](images/staged-portal/02-dns-links.png)
 
 ![Historical Functions subnet edit form](images/portal/03-4-middle-masked.png)
 
@@ -331,6 +346,10 @@ Neither check creates seed documents or grants item access.
 4. Cosmos SQL role definitions and assignments remain the explicit Bicep/CLI
    operation in Stage 4; the general **IAM** blade is not a replacement for them.
 
+![Foundry IAM Role assignments filtered to the APIM identity: Cognitive Services User](images/staged-portal/04-foundry-iam.png)
+
+![Storage IAM Role assignments filtered to the resolver identity: Storage Blob Data Owner on this resource](images/staged-portal/04-storage-iam.png)
+
 ![Historical Foundry IAM view showing Cognitive Services User for APIM](images/portal/07-6-middle-masked.png)
 
 ### 5. Verify registrations, membership and consent
@@ -349,6 +368,10 @@ Neither check creates seed documents or grants item access.
    privileged operation using `Grant-SyncGraphPermissions.ps1`. Tenant-admin consent
    is not implied by an Azure role. The earlier run used delegated snapshots instead;
    it does not prove unattended consent or timer execution.
+
+![Gateway app Expose an API: access_as_user scope and the two authorized clients](images/staged-portal/05-gateway-expose-api.png)
+
+![Admin app App roles: CCOF.Projects.Write and CCOF.Projects.Read](images/staged-portal/05-admin-roles.png)
 
 ![Historical Entra group Members view; not synchronization evidence](images/portal/06-7-middle-masked.png)
 
@@ -369,9 +392,18 @@ Neither check creates seed documents or grants item access.
    project detail, chargeback and onboarding downloads. A demo-mode browser interception
    does not verify sign-in. Capture the final UI without one.
 
-**Acceptance still needed for each target:** Standard v2 networking, Foundry setup,
-actual Azure and Graph permissions, an allowed request, expected denied requests,
-fresh correlated telemetry, and genuine signed-in Portal/Admin screenshots.
+![Function App Environment variables: setting names only, values hidden](images/staged-portal/06-function-settings.png)
+
+![Resolver Authentication: require authentication](images/staged-portal/06-resolver-auth.png)
+
+![Resolver functions after publishing: health and resolve enabled](images/staged-portal/07-functions-list.png)
+
+**Acceptance still needed for each target:** genuine signed-in Admin V3 screenshots. The Portal
+walkthrough of the steps above ran against both targets on 2026-10-21
+([results](../STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)); Standard v2
+networking, Foundry setup, Azure permissions, Entra registrations, allowed and denied requests and
+correlated telemetry are covered by the stage read-backs and Stage 8. Graph application consent
+remains a separate privileged step (refused in Contoso without an active admin role).
 
 ### Review findings
 

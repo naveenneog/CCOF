@@ -87,21 +87,40 @@ local paths are replaced by `<config-dir>`; no token or setting value is shown.
 
 ## Portal walkthrough with Playwright
 
-The guide's manual Portal steps were turned into 20 Portal deep links per run (generated from each
+The guide's manual Portal steps were turned into 20 Portal steps per run (generated from each
 run's real resource IDs, with the text each page is expected to show). Two dedicated Edge
-profiles were signed in to FDPO and Contoso by the account owner during the run. Those sessions
-used session-only cookies and ended when the automation closed the windows, so the walkthrough
-did not reach the Portal. The windows were reopened; a watcher runs the walkthrough as soon as a
-sign-in completes. No authentication was intercepted or bypassed. Walkthrough status per run is
-recorded below when available.
+profiles were signed in to FDPO and Contoso by the account owner. On 2026-10-20 those sessions
+ended when the automation closed the windows; on 2026-10-21 the profiles were reopened, the
+sessions were still valid, and the walkthrough ran against both deployments. No authentication was
+intercepted or bypassed.
 
 | Check | Result |
 | --- | --- |
 | Guide and reports rendered in Edge (Playwright) | 39 images load, 26 local links and 1 anchor resolve, 0 page errors; a hidden image was reported broken (negative control) |
 | Guide PowerShell blocks | Parse without errors |
-| Manual Portal steps covered by deep links | Every section 0-8 and the Foundry section maps to 1-4 deep links (20 per run) |
-| Portal walkthrough, FDPO | **Not run: Portal sign-in pending** (window open on the sign-in page until the end of the session) |
-| Portal walkthrough, Contoso | **Not run: Portal sign-in pending** |
+| Manual Portal steps covered by deep links | Every section 0-8 and the Foundry section maps to 1-4 Portal steps (20 per run) |
+| Portal walkthrough, Contoso (2026-10-21) | 19 of 20 steps pass. `06-apim-apis`: the APIs blade stayed on "Service is getting ready..." in four afternoon attempts; it passed in the morning run, and ARM lists the `Claude Messages (staged)` API with the service `Succeeded` |
+| Portal walkthrough, FDPO/SASET (2026-10-21) | 20 of 20 steps pass (`00-subscription-access` and `06-apim-apis` on a targeted rerun) |
+| Walkthrough negative control | `06-resolver-auth` opened on the Function App overview (without the Authentication menu entry) reports `mismatch`; the Authentication blade reports `pass` |
+
+Walkthrough fixes made during the run (in [tests/playwright](../tests/playwright/README.md)):
+- Sub-blade deep links such as `/managedidentities`, `/networking`, `/virtualNetwork` and `/users`
+  opened the resource overview. Those steps now open the overview and select the entry through the
+  blade's menu search; IAM steps also select **Role assignments**.
+- `06-resolver-auth` previously passed on any page that contained "Microsoft"; it now requires
+  "Require authentication". The subscription check now requires "Active permanent assignments".
+- A new browser tab stopped at the account picker. The walker reuses the signed-in Portal tab and
+  its host (`ms.portal.azure.com` for FDPO) instead; no account was selected on the operator's
+  behalf.
+- In the shared FDPO resource group (56 resources) and subscription IAM (60 inherited
+  assignments), the expected rows sat outside the rendered list. Those steps type into the
+  blade's own filter box.
+
+Both lab runs set `stage1.functionsPublicNetworkAccess` to `Enabled` (the default is `Disabled`), so
+the Function App networking blade shows public inbound access; the resolver still requires
+authentication and returned 401 to the anonymous Stage 8 probe. The guide embeds 13 Contoso
+captures with GUIDs, the signed-in account, the directory name and the subscription name masked;
+pages that list people (subscription access, group members) are not published.
 
 Rerun steps: [tests/playwright](../tests/playwright/README.md).
 
