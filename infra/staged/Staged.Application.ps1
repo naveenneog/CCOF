@@ -126,11 +126,17 @@ function Invoke-Stage7 {
 
 # ---------------------------------------------------------------- stage 8: acceptance
 
-function Invoke-StgGateway {
-    param([string]$Url, [string]$Token, [string]$Project, [string]$Model)
+function New-StgGatewayHeaders {
+    param([string]$Token, [string]$Project, [string]$ProjectHeader = 'x-ccof-project')
     $headers = @{ 'anthropic-version' = '2023-06-01'; 'content-type' = 'application/json' }
     if ($Token) { $headers.Authorization = "Bearer $Token" }
-    if ($Project) { $headers['x-ccof-project'] = $Project }
+    if ($Project) { $headers[$ProjectHeader] = $Project }
+    return $headers
+}
+
+function Invoke-StgGateway {
+    param([string]$Url, [string]$Token, [string]$Project, [string]$Model, [string]$ProjectHeader = 'x-ccof-project')
+    $headers = New-StgGatewayHeaders -Token $Token -Project $Project -ProjectHeader $ProjectHeader
     $body = @{ model = $Model; max_tokens = 24; messages = @(@{ role = 'user'; content = 'Reply with exactly: STAGED OK' }) } | ConvertTo-Json -Depth 5
     $r = Invoke-WebRequest -Uri "$Url/v1/messages" -Method Post -Headers $headers -Body $body -SkipHttpErrorCheck -TimeoutSec 90
     $ccof = [ordered]@{}; foreach ($h in $r.Headers.Keys) { if ($h -like 'x-ccof-*') { $ccof[$h] = "$($r.Headers[$h])" } }
@@ -145,7 +151,7 @@ function Invoke-Stage8 {
     if (-not $Apply) { Write-Host "preview: gateway $($s6.gatewayUrl): anonymous 401, $(@($t.allowed).Count) allowed and $(@($t.denied).Count) denied requests, resolver 401, admin console checks, telemetry query"; return $null }
     $checks = [ordered]@{}
     $probe = @(@($t.allowed) + @($t.denied))[0]
-    $checks.anonymous = Invoke-StgGateway -Url $s6.gatewayUrl -Project $probe.project -Model $probe.model
+    $checks.anonymous = Invoke-StgGateway -Url $s6.gatewayUrl -Project $probe.project -Model $probe.model -ProjectHeader $Cfg.gateway.projectHeaderName
     Assert-Stg ($checks.anonymous.status -eq 401) "anonymous request answered $($checks.anonymous.status)"
     $resolverUrl = "https://$($s1.names.apps.resolver.functionApp).azurewebsites.net/api/resolve"
     $checks.resolverAnonymous = [int](Invoke-WebRequest -Uri $resolverUrl -Method Post -Body '{}' -ContentType 'application/json' -SkipHttpErrorCheck -TimeoutSec 60).StatusCode
@@ -155,12 +161,12 @@ function Invoke-Stage8 {
     $checks.allowed = @(); $checks.denied = @()
     foreach ($c in $t.allowed) {
         $r = $null
-        for ($i = 0; $i -lt 8; $i++) { $r = Invoke-StgGateway -Url $s6.gatewayUrl -Token $token -Project $c.project -Model $c.model; if ($r.status -eq 200) { break }; Start-Sleep 20 }
+        for ($i = 0; $i -lt 8; $i++) { $r = Invoke-StgGateway -Url $s6.gatewayUrl -Token $token -Project $c.project -Model $c.model -ProjectHeader $Cfg.gateway.projectHeaderName; if ($r.status -eq 200) { break }; Start-Sleep 20 }
         $checks.allowed += $r
         Assert-Stg ($r.status -eq 200) "allowed request $($c.project)/$($c.model) answered $($r.status) $($r.result)"
     }
     foreach ($c in $t.denied) {
-        $r = Invoke-StgGateway -Url $s6.gatewayUrl -Token $token -Project $c.project -Model $c.model
+        $r = Invoke-StgGateway -Url $s6.gatewayUrl -Token $token -Project $c.project -Model $c.model -ProjectHeader $Cfg.gateway.projectHeaderName
         $checks.denied += $r + @{ expected = $c.expectedStatus; reason = $c.reason }
         Assert-Stg ($r.status -eq [int]$c.expectedStatus) "denied request $($c.project)/$($c.model) answered $($r.status), expected $($c.expectedStatus)"
     }

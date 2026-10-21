@@ -58,12 +58,32 @@ local paths are replaced by `<config-dir>`; no token or setting value is shown.
 | 2 | Contoso subscription: "This subscription is internal or sandbox. Only $0.00 products or test products can be purchased." | Subscription limit, not a template defect. `stage1.foundry.modelDeploymentsBlocked` records the reason; Stage 0 warns and Stage 8 records telemetry as not applicable |
 | 3 | Standard v2 alone did not integrate APIM with the VNet | Stage 2 PATCHes APIM to `virtualNetworkType: External` on the APIM subnet (keeping its identity), waits for `Succeeded`, and verifies subnet and identity |
 | 4 | Foundry provisioning and its private path were outside the stages | Stage 1 optionally creates the account and deployments; Stage 2 creates its private endpoint with the cognitiveservices, openai and services.ai zones |
-| 5 | SASET allows writes only in an RG that holds another team's resources | `sharedResourceGroup: true`: Stage 1 applies only when what-if shows no Modify or Delete for any resource whose name does not start with the prefix. The same guard allows a rerun after a failed Stage 1 |
+| 5 | SASET allows writes only in an RG that holds another team's resources | `sharedResourceGroup: true`: Stage 1 compares changes with exact resource IDs in the prior Stage 1 deployment operations; name prefixes do not establish ownership, and all deletes are refused |
 | 6 | Stage 7 of both runs, started at the same time from one checkout, failed: `npm ci` EPERM on `admin/node_modules` | Run Stage 7 for one target at a time per checkout (documented). Sequential reruns passed |
 | 7 | State could be reused across targets | `state.json` now records tenant, subscription and RG; a mismatch stops with `state_target_mismatch`. Offline test with a negative control |
 | 8 | Telemetry acceptance counted any recent rows | Stage 8 queries `ApiManagementGatewayLlmLog` for exactly this run's `x-ccof-request-id` values (APIM `context.RequestId` = `CorrelationId`) and requires every one |
 | 9 | Graph application consent needs an active Privileged Role Administrator or Global Administrator. Azure CLI cannot activate PIM (token lacks the RoleManagement scopes) | Unchanged: interactive PIM activation, then `Grant-SyncGraphPermissions.ps1`. The script refused safely |
 | 10 | A direct call to the private Foundry from outside the VNet returned `PermissionDenied` (RBAC), not a network error | Inconclusive about the network: the service checked RBAC first, and no model role was granted to the operator. Account read-back shows public access `Disabled`, default action `Deny` |
+| 11 | Stage 1 recheck counted resources and role assignments created by later stages | The verifier now scopes inventory to Stage 1 deployment targets and checks Stage 4 grant counts against verified Stage 4 state |
+| 12 | Stage 8 used the default project header when configuration selected another name | Acceptance probes now use `gateway.projectHeaderName` for anonymous, admitted and denied calls |
+| 13 | Re-running Stage 2 in `create` mode could reapply the authoritative VNet subnet list | An existing VNet with saved Stage 2 state skips that deployment and verifies or reconciles the remaining integrations; an existing VNet without state is refused |
+| 14 | New Stage 2 DNS-link verification could fail on the earlier deployment output shape, which did not include `vnetId` or Foundry zone IDs | The VNet ID is derived from `functionsSubnetId`; missing Foundry zone IDs are derived from the create-mode resource group or existing-mode configuration |
+| 15 | Downstream stages could become stale when verification snapshots or duration values changed | Stable output hashes and exact state migrations now separate transient verification data from operational outputs; Stage 1, 2 and 4 migrations also check ARM outputs |
+
+## Final bug-bash recheck — 2026-10-20
+
+- Stage 1 verify-only inventory passed in SASET (139 s) and Contoso (129 s).
+- Stage 4 grants were reapplied and verified with exact Stage 1 resource scopes in SASET (62 s) and
+  Contoso (64 s).
+- Stage 2 retries skipped the authoritative VNet deployment and verified DNS links, private
+  endpoints, Function App integration and Standard v2 APIM integration in SASET (101 s) and Contoso
+  (111 s). No network resources were redeployed.
+- Stage 8 passed in SASET (157 s): anonymous/resolver 401, two admitted model calls 200, two denied
+  calls 403, admin 302/200/401, and both request IDs found in telemetry. Contoso passed in 16 s:
+  anonymous/resolver 401, zero admitted calls because no model is available, two denied calls 403,
+  admin 302/200/401; telemetry was correctly marked not applicable.
+- Offline checks passed: 344 staged contract checks; the staged customer deployment compile/parse
+  checks; 88 quickstart checks; and the public-manual artifact checks.
 
 ## Portal walkthrough with Playwright
 

@@ -102,6 +102,7 @@ foreach ($file in $driverFiles) {
 $functions = @($functionAsts | ForEach-Object Name)
 foreach ($n in 0..8) { Assert-Contract ($functions -contains "Invoke-Stage$n") "Driver lacks Invoke-Stage$n." }
 $driver = ($driverFiles | ForEach-Object { Get-Content -LiteralPath $_ -Raw }) -join "`n"
+Assert-Contract (-not $driver.Contains('}`n} finally')) 'Driver must not contain a literal escaped newline after its Stage 7 lock try block.'
 foreach ($line in ($driver -split "`n" | Where-Object { $_ -match "Invoke-Qs(Az|AzJson)|Invoke-StgAzJson|Get-StgGraph|Get-StgArm" })) {
     foreach ($literal in [regex]::Matches($line, "'[^']*'")) {
         Assert-Contract ($literal.Value -notmatch '[&|<>^]') "Driver passes a cmd.exe metacharacter to az: $($literal.Value)"
@@ -115,6 +116,32 @@ foreach ($n in 2..8) {
 
 # Configuration: the committed example is refused until its placeholders are replaced; a filled copy passes.
 . $driverPath -DotSourceOnly
+$action = Get-StgStage2NetworkAction -Mode 'create' -VnetExists $false -StageStateExists $false
+Assert-Contract ($action -ceq 'deploy') 'First Stage 2 create-mode deployment must deploy the network.'
+$action = Get-StgStage2NetworkAction -Mode 'create' -VnetExists $true -StageStateExists $true
+Assert-Contract ($action -ceq 'reuse') 'A saved Stage 2 create-mode retry must skip the authoritative network deployment.'
+$action = Get-StgStage2NetworkAction -Mode 'existing' -VnetExists $true -StageStateExists $false
+Assert-Contract ($action -ceq 'deploy') 'Existing-network mode must not be blocked by a pre-existing VNet.'
+$unsafeCreateRetry = $false
+try { $null = Get-StgStage2NetworkAction -Mode 'create' -VnetExists $true -StageStateExists $false } catch { $unsafeCreateRetry = $_.Exception.Message -match 'stage2_create_existing_vnet' }
+Assert-Contract $unsafeCreateRetry 'Create mode without Stage 2 state must refuse to rewrite an existing VNet subnet list.'
+$dnsConfig = @{ subscriptionId = '00000000-0000-4000-8000-000000000001'; resourceGroup = 'rg'; network = @{ mode = 'create' } }
+$dnsOutputs = @{ functionsSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/functions'; privateDnsZoneIds = @{ cosmos = 'cosmos-zone'; blob = 'blob-zone' } }
+$dnsTargets = Get-StgStage2DnsTargets -Cfg $dnsConfig -Outputs $dnsOutputs -HasFoundry $true
+Assert-Contract ($dnsTargets.vnetId -ceq '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet' -and $dnsTargets.zoneIds.Count -eq 5) 'Stage 2 must derive DNS targets when earlier deployment outputs lack VNet and Foundry zone IDs.'
+$headers = New-StgGatewayHeaders -Token 'token-placeholder' -Project 'PROJECT01' -ProjectHeader 'x-customer-project'
+Assert-Contract ($headers['x-customer-project'] -ceq 'PROJECT01' -and -not $headers.ContainsKey('x-ccof-project')) 'Stage 8 must use the configured project selector header.'
+$priorResourceId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/shared/providers/Microsoft.Storage/storageAccounts/prefix-owned/blobServices/default'
+$changes = @(
+    @{ changeType = 'Create'; resourceId = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/prefix-new' }
+    @{ changeType = 'Modify'; resourceId = $priorResourceId }
+    @{ changeType = 'Modify'; resourceId = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.ApiManagement/service/prefix-unrelated' }
+)
+$unsafe = @(Get-StgUnsafeSharedChanges -Changes $changes -PriorStage1TargetIds @($priorResourceId))
+Assert-Contract ($unsafe.Count -eq 1 -and $unsafe[0].resourceId -like '*prefix-unrelated') 'Shared Stage 1 must use exact prior operation IDs, not a colliding prefix.'
+Assert-Contract ((Test-StgExactResourceScope $priorResourceId @($priorResourceId)) -and -not (Test-StgExactResourceScope '/subscriptions/s/resourceGroups/rg/providers/Microsoft.ApiManagement/service/prefix-unrelated' @($priorResourceId))) 'Stage 1 and Stage 4 grant inventory must use exact resource IDs, not matching names.'
+$delete = @(Get-StgUnsafeSharedChanges -Changes @(@{ changeType = 'Delete'; resourceId = $priorResourceId }) -PriorStage1TargetIds @($priorResourceId))
+Assert-Contract ($delete.Count -eq 1) 'Shared Stage 1 must always refuse Delete, even for a prior target.'
 $example = Join-Path $root 'infra\staged\staged.config.example.json'
 $refused = $false
 try { $null = Read-StgConfig $example } catch { $refused = $_.Exception.Message -match 'tenantId must be a GUID' }
@@ -126,22 +153,105 @@ try {
     $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
     $read = Read-StgConfig $tmp
     Assert-Contract ($read.stage1.prefix -ceq 'ccofstg' -and $read.stage1.functionsPublicNetworkAccess -ceq 'Disabled' -and $read.stage1.approveNewPublicApimBootstrap -eq $false) 'Example defaults must stay private and defer APIM.'
+    $stage1Parameters = Get-Stage1Parameters $read
+    $recordedParameters = @{ properties = @{ parameters = @{} } }
+    foreach ($key in $stage1Parameters.Keys) { $recordedParameters.properties.parameters[$key] = @{ value = $stage1Parameters[$key] } }
+    Assert-StgStage1Parameters $recordedParameters $read
+    $recordedParameters.properties.parameters.storagePublicNetworkAccess.value = 'Enabled'
+    $mismatch = $false
+    try { Assert-StgStage1Parameters $recordedParameters $read } catch { $mismatch = $_.Exception.Message -match 'stage1_parameters_changed' }
+    Assert-Contract $mismatch 'A completed Stage 1 deployment with different parameters must not be adopted.'
     $c.stage1.prefix = 'BAD_PREFIX'; $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
     $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'prefix' }
     Assert-Contract $bad 'An invalid prefix must be refused.'
+    $c.stage1.prefix = 'ccofstg'
+    $c.stage1.foundry.create = $true
+    $c.stage1.foundry.modelProviderData = @{ organizationName = 'Example Corp'; countryCode = 'US'; industry = 'Technology' }
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'industry' }
+    Assert-Contract $bad 'Anthropic model-provider industry must use a supported lowercase value.'
+    $c.stage1.foundry.modelProviderData.industry = 'technology'
+    $c.stage1.foundry.deployments[1].name = $c.stage1.foundry.deployments[0].name
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'unique' }
+    Assert-Contract $bad 'Duplicate Foundry deployment names must be refused.'
+    $c.stage1.foundry.deployments[1].name = 'claude-sonnet-5'
+    if (-not $c.entra.existing) { $c.entra.existing = @{} }
+    $c.entra.existing.Remove('adminAppId')
+    $c.entra.adminEditors = @()
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'adminEditors' }
+    Assert-Contract $bad 'A new assignment-required admin app must have at least one editor.'
+    $c.entra.existing.adminAppId = '00000000-0000-4000-8000-000000000003'
+    $c.entra.adminEditors = @()
+    $c.stage1.foundry.create = $false
+    $c.network.mode = 'existing'
+    $c.network.existing = @{
+        privateEndpointSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/private'
+        functionsSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/functions'
+        apimSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/apim'
+        privateDnsZoneIds = @{ cosmos = '/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg/providers/Microsoft.Network/privateDnsZones/privatelink.documents.azure.com'; blob = '/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net' }
+    }
+    $c.backends[0].privateEndpoint = $true
+    $c.backends[0].subscriptionId = $c.subscriptionId
+    $c.backends[0].resourceGroup = $c.resourceGroup
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'private Foundry.*requires' }
+    Assert-Contract $bad 'Existing-network private Foundry configuration must require all three zone IDs.'
 } finally { Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue }
 # State is bound to its tenant/subscription/RG: another target's outputs are refused, not reused.
 $stateDir = Join-Path ([IO.Path]::GetTempPath()) "staged-state-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $stateDir | Out-Null
 try {
     $script:StateDir = $stateDir
-    $cfgA = @{ tenantId = '00000000-0000-4000-8000-00000000000a'; subscriptionId = '00000000-0000-4000-8000-00000000000b'; resourceGroup = 'rg-a' }
-    $cfgB = @{ tenantId = '00000000-0000-4000-8000-00000000000a'; subscriptionId = '00000000-0000-4000-8000-00000000000c'; resourceGroup = 'rg-a' }
-    Save-StgStage $cfgA 1 @{ marker = 'a' }
+    $cfgA = @{
+        tenantId = '00000000-0000-4000-8000-00000000000a'
+        subscriptionId = '00000000-0000-4000-8000-00000000000b'
+        resourceGroup = 'rg-a'
+        location = 'eastus2'
+        tags = @{}
+        sharedResourceGroup = $false
+        stage1 = @{ prefix = 'abc123'; includeAdmin = $true }
+        cosmos = @{ databaseName = 'ccof'; capacityMode = 'serverless' }
+        sync = @{ mode = 'delegated-snapshot' }
+        backends = @()
+    }
+    Save-StgStage $cfgA 1 @{ marker = 'a'; durationSeconds = 1 }
     Assert-Contract ((Get-StgStage $cfgA 1).marker -ceq 'a') 'State must return its own target outputs.'
+    $cfgB = $cfgA.Clone()
+    $cfgB.subscriptionId = '00000000-0000-4000-8000-00000000000c'
     $mismatch = $false
     try { $null = Get-StgStage $cfgB 1 } catch { $mismatch = $_.Exception.Message -match 'state_target_mismatch' }
     Assert-Contract $mismatch 'State of another subscription must be refused.'
+    $cfgA.stage1.prefix = 'xyz789'
+    $changed = $false
+    try { $null = Get-StgStage $cfgA 1 } catch { $changed = $_.Exception.Message -match 'stage_config_changed' }
+    Assert-Contract $changed 'Stage outputs must not be reused after that stage config changes.'
+    $cfgA.stage1.prefix = 'abc123'
+    Save-StgStage $cfgA 3 @{ marker = 'schema-a' }
+    Save-StgStage $cfgA 4 @{ marker = 'grants-a' }
+    Save-StgStage $cfgA 1 @{ marker = 'a'; durationSeconds = 999 }
+    Assert-Contract ((Get-StgStage $cfgA 4).marker -ceq 'grants-a') 'A duration-only change must not invalidate dependent stages.'
+    $state = Read-StgState $cfgA
+    $legacyOutput = ConvertTo-StgCanonical $state.stages['1'].outputs | ConvertTo-Json -Depth 100 -Compress
+    $state.stages['4'].dependencyHashes['1'] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($legacyOutput))).ToLowerInvariant()
+    $state | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath (Get-StgStatePath $cfgA) -Encoding utf8NoBOM
+    $null = Get-StgStage $cfgA 4
+    $state = Read-StgState $cfgA
+    Assert-Contract ($state.stages['4'].dependencyHashes['1'] -ceq (Get-StgDependencyHashes $state 4)['1']) 'Legacy duration-inclusive dependency hashes must migrate only when the saved output matches exactly.'
+    Save-StgStage $cfgA 3 @{ marker = 'schema-b' }
+    $dependencyChanged = $false
+    try { $null = Get-StgStage $cfgA 4 } catch { $dependencyChanged = $_.Exception.Message -match 'stage_dependency_changed' }
+    Assert-Contract $dependencyChanged 'Downstream outputs must not be reused after a prerequisite stage is reapplied.'
+    $lockPath = Join-Path $stateDir 'stage7.lock'
+    $lock = Enter-StgStage7Lock $lockPath
+    $busy = $false
+    try { $second = Enter-StgStage7Lock $lockPath; $second.Dispose() } catch { $busy = $_.Exception.Message -match 'stage7_busy' }
+    Assert-Contract $busy 'Concurrent Stage 7 package builds must fail fast.'
+    $lock.Dispose()
+    $reacquired = Enter-StgStage7Lock $lockPath
+    Assert-Contract ($null -ne $reacquired) 'Stage 7 lock must be released for a later retry.'
+    $reacquired.Dispose()
 } finally { Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue }
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }

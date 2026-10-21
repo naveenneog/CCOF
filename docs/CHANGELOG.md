@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-10-20 — Staged deployment bug bash and live recheck
+
+- Stage 1 shared-RG ownership now uses exact prior deployment resource IDs; the inventory verifier
+  ignores unrelated and later-stage resources.
+- Stage 2 create-mode retries skip the authoritative network deployment when a VNet already exists
+  with saved state, and refuse to rewrite an existing VNet when that state is missing. DNS-link
+  checks support earlier deployment outputs.
+- Stage 8 acceptance uses the configured project header. Dependency hashes now migrate only when
+  saved outputs match exactly or the relevant ARM outputs confirm the stable projection.
+- Logged findings B-10 through B-15 in [`BUGS-FOUND.md`](../BUGS-FOUND.md). Offline staged,
+  customer-deployment, quickstart and public-manual checks pass. Stage 1, Stage 2 and Stage 8
+  acceptance rechecks and the Stage 4 grant recheck pass in both SASET and Contoso
+  ([report](STAGED-STDV2-RUNS-2026-10-20.md)).
+
 ## 2026-10-20 — Standard v2 and private Foundry, SASET MSFT FDPO and Contoso
 
 - Stage 1 can create a keyless private Foundry account with Claude deployments

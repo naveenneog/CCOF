@@ -84,7 +84,7 @@ The driver refuses it until the placeholders are replaced. Sections:
 | `cosmos` | 3, 4 | Database name, capacity mode, custom role names |
 | `apim` | 4, 6 | `existing` APIM, or the Stage 1 one; API id, path and display name |
 | `stage1.foundry` | 0, 1, 2 | Optional new Foundry account: `create`, `accountName`, `publicNetworkAccess` (default `Disabled`), `deployments` [{ name, model, version, sku, capacity }], `modelProviderData` { organizationName, countryCode, industry } (required with deployments), or `modelDeploymentsBlocked` with the reason |
-| `sharedResourceGroup` | 1 | `true` to deploy beside existing resources: apply only when what-if shows no Modify or Delete outside this deployment's prefix |
+| `sharedResourceGroup` | 1 | `true` to deploy beside existing resources: apply only when what-if shows no Modify or Delete outside the exact resource IDs recorded by the prior Stage 1 deployment |
 | `backends` | 0, 2, 4, 6 | Foundry accounts, deployment names and inference geography; `privateEndpoint: true` (same subscription and RG) makes Stage 2 create its private endpoint and DNS |
 | `entra` | 5 | Display names to create, or `existing` app IDs to merge into; `allowAzureCliClient` |
 | `groups` | 5, 7 | Project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets |
@@ -125,15 +125,20 @@ Marketplace offers:
   Owner on one resource group was sufficient in the SASET run.
 
 ### Stage 1 in a shared resource group
-With `sharedResourceGroup: true`, Stage 1 runs what-if first and refuses any Modify or Delete of a
-resource whose name (or parent name) does not start with the prefix. The same guard applies to a
-rerun after a failed Stage 1 apply. Read-back and grant checks then consider only this
+With `sharedResourceGroup: true`, Stage 1 runs what-if first and refuses a Modify or Deploy for a
+resource ID not recorded by the prior Stage 1 deployment operations. It always refuses Delete,
+including for a prior target. This permits an exact retry after a failed Stage 1 apply without
+treating a matching name prefix as ownership. Read-back and grant checks consider only this
 deployment's resources.
 
 ### Stage 2: network
 `mode: create` reuses [`infra/prereqs/network.bicep`](../../infra/prereqs/network.bicep), whose
-subnet list is authoritative: run it once per VNet. The driver then attaches each Function App
-to the Functions subnet one at a time (parallel joins failed with `ServiceAssociationLinkLease`).
+subnet list is authoritative: run it once per VNet. A retry with a saved Stage 2 state skips the
+network deployment, then verifies or reconciles the Function App and APIM integrations. If the VNet
+exists without matching Stage 2 state, the driver refuses `create` mode; recover with
+`network.mode: existing` and explicit subnet and DNS zone IDs. The driver then attaches each
+Function App to the Functions subnet one at a time (parallel joins failed with
+`ServiceAssociationLinkLease`).
 The lab run took 11 minutes, mostly private endpoint creation.
 
 With a Stage 1 APIM of SKU `StandardV2` (or `PremiumV2`), Stage 2 also sets its **outbound**
@@ -195,8 +200,9 @@ API 401 without a token. Telemetry: every allowed response's `x-ccof-request-id`
 
 ## Recovery
 
-- A failed apply records nothing. Read the deployment operations, fix the cause and rerun the
-  same stage; deterministic names make the rerun converge.
+- A failed apply records nothing. Read the deployment operations and fix the cause. Rerun Stage 2
+  `create` only when its VNet was not created; otherwise use `network.mode: existing` with explicit
+  IDs. Other stages can be rerun after their stage-specific preconditions are met.
 - A partially created Stage 1 is resumed only when `stage1-services` succeeded; otherwise empty
   or replace the RG under a separate approval.
 - Stage 5 never deletes Entra objects. Stage 4 never removes earlier assignments.

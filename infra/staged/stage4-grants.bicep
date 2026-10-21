@@ -187,4 +187,15 @@ output storageOwnerAssignmentIds array = [for (k, i) in appKeys: storageOwner[i]
 output metricsPublisherAssignmentIds array = [for (k, i) in appKeys: publisher[i].id]
 output workspaceReaderAssignmentIds array = [for (k, i) in workspaceReaders: workspaceReader[i].id]
 output cosmosAssignmentIds array = [for a in activeAssignments: a.id]
+output cosmosAssignmentDetails array = [for a in activeAssignments: {
+  id: guid(account.id, 'ccof-staged', a.id)
+  principalId: principals[a.principal]
+  roleDefinitionId: startsWith(a.role, 'custom:')
+    ? '${account.id}/sqlRoleDefinitions/${guid(account.id, 'ccof-staged', substring(a.role, 7))}'
+    : '${account.id}/sqlRoleDefinitions/${a.role}'
+  scope: empty(a.container) ? '${account.id}/dbs/${databaseName}' : '${account.id}/dbs/${databaseName}/colls/${a.container}'
+}]
+output storageOwnerDetails array = [for (k, i) in appKeys: { principalId: principals[k], roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobOwner), scope: storage[i].id }]
+output metricsPublisherDetails array = [for (k, i) in appKeys: { principalId: principals[k], roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', metricsPublisher), scope: insights[i].id }]
+output workspaceReaderDetails array = [for k in workspaceReaders: { principalId: principals[k], roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', logReader), scope: workspace.id }]
 output foundryGrants array = [for b in backends: (!empty(apimPrincipalId) && (b.?assignCognitiveServicesUser ?? true)) ? b.id : '']

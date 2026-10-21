@@ -55,6 +55,9 @@ New-Item -ItemType Directory -Force -Path $script:StateDir | Out-Null
 $mode = if ($Apply -and $Stage -ne 0) { 'apply' } else { 'preview' }
 Write-Host "== stage $Stage ($mode) subscription $($cfg.subscriptionId) RG $($cfg.resourceGroup); state $script:StateDir"
 $started = [DateTime]::UtcNow
+$stage7Lock = $null
+if ($Apply -and $Stage -eq 7) { $stage7Lock = Enter-StgStage7Lock (Join-Path $script:Repo '.staged-stage7.lock') }
+try {
 $outputs = switch ($Stage) {
     0 { Invoke-Stage0 $cfg }
     1 { Invoke-Stage1 $cfg -Apply:$Apply }
@@ -71,3 +74,4 @@ if ($Stage -eq 0 -or $Apply) {
     Save-StgStage $cfg $Stage $outputs
     Write-Host "stage $Stage completed and verified in $([int]([DateTime]::UtcNow - $started).TotalSeconds) s; outputs in $(Get-StgStatePath $cfg)" -ForegroundColor Green
 } else { Write-Host "stage $Stage preview only: nothing changed. Rerun with -Apply." }
+} finally { if ($stage7Lock) { $stage7Lock.Dispose() } }
