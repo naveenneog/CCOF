@@ -19,6 +19,7 @@ import { Reconciler } from "./pages/reconciler.tsx";
 import { Foundry } from "./pages/foundry.tsx";
 import { Health } from "./pages/health.tsx";
 import { Audit } from "./pages/audit.tsx";
+import { RemovalLimits } from "./pages/removal-limits.tsx";
 import { CostDefinitions } from "./pages/cost-definitions.tsx";
 import { HelpPage } from "./pages/help.tsx";
 import { UserDirectoryProvider } from "./components/user-identity.tsx";
@@ -45,6 +46,7 @@ function Page() {
     case "foundry": page = <Foundry />; break;
     case "health": page = <Health />; break;
     case "audit": page = <Audit query={route.query} />; break;
+    case "removal-limits": page = <RemovalLimits />; break;
     case "cost-definitions": page = <CostDefinitions />; break;
     case "help": page = <HelpPage />; break;
     default: page = <div className="page"><h1 id="page-title" tabIndex={-1}>Page not found</h1><p><a href="#/overview">Go to the overview</a></p></div>;

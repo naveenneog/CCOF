@@ -1,5 +1,27 @@
 # Change log
 
+## 2026-10-22 — Admin 3.2.0: project retirement, removal limits, change record
+
+- **Retire project** (V3 project Settings, `POST /api/projects/{id}/retire`, If-Match and the project ID
+  repeated in the body). Sets `status: "retired"` and `retiredAt`; edits then return 409
+  `project_retired`. The sync removes all memberships of a retired project at its next run without
+  reading its groups, outside the removal limits (`src/sync/plan.ts`, `src/sync/run.ts`). Other
+  non-active statuses still freeze the project.
+- **Removal limits** page and `GET/PUT /api/v3/sync/removal-limits`: an override of
+  `SYNC_MAX_REMOVALS_PER_RUN` / `SYNC_MAX_REMOVAL_FRACTION` with reason and expiry (≤ 90 days), stored
+  in `adminConfig`. The sync reads it when `SYNC_LIMITS_CONTAINER` is set; a missing, invalid, expired
+  or unreadable override falls back to the app settings (`src/sync/removal-limits.ts`).
+- **Change record**: every admin change (projects, catalog, removal limits) is written to `adminConfig`
+  before it is applied and completed with its result; if it cannot be written, the change is refused
+  with 503 `change_log_unavailable` (`admin/src/change-log.ts`). Audit has a Change record / Telemetry
+  source switch; project Activity reads the change record. `GET /api/v3/audit/changes`.
+- Staged deployment: Stage 3 assignment `sync-limits-reader` (Cosmos Built-in Data Reader on
+  `adminConfig`, only with the admin app); Stage 5 sets `SYNC_LIMITS_CONTAINER=adminConfig` with the
+  admin app. `tests/Test-StagedStages.ps1` checks both.
+- [VDI upgrade](ADMIN-V3-VDI-UPGRADE.md) section 9: admin and sync packages, the sync grant and setting.
+- Tests: admin 114, sync 237 (1 skipped), staged 355 checks; 11/11 mutants caught (control load
+  failure reported separately); Edge check of retire, removal limits, audit in both themes and as reader.
+
 ## 2026-10-22 — Admin 3.1.0: Entra names and admin-only VDI upgrade
 
 - V3 displays current Entra display names/UPNs beside full object IDs in Overview, Chargeback

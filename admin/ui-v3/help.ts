@@ -40,6 +40,8 @@ export const HELP: Record<string, HelpTopic> = {
     troubleshooting: [
       ["'Someone else changed this'", "The project changed after you opened it. Reload, then make your change again."],
       ["Changes don't reach developers", "Limits reach the gateway after the next entitlement sync run."],
+      ["Retire project", "Settings > Retire project. Type the project ID to confirm. The project becomes read-only and the entitlement sync removes all its memberships at its next run; the removals are not counted against the removal limits. The Entra groups are not changed. A sync older than admin 3.2 only freezes a retired project and removes nothing."],
+      ["'Project is retired'", "A retired project can't be edited. Create a new project if the work continues."],
     ],
   },
   "new-project": {
@@ -104,9 +106,26 @@ export const HELP: Record<string, HelpTopic> = {
   },
   audit: {
     title: "Audit",
-    summary: "Every change and refusal made through the admin API, searchable by project, actor, operation, outcome and date, with before → after values.",
-    permissions: ["Log Analytics Reader on the admin app's own workspace (ADMIN_AUDIT_WORKSPACE_ID when it differs from ADMIN_WORKSPACE_ID)."],
-    troubleshooting: [["My change isn't listed yet", "Log ingestion takes a few minutes."]],
+    summary: "Every change made through the admin API, searchable by project, actor, operation, outcome and date, with before → after values. Two sources: the change record and telemetry.",
+    figures: [
+      ["Change record", "A Cosmos document per change in the adminConfig container, written before the change is applied and completed with its result. If it can't be written, the change is refused (change_log_unavailable). Outcome 'pending' means the result was not confirmed. Not deleted by the console."],
+      ["Telemetry", "ccof.admin.audit.v1 log lines in Log Analytics, including refused attempts. Kept for the workspace retention period."],
+    ],
+    permissions: ["Change record: ADMIN_CONFIG_CONTAINER and a scoped Cosmos data role (read, query, create, replace) on adminConfig.", "Telemetry: Log Analytics Reader on the admin app's own workspace (ADMIN_AUDIT_WORKSPACE_ID when it differs from ADMIN_WORKSPACE_ID)."],
+    troubleshooting: [["My change isn't in Telemetry yet", "Log ingestion takes a few minutes. The change record is immediate."]],
+  },
+  "removal-limits": {
+    title: "Removal limits",
+    summary: "The entitlement sync holds back access removals when one run would remove more than both limits: a count and a fraction of current memberships. This page saves an override of the sync's app settings, for example for a planned reorganisation.",
+    figures: [
+      ["Max removals per run", "Whole number, 0 to 10,000,000. App setting default: SYNC_MAX_REMOVALS_PER_RUN (5)."],
+      ["Max removal fraction", "Decimal 0 to 1, up to six places. App setting default: SYNC_MAX_REMOVAL_FRACTION (0.1)."],
+      ["Expiry", "Up to 90 days, or none. After expiry the app settings apply again."],
+      ["Fallback", "A missing, disabled, expired, invalid or unreadable override never raises the limits: the sync uses its app settings."],
+      ["Retirement", "Removals caused by retiring a project are not counted against the limits."],
+    ],
+    permissions: ["Saving needs CCOF.Projects.Write and ADMIN_CONFIG_CONTAINER with a scoped Cosmos data role.", "The sync reads the override only with SYNC_LIMITS_CONTAINER=adminConfig and a Cosmos data read role on that container (staged Stage 3 and Stage 5)."],
+    troubleshooting: [["The sync still holds back removals", "Check the sync log for removal_limits_from_admin or the fallback reason (override_unreadable, override_invalid, override_expired)."]],
   },
   "cost-definitions": {
     title: "Cost definitions",

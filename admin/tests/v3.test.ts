@@ -82,10 +82,10 @@ test("a denied configured rate-card store never silently substitutes packaged pr
   assert.equal((await call("version")).status, 200);
 });
 
-test("v3 fails closed without authentication and reports 3.1.0", async () => {
+test("v3 fails closed without authentication and reports 3.2.0", async () => {
   const { deps, call } = setup();
   const v = await call("version");
-  assert.equal(data(v).version, "3.1.0");
+  assert.equal(data(v).version, "3.2.0");
   deps.authenticate = async () => { throw new ApiError(401, "bearer_token_required"); };
   assert.equal((await call("version")).status, 401);
   deps.authenticate = null;

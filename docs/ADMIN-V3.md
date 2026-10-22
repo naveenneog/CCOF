@@ -1,9 +1,10 @@
 # Admin console V3: settings, permissions, upgrade and rollback
 
-Release source: `feat/admin-console-v2`; package version **3.1.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
+Release source: `feat/admin-console-v2`; package version **3.2.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
 One ZIP serves both consoles. V2 stays at `/api/console` and is unchanged; V3 is at
 `/api/console-v3` and is served only when `ADMIN_V3_ENABLED=true`. This is an
-**admin-app-only** upgrade: no gateway, sync or reconciler change, no new Entra app, roles or scopes.
+**admin-app-only** upgrade up to 3.1.0: no gateway, sync or reconciler change, no new Entra app, roles or scopes.
+3.2.0 also needs the sync package for retirement and removal limits to take effect (below).
 
 **3.1.0:** current Entra user names appear beside full object IDs in Overview, Chargeback,
 Budgets/Reconciler and Audit/Activity. The admin managed identity needs Graph application
@@ -11,20 +12,38 @@ Budgets/Reconciler and Audit/Activity. The admin managed identity needs Graph ap
 The [step-by-step VDI upgrade](ADMIN-V3-VDI-UPGRADE.md) covers the manual grant, private publishing,
 settings, verification and rollback. Names are memory-only; filters and exports retain object IDs.
 
+**3.2.0:**
+
+- **Retire project** (project Settings tab, type the project ID to confirm). The project document gets
+  `status: "retired"` and `retiredAt`; the project becomes read-only (edits return 409 `project_retired`).
+  The entitlement sync removes all its memberships at its next run, outside the removal limits
+  ([SYNC.md](SYNC.md)). The Entra groups are not changed.
+- **Removal limits** page: an override of the sync's `SYNC_MAX_REMOVALS_PER_RUN` and
+  `SYNC_MAX_REMOVAL_FRACTION`, with a reason and an expiry of up to 90 days.
+- **Change record**: every admin change (project create, settings, limits, family policy, retire, cost
+  definitions, removal limits) is written to the `adminConfig` container before it is applied, then
+  completed with its result. If the record cannot be written, the change is refused with 503
+  `change_log_unavailable` and nothing is modified (`admin/src/change-log.ts`). Audit and Activity read it;
+  the telemetry audit (refused attempts included) stays available as a second source.
+
+A sync older than 3.2.0 treats a retired project as frozen (`status:not_active`): nothing is removed,
+and the override is not read. Upgrade the sync package together with the admin package.
+
 ## What V3 adds
 
 | Page | What it shows | Data |
 | --- | --- | --- |
 | Overview | **Cost breakdown** (full width): overall known cost, tag toggles and a project picker; a project donut (top 7 + "N more") → select a project for its classification donut (STD, PRM, CYB, ...) → select a classification; the **users** split (top 8 by cost, Entra Object IDs) and **models** donut beside it follow the selection, and unknown cost is never drawn as zero. Then month-to-date known list cost stacked by model family (with its data table), needs-attention list (groups at ≥ 80 % of budget, incomplete coverage, late reconciler, failing probes), telemetry and reconciler facts, recent changes | `/api/v3/chargeback/{projects,classifications,developers,models,trend,totals,coverage}`, `/api/v2/budgets`, `/api/v3/reconciler/runs`, `/api/v2/health`, `/api/v3/audit` |
 | Projects | Full-width table, 25 a page with continuation tokens; search, tags (all must match), backend and classification filters; budget used per project | `/api/v2/projects` (new `tags`, `classification` filters), `/api/v2/budgets` |
-| Project detail | Tabs: Overview (cost trend, group budget use, facts), Models & limits (editor, review, save), Access groups, Budgets (person/group budgets in USD or CCU, burn-down, budget assistant with *Apply to limits*), **Onboarding** (per classification: download `config.json` for the developer's CCOF helper and `onboarding.json` for whoever onboards the team, with a preview, install paths and steps), Settings (name, tags, backend, subscription), Activity | `/api/projects/{id}` and its existing PUT/PATCH routes with If-Match, `/api/v3/plan`, `/api/v3/audit`, `/api/v3/projects/{id}/client-config` |
+| Project detail | Tabs: Overview (cost trend, group budget use, facts), Models & limits (editor, review, save), Access groups, Budgets (person/group budgets in USD or CCU, burn-down, budget assistant with *Apply to limits*), **Onboarding** (per classification: download `config.json` for the developer's CCOF helper and `onboarding.json` for whoever onboards the team, with a preview, install paths and steps), Settings (name, tags, backend, subscription; **Retire project**), Activity (change record; telemetry when the record is not configured) | `/api/projects/{id}` and its existing PUT/PATCH routes with If-Match, `POST /api/projects/{id}/retire`, `/api/v3/plan`, `/api/v3/audit/changes`, `/api/v3/audit`, `/api/v3/projects/{id}/client-config` |
 | New project | Stepper: Basics → Access groups → Models & budget (with the assistant) → Review (the exact document) → `POST /api/projects` | existing |
 | Chargeback | Totals, coverage state, rate-card version, observation time, "list price, not an invoice"; charts each paired with a data table: cost over time by family (hour/day bins), cost by token category, top groups/projects, budget burn-down; breakdown tabs (groups, developers, models, families, projects, unpriced, diagnostics) paged ≤ 500 rows; CSV export with `truncated` flag | `/api/v3/chargeback/{view}` |
 | Budgets | Group and person budget counts, spend, capped use; burn-down per access group; snapshots table (groups or people) | `/api/v3/reconciler/{summary,snapshots}`, `/api/v2/budgets` |
 | Reconciler | Last written run age vs timer interval, states written (person/group), ingestion delay, unattributed/unpriced; latest run per outcome; snapshot search by period, scope, project, classification, person, snapshot state, budget state (server-side paging) | `/api/v3/reconciler/{runs,snapshots}` |
 | Foundry | Accounts (lifecycle, region, public access, matched backends, deployments on demand), gateway backends with linked projects, `not_found` accounts with affected projects | `/api/v2/inventory`, `/api/v2/deployments`, `/api/v2/projects?backendId=` |
 | Health | Reconciler freshness, telemetry freshness, admin version, endpoint probes, configured integrations — as separate signals | `/api/v2/health`, `/api/v3/{reconciler/runs,chargeback/coverage,version,capabilities}` |
-| Audit | Filter by project, actor, operation, outcome and UTC dates; before → after; paged | `/api/v3/audit` |
+| Audit | Source: **Change record** (default) or **Telemetry** (includes refused attempts). Filter by project, actor, operation, outcome and UTC dates; before → after; paged | `/api/v3/audit/changes`, `/api/v3/audit` |
+| Removal limits | Current override state, values, expiry, reason, who changed it; edit with review | `/api/v3/sync/removal-limits` |
 | Cost definitions | Rate card in USD or CCU per MTok (exact, 100 CCU = USD 1), families, effective dates, geography multipliers, prompt tiers, cache categories; **Load from file**, **Edit prices** (reprice from a future date), server review, save with ETag; export JSON; model mappings, retail meters, billed cost | `/api/v2/catalog`, `/api/v3/rate-card/review`, `/api/v2/{prices,billed-cost}` |
 | Help | All help topics, permissions matrix, runbooks; every page also has a contextual Help drawer | static |
 
@@ -70,7 +89,7 @@ change.
 | `ADMIN_CLIENT_SCOPE` | Onboarding downloads (optional) | Token scope; defaults to `api://<ADMIN_CLIENT_ID>/access_as_user` |
 | `ADMIN_GATEWAY_URL` | Onboarding downloads | Gateway base URL the client calls, `https://…` without `/v1` (same value as the client's `gatewayUrl`) |
 | `ADMIN_PROJECT_HEADER` | Onboarding downloads (optional) | Project selector header, default `x-ccof-project` |
-| `ADMIN_CONFIG_CONTAINER` | Saving cost definitions (as V2) | Cosmos container; when a catalog is saved, chargeback and the budget assistant use its rate card |
+| `ADMIN_CONFIG_CONTAINER` | Saving cost definitions (as V2); change record and removal limits (3.2.0) | Cosmos container (`adminConfig`); when a catalog is saved, chargeback and the budget assistant use its rate card. When set, a change that cannot be recorded here is refused |
 
 A missing or invalid setting disables only its feature, which then shows its capability state
 (`disabled`, `permission_required`, `unavailable`) with the reason and the permission that enables it.
@@ -91,10 +110,12 @@ All belong to the **admin Function App managed identity**; none are granted by t
 | Billed cost, retail meters, group search | As V2 | As V2 |
 | Budget assistant | None | Always available |
 | User names (3.1.0) | Graph application `User.Read.All`, admin consent, `ADMIN_USER_NAMES_ENABLED=true` | Full IDs remain visible with disabled/permission/unavailable/missing-user state |
+| Change record, removal limits (3.2.0) | The existing admin role on `adminConfig` (read, query, create, replace; no delete) | Change record and removal limits show `disabled`; Activity uses telemetry |
+| Override reaches the sync (3.2.0) | **Sync** identity: Cosmos DB Built-in Data Reader on `adminConfig`; sync setting `SYNC_LIMITS_CONTAINER=adminConfig` | The sync uses its app settings |
 
 People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need `CCOF.Projects.Write`
-(or `ADMIN_EDITOR_IDS`). Every write keeps the field-level review and If-Match ETag and emits one
-`ccof.admin.audit.v1` line.
+(or `ADMIN_EDITOR_IDS`). Every write keeps the field-level review and If-Match ETag, emits one
+`ccof.admin.audit.v1` line and, with `ADMIN_CONFIG_CONTAINER`, one change-record document.
 
 ## New API
 
@@ -106,12 +127,16 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/reconciler/runs` | Latest run per outcome and reason, with `ageMinutes` and `freshness` against the interval |
 | `GET /api/v3/reconciler/snapshots`, `/summary` | `period`, `scope` (person, group), `project`, `classification`, `person`, `state` (current, expired, historical, invalid_event), `budgetState`, `limit`, `offset`; exact USD equivalents |
 | `GET /api/v3/audit` | `project`, `actor`, `operation`, `outcome`, `from`, `to` (≤ 93 days, default last 31), `limit`, `offset` |
+| `GET /api/v3/audit/changes` | Same parameters; reads the change record. Outcomes: `created`, `updated`, `retired`, `refused` (ETag race), `failed`, `pending` (result not confirmed) |
+| `GET /api/v3/sync/removal-limits` | Reader. The override (`enabled`, `maxRemovalsPerRun`, `maxRemovalFraction` text with ≤ 6 decimals, `expiresAt`, `reason`, `updatedAt`, `updatedBy`), its ETag and state: `none`, `disabled`, `expired`, `in_effect`, `invalid` |
+| `PUT /api/v3/sync/removal-limits` | Editor. Body: the five editable fields only. First save needs `If-None-Match: *`, later saves `If-Match`. Validated with the sync's own rules plus expiry in the future and ≤ 90 days; 422 `invalid_removal_limits` with `problems` |
+| `POST /api/projects/{id}/retire` | Editor, `If-Match`, body exactly `{"confirmProjectId":"<id>"}`. 409 when already retired. One-way in the console |
 | `GET /api/v3/plan` | In-force models by family, geography multipliers, rate card version and source |
 | `POST /api/v3/plan` | Budget assistant: `monthlyBudget {amount, currency USD/CCU}`, `members`, `geography`, `sizing`, `mix`, `families[{family, model?, budgetPercent}]`, working days/hours, burst. Pure; no writes. 422 with `detail` on invalid input. |
 | `POST /api/v3/rate-card/review` | Validates a candidate rate card with the reconciler's parser and the history rules (version must change, recorded entries unchanged, new or closed entries not in the past) and returns added/closed/unchanged. Saving stays `PUT /api/v2/catalog` with If-Match. |
-| `GET /api/v3/version`, `/capabilities` | `3.1.0`; which features are configured and the caller's role |
+| `GET /api/v3/version`, `/capabilities` | `3.2.0`; which features are configured (including `changeLog`, `removalLimits`) and the caller's role |
 
-`/api/v2/version` and `/api/health` report 3.1.0. `/api/v2/projects` accepts `tags` (comma-separated, all
+`/api/v2/version` and `/api/health` report 3.2.0. `/api/v2/projects` accepts `tags` (comma-separated, all
 must match, up to 10) and `classification`.
 
 ## Upgrade from the VDI
@@ -141,6 +166,9 @@ The shorter V3 migration outline follows [ADMIN-V2.md](ADMIN-V2.md) "VDI build a
   understand: projects and catalog documents keep the V2 schema.
 - A project or catalog change made in V3 is a real change; reverse it through a reviewed, ETag-guarded
   edit in either console, never by restoring the database.
+- A retired project stays retired. Admin 3.1.0 and earlier refuse edits to it (`retiredAt:invalid`,
+  `admin/src/validation.ts`). Change-record and removal-limit documents stay in `adminConfig`; older
+  packages ignore them.
 
 ## Local demo
 

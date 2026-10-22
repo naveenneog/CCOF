@@ -77,6 +77,7 @@ module settings '../quickstart/modules/app-settings.bicep' = {
     apimId: apimService.id
     resolver: resolver
     sync: sync
+    syncLimitsContainer: (admin.?enabled ?? false) ? 'adminConfig' : ''
     reconciler: reconciler
     budgetState: budgetState
     syncTimerEnabled: syncTimerEnabled

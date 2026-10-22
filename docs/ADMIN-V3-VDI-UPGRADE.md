@@ -1,8 +1,11 @@
-# Admin V3.1 upgrade from a Windows VDI
+# Admin V3.1 and V3.2 upgrade from a Windows VDI
 
 This upgrades the existing **admin Function App only** to version **3.1.0**. Resolver, sync,
 reconciler, APIM policies, project records and enforcement are unchanged. Nothing here runs the
 staged-deployment driver. V2 remains at `/api/console`; V3 is `/api/console-v3`.
+
+Sections 1-8 cover 3.1.0. [Section 9](#9-upgrade-to-320-retirement-removal-limits-change-record)
+covers 3.2.0, which also updates the **sync** app, one sync Cosmos grant and one sync setting.
 
 ## What changes
 
@@ -254,6 +257,105 @@ change to past costs, membership or budget ownership. CSV exports intentionally 
   grants or disable the managed identity. Removing consent does not instantly revoke cached
   tokens or displayed labels.
 
+## 9. Upgrade to 3.2.0: retirement, removal limits, change record
+
+3.2.0 adds project retirement, removal limits edited in the console, and a permanent change record
+([ADMIN-V3.md](ADMIN-V3.md), [SYNC.md](SYNC.md)). Steps 1-8 still apply, with `3.2.0` in place of
+`3.1.0` in the build check and file name. The admin side needs no new permission: the change record
+and the removal limits use the existing admin role on `adminConfig` (read, query, create, replace).
+
+| Item | Who | Change |
+| --- | --- | --- |
+| Admin Function App | Deployment operator | Publish `ccof-admin-v3.2.0.zip` (steps 3-5) |
+| Sync Function App | Deployment operator | Publish the 3.2.0 sync package; without it a retired project is only frozen and the override is ignored |
+| Sync managed identity | Cosmos account owner | Cosmos DB Built-in Data Reader (`00000000-0000-0000-0000-000000000001`) on `/dbs/<database>/colls/adminConfig` only |
+| Sync app setting | Deployment operator | `SYNC_LIMITS_CONTAINER` = `adminConfig` |
+
+`ADMIN_CONFIG_CONTAINER` must be set on the admin app (it already is when cost definitions are
+saved). With it set, an admin change that cannot be written to the change record is refused with
+503 `change_log_unavailable`, and nothing is modified.
+
+### Build both packages
+
+```powershell
+$ErrorActionPreference = 'Stop'
+Set-Location 'C:\REPLACE\ccof-bicep'
+$repo = (Get-Location).Path
+$version = (Get-Content admin\package.json -Raw | ConvertFrom-Json).version
+if ($version -ne '3.2.0') { throw 'This is not the approved Admin 3.2.0 source.' }
+$release = Join-Path $HOME 'ccof-admin-releases'
+New-Item -ItemType Directory -Force -Path $release | Out-Null
+$zip = Join-Path $release 'ccof-admin-v3.2.0.zip'
+& (Join-Path $repo 'admin\Build-AdminPackage.ps1') -OutFile $zip
+& (Join-Path $repo 'scripts\portal\Build-PortalPackage.ps1') -App sync -OutputDirectory $release
+$syncZip = Join-Path $release 'sync.zip'
+Get-FileHash -LiteralPath $zip, $syncZip -Algorithm SHA256
+```
+
+Keep the currently deployed sync ZIP as its rollback package, as for the admin ZIP.
+
+### Grant the sync read access to adminConfig
+
+Run with the dedicated profile from step 4. The principal is the sync app's managed identity
+(the user-assigned identity named in `SYNC_MANAGED_IDENTITY_CLIENT_ID`), not the admin identity.
+
+```powershell
+$cosmosAccount = 'REPLACE-cosmos-account'
+$cosmosRg = 'REPLACE-cosmos-resource-group'
+$database = 'REPLACE-cosmos-database'
+$syncApp = 'REPLACE-sync-function-app'
+$syncPrincipalId = 'REPLACE-sync-identity-object-id'
+foreach ($value in @($cosmosAccount, $cosmosRg, $database, $syncApp, $syncPrincipalId)) {
+    if (-not $value -or $value -match '[()&|<>^"]') {
+        throw 'Azure CLI arguments must be non-empty and contain no cmd.exe metacharacters.'
+    }
+}
+az cosmosdb sql role assignment create --subscription $sub --account-name $cosmosAccount `
+    --resource-group $cosmosRg --role-definition-id 00000000-0000-0000-0000-000000000001 `
+    --principal-id $syncPrincipalId --scope "/dbs/$database/colls/adminConfig"
+if ($LASTEXITCODE -ne 0) { throw 'Cosmos role assignment failed.' }
+az cosmosdb sql role assignment list --subscription $sub --account-name $cosmosAccount `
+    --resource-group $cosmosRg -o table
+```
+
+The list must show the new assignment with scope ending `/colls/adminConfig`. The empty-value check
+matters: a missing scope part widens the assignment.
+
+### Publish the sync package and set the setting
+
+```powershell
+az functionapp deployment source config-zip --subscription $sub `
+    --resource-group $rg --name $syncApp --src $syncZip
+if ($LASTEXITCODE -ne 0) { throw 'Sync publishing failed.' }
+az functionapp config appsettings set --subscription $sub --resource-group $rg `
+    --name $syncApp --settings SYNC_LIMITS_CONTAINER=adminConfig -o none
+if ($LASTEXITCODE -ne 0) { throw 'Sync setting failed.' }
+```
+
+`$rg` is the resource group of the sync app; change it if it differs from the admin app's. Do not run
+Stage 3, Stage 5 or Stage 7 of the staged driver for this: they apply all grants, settings and apps.
+The staged driver includes the same grant (`sync-limits-reader`) and setting for new deployments.
+
+### Verify
+
+| Check | Expected |
+| --- | --- |
+| `/api/v3/version` | `version: 3.2.0` |
+| `/api/v3/capabilities` | `changeLog` and `removalLimits` are `configured` |
+| Edit a test project setting | Audit > Change record shows the change with outcome `updated` |
+| Removal limits page, save an override with a short expiry | State `in effect`; the next sync run emits the notice `removal_limits_from_admin` |
+| Sync run after the override is switched off | No `override_unreadable` notice (that one means the grant or setting is missing) |
+| Retire a test project | Read-only banner; the next sync run emits `project_retired` with the removal count |
+
+### Rollback
+
+- Admin: publish the retained admin ZIP. Retired projects stay retired; admin 3.1.0 and earlier
+  refuse edits to them (`retiredAt:invalid`). Change-record documents remain in `adminConfig`.
+- Sync: publish the retained sync ZIP and remove `SYNC_LIMITS_CONTAINER`. A retired project is then
+  frozen: its remaining memberships are kept, nothing is added.
+- The sync Cosmos assignment can be removed with `az cosmosdb sql role assignment delete` using the id
+  from the list above.
+
 ## References
 
 - Implementation: `admin/src/user-directory.ts`, `admin/src/v3.ts`,
@@ -262,4 +364,8 @@ change to past costs, membership or budget ownership. CSV exports intentionally 
 - [Graph JSON batching: 20 requests per batch](https://learn.microsoft.com/en-us/graph/json-batching).
 - [Assign an app role to a managed identity](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/assign-app-role-managed-identity-powershell).
 - [Graph New-MgServicePrincipalAppRoleAssignment](https://learn.microsoft.com/en-us/powershell/module/microsoft.graph.applications/new-mgserviceprincipalapproleassignment).
+- Retirement and removal limits: `src/sync/plan.ts`, `src/sync/removal-limits.ts`, `admin/src/sync-limits.ts`,
+  `admin/src/change-log.ts`, `infra/staged/stage3-grants.bicep` (`sync-limits-reader`).
+- [az cosmosdb sql role assignment create](https://learn.microsoft.com/en-us/cli/azure/cosmosdb/sql/role/assignment#az-cosmosdb-sql-role-assignment-create).
+- [Cosmos DB built-in data roles](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/reference-data-plane-security#built-in-roles).
 - [Functions ZIP deployment and Flex Consumption](https://learn.microsoft.com/en-us/azure/azure-functions/deployment-zip-push#deploy-by-using-azure-cli).

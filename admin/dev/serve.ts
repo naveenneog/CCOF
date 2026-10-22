@@ -22,6 +22,8 @@ import type { CatalogStore } from "../src/v2.ts";
 import { createOperations } from "../src/operations.ts";
 import type { Operations } from "../src/operations.ts";
 import { handleV3Request } from "../src/v3.ts";
+import { createMemoryChangeLog } from "../src/change-log.ts";
+import { createMemoryLimitsStore } from "../src/sync-limits.ts";
 import { QueryCache } from "../src/chargeback.ts";
 import { createDemoTelemetry } from "./demo-data.ts";
 import type { DemoGroup } from "./demo-data.ts";
@@ -144,6 +146,9 @@ const catalogStore: CatalogStore = {
     return catalog.etag;
   },
 };
+// Demo change record and removal limits (memory only); Azure uses the adminConfig container.
+const changeLog = createMemoryChangeLog();
+const limitsStore = createMemoryLimitsStore();
 const realOperations = createOperations({}, { getToken: async () => { throw new Error("Demo must not acquire real tokens"); } }, console.log);
 
 // ---- Demo-only synthetic telemetry (dev/demo-data.ts); never used in Azure. ----
@@ -261,10 +266,10 @@ const server = createServer(async (req, res) => {
     const request = { method: req.method ?? "GET", path: url.pathname + url.search, headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; }, body };
     if (url.pathname.startsWith("/api/v3/") && !V3_ENABLED) return sendJson(404, { error: "route_not_found" });
     const r = url.pathname.startsWith("/api/v3/")
-      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, defaultCatalog, operations, directory, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
+      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, changeLog, limitsStore, defaultCatalog, operations, directory, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
       : url.pathname.startsWith("/api/v2/")
-        ? await handleV2Request(request, { authenticate, projects: store, catalogStore, defaultCatalog, operations, log: demoLog, now: () => new Date(), newId: randomUUID })
-        : await handleAdminRequest(request, { authenticate, store, log: demoLog, now: () => new Date(), newId: randomUUID });
+        ? await handleV2Request(request, { authenticate, projects: store, catalogStore, changeLog, defaultCatalog, operations, log: demoLog, now: () => new Date(), newId: randomUUID })
+        : await handleAdminRequest(request, { authenticate, store, changeLog, log: demoLog, now: () => new Date(), newId: randomUUID });
     return sendJson(r.status, r.jsonBody, r.headers);
   }
   send(404, { "content-type": "text/plain" }, "Not found");

@@ -607,3 +607,6 @@ button.donut-legend-row.is-selected { background: var(--primary-tint); border-co
   button.donut-legend-row.is-selected { outline: 2px solid Highlight; }
   .nav-item.is-active { outline: 2px solid Highlight; }
 }
+
+.check-inline { display: flex; gap: var(--s2); align-items: center; font-size: var(--text-sm); min-height: 2.25rem; }
+.plain-list { margin: 0 0 var(--s3); padding-left: 1.2rem; display: grid; gap: var(--s1); font-size: var(--text-sm); }

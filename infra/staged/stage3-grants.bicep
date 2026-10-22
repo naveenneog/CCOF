@@ -138,7 +138,9 @@ var cosmosRoleDefinitions = [
 ]
 
 // The quickstart's assignments without the runner VM (the staged path seeds through the sync app),
-// plus the admin editor on projects and adminConfig only (no delete, no upsert, no budget containers).
+// plus the admin editor on projects and adminConfig only (no delete, no upsert, no budget containers),
+// and the sync's read access to adminConfig for the removal limits set in the admin console.
+// adminConfig exists only with the admin app, so assignments on it need the admin principal.
 // 00000000-0000-0000-0000-000000000001 is Cosmos DB Built-in Data Reader.
 var cosmosAssignments = [
   { id: 'resolver-cosmos-data-reader', principal: 'resolver', role: '00000000-0000-0000-0000-000000000001', container: '', when: '' }
@@ -154,8 +156,9 @@ var cosmosAssignments = [
   { id: 'qs-sync-backends-writer', principal: 'sync', role: 'custom:onbProjectWriter', container: 'backends', when: '' }
   { id: 'admin-projects-editor', principal: 'admin', role: 'custom:adminProjectEditor', container: 'projects', when: '' }
   { id: 'admin-config-editor', principal: 'admin', role: 'custom:adminProjectEditor', container: 'adminConfig', when: '' }
+  { id: 'sync-limits-reader', principal: 'sync', role: '00000000-0000-0000-0000-000000000001', container: 'adminConfig', when: '' }
 ]
-var activeAssignments = filter(cosmosAssignments, a => (empty(a.when) || a.when == syncMode) && !empty(principals[?a.principal] ?? ''))
+var activeAssignments = filter(cosmosAssignments, a => (empty(a.when) || a.when == syncMode) && !empty(principals[?a.principal] ?? '') && (a.container != 'adminConfig' || !empty(principals.?admin ?? '')))
 
 resource roleDefinitions 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-11-15' = [for d in cosmosRoleDefinitions: {
   parent: account
