@@ -28,8 +28,8 @@ test("admin options only add filter lines, bins and paging to the workbook text"
   const base = chargebackQueries(legacy, 500, groups);
   const extended = chargebackQueries(legacy, 500, groups, { extendedFilters: true, trendBin: "1h", offset: 100, extraViews: true });
   const strip = (q: string) => q
-    .replace('let BackendFilter = base64_decode_tostring("{Backend:base64}");\nlet FamilyFilter = base64_decode_tostring("{Family:base64}");\nlet ClassificationFilter = base64_decode_tostring("{Classification:base64}");\nlet ProjectSetFilter = base64_decode_tostring("{Projects:base64}");\nlet ProjectSet = split(ProjectSetFilter, ",");\n', "")
-    .replace('\n    and (BackendFilter == "*" or backendId =~ BackendFilter)\n    and (FamilyFilter == "*" or modelFamily == FamilyFilter)\n    and (ClassificationFilter == "*" or classification == ClassificationFilter)\n    and (ProjectSetFilter == "*" or projectId in (ProjectSet))', "")
+    .replace('let BackendFilter = base64_decode_tostring("{Backend:base64}");\nlet FamilyFilter = base64_decode_tostring("{Family:base64}");\nlet ClassificationFilter = base64_decode_tostring("{Classification:base64}");\nlet ProjectSetFilter = base64_decode_tostring("{Projects:base64}");\nlet ProjectSet = split(ProjectSetFilter, ",");\nlet ChargebackFilter = base64_decode_tostring("{Chargeback:base64}");\n', "")
+    .replace('\n    and (BackendFilter == "*" or backendId =~ BackendFilter)\n    and (FamilyFilter == "*" or modelFamily == FamilyFilter)\n    and (ClassificationFilter == "*" or classification == ClassificationFilter)\n    and (ProjectSetFilter == "*" or projectId in (ProjectSet))\n    and (ChargebackFilter == "*" or chargebackId == ChargebackFilter)', "")
     .replace("| extend reportRowNumber = row_number()\n| where reportRowNumber > 100\n", "")
     .replace("pageOffset = 100, truncated = ReportRows > 600", "truncated = ReportRows > 500");
   for (const key of ["totals", "groups", "developers", "models", "families", "unpriced", "diagnostics", "health"] as const) {
@@ -50,6 +50,20 @@ test("server binding resolves every workbook parameter and encodes values", () =
     assert.doesNotMatch(q, /\{[A-Za-z]+:(base64|start|end)\}/, view);
     assert.match(q, /datetime\(2026-10-01T00:00:00.000Z\)/);
     assert.ok(q.includes(Buffer.from("foundry-eus2").toString("base64")), view);
+  }
+});
+
+test("chargeback ID filter and per-ID view (ADR-0034 decision 7)", () => {
+  const prepared = prepareRateCard(card);
+  const settings = { workspaceId: "11111111-2222-4333-8444-555555555555", gatewayResourceId: answers.gatewayResourceId, maxQueryDays: 62, retentionDays: 90 };
+  const f = readChargebackFilters(new URLSearchParams("period=month&chargeback=WBS-1234.01"), NOW, 62);
+  assert.equal(f.chargeback, "WBS-1234.01");
+  const q = buildChargebackQuery("chargebackIds", f, settings, { ledger, pricing, budgets }, prepared, []);
+  assert.match(q, /by chargebackId, person/);
+  assert.ok(q.includes(Buffer.from("WBS-1234.01").toString("base64")));
+  assert.equal(readChargebackFilters(new URLSearchParams("period=month"), NOW, 62).chargeback, "");
+  for (const bad of ["WBS 1", "=1+1", "x".repeat(65)]) {
+    assert.throws(() => readChargebackFilters(new URLSearchParams({ period: "month", chargeback: bad }), NOW, 62), /invalid_chargeback_filter/);
   }
 });
 

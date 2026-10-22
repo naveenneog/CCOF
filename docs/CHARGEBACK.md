@@ -138,6 +138,19 @@ model. "Top people" ranks people by known list CCU. That ranking is not complete
 | `reportRows`, `displayedLimit`, `truncated` | The grid shows at most `maxRows` rows (1,000 in the proof of concept). When `truncated` is true, narrow the project or period |
 | `periodStart`, `periodEnd`, `basis`, `rateCardVersion`, `rateSourceDates`, `rateCardSha256`, `ledgerSha256`, `retentionTruncated` | Provenance: the period, "list price", the rate card, the exact rate-card and ledger files deployed, and whether retention cut the period |
 
+### Chargeback ID per developer
+
+"Per chargeback ID and developer" groups usage by `chargebackId`, then person, with the same figures
+as above ([ADR-0034](adr/0034-group-centric-onboarding.md) decision 7). The chargeback ID (for example
+a WBS element) is set on an onboarded group in the admin console and copied into each request's
+`ccof.usage.v1` trace by the gateway, so a row carries the ID that applied when the request was made;
+changing a group's ID later does not rewrite earlier usage. Requests of baseline projects, and of
+groups with no ID, show `(none)`. A person in two groups with different IDs has one row per ID.
+The ledger accepts only IDs matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$`
+([analytics/ledger.kql](../analytics/ledger.kql)); any other value is reported as `(none)`. The admin
+console's chargeback API accepts `chargeback=<id>` as a filter on every view
+(`GET /api/v3/chargeback/{view}?chargeback=...`; view `chargebackIds`).
+
 ### Budget versus spend
 
 One row per budget scope: each person in a project, and each project's classification group. Each

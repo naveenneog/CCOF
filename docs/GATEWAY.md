@@ -67,6 +67,10 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
    change to the service scope's `forward-request` does not reach this API.
 7. **Telemetry.** `ccof.resolver.v1` when the resolver was asked; `ccof.usage.v1` for every forwarded
    request (counts only; a streamed body is never read, so nothing holds a stream back) — `docs/TELEMETRY.md`.
+   For an onboarded group the trace also carries `chargebackId` (the group's chargeback ID at request time,
+   or `null`). Every trace carries `surface`: the surface `entra.surfaceClients` maps the calling client to,
+   or `null` when unmapped. The ledger exposes both
+   ([analytics/ledger.kql](../analytics/ledger.kql), ADR-0034 decision 7).
    A non-streamed body is read by a policy of its own that a streamed reply never reaches: the gateway reads
    the whole reply before any policy that mentions the response body runs (live request traces, 2026-10-12).
 

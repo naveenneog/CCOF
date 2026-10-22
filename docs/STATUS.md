@@ -2,7 +2,19 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G7a — chargeback ID and surface in usage, ledger and workbook ([ROADMAP](ROADMAP.md)).
+**Active packet:** G7b — export for Power BI ([ROADMAP](ROADMAP.md)).
+
+### G7a — chargeback ID in usage and workbook (complete)
+
+- Gateway validates and caches the decision's `chargebackId`; the `ccof.usage.v1` trace carries `chargebackId`
+  and `surface`; `ledger.kql` exposes both (validated); the workbook and console gain `chargebackIds`
+  (chargeback ID by developer, `(none)` when absent); the console filters with `chargeback=`.
+  [CHARGEBACK.md](CHARGEBACK.md), [GATEWAY.md](GATEWAY.md).
+- Tests: gateway 134/134 (compiled C#), workbook/chargeback suites, admin 131/131; offline KQL checker 0 errors
+  on 23 workbook and admin queries (checker shown to fail on a broken query). Full gate PASS.
+- Mutants: 10/10 caught. Workbook digests and the quickstart table count updated deliberately.
+- Council round 1: CODER and QA BLOCK (`chargebackIds` unreachable through the v3 route). Fixed with a
+  route-level test. Round 2: all five PASS.
 
 ### G6 — admin group API (complete)
 

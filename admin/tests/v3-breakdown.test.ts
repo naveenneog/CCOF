@@ -108,7 +108,7 @@ test("tags resolve to registry projects across pages, are reported, and are part
   const r = await call("chargeback/projects?period=month&tags=pilot,finance");
   assert.equal(r.status, 200);
   assert.deepEqual((metas[0].filters as Doc).projectSet, ["OPS", "PAY"]);
-  assert.deepEqual((body(r).data as Doc).filters, { project: "", group: "", developer: "", model: "", backend: "", family: "", classification: "", tags: ["finance", "pilot"], tagProjects: 2 });
+  assert.deepEqual((body(r).data as Doc).filters, { project: "", group: "", developer: "", model: "", backend: "", family: "", classification: "", chargeback: "", tags: ["finance", "pilot"], tagProjects: 2 });
   await call("chargeback/projects?period=month&tags=finance,pilot");
   assert.equal(metas.length, 1, "same tags in another order hit the cache");
   await call("chargeback/projects?period=month&tags=legal");

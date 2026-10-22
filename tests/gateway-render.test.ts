@@ -440,6 +440,8 @@ describe("rendered policy structure", () => {
       "streamed", "inferenceGeo", "inferenceGeoSource", "usageSource", "usage", "input_tokens", "output_tokens",
       "cache_read_input_tokens", "cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens", "inference_geo",
       "ccofOid", "ccofProjectId", "ccofClassification", "ccofClassificationGroupId", "ccofClassificationGroupDisplayName", "ccofModelFamily", "ccofBackendId", "ccofModel", "ccofStream", "Content-Type",
+      // ADR-0034 decision 7 / G7a: the group's chargeback ID and the request's surface.
+      "chargebackId", "surface", "ccofChargebackId", "ccofSurface",
     ]);
     for (const k of keys) assert.ok(allowed.has(k), `usage trace builder reads or writes a field outside the contract: ${k}`);
     const loops = [...builder.matchAll(/foreach \(var name in new string\[\] \{([^}]*)\}\)/g)];

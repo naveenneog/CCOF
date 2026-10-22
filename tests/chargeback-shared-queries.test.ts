@@ -18,18 +18,19 @@ test("the shared query builder leaves the chargeback and fixed-price workbooks b
   const { buildWorkbook } = await import("../analytics/workbooks/build.ts");
   const chargeback = buildChargebackWorkbook(workbookAnswers(), card, ledger, groups);
   const workbook = buildWorkbook(workbookAnswers(), card, ledger);
-  assert.equal(chargeback.contentSha256, "100f393e18730b997101bbc1cc7f50e4863c4c8eb7079204252c9c33551e80f4");
-  assert.equal(workbook.contentSha256, "59e9f52da3a7d4471c01385921069bf57d4744c0f9d535ea790c32a60b7631b3");
+  assert.equal(chargeback.contentSha256, "d81cf8de6866465617303b0ed63677a6f385b69005dbde3423512babef8ea61d");
+  assert.equal(workbook.contentSha256, "9e34609656413f7c47a2d925acecfea6f7b1722042d9f67a587e3a77ab4bcb27");
   assert.deepEqual(Object.fromEntries(Object.entries(chargeback.queries).map(([k, v]) => [k, sha(v as string)])), {
-    health: "591561b2327edcd657b8dbf813aec9eb9459542a5ddbbe7d713e73183aa00090",
-    developers: "33a31a7d9dfa4c54992228ae161b18ae3a5586671f052f204040b9ca54094944",
-    usage: "b47221f3eec4a6973cd3d39231bad2a664f30e27471e9fe2b6a2adb10b9087fa",
-    groups: "7c86856f161fa04568bf93d5b2fe9d26124a6673acc9a01654dd52deed0d15b9",
-    models: "8189f06c2963d0ff29d4e0b0d13d1e2ff988a8393b1ea463b4edd645b9678e9e",
-    families: "223586465a491e8ba4e2947775d494a7424cda1ef8455d34aaa90e6d6b6a5a0e",
-    totals: "7a0a86e967c32b745535c08616db9f1cc282d8e1bc86697b41263a320543457a",
-    trends: "a8bf09f4ae2bd38b9517a785c086b01160055197e7ca4459a57fd612c3675cdf",
-    diagnostics: "37bb7e6e132391e20a9255bd4a4c7ee12479c5c2f5c4550a93b719a2b460f58a",
-    unpriced: "9c9995436f9a508a2fa98994ee4902dff02b642f0afb6fd43a8baceeeb8e3ca9",
+    health: "60634e89dbccfcb4d2185110a7f8bc626ee11ad59607bfd05834880f711cff78",
+    developers: "433275912bb664ad78fd899ce5f3dc90b6eab62458911e7f76f5f23c4d8ca570",
+    usage: "396f39df885dda69c1c6855ae467c951fae27b8b62ba6f87de1945d12fa39cae",
+    groups: "c1de3a804f2f4a11aa1f331bc29be4453accc6c2c52fd8eab8a3f3bd70d6add4",
+    chargebackIds: "f47b0bd9321d4c59e28dc695762a63652462ab01b2aa77ee4557b5ed4115735e",
+    models: "eaa469c16be4ec5b593a9154cc52b5b3e9db3a00baa14f5c3af49c388af8ae89",
+    families: "b6d73b7f34c91c87d817cdda9814f47afcc9e77dd2de6e4574273533972c7d0f",
+    totals: "28e27c35517bc7c28b26767e9815dfb669b516db61b7535ddbf50f82e4702fa5",
+    trends: "1f0590b5bece8cac0de0baff46eaf151449d47b92a3a30846984fd6e0be297cd",
+    diagnostics: "0cf642d6ab0bd02241196dce8d19cb5b32a1730ca9423c78770694d2797587c0",
+    unpriced: "d7bba093e0304ff2616f4d1e49a698902f403ac3b826b7b04bfcc530f9256081",
   });
 });

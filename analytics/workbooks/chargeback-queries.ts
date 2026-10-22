@@ -63,12 +63,14 @@ let FamilyFilter = base64_decode_tostring("{Family:base64}");
 let ClassificationFilter = base64_decode_tostring("{Classification:base64}");
 let ProjectSetFilter = base64_decode_tostring("{Projects:base64}");
 let ProjectSet = split(ProjectSetFilter, ",");
+let ChargebackFilter = base64_decode_tostring("{Chargeback:base64}");
 ` : "";
   const extraWhere = extended ? `
     and (BackendFilter == "*" or backendId =~ BackendFilter)
     and (FamilyFilter == "*" or modelFamily == FamilyFilter)
     and (ClassificationFilter == "*" or classification == ClassificationFilter)
-    and (ProjectSetFilter == "*" or projectId in (ProjectSet))` : "";
+    and (ProjectSetFilter == "*" or projectId in (ProjectSet))
+    and (ChargebackFilter == "*" or chargebackId == ChargebackFilter)` : "";
   return `let GroupMetadata = datatable(projectId:string, classification:string, mappedGroupId:string, mappedGroupName:string)[
 ${groups.map(g => [g.projectId, g.classification, g.groupId.toLowerCase(), g.displayName ?? ""].map(kqlString).join(", ")).join(",\n")}
 ];
@@ -79,7 +81,9 @@ ${extraLets}let Ledger = RawLedger
 | extend classificationGroupId = tostring(column_ifexists("classificationGroupId", "")),
     classificationGroupDisplayName = tostring(column_ifexists("classificationGroupDisplayName", "")),
     classificationGroupNameState = tostring(column_ifexists("classificationGroupNameState", "unknown")),
-    admittedModelFamily = tostring(column_ifexists("admittedModelFamily", ""))
+    admittedModelFamily = tostring(column_ifexists("admittedModelFamily", "")),
+    chargebackId = tostring(column_ifexists("chargebackId", "")),
+    surface = tostring(column_ifexists("surface", ""))
 | join kind=leftouter GroupMetadata on projectId, classification
 | extend groupId = iff(isnotempty(classificationGroupId), classificationGroupId, mappedGroupId),
     groupDisplayName = case(isnotempty(classificationGroupDisplayName), classificationGroupDisplayName,
@@ -140,7 +144,7 @@ export function reportRollup(groupBy: string, withGroupNames = false): string {
 | project-away ${costColumns.map(c => `${c}CostSum`).join(", ")}, cacheReadSavingsSum`;
 }
 
-export type ChargebackQueries = Record<"health" | "developers" | "usage" | "groups" | "models" | "families" | "totals" | "trends" | "diagnostics" | "unpriced", string> & { projects?: string; classifications?: string };
+export type ChargebackQueries = Record<"health" | "developers" | "usage" | "groups" | "chargebackIds" | "models" | "families" | "totals" | "trends" | "diagnostics" | "unpriced", string> & { projects?: string; classifications?: string };
 
 // The chargeback report queries. `usage` is the result of usageQueryBase for the same settings, rate
 // card and ledger; `maxRows` bounds every row view.
@@ -180,6 +184,9 @@ export function chargebackQueries(usage: UsageQueryBase, maxRows: number, groups
     developers: report("person"),
     usage: report("projectLabel, groupId, person", "knownListUsd desc nulls last", true),
     groups: report("groupId", "knownListUsd desc nulls last", true),
+    // Requirement 6 (ADR-0034 decision 7): the chargeback ID each developer's usage carried.
+    chargebackIds: base.replace("let PricedUsage = BasePricedUsage", "let PricedUsage = BasePricedUsage\n| extend chargebackId = iff(isempty(chargebackId), \"(none)\", chargebackId)")
+      + bounded(reportRollup("chargebackId, person") + provenance, maxRows, "chargebackId asc, knownListUsd desc nulls last", offset),
     models: report("model"),
     families: report("modelFamily"),
     totals: report("basis = \"fixed list price\""),

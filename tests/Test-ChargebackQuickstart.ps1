@@ -83,7 +83,8 @@ try {
     $names | ConvertTo-Json -Depth 20 -AsArray | Set-Content -LiteralPath $groupsPath -Encoding utf8NoBOM
     $build = Invoke-QsWorkbookBuild -AnswersPath $answers -GroupsPath $groupsPath -Directory $fixtureDir
     $parameters = (Get-Content $build.parametersPath -Raw | ConvertFrom-Json -AsHashtable -Depth 100).parameters
-    Assert-True 'offline generator writes full query content, not shell' (@($parameters.workbookContent.value.items | Where-Object { $_.type -eq 3 }).Count -eq 10)
+    # 11 query tables: the 10 of the fixed-price report plus "Per chargeback ID and developer" (ADR-0034 decision 7).
+    Assert-True 'offline generator writes full query content, not shell' (@($parameters.workbookContent.value.items | Where-Object { $_.type -eq 3 }).Count -eq 11)
     Assert-True 'offline artifact retains fixed-price report marker' ($parameters.contentTags.value.'ccof-report' -ceq 'fixed-price-v1')
     $ctx = @{ P = $p; GeneratedDir = $fixtureDir; ParametersPath = 'unused-fixture.bicepparam'
         State = @{ completed = @{

@@ -279,7 +279,7 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
       return response(200, { projectId, classification, ...files, observedAt: deps.now().toISOString() });
     }
 
-    const chargeback = /^chargeback\/([a-z]+)$/.exec(path);
+    const chargeback = /^chargeback\/([A-Za-z]+)$/.exec(path);
     if (chargeback) {
       const view = chargeback[1] as ChargebackView;
       if (!(CHARGEBACK_VIEWS as readonly string[]).includes(view)) throw new ApiError(404, "view_not_found");
@@ -307,7 +307,7 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
           },
           seriesCap: isSeries ? 2000 : null,
           period: filters.period, interval: filters.interval, filters: { project: filters.project, group: filters.group, developer: filters.developer, model: filters.model, backend: filters.backend, family: filters.family,
-            classification: filters.classification, tags: filters.tags, tagProjects: filters.projectSet === null ? null : filters.projectSet.length },
+            classification: filters.classification, chargeback: filters.chargeback, tags: filters.tags, tagProjects: filters.projectSet === null ? null : filters.projectSet.length },
           rateCardVersion: prepared.version, rateCardSource: card.source, basis: LIST_PRICE_BASIS,
           observedAt: deps.now().toISOString(), cached: false,
         };

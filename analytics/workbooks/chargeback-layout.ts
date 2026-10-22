@@ -35,6 +35,7 @@ Filters are display-only, not authorization. Periods are UTC [start, end); reten
     table("developers", "Per developer · selected-period costs and tokens"),
     table("usage", "Per developer · project / Entra group object ID and exact name"),
     table("groups", "Per Entra group · all projects / exact name snapshots and object ID"),
+    table("chargebackIds", "Per chargeback ID and developer · onboarded groups' WBS or cost-centre ID at request time"),
     table("models", "By model · token categories and costs"),
     table("families", "By model family · prefix-derived, independent of quotas"),
     table("trends", "Daily cost and token trend · model family"),

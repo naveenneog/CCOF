@@ -137,6 +137,8 @@
                 var surfaces = body["surfaces"];
                 if (surfaces == null ? (string)body["classification"] == "group" : (surfaces.Type != JTokenType.Array || ((JArray)surfaces).Count < 1 || ((JArray)surfaces).Count > 5)) { return false; }
                 if (surfaces != null) { var seenSurfaces = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal); foreach (var s in (JArray)surfaces) { if (s.Type != JTokenType.String || Array.IndexOf(new string[] { "chat", "code", "cowork", "design", "m365" }, (string)s) < 0 || !seenSurfaces.Add((string)s)) { return false; } } }
+                var chargeback = body["chargebackId"];
+                if (chargeback != null && chargeback.Type != JTokenType.Null && (chargeback.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)chargeback, "^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}\\z"))) { return false; }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return false; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -310,6 +312,8 @@
                 var surfaces = body["surfaces"];
                 if (surfaces == null ? (string)body["classification"] == "group" : (surfaces.Type != JTokenType.Array || ((JArray)surfaces).Count < 1 || ((JArray)surfaces).Count > 5)) { return unavailable; }
                 if (surfaces != null) { var seenSurfaces = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal); foreach (var s in (JArray)surfaces) { if (s.Type != JTokenType.String || Array.IndexOf(new string[] { "chat", "code", "cowork", "design", "m365" }, (string)s) < 0 || !seenSurfaces.Add((string)s)) { return unavailable; } } }
+                var chargeback = body["chargebackId"];
+                if (chargeback != null && chargeback.Type != JTokenType.Null && (chargeback.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)chargeback, "^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}\\z"))) { return unavailable; }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return unavailable; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -355,6 +359,7 @@
                 var approval = body["restrictedFamiliesApproved"];
                 if (approval != null) { decision["restrictedFamiliesApproved"] = (bool)approval; }
                 if (surfaces != null) { decision["surfaces"] = surfaces; }
+                if (chargeback != null && chargeback.Type == JTokenType.String) { decision["chargebackId"] = (string)chargeback; }
                 var displayName = body["classificationGroupDisplayName"];
                 if (displayName != null && displayName.Type == JTokenType.String && ((string)displayName).Length >= 1 && ((string)displayName).Length <= 256) {
                     decision["classificationGroupDisplayName"] = (string)displayName;
@@ -458,6 +463,10 @@
         <set-variable name="ccofRestrictedFamiliesApproved" value="@{
             var approval = JObject.Parse((string)context.Variables["ccofDecision"])["restrictedFamiliesApproved"];
             return approval != null && approval.Type == JTokenType.Boolean && (bool)approval;
+        }" />
+        <set-variable name="ccofChargebackId" value="@{
+            var chargeback = JObject.Parse((string)context.Variables["ccofDecision"])["chargebackId"];
+            return chargeback != null && chargeback.Type == JTokenType.String ? (string)chargeback : "";
         }" />
         <set-variable name="ccofBackendId" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["backendId"])" />
         <set-variable name="ccofFamilyPolicy" value="@(JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"].ToString(Newtonsoft.Json.Formatting.None))" />
@@ -885,6 +894,8 @@
                     new JProperty("classificationGroupId", (string)context.Variables["ccofClassificationGroupId"]),
                     new JProperty("classificationGroupDisplayName", context.Variables.GetValueOrDefault<string>("ccofClassificationGroupDisplayName", "") == "" ? null : (string)context.Variables["ccofClassificationGroupDisplayName"]),
                     new JProperty("modelFamily", context.Variables.GetValueOrDefault<string>("ccofModelFamily", "") == "" ? null : (string)context.Variables["ccofModelFamily"]),
+                    new JProperty("chargebackId", context.Variables.GetValueOrDefault<string>("ccofChargebackId", "") == "" ? null : (string)context.Variables["ccofChargebackId"]),
+                    new JProperty("surface", context.Variables.GetValueOrDefault<string>("ccofSurface", "") == "" ? null : (string)context.Variables["ccofSurface"]),
                     new JProperty("backendId", backendId),
                     new JProperty("deployment", deployment),
                     new JProperty("model", servedModel),

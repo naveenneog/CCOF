@@ -79,6 +79,10 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
             tostring(payload.classificationGroupDisplayName), ""),
         classificationGroupNameState = iff(traceKnown and payload.classificationGroupNameState in ("snapshot", "retained_snapshot"),
             tostring(payload.classificationGroupNameState), "unknown"),
+        // An onboarded group's chargeback ID at request time and the request's surface (ADR-0034 decision 7).
+        chargebackId = iff(traceKnown and gettype(payload.chargebackId) == "string"
+            and tostring(payload.chargebackId) matches regex @"^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$", tostring(payload.chargebackId), ""),
+        surface = iff(traceKnown and payload.surface in ("chat", "code", "cowork", "design", "m365"), tostring(payload.surface), ""),
         admittedModelFamily = iff(traceKnown and payload.modelFamily in ("haiku", "sonnet", "opus", "fable", "mythos"),
             tostring(payload.modelFamily), ""),
         backendId = iff(traceKnown and gettype(payload.backendId) == "string", tostring(payload.backendId), ""),
@@ -103,7 +107,7 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
     | project timestamp, ingestedAt, gatewayResourceId, gatewayRequestId, providerRequestId,
         personId, projectId, classification, backendId, deployment, model, streamed,
         classificationGroupId, classificationGroupDisplayName, classificationGroupNameState,
-        admittedModelFamily,
+        admittedModelFamily, chargebackId, surface,
         requestFailed, gatewayOutcomeKnown,
         inputTokens, outputTokens, cacheWrite5mTokens, cacheWrite1hTokens, cacheReadTokens,
         inputTokensKnown, outputTokensKnown, cacheWrite5mTokensKnown, cacheWrite1hTokensKnown, cacheReadTokensKnown,

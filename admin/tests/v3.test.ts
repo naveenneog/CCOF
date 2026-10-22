@@ -92,6 +92,17 @@ test("v3 fails closed without authentication and reports 3.2.0", async () => {
   assert.equal((await call("chargeback/totals")).status, 503);
 });
 
+test("the chargeback ID view is reachable and its filter is echoed (ADR-0034 decision 7)", async () => {
+  const { call, queries } = setup();
+  const res = await call("chargeback/chargebackIds?period=month&chargeback=WBS-1234.01");
+  assert.equal(res.status, 200);
+  const body = data(res);
+  assert.equal(body.state, "available", JSON.stringify(body));
+  assert.equal((body.data as Doc).filters && ((body.data as Doc).filters as Doc).chargeback, "WBS-1234.01");
+  assert.ok(queries.some((q) => q.query.includes("by chargebackId, person")));
+  assert.equal((await call("chargeback/chargebackIds?period=month&chargeback=WBS%201")).status, 400);
+});
+
 test("chargeback is disabled, not failed, when its settings are missing; other features keep working", async () => {
   const { call, queries } = setup({ ADMIN_WORKSPACE_ID: WS, ADMIN_LOG_RESOURCE_IDS: RECON });
   const cb = data(await call("chargeback/totals"));
