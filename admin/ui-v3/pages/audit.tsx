@@ -4,6 +4,7 @@ import { human, when } from "../lib/format.ts";
 import { href } from "../lib/router.ts";
 import { Button, CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, StatePill } from "../components/ui.tsx";
 import { ChangeList, PagerLite } from "./project-detail.tsx";
+import { UserIdentity } from "../components/user-identity.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +44,7 @@ export function Audit({ query }: { query: URLSearchParams }) {
               { key: "operation", label: "Operation", render: (r: any) => human(r.operation) },
               { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
               { key: "projectId", label: "Project", render: (r: any) => r.projectId ? <a href={href(`/projects/${encodeURIComponent(r.projectId)}/activity`)}>{r.projectId}</a> : "—" },
-              { key: "actorOid", label: "Actor", render: (r: any) => <code title={r.actorOid}>{String(r.actorOid ?? "").slice(0, 8) || "—"}</code> },
+              { key: "actorOid", label: "Actor", render: (r: any) => <UserIdentity objectId={r.actorOid} /> },
               { key: "d", label: "Before → after", render: (r: any) => <ChangeList d={r.d} /> },
               { key: "requestId", label: "Request", render: (r: any) => <code className="muted">{String(r.requestId).slice(0, 8)}</code> },
             ]} />

@@ -216,6 +216,16 @@ const demoEnv = mode === "seeded" ? {
 const kql = (name: string) => readFile(new URL(`../kql/${name}`, import.meta.url), "utf8");
 const sources = await Promise.all([kql("ledger.kql"), kql("pricing.kql"), kql("budgets.kql")]).then(([ledger, pricing, budgets]) => ({ ledger, pricing, budgets })).catch(() => null);
 const v3Cache = new QueryCache();
+// Synthetic labels only: the demo never queries the real directory.
+const directory = {
+  lookup: async (ids: string[]) => ({
+    state: "available" as const, observedAt: now(), data: { users: ids.map((objectId) => ({
+      objectId, state: "resolved" as const, expiresAt: Date.now() + 300000,
+      displayName: `Demo User ${objectId.slice(0, 8)}`,
+      userPrincipalName: `demo-${objectId.slice(0, 8)}@example.invalid`,
+    })) },
+  }),
+};
 const V3_ENABLED = process.env.ADMIN_V3_ENABLED !== "false";
 
 const server = createServer(async (req, res) => {
@@ -251,7 +261,7 @@ const server = createServer(async (req, res) => {
     const request = { method: req.method ?? "GET", path: url.pathname + url.search, headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; }, body };
     if (url.pathname.startsWith("/api/v3/") && !V3_ENABLED) return sendJson(404, { error: "route_not_found" });
     const r = url.pathname.startsWith("/api/v3/")
-      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, defaultCatalog, operations, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
+      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, defaultCatalog, operations, directory, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
       : url.pathname.startsWith("/api/v2/")
         ? await handleV2Request(request, { authenticate, projects: store, catalogStore, defaultCatalog, operations, log: demoLog, now: () => new Date(), newId: randomUUID })
         : await handleAdminRequest(request, { authenticate, store, log: demoLog, now: () => new Date(), newId: randomUUID });

@@ -8,6 +8,7 @@ import { BurnDown, HBars, SplitBar, StackedColumns } from "../components/charts.
 import { ChartPanel, FAMILIES, TOKEN_CATEGORIES, bucketLabel, trendBuckets } from "../components/panels.tsx";
 import { PagerLite } from "./project-detail.tsx";
 import { useDebounced } from "./projects.tsx";
+import { UserIdentity } from "../components/user-identity.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,7 +26,7 @@ const common: Column<any>[] = [
 const VIEWS: Record<string, { label: string; columns: Column<any>[] }> = {
   groups: { label: "Groups", columns: [{ key: "groupId", label: "Entra group", render: (r) => <><span>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown name)"}</span><code className="block muted">{r.groupId}</code></> },
     { key: "groupProjects", label: "Projects", render: (r) => (r.groupProjects ?? []).join(", ") }, ...common] },
-  developers: { label: "Developers", columns: [{ key: "person", label: "Entra Object ID", render: (r) => <code>{r.person}</code> }, ...common] },
+  developers: { label: "Developers", columns: [{ key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
   models: { label: "Models", columns: [{ key: "model", label: "Model", render: (r) => <code>{r.model}</code> }, ...common] },
   families: { label: "Families", columns: [{ key: "modelFamily", label: "Family", render: (r) => <span className="cap">{r.modelFamily}</span> }, ...common] },
   projects: { label: "Projects", columns: [{ key: "projectLabel", label: "Project", render: (r) => <a href={href(`/projects/${encodeURIComponent(r.projectLabel)}`)}>{r.projectLabel}</a> }, ...common] },

@@ -21,6 +21,7 @@ import { Health } from "./pages/health.tsx";
 import { Audit } from "./pages/audit.tsx";
 import { CostDefinitions } from "./pages/cost-definitions.tsx";
 import { HelpPage } from "./pages/help.tsx";
+import { UserDirectoryProvider } from "./components/user-identity.tsx";
 
 try { applyTheme((localStorage.getItem("ccof.v3.theme") as ThemeChoice) || "system"); } catch { applyTheme("system"); }
 
@@ -90,7 +91,7 @@ function App() {
     );
   }
   if (!session) return <Center><p className="muted" role="status">Checking your access…</p></Center>;
-  return <SessionContext.Provider value={session}><ToastHost><Page /></ToastHost></SessionContext.Provider>;
+  return <SessionContext.Provider value={session}><UserDirectoryProvider><ToastHost><Page /></ToastHost></UserDirectoryProvider></SessionContext.Provider>;
 }
 
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

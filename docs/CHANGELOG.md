@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-10-22 — Admin 3.1.0: Entra names and admin-only VDI upgrade
+
+- V3 displays current Entra display names/UPNs beside full object IDs in Overview, Chargeback
+  Developers, Budgets/Reconciler and Audit/Project Activity. Accounting, CSVs and filters keep IDs.
+- Authenticated, bounded Graph lookup using the admin managed identity, enabled with
+  `ADMIN_USER_NAMES_ENABLED=true` and Graph application `User.Read.All` with tenant admin consent.
+  Missing users, denied permissions and provider failures keep IDs and other data available.
+- Names are memory-only. Browser cache uses remaining server freshness, translated for clock
+  skew, instead of restarting a five-minute TTL. Server lookup (including token acquisition) and
+  browser queue have deadlines; failing batches cancel sibling requests.
+- Added [manual VDI upgrade](ADMIN-V3-VDI-UPGRADE.md): existing managed identity consent, SPA
+  redirect, private publishing, settings, verification and rollback. No changes to the gateway,
+  sync, reconciler, APIM policies or deployed permissions.
+- 108 admin tests, build/package, Edge UI/failure checks and the repository packet gate pass.
+
 ## 2026-10-21 — Network is the last setup stage
 
 - New stage order: 0 checks, 1 resources, 2 schema, 3 grants, 4 Entra, 5 configuration,

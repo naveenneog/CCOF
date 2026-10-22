@@ -21,6 +21,7 @@ import type { QuerySources } from "./chargeback.ts";
 import { ADMIN_VERSION } from "./version.ts";
 import { isObject } from "./validation.ts";
 import type { Doc } from "./validation.ts";
+import { createUserDirectory } from "./user-directory.ts";
 
 let authenticate: Authenticator | null = null;
 let authProblem = "";
@@ -32,6 +33,7 @@ try {
 
 const cosmos = readCosmosSettings(process.env);
 const credential = new ManagedIdentityCredential(process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID ? { clientId: process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID } : {});
+const directory = createUserDirectory(process.env, credential);
 const container = cosmos ? openContainer(cosmos, credential) : null;
 const store = container ? createCosmosProjectStore(container) : null;
 const catalogContainer = cosmos && process.env.ADMIN_CONFIG_CONTAINER
@@ -161,7 +163,7 @@ app.http("adminV3", {
     }, {
       authenticate, projects: store, catalogStore, defaultCatalog: await defaultCatalog(log),
       operations: createOperations(process.env, credential, log), env: process.env,
-      sources: await querySources(log), cache: v3Cache, now: () => new Date(), newId: randomUUID, log,
+      sources: await querySources(log), cache: v3Cache, directory, now: () => new Date(), newId: randomUUID, log,
     });
     return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
   },

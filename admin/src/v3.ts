@@ -24,6 +24,8 @@ import { buildClientFiles, readClientSettings } from "./client-config.ts";
 import type { ChargebackView, Configured, QuerySources } from "./chargeback.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
 import { ccuToUsdText, DECIMAL_TEXT } from "./units.ts";
+import { readUserIds } from "./user-directory.ts";
+import type { UserDirectory } from "./user-directory.ts";
 
 export const MAX_PLAN_BYTES = 16 * 1024;
 export const MAX_RATE_CARD_BYTES = 1024 * 1024;
@@ -35,6 +37,7 @@ export interface V3Dependencies {
   catalogStore: CatalogStore | null;
   defaultCatalog: Doc | null;
   operations: Operations;
+  directory?: UserDirectory;
   env: Readonly<Record<string, string | undefined>>;
   // The packaged KQL sources (ledger.kql, pricing.kql, budgets.kql); null when the package lacks them.
   sources: QuerySources | null;
@@ -168,6 +171,13 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
     if (!deps.authenticate) throw new ApiError(503, "admin_auth_not_configured");
     const actor = await deps.authenticate(request.headers("authorization"));
     actorOid = actor.oid;
+    if (path === "directory/users") {
+      if (method !== "POST") throw new ApiError(405, "method_not_allowed");
+      if ([...url.searchParams].length) throw new ApiError(400, "unknown_parameter");
+      const ids = readUserIds(parseJson(request.body, MAX_PLAN_BYTES));
+      if (!deps.directory) return response(200, { state: "unavailable", reason: "user_directory_unavailable", observedAt: deps.now().toISOString() });
+      return response(200, await deps.directory.lookup(ids, deps.log, request.headers("x-ccof-refresh") === "true"));
+    }
     if (path === "version" && method === "GET") return response(200, { version: ADMIN_VERSION, api: "v3", consoles: ["v2", "v3"], projectApi: "v1-compatible" });
     if (path === "capabilities" && method === "GET") {
       const cb = readChargebackSettings(deps.env), rec = readReconcilerSettings(deps.env), au = readAuditSettings(deps.env);
@@ -178,6 +188,7 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
           projects: deps.projects ? "configured" : "project_store_not_configured",
           chargeback: state(cb), reconciler: state(rec), audit: state(au), queries: deps.sources ? "packaged" : "packaged_queries_unavailable",
           catalogStore: deps.catalogStore ? "configured" : "ADMIN_CONFIG_CONTAINER_not_set",
+          userNames: deps.env.ADMIN_USER_NAMES_ENABLED === "true" ? "configured" : "ADMIN_USER_NAMES_ENABLED_not_set",
         },
       });
     }

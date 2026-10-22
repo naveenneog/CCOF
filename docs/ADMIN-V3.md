@@ -1,9 +1,15 @@
 # Admin console V3: settings, permissions, upgrade and rollback
 
-Release source: `feat/admin-console-v2`; package version **3.0.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
+Release source: `feat/admin-console-v2`; package version **3.1.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
 One ZIP serves both consoles. V2 stays at `/api/console` and is unchanged; V3 is at
 `/api/console-v3` and is served only when `ADMIN_V3_ENABLED=true`. This is an
 **admin-app-only** upgrade: no gateway, sync or reconciler change, no new Entra app, roles or scopes.
+
+**3.1.0:** current Entra user names appear beside full object IDs in Overview, Chargeback,
+Budgets/Reconciler and Audit/Activity. The admin managed identity needs Graph application
+`User.Read.All` with tenant admin consent, plus `ADMIN_USER_NAMES_ENABLED=true`.
+The [step-by-step VDI upgrade](ADMIN-V3-VDI-UPGRADE.md) covers the manual grant, private publishing,
+settings, verification and rollback. Names are memory-only; filters and exports retain object IDs.
 
 ## What V3 adds
 
@@ -49,6 +55,7 @@ change.
 | Setting | Needed for | Value |
 | --- | --- | --- |
 | `ADMIN_V3_ENABLED` | V3 console and `/api/v3/*` | `true` to serve; anything else returns 404 (V2 unaffected) |
+| `ADMIN_USER_NAMES_ENABLED` | Entra user labels | `true`; admin managed identity Graph `User.Read.All` application permission with consent. No changes to sync or telemetry. |
 | `ADMIN_GATEWAY_RESOURCE_ID` | Chargeback, Overview cost | Full ARM ID of the APIM instance (`_ResourceId` of `ApiManagementGatewayLogs`) |
 | `ADMIN_CHARGEBACK_WORKSPACE_ID` | Chargeback (optional) | Workspace GUID holding the gateway logs; defaults to `ADMIN_WORKSPACE_ID` |
 | `ADMIN_CHARGEBACK_MAX_QUERY_DAYS` | Chargeback (optional) | 31–366, default 62 |
@@ -83,6 +90,7 @@ All belong to the **admin Function App managed identity**; none are granted by t
 | Foundry inventory | Reader on APIM and Foundry accounts | Inventory disabled; type backend IDs |
 | Billed cost, retail meters, group search | As V2 | As V2 |
 | Budget assistant | None | Always available |
+| User names (3.1.0) | Graph application `User.Read.All`, admin consent, `ADMIN_USER_NAMES_ENABLED=true` | Full IDs remain visible with disabled/permission/unavailable/missing-user state |
 
 People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need `CCOF.Projects.Write`
 (or `ADMIN_EDITOR_IDS`). Every write keeps the field-level review and If-Match ETag and emits one
@@ -92,6 +100,7 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 
 | Route | Behavior |
 | --- | --- |
+| `POST /api/v3/directory/users` | Authenticated admin readers/editors; body `{"objectIds":["<GUID>"]}` with 1-100 GUIDs, no extra keys/parameters. Returns current display names/UPNs and object IDs; Graph batches of 20, five-minute bounded memory cache, no-store HTTP response. No directory writes or persisted names. |
 | `GET /api/v3/chargeback/{view}` | `view`: totals, groups, developers, models, families, projects, classifications (project × classification), trend, coverage, unpriced, diagnostics. Query: `period` (month, previous, custom), `from`/`to` (UTC, custom only), `project`, `group` and `developer` (Object IDs), `model`, `backend` (request-time `backendId`), `family`, `classification`, `tags` (comma-separated, ≤ 10, all must match; resolved to project IDs from the registry, refused with 400 `tag_matches_too_many_projects` above 2,000 projects; no match selects nothing), `interval` (hour, day), `limit` (1–500, default 100), `offset`. Unknown or repeated parameters return 400. |
 | `GET /api/v3/projects/{id}/client-config?classification=STD` | Reader. Returns `config` (validates with `client/src/config.mjs`: tenant, client, scope, gateway URL, the classification's models by family, a stable Desktop profile ID, `project {id, selectorHeader}`), `onboarding` (Entra group, models, install paths, steps), `missing` and `complete`. No secrets. 400 invalid classification, 404 unknown project or classification, 409 classification without models. |
 | `GET /api/v3/reconciler/runs` | Latest run per outcome and reason, with `ageMinutes` and `freshness` against the interval |
@@ -100,24 +109,27 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/plan` | In-force models by family, geography multipliers, rate card version and source |
 | `POST /api/v3/plan` | Budget assistant: `monthlyBudget {amount, currency USD/CCU}`, `members`, `geography`, `sizing`, `mix`, `families[{family, model?, budgetPercent}]`, working days/hours, burst. Pure; no writes. 422 with `detail` on invalid input. |
 | `POST /api/v3/rate-card/review` | Validates a candidate rate card with the reconciler's parser and the history rules (version must change, recorded entries unchanged, new or closed entries not in the past) and returns added/closed/unchanged. Saving stays `PUT /api/v2/catalog` with If-Match. |
-| `GET /api/v3/version`, `/capabilities` | `3.0.0`; which features are configured and the caller's role |
+| `GET /api/v3/version`, `/capabilities` | `3.1.0`; which features are configured and the caller's role |
 
-`/api/v2/version` and `/api/health` report 3.0.0. `/api/v2/projects` accepts `tags` (comma-separated, all
+`/api/v2/version` and `/api/health` report 3.1.0. `/api/v2/projects` accepts `tags` (comma-separated, all
 must match, up to 10) and `classification`.
 
 ## Upgrade from the VDI
 
-Follow [ADMIN-V2.md](ADMIN-V2.md) "VDI build and upgrade" with these differences:
+The full manual procedure is [Admin V3.1 VDI upgrade](ADMIN-V3-VDI-UPGRADE.md).
+The shorter V3 migration outline follows [ADMIN-V2.md](ADMIN-V2.md) "VDI build and upgrade":
 
-1. Build `ccof-admin-v3.0.0.zip` with `admin\Build-AdminPackage.ps1 -OutFile <path>`. Keep the 2.0.x ZIP
+1. Build `ccof-admin-v3.1.0.zip` with `admin\Build-AdminPackage.ps1 -OutFile <path>`. Keep the 2.0.x ZIP
    as the rollback package. The ZIP adds `ui-dist-v3/` and `kql/`.
 2. Add the SPA redirect URI `https://<admin-host>/api/console-v3` to the existing **CCOF Admin** app
    registration (Authentication → Single-page application). No new app, roles or scopes.
 3. Publish with the same private `az functionapp deployment source config-zip` route.
 4. Leave `ADMIN_V3_ENABLED` unset first: confirm `/api/console` (V2) works and `/api/health` reports
-   `3.0.0`; `/api/console-v3` returns 404.
+   `3.1.0`; `/api/console-v3` returns 404.
 5. Set `ADMIN_V3_ENABLED=true` (and the chargeback settings above when approved). Open
    `/api/console-v3` from the VDI, sign in, and check each page's state against the settings you set.
+   For names, grant `User.Read.All` to the admin managed identity and set
+   `ADMIN_USER_NAMES_ENABLED=true` as described in the full guide.
 6. Acceptance: reader cannot edit; editor reviews and saves a test limit (audit line appears); the
    chargeback totals for this month match the workbook's for the same filters and rate-card version.
 

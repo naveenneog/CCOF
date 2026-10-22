@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { UserIdentity } from "../components/user-identity.tsx";
 import { api, qs, useQuery } from "../lib/api.ts";
 import { ago, human, int, pct, usd, when } from "../lib/format.ts";
 import { href, navigate } from "../lib/router.ts";
@@ -303,7 +304,7 @@ function ActivityTab({ id }: { id: string }) {
         { key: "at", label: "When", render: (r: any) => when(r.at) },
         { key: "operation", label: "Change", render: (r: any) => human(r.operation) },
         { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
-        { key: "actorOid", label: "Actor", render: (r: any) => <code>{String(r.actorOid ?? "").slice(0, 8)}</code> },
+        { key: "actorOid", label: "Actor", render: (r: any) => <UserIdentity objectId={r.actorOid} /> },
         { key: "changes", label: "Before → after", render: (r: any) => <ChangeList d={r.d} /> },
       ]} />
       {audit.data.data.page && <PagerLite page={audit.data.data.page} onPage={setOffset} />}
