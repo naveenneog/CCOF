@@ -21,6 +21,7 @@ import type { RefusalReason, ResolveRefusal } from "./refusals.ts";
 import { refuse, settledValue } from "./refusals.ts";
 import { selectByKey, selectBySelector } from "./select-membership.ts";
 import type { FamilyPolicy } from "../contracts/model-families.ts";
+import type { Surface } from "../contracts/group-registration.ts";
 
 export { refusalStatus } from "./refusals.ts";
 export type { RefusalReason, ResolveRefusal } from "./refusals.ts";
@@ -112,6 +113,10 @@ export interface ResolveSuccess {
   classificationGroupDisplayName?: string;
   backendId: string;
   familyPolicy: FamilyPolicy;
+  // Present only for an onboarded group's membership (ADR-0034).
+  surfaces?: Surface[];
+  chargebackId?: string | null;
+  restrictedFamiliesApproved?: boolean;
   budgetEnforcement: BudgetEnforcement["mode"];
   // Whether the gateway must apply the CCU aggregate ceiling; false whenever
   // budgets are not enforced.
@@ -213,6 +218,13 @@ export async function resolveRequest(
       : {}),
     backendId: membership.backendId,
     familyPolicy: membership.familyPolicy,
+    ...(membership.group !== undefined
+      ? {
+        surfaces: membership.group.surfaces,
+        chargebackId: membership.group.chargebackId,
+        restrictedFamiliesApproved: membership.group.restrictedFamiliesApproved,
+      }
+      : {}),
     personBudgetScope: `${input.personId}:${membership.projectId}`,
   };
 

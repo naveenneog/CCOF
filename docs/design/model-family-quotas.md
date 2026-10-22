@@ -33,7 +33,7 @@ Non-`claude-` deployment aliases are allowed only as explicit exact IDs in a fam
 `^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$`. Their family cannot be inferred from their prefix.
 Duplicate models within/across families are configuration errors.
 
-Fable/Mythos entries may exist **only under authoritative classification exactly `CYB`**.
+Fable/Mythos entries may exist **only under authoritative classification exactly `CYB`**, or under the scope code `group` when the membership carries `restrictedFamiliesApproved: true` ([ADR-0034](../adr/0034-group-centric-onboarding.md)).
 `cyb`, `CYB-extra`, displayName `CYB Approved`, or a group name prefix grants nothing.
 STD/PRM (and any other classification) containing either entry is invalid, even if it is empty or
 has null limits. CYB may omit these families until real deployment IDs are supplied.

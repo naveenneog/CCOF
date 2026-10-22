@@ -2,8 +2,10 @@
 // of a record and the resolver's clock, so decide.ts can compose them and the
 // tests can drive every boundary without a real clock.
 
-import { parseFamilyPolicy } from "../contracts/model-families.ts";
+import { GROUP_SCOPE_CODE, parseFamilyPolicy } from "../contracts/model-families.ts";
 import type { FamilyPolicy } from "../contracts/model-families.ts";
+import { CHARGEBACK_ID, MAX_PRIORITY, SURFACES } from "../contracts/group-registration.ts";
+import type { Surface } from "../contracts/group-registration.ts";
 
 export interface BudgetStalenessPolicy {
   graceSeconds: number;
@@ -82,8 +84,16 @@ export type MembershipProblem =
   | "invalid_backend_id"
   | "invalid_classification_group_id"
   | "invalid_aggregate_mode"
+  | "invalid_group_attributes"
   | "invalid_family_policy"
   | "family_classification_forbidden";
+
+// What an onboarded group's membership adds (ADR-0034); absent on baseline memberships.
+export interface GroupDecisionFields {
+  surfaces: Surface[];
+  chargebackId: string | null;
+  restrictedFamiliesApproved: boolean;
+}
 
 export interface ValidMembership {
   projectId: string;
@@ -93,9 +103,20 @@ export interface ValidMembership {
   backendId: string;
   aggregateMode: "strict" | "notify";
   familyPolicy: FamilyPolicy;
+  group?: GroupDecisionFields;
 }
 
 export const isIdentifier = (value: unknown): value is string => typeof value === "string" && IDENTIFIER.test(value);
+
+function readGroupFields(membership: Record<string, unknown>): GroupDecisionFields | null {
+  const { priority, surfaces, chargebackId, restrictedFamiliesApproved } = membership;
+  const surfacesOk = Array.isArray(surfaces) && surfaces.length > 0 && new Set(surfaces).size === surfaces.length
+    && surfaces.every((s) => (SURFACES as readonly unknown[]).includes(s));
+  const chargebackOk = chargebackId === null || (typeof chargebackId === "string" && CHARGEBACK_ID.test(chargebackId));
+  const priorityOk = Number.isSafeInteger(priority) && (priority as number) >= 1 && (priority as number) <= MAX_PRIORITY;
+  if (!surfacesOk || !chargebackOk || !priorityOk || typeof restrictedFamiliesApproved !== "boolean") return null;
+  return { surfaces: [...(surfaces as Surface[])], chargebackId: chargebackId as string | null, restrictedFamiliesApproved };
+}
 
 // Validates the fields the resolver returns or acts on, and returns a copy
 // holding exactly those fields. WP-SYNC can run this before each write.
@@ -112,7 +133,11 @@ export function validateMembership(
   // Anything but the two known modes is malformed, never "notify": reading it
   // as notify would silently skip the aggregate check.
   if (aggregateMode !== "strict" && aggregateMode !== "notify") return { ok: false, detail: "invalid_aggregate_mode" };
-  const familyPolicy = parseFamilyPolicy(membership.familyPolicy, classification);
+  // Group attributes are read only under the group code, so a baseline
+  // membership's approval flag grants nothing.
+  const group = classification === GROUP_SCOPE_CODE ? readGroupFields(membership) : undefined;
+  if (group === null) return { ok: false, detail: "invalid_group_attributes" };
+  const familyPolicy = parseFamilyPolicy(membership.familyPolicy, classification, group?.restrictedFamiliesApproved ?? false);
   if (!familyPolicy.ok) return familyPolicy;
   return {
     ok: true,
@@ -124,6 +149,7 @@ export function validateMembership(
       backendId,
       aggregateMode,
       familyPolicy: structuredClone(familyPolicy.value),
+      ...(group !== undefined ? { group } : {}),
     },
   };
 }

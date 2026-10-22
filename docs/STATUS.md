@@ -2,7 +2,30 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G2b — resolver and gateway carry group attributes ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G3 — precedence for a person in several groups ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+### G2b — resolver and gateway carry group attributes (complete)
+
+- `validateMembership` reads group attributes only under the code `group` and checks the family
+  policy with the approval ([src/resolver/freshness.ts](../src/resolver/freshness.ts)); the decision
+  returns `surfaces`, `chargebackId`, `restrictedFamiliesApproved` for groups only
+  ([src/resolver/decide.ts](../src/resolver/decide.ts)). APIM admits Fable/Mythos for `CYB` or an
+  approved group at the fresh, cached and per-request checks
+  ([claude-messages.template.xml](../infra/gateway/policy/claude-messages.template.xml)).
+- Tests: `tests/resolver-group-membership.test.ts` 4/4; resolver suites 279 pass, 2 skipped (live);
+  gateway suites 124/124 with the vectors run as compiled C#.
+- Mutants: 9/9 caught (resolver 4, policy 5; one policy mutant first caught only by the structural
+  cached/fresh equality test, then confirmed behaviourally by the non-boolean vector).
+- Council: ARCHITECT PASS-WITH-NOTES (revocation follows the cache TTL, as for CYB), CODER PASS,
+  QA PASS-WITH-NOTES, SECURITY PASS-WITH-NOTES (validate surfaces/chargeback ID in APIM before G4/G7
+  use them); UX not applicable.
+
+G3 acceptance:
+
+- Without a selector, among active memberships that are all groups, the lowest `priority` applies.
+- Equal lowest priorities, or a baseline project among the candidates, are refused with
+  `project_selection_required`.
+- A selector still chooses its group; the key path is unchanged.
 
 ### G2 — sync and reconciler read group documents (complete)
 
@@ -30,16 +53,6 @@
   decisions 3, 4). Second round: ARCHITECT PASS, CODER PASS, QA PASS, SECURITY PASS; UX not
   applicable (no user-facing change).
 - Gate: `node .ironclad/gate.mjs --stage packet` PASS before the redesign; rerun at G2.
-
-G2b acceptance:
-
-- `validateMembership` accepts a `group` membership only with valid `priority`, `surfaces`,
-  `chargebackId` and boolean `restrictedFamiliesApproved`, and checks the family policy with that
-  approval; a baseline membership's approval grants nothing.
-- The resolver success carries `surfaces`, `chargebackId` and `restrictedFamiliesApproved` for a
-  group membership only.
-- The APIM policy (fresh decision, cached decision, per-request family check) admits Fable/Mythos
-  for `CYB`, or for `group` with `restrictedFamiliesApproved: true`; a non-boolean value is refused.
 
 Open unknowns for the work stream: G-A1 to G-A4, G-R3 ([UNKNOWNS](UNKNOWNS.md)).
 

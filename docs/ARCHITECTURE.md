@@ -46,7 +46,7 @@ amber dashed components are optional, not universally deployed.
 3. **Private registry and authorization.** The resolver reads Cosmos through Functions outbound
    integration and its SQL private endpoint, returning the authorized project/classification,
    exact model admission and `backendId`. APIM enforces aggregate **and** family ceilings for
-   person/group. Haiku/Sonnet/Opus are registered explicitly; Fable/Mythos also require CYB.
+   person/group. Haiku/Sonnet/Opus are registered explicitly; Fable/Mythos also require CYB, or an onboarded group with `restrictedFamiliesApproved: true` ([ADR-0034](adr/0034-group-centric-onboarding.md)).
    Prefixes never grant access. Cosmos public access and local authentication are disabled.
 4. **Backend routing.** `set-backend-service` selects only the resolved project backend. Same-tenant
    Foundry accounts may span Azure subscriptions; APIM's system identity obtains a cognitive-resource

@@ -309,6 +309,31 @@ test("actual C# rejects invalid v3 policies, admits only exact IDs, scopes keys 
     resolver(`safe maxima ${period}`, d, true);
   }
   for (const restricted of ["fable", "mythos"]) {
+    // A group (ADR-0034) holds the restricted families only with an explicit boolean approval.
+    for (const [label, classification, approval, allowed] of [
+      ["group approved", "group", true, true], ["group not approved", "group", false, false],
+      ["group approval missing", "group", undefined, false], ["group approval string", "group", "true", false],
+      ["baseline STD with approval", "STD", true, false], ["CYB with approval false", "CYB", false, true],
+    ] as [string, string, unknown, boolean][]) {
+      const d = decision(); d.classification = classification;
+      if (approval !== undefined) d.restrictedFamiliesApproved = approval;
+      d.familyPolicy.families[restricted] = { models: ["deployment-approved"], person: nullLimit(), group: nullLimit() };
+      resolver(`${restricted} ${label}`, d, allowed);
+      if (typeof approval === "boolean") {
+        vectors.push({ label: `${restricted} admission ${label}`, method: "Family",
+          vars: { ccofFamilyPolicy: d.familyPolicy, ccofClassification: classification, ccofModel: "deployment-approved", ccofRestrictedFamiliesApproved: approval },
+          expected: allowed ? restricted : "" });
+      }
+    }
+    const approved = decision(); approved.classification = "group"; approved.restrictedFamiliesApproved = true;
+    vectors.push({ label: `${restricted} approval copied to the decision`, method: "Resolve",
+      vars: { ccofResolverResponse: { status: 200, body: approved } }, json: true, property: "d.restrictedFamiliesApproved", expected: true });
+    const groupDefault = decision(); groupDefault.classification = "group";
+    resolver(`${restricted} group without restricted families needs no approval`, groupDefault, true);
+    const notBoolean = decision(); notBoolean.classification = "group"; notBoolean.restrictedFamiliesApproved = "yes";
+    resolver(`${restricted} non-boolean approval refused even without restricted families`, notBoolean, false);
+  }
+  for (const restricted of ["fable", "mythos"]) {
     for (const classification of ["STD", "PRM", "cyb", "CYB-extra", "CYB"]) {
       const d = decision(); d.classification = classification;
       d.classificationGroupDisplayName = "CYB Approved";

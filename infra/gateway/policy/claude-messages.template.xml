@@ -126,6 +126,7 @@
                 }
                 var groupId = body["classificationGroupId"];
                 if (groupId == null || groupId.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)groupId, "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z")) { return false; }
+                if (body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type != JTokenType.Boolean) { return false; }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return false; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -137,7 +138,7 @@
                 var registered = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
                 foreach (var family in families.Properties()) {
                     if (Array.IndexOf(new string[] { "haiku", "sonnet", "opus", "fable", "mythos" }, family.Name) < 0) { return false; }
-                    if ((family.Name == "fable" || family.Name == "mythos") && (string)body["classification"] != "CYB") { return false; }
+                    if ((family.Name == "fable" || family.Name == "mythos") && !((string)body["classification"] == "CYB" || ((string)body["classification"] == "group" && body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type == JTokenType.Boolean && (bool)body["restrictedFamiliesApproved"]))) { return false; }
                     var entry = family.Value as JObject;
                     if (entry == null || entry.Count != 3) { return false; }
                     var models = entry["models"] as JArray;
@@ -295,6 +296,7 @@
                 }
                 var groupId = body["classificationGroupId"];
                 if (groupId == null || groupId.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)groupId, "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z")) { return unavailable; }
+                if (body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type != JTokenType.Boolean) { return unavailable; }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return unavailable; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -306,7 +308,7 @@
                 var registered = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
                 foreach (var family in families.Properties()) {
                     if (Array.IndexOf(new string[] { "haiku", "sonnet", "opus", "fable", "mythos" }, family.Name) < 0) { return unavailable; }
-                    if ((family.Name == "fable" || family.Name == "mythos") && (string)body["classification"] != "CYB") { return unavailable; }
+                    if ((family.Name == "fable" || family.Name == "mythos") && !((string)body["classification"] == "CYB" || ((string)body["classification"] == "group" && body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type == JTokenType.Boolean && (bool)body["restrictedFamiliesApproved"]))) { return unavailable; }
                     var entry = family.Value as JObject;
                     if (entry == null || entry.Count != 3) { return unavailable; }
                     var models = entry["models"] as JArray;
@@ -337,6 +339,8 @@
                 decision["decisionVersion"] = 3;
                 decision["classificationGroupId"] = ((string)groupId).ToLowerInvariant();
                 decision["familyPolicy"] = familyPolicy;
+                var approval = body["restrictedFamiliesApproved"];
+                if (approval != null) { decision["restrictedFamiliesApproved"] = (bool)approval; }
                 var displayName = body["classificationGroupDisplayName"];
                 if (displayName != null && displayName.Type == JTokenType.String && ((string)displayName).Length >= 1 && ((string)displayName).Length <= 256) {
                     decision["classificationGroupDisplayName"] = (string)displayName;
@@ -437,6 +441,10 @@
             var name = JObject.Parse((string)context.Variables["ccofDecision"])["classificationGroupDisplayName"];
             return name != null && name.Type == JTokenType.String && ((string)name).Length >= 1 && ((string)name).Length <= 256 ? (string)name : "";
         }" />
+        <set-variable name="ccofRestrictedFamiliesApproved" value="@{
+            var approval = JObject.Parse((string)context.Variables["ccofDecision"])["restrictedFamiliesApproved"];
+            return approval != null && approval.Type == JTokenType.Boolean && (bool)approval;
+        }" />
         <set-variable name="ccofBackendId" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["backendId"])" />
         <set-variable name="ccofFamilyPolicy" value="@(JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"].ToString(Newtonsoft.Json.Formatting.None))" />
         <set-variable name="ccofPersonTpm" value="@((int?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokensPerMinute"] ?? 0)" />
@@ -469,7 +477,7 @@
             var matches = 0;
             foreach (var family in ((JObject)JObject.Parse((string)context.Variables["ccofFamilyPolicy"])["families"]).Properties()) {
                 if (Array.IndexOf(new string[] { "haiku", "sonnet", "opus", "fable", "mythos" }, family.Name) < 0) { return ""; }
-                if ((family.Name == "fable" || family.Name == "mythos") && classification != "CYB") { return ""; }
+                if ((family.Name == "fable" || family.Name == "mythos") && classification != "CYB" && !(classification == "group" && context.Variables.GetValueOrDefault<bool>("ccofRestrictedFamiliesApproved", false))) { return ""; }
                 foreach (var allowed in (JArray)family.Value["models"]) {
                     if (allowed.Type == JTokenType.String && string.Equals((string)allowed, model, StringComparison.Ordinal)) {
                         admitted = family.Name;

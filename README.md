@@ -22,7 +22,7 @@ separate controls. Optional reconciliation is not an inference-path dependency.
 - Strict family-policy contracts shared by the resolver, sync and reconciler.
   The gateway consumes decision version 3 and uses the `d3` cache namespace.
 - Exact registered model IDs, aggregate and family ceilings, and classification
-  restrictions. Fable/Mythos access requires authoritative classification `CYB`.
+  restrictions. Fable/Mythos access requires authoritative classification `CYB`, or an onboarded group with `restrictedFamiliesApproved: true` ([ADR-0034](docs/adr/0034-group-centric-onboarding.md)).
 - Explicit project-to-backend mapping, including multiple designated subscriptions.
   A backend descriptor alone is not evidence that a second live route works.
 - A combined developer-client/gateway registration by default. The internal resolver
