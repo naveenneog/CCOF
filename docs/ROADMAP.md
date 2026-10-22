@@ -11,8 +11,9 @@
 | G3 — Precedence | Complete | No selector and several active groups: lowest priority applies; equal lowest refused; a selector still wins |
 | G4 — Surfaces | Complete | Decision carries allowed surfaces; APIM maps client app ID to surface and refuses a surface the group does not allow; no mapping means no enforcement |
 | G5 — Cache suggesters | Complete | Suggested cache-read share per surface, with cited sources; group value derived from enabled surfaces |
-| G6 — Admin group API | Active | Search Entra groups, onboard, edit, list and retire group registrations with change records |
-| G7 — Chargeback ID in usage and export | Pending | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
+| G6 — Admin group API | Complete | Search Entra groups, onboard, edit, list and retire group registrations with change records |
+| G7a — Chargeback ID in usage and workbook | Active | Usage trace, ledger KQL and workbook carry chargeback ID and surface; a per-developer view lists the ID |
+| G7b — Export for Power BI | Pending | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
 | G8 — Admin UI | Pending | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
 | G9 — Live verification | Pending | Contoso (admin/Entra) and FDPO (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant |
 | G-WIRE — Wire rename | Pending | Replace `projectId`/`classification` wire fields with group fields across resolver, APIM, ledger, workbook |

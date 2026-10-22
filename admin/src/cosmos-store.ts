@@ -40,7 +40,7 @@ export function createCosmosProjectStore(container: Container): ProjectStore {
       return resources.map((doc) => ({ doc, etag: String(doc._etag ?? "") }));
     },
     async listPage(query) {
-      const filters: string[] = [];
+      const filters: string[] = ['(NOT IS_DEFINED(c.kind) OR c.kind != "group")'];
       const parameters: { name: string; value: string }[] = [];
       if (query.search) { filters.push("(CONTAINS(c.projectId, @search, true) OR CONTAINS(c.displayName, @search, true))"); parameters.push({ name: "@search", value: query.search }); }
       if (query.tag) { filters.push("ARRAY_CONTAINS(c.adminTags, @tag)"); parameters.push({ name: "@tag", value: query.tag }); }

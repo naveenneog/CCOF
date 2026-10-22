@@ -2,7 +2,19 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G6 — admin group API ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G7a — chargeback ID and surface in usage, ledger and workbook ([ROADMAP](ROADMAP.md)).
+
+### G6 — admin group API (complete)
+
+- `/api/groups` list, read, onboard, update (If-Match), retire (confirm ID); Entra group search and member
+  count via Graph `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` behind `ADMIN_GROUP_SEARCH_ENABLED`;
+  cache suggestion route ([admin/src/groups.ts](../admin/src/groups.ts),
+  [admin/src/group-directory.ts](../admin/src/group-directory.ts), [ADMIN-API.md](ADMIN-API.md)).
+- The projects API and V2/V3 project lists exclude group documents.
+- Tests: admin 129/129, build OK. Mutants 17/17 caught after fixing two vacuous tests.
+- Council round 1: ARCHITECT BLOCK (group documents listed as projects; the V3 project page crashed on
+  one). Fixed server-side. Round 2: ARCHITECT, CODER, QA, SECURITY, UX PASS.
+- Not live-verified: Graph permissions are not granted in any tenant yet (G9).
 
 ### G4 — surfaces (complete)
 

@@ -79,10 +79,10 @@ function route(method: string, path: string): Route | "method_not_allowed" | nul
   return null;
 }
 
-const json = (status: number, jsonBody: unknown, headers: Record<string, string> = {}): ApiResponse =>
+export const json = (status: number, jsonBody: unknown, headers: Record<string, string> = {}): ApiResponse =>
   ({ status, jsonBody, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
 
-function parseBody(request: ApiRequest): unknown {
+export function parseBody(request: Pick<ApiRequest, "body">): unknown {
   if (request.body === null || request.body === "") throw new ApiError(400, "body_required");
   if (Buffer.byteLength(request.body, "utf8") > MAX_BODY_BYTES) throw new ApiError(413, "body_too_large");
   try {
@@ -92,7 +92,7 @@ function parseBody(request: ApiRequest): unknown {
   }
 }
 
-function requireIfMatch(request: ApiRequest): string {
+export function requireIfMatch(request: Pick<ApiRequest, "headers">): string {
   const value = request.headers("if-match")?.trim();
   if (!value || value === "*") throw new ApiError(428, "if_match_required");
   return value;
@@ -112,7 +112,7 @@ function summary(p: StoredProject) {
 }
 
 // Changed leaf paths with before and after values; limits and model names are configuration, not secrets.
-function changes(before: unknown, after: unknown, path: string, out: { path: string; before: unknown; after: unknown }[]) {
+export function changes(before: unknown, after: unknown, path: string, out: { path: string; before: unknown; after: unknown }[]) {
   if (isObject(before) && isObject(after)) {
     for (const key of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) changes(before[key], after[key], path ? `${path}.${key}` : key, out);
     return out;
@@ -159,7 +159,7 @@ async function classificationUpdate(
 
 // A write that throws (timeout, lost connection, 503) may still have committed in Cosmos, so the record
 // says "unconfirmed", never "failed". Definite refusals (ETag, conflict) are recorded as "refused".
-async function recorded<T>(pending: PendingChange, write: () => Promise<T>): Promise<T> {
+export async function recorded<T>(pending: PendingChange, write: () => Promise<T>): Promise<T> {
   try { return await write(); } catch (err) {
     await pending.finish("unconfirmed", { code: err instanceof ApiError ? err.code : "write_failed" });
     throw err;
@@ -168,7 +168,7 @@ async function recorded<T>(pending: PendingChange, write: () => Promise<T>): Pro
 
 // A registry failure (no network path, missing data role, Cosmos outage) is reported as 503
 // registry_unavailable with no provider detail; the cause belongs in the app's own logs.
-function guardStore(store: ProjectStore): ProjectStore {
+export function guardStore(store: ProjectStore): ProjectStore {
   const guard = <A extends unknown[], R>(work: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
     try {
       return await work(...args);
@@ -182,6 +182,20 @@ function guardStore(store: ProjectStore): ProjectStore {
     read: guard((id: string) => store.read(id)),
     create: guard((doc: Doc) => store.create(doc)),
     replace: guard((doc: Doc, etag: string) => store.replace(doc, etag)),
+  };
+}
+
+// The project API never sees onboarded group documents (ADR-0034), which share the container:
+// they are not listed, and reading one is "not found", so no project route can edit a group.
+const isGroupDoc = (doc: Doc) => doc.kind === "group";
+function projectsOnly(store: ProjectStore): ProjectStore {
+  return {
+    ...store,
+    list: async () => (await store.list()).filter((p) => !isGroupDoc(p.doc)),
+    read: async (id: string) => {
+      const found = await store.read(id);
+      return found && !isGroupDoc(found.doc) ? found : null;
+    },
   };
 }
 
@@ -206,7 +220,7 @@ export async function handleAdminRequest(request: ApiRequest, deps: ApiDependenc
     const writes = matched.op === "create" || matched.op === "familyPolicy" || matched.op === "limits" || matched.op === "settings" || matched.op === "retire";
     if (writes && !actor.canWrite) throw new ApiError(403, "write_permission_required");
     if (!deps.store) throw new ApiError(503, "project_store_not_configured");
-    const store = guardStore(deps.store);
+    const store = projectsOnly(guardStore(deps.store));
 
     switch (matched.op) {
       case "list": {

@@ -24,6 +24,8 @@ import { ADMIN_VERSION } from "./version.ts";
 import { isObject } from "./validation.ts";
 import type { Doc } from "./validation.ts";
 import { createUserDirectory } from "./user-directory.ts";
+import { createGroupDirectory } from "./group-directory.ts";
+import { handleGroupRequest } from "./groups.ts";
 
 let authenticate: Authenticator | null = null;
 let authProblem = "";
@@ -36,6 +38,7 @@ try {
 const cosmos = readCosmosSettings(process.env);
 const credential = new ManagedIdentityCredential(process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID ? { clientId: process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID } : {});
 const directory = createUserDirectory(process.env, credential);
+const groupDirectory = createGroupDirectory(process.env, credential);
 const container = cosmos ? openContainer(cosmos, credential) : null;
 const store = container ? createCosmosProjectStore(container) : null;
 const catalogContainer = cosmos && process.env.ADMIN_CONFIG_CONTAINER
@@ -72,6 +75,16 @@ async function projectsHandler(request: HttpRequest, context: InvocationContext)
   return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
 }
 
+async function groupsHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  const body = ["POST", "PUT"].includes(request.method.toUpperCase()) ? await request.text() : null;
+  const url = new URL(request.url);
+  const response = await handleGroupRequest(
+    { method: request.method, path: url.pathname, query: (name) => url.searchParams.get(name), headers: (name) => request.headers.get(name), body },
+    { authenticate, store, changeLog, directory: groupDirectory, log: (line) => context.log(line), now: () => new Date(), newId: () => randomUUID() },
+  );
+  return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
+}
+
 // Function-key protected. Reports configuration and Cosmos reachability as codes only.
 async function healthHandler(_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const cosmosState = container ? await probeCosmos(container, (line) => context.log(line)) : "not_configured";
@@ -99,6 +112,11 @@ app.http("classificationPolicy", {
 });
 app.http("projectSettings", { methods: ["PUT"], authLevel: "anonymous", route: "api/projects/{projectId}/settings", handler: projectsHandler });
 app.http("projectRetire", { methods: ["POST"], authLevel: "anonymous", route: "api/projects/{projectId}/retire", handler: projectsHandler });
+// Group onboarding (ADR-0034): /api/groups, /api/groups/{groupId|directory|cache-suggestion}, and
+// /api/groups/{groupId}/retire or /api/groups/directory/{groupId}.
+app.http("groups", { methods: ["GET", "POST"], authLevel: "anonymous", route: "api/groups", handler: groupsHandler });
+app.http("group", { methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/groups/{segment}", handler: groupsHandler });
+app.http("groupAction", { methods: ["GET", "POST"], authLevel: "anonymous", route: "api/groups/{segment}/{part}", handler: groupsHandler });
 app.http("adminV2", {
   methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/v2/{feature}",
   handler: async (request, context) => {

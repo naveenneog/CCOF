@@ -100,6 +100,46 @@ Routes must not start with `admin`: the Functions host reserves that prefix for 
   ETags, and the before and after value of each changed limit or model list. Tokens are never
   logged.
 
+### Onboarded groups ([ADR-0034](adr/0034-group-centric-onboarding.md))
+
+An onboarded group is one existing Entra security group with its own per-user budget (`autoScale`
+or `cap`), limits, models, surfaces, priority, chargeback ID and cache profile. Group documents are
+stored in the `projects` container with `kind: "group"` and `id = projectId = groupId`
+([admin/src/groups.ts](../admin/src/groups.ts)).
+
+| Request | Role | Behaviour |
+|---|---|---|
+| `GET /api/groups` | Reader | Group summaries with ETags; baseline projects are not listed |
+| `GET /api/groups/{groupId}` | Reader | The group document and its `ETag`; 404 for a baseline project |
+| `POST /api/groups` | Editor | Onboard: body holds `groupId` and the editable fields; stored `active`; 409 if the ID exists as a group or a project |
+| `PUT /api/groups/{groupId}` | Editor | Change any of `displayName`, `backendId`, `priority`, `chargebackId`, `budget`, `restrictedFamiliesApproved`, `familyPolicy`, `surfaces`, `cacheProfile`; needs `If-Match`; 409 when retired |
+| `POST /api/groups/{groupId}/retire` | Editor | Body `{"confirmGroupId": "<groupId>"}`; needs `If-Match`; one way. The next sync removes every member's access |
+| `GET /api/groups/directory?search=<text>` | Reader | Entra security groups whose display name matches; text 1-100 characters without `"` or `\` |
+| `GET /api/groups/directory/{groupId}` | Reader | One Entra group with its direct member count |
+| `GET /api/groups/cache-suggestion?surfaces=code,chat` | Reader | Suggested cache-read share for the surfaces, with evidence class ([cache-suggestions.ts](../src/contracts/cache-suggestions.ts)) |
+
+- **Validation:** the same contract the sync and reconciler read
+  ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)); problems are
+  returned as field paths (`422 invalid_group`).
+- **Change record:** each write is recorded in `adminConfig` before it is applied, as for projects.
+- **Directory lookup:** enabled with `ADMIN_GROUP_SEARCH_ENABLED=true`. The admin managed identity
+  needs Microsoft Graph application permissions `Group.ReadBasic.All` (search and read) and
+  `GroupMember.ReadBasic.All` (member count) with tenant admin consent. These are the read-only
+  least-privileged options listed on
+  [List groups](https://learn.microsoft.com/en-us/graph/api/group-list?view=graph-rest-1.0) and
+  [List group members](https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0).
+  Requests send `ConsistencyLevel: eventual`
+  ([advanced queries](https://learn.microsoft.com/en-us/graph/aad-advanced-queries)). Without the
+  setting the routes return `503 group_directory_disabled`; a missing permission returns
+  `502 group_directory_permission_required`.
+- **Error codes:** `400 invalid_search_text` (blank, over 100 characters, or containing `"` or `\`),
+  `400 group_search_rejected` (Graph refused the text), `400 invalid_surfaces`,
+  `503 group_directory_not_configured` (no directory client), `503 group_directory_unavailable`
+  (Graph outage or timeout), `404 group_not_found`, `409 group_exists`, `409 group_retired`,
+  `412 etag_mismatch`, `428 if_match_required`, `422 invalid_group` with `problems`.
+- **Projects API:** `/api/projects` and the V2/V3 project lists do not return group documents, and
+  `GET /api/projects/{groupId}` is 404, so no project route can change a group.
+
 ## Sign-in
 
 A new app registration, "CCOF Admin", serves both the console and the API. It has **no Graph or
