@@ -32,9 +32,12 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
    is the same for every group and reserved (baseline projects may not use it), so the budget scope
    `"<groupId>:group"` does not move when the group's settings change. A later packet (ROADMAP
    G-WIRE) renames the wire fields. Baseline project documents remain readable until then.
-5. **Precedence (ASSUMED, G-A1).** A selector header names the group. Without one, the active
-   membership with the lowest `priority` number applies; equal lowest priorities are refused with
-   `project_selection_required`, as today.
+5. **Precedence (ASSUMED, G-A1).** A selector header names the group. Without one, when every active
+   membership is an onboarded group, the one with the lowest `priority` number applies; equal lowest
+   priorities, or any baseline project among the candidates, are refused with
+   `project_selection_required`, as today
+   ([src/resolver/select-membership.ts](../../src/resolver/select-membership.ts)). APIM caches the
+   no-selector decision per person, so a priority change applies after the allow TTL.
 6. **Surfaces.** Allowed surfaces are a subset of `chat`, `cowork`, `code`, `m365`, `design`.
    `design` is accepted and stored but has no Foundry path yet. The resolver returns the list with
    the decision; APIM maps the calling client app ID (`azp`/`appid`, policy lines 42-44) to a

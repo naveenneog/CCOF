@@ -8,7 +8,7 @@
 | G1 — Group registration contract | Complete | Given a group document, the parser returns a typed registration or field-path problems; Fable/Mythos only with explicit approval |
 | G2 — Sync and reconciler read groups | Complete | A `kind: "group"` document produces memberships for its Entra members and a reconciler scope; memberships carry priority, surfaces and chargeback ID |
 | G2b — Resolver and gateway carry group attributes | Complete | Resolver validates and returns surfaces, chargeback ID and approval; APIM admits Fable/Mythos for a group only with approval |
-| G3 — Precedence | Active | No selector and several active groups: lowest priority applies; equal lowest refused; a selector still wins |
+| G3 — Precedence | Complete | No selector and several active groups: lowest priority applies; equal lowest refused; a selector still wins |
 | G4 — Surfaces | Pending | Decision carries allowed surfaces; APIM maps client app ID to surface and refuses a surface the group does not allow; no mapping means no enforcement |
 | G5 — Cache suggesters | Pending | Suggested cache-read share per surface, with cited sources; group value derived from enabled surfaces |
 | G6 — Admin group API | Pending | Search Entra groups, onboard, edit, list and retire group registrations with change records |

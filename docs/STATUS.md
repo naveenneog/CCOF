@@ -2,7 +2,17 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G3 — precedence for a person in several groups ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G5 — cache suggesters ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+### G3 — precedence (complete)
+
+- No selector and all active memberships are groups: the lowest `priority` applies; ties, malformed
+  priorities and baseline candidates keep `project_selection_required`; an exhausted lowest-priority
+  group is refused, not skipped ([src/resolver/select-membership.ts](../src/resolver/select-membership.ts)).
+- Tests: `tests/resolver-group-precedence.test.ts` 7/7; resolver suites 284 pass, 2 skipped (live).
+- Mutants: 3/3 caught.
+- Council: ARCHITECT PASS, CODER PASS, QA PASS-WITH-NOTES (two cases added), SECURITY PASS; UX not
+  applicable. G-A1 remains ASSUMED pending owner confirmation.
 
 ### G2b — resolver and gateway carry group attributes (complete)
 
@@ -19,40 +29,6 @@
 - Council: ARCHITECT PASS-WITH-NOTES (revocation follows the cache TTL, as for CYB), CODER PASS,
   QA PASS-WITH-NOTES, SECURITY PASS-WITH-NOTES (validate surfaces/chargeback ID in APIM before G4/G7
   use them); UX not applicable.
-
-G3 acceptance:
-
-- Without a selector, among active memberships that are all groups, the lowest `priority` applies.
-- Equal lowest priorities, or a baseline project among the candidates, are refused with
-  `project_selection_required`.
-- A selector still chooses its group; the key path is unchanged.
-
-### G2 — sync and reconciler read group documents (complete)
-
-- `readProjectDocument` and `readRegistry` dispatch on `kind: "group"`; the scope code `group` is
-  reserved for groups at both boundaries ([src/sync/projects.ts](../src/sync/projects.ts),
-  [src/reconciler/registry.ts](../src/reconciler/registry.ts)). Memberships carry `priority`,
-  `surfaces`, `chargebackId`, `restrictedFamiliesApproved` ([src/sync/membership.ts](../src/sync/membership.ts)).
-- Tests: `tests/sync-group-documents.test.ts` 11/11; sync and reconciler suites 393 pass, 4 skipped (live).
-- Mutants: 8/8 caught after strengthening two tests that let mutants survive (unchanged-run clock,
-  cap `aggregateMode` on the sync side).
-- Council: ARCHITECT PASS-WITH-NOTES (until G2b, a group approved for Fable/Mythos is refused for all
-  of its models, failing closed: do not onboard such a group before G2b), CODER PASS, QA PASS,
-  SECURITY PASS; UX not applicable.
-- The admin console lists a group document with no classifications; baseline edit routes refuse it
-  (G6 adds group routes).
-
-### G1 — group registration contract (complete)
-
-- `readGroupRegistration` ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)) and
-  `restrictedFamiliesAllowed` ([src/contracts/model-families.ts](../src/contracts/model-families.ts)).
-- Tests: `tests/group-registration.test.ts` 9/9; related family-policy suites 24/24.
-- Mutants: 7/7 caught, each with the suite loading all 9 tests and the named test failing.
-- Council: first round BLOCK (Architect, QA, Security): a tier-based scope code moved budget scopes
-  and could be declared by any project; group/project ID collision possible. Redesigned (ADR-0034
-  decisions 3, 4). Second round: ARCHITECT PASS, CODER PASS, QA PASS, SECURITY PASS; UX not
-  applicable (no user-facing change).
-- Gate: `node .ironclad/gate.mjs --stage packet` PASS before the redesign; rerun at G2.
 
 Open unknowns for the work stream: G-A1 to G-A4, G-R3 ([UNKNOWNS](UNKNOWNS.md)).
 

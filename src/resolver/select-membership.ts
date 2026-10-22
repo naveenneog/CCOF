@@ -3,13 +3,16 @@
 //   person's own entitlement record must confirm it;
 // - the selector path (docs/PILOT.md C-1, ADR-0006's rule): no key; an
 //   optional projectId selector chooses among the person's active memberships,
-//   and with no selector the single active project is used.
+//   and with no selector the single active project is used, or, when every
+//   active membership is an onboarded group, the one with the lowest priority
+//   (ADR-0034 decision 5).
 // Either way the selector only chooses; authorization comes from the record.
 
 import type { EntitlementRecord, ProjectMembership, ResolveDependencies, ResolveInput } from "./decide.ts";
 import { checkEntitlementRecord } from "./freshness.ts";
 import type { ResolveRefusal } from "./refusals.ts";
 import { refuse, settledValue } from "./refusals.ts";
+import { GROUP_SCOPE_CODE } from "../contracts/model-families.ts";
 
 export type Selection = { membership: ProjectMembership } | ResolveRefusal;
 
@@ -70,6 +73,21 @@ export async function selectByKey(
   return selection;
 }
 
+// Without a selector, among memberships that are all onboarded groups, the
+// lowest priority applies (ADR-0034 decision 5). Equal lowest priorities, or
+// any baseline membership (no priority), leave the choice to the caller.
+function lowestPriorityProject(active: ProjectMembership[]): string | null {
+  const ranked: { projectId: string; priority: number }[] = [];
+  for (const m of active) {
+    const priority = (m as unknown as Record<string, unknown>).priority;
+    if (m.classification !== GROUP_SCOPE_CODE || !Number.isSafeInteger(priority) || (priority as number) < 1) return null;
+    ranked.push({ projectId: m.projectId, priority: priority as number });
+  }
+  const lowest = Math.min(...ranked.map((r) => r.priority));
+  const winners = new Set(ranked.filter((r) => r.priority === lowest).map((r) => r.projectId));
+  return winners.size === 1 ? [...winners][0] : null;
+}
+
 export async function selectBySelector(
   input: ResolveInput,
   deps: ResolveDependencies,
@@ -86,6 +104,9 @@ export async function selectBySelector(
 
   const projects = new Set(active.map((m) => m.projectId));
   if (projects.size === 0) return refuse("no_entitlement");
-  if (projects.size > 1) return refuse("project_selection_required");
+  if (projects.size > 1) {
+    const chosen = lowestPriorityProject(active);
+    return chosen === null ? refuse("project_selection_required") : pickInProject(active, chosen, true);
+  }
   return pickInProject(active, active[0].projectId, true);
 }
