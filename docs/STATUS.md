@@ -2,7 +2,17 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G5 — cache suggesters ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G4 — surfaces ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+### G5 — cache suggesters (complete)
+
+- [src/contracts/cache-suggestions.ts](../src/contracts/cache-suggestions.ts): per-surface suggestion with evidence
+  class (illustrative, analogue, assumed, none) and source; a group's suggestion is the lowest among
+  enabled surfaces the gateway carries, returned with the surfaces and classes that set it.
+- Tests: `tests/cache-suggestions.test.ts` 6/6. Mutants 5/5 caught.
+- Council round 1: labels overstated evidence (`code` marked published; `cowork` used a tuned figure).
+  Fixed. Round 2: ARCHITECT and UX PASS-WITH-NOTES (cowork, not gateway-routed, set the minimum:
+  now excluded), CODER PASS, QA PASS-WITH-NOTES, SECURITY PASS.
 
 ### G3 — precedence (complete)
 
