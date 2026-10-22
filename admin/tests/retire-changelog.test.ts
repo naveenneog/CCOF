@@ -131,10 +131,10 @@ test("each write is recorded before it is applied and completed with its result"
   const etag2 = (await store.read("PROJECT02"))!.etag;
   await call("PUT", "/api/projects/PROJECT02/settings", { displayName: "Renamed" }, { "if-match": etag2 });
   assert.equal([...changeLog.records.values()].filter((r) => r.operation === "settings").length, 1);
-  // A write that throws leaves a failed record, not a pending one.
+  // A write that throws may have committed: the record says unconfirmed, never failed.
   store.throwOnWrite = true;
   await call("PUT", "/api/projects/PROJECT02/settings", { displayName: "Again" }, { "if-match": etag2 });
-  assert.equal([...changeLog.records.values()].at(-1)!.outcome, "failed");
+  assert.equal([...changeLog.records.values()].at(-1)!.outcome, "unconfirmed");
 });
 
 test("catalog edits are recorded and refused when the record is unavailable", async () => {
@@ -193,6 +193,11 @@ test("removal limits: validated like the sync, ETag-guarded, recorded, and read 
   assert.equal((await v3("PUT", "sync/removal-limits", { ...good, enabled: false }, { "if-match": '"stale"' })).status, 412);
   assert.equal((await v3("PUT", "sync/removal-limits", { ...good, enabled: false }, { "if-match": limitsStore.current!.etag })).status, 200);
   assert.equal(body(await v3("GET", "sync/removal-limits")).state, "disabled");
+  // An expired override can be switched off with its old expiry; enabling it needs a future one.
+  const past = { ...good, expiresAt: "2026-10-19T00:00:00.000Z" };
+  const etag = limitsStore.current!.etag;
+  assert.deepEqual(body(await v3("PUT", "sync/removal-limits", past, { "if-match": etag })).problems, ["expiresAt:not_in_future"]);
+  assert.equal((await v3("PUT", "sync/removal-limits", { ...past, enabled: false }, { "if-match": etag })).status, 200);
 });
 
 test("audit/changes lists the permanent record with the audit filters", async () => {

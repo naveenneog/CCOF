@@ -25,7 +25,8 @@ export function limitsFromBody(body: unknown, actorOid: string, now: Date): Doc 
   const problems = removalLimitsProblems(doc);
   if (typeof doc.expiresAt === "string" && !problems.includes("expiresAt:invalid")) {
     const at = Date.parse(doc.expiresAt);
-    if (at <= now.getTime()) problems.push("expiresAt:not_in_future");
+    // A past expiry is harmless on a disabled override, so switching an expired one off is always possible.
+    if (at <= now.getTime() && doc.enabled === true) problems.push("expiresAt:not_in_future");
     else if (at > now.getTime() + MAX_OVERRIDE_DAYS * 86_400_000) problems.push("expiresAt:beyond_90_days");
   }
   if (problems.length) throw new ValidationError(problems);

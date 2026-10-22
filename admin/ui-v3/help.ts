@@ -108,7 +108,7 @@ export const HELP: Record<string, HelpTopic> = {
     title: "Audit",
     summary: "Every change made through the admin API, searchable by project, actor, operation, outcome and date, with before → after values. Two sources: the change record and telemetry.",
     figures: [
-      ["Change record", "A Cosmos document per change in the adminConfig container, written before the change is applied and completed with its result. If it can't be written, the change is refused (change_log_unavailable). Outcome 'pending' means the result was not confirmed. Not deleted by the console."],
+      ["Change record", "A Cosmos document per change in the adminConfig container, written before the change is applied and completed with its result. If it can't be written, the change is refused (change_log_unavailable). Outcome 'unconfirmed' means the write raised an error, such as a timeout, and may still have been applied; check the item. 'pending' means no result was recorded. Not deleted by the console."],
       ["Telemetry", "ccof.admin.audit.v1 log lines in Log Analytics, including refused attempts. Kept for the workspace retention period."],
     ],
     permissions: ["Change record: ADMIN_CONFIG_CONTAINER and a scoped Cosmos data role (read, query, create, replace) on adminConfig.", "Telemetry: Log Analytics Reader on the admin app's own workspace (ADMIN_AUDIT_WORKSPACE_ID when it differs from ADMIN_WORKSPACE_ID)."],

@@ -259,7 +259,7 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
       const pending = await beginChange(deps.changeLog, { requestId, at: deps.now().toISOString(), actorOid: actor.oid, operation: "v3/sync/removal-limits",
         projectId: null, changes: changed, details: { etagBefore: current?.etag ?? null } }, deps.now, deps.log);
       let etag: string | null;
-      try { etag = await deps.limitsStore.save(doc, current?.etag ?? null); } catch (err) { await pending.finish("failed", { code: "write_failed" }); throw err; }
+      try { etag = await deps.limitsStore.save(doc, current?.etag ?? null); } catch (err) { await pending.finish("unconfirmed", { code: "write_failed" }); throw err; }
       if (!etag) { await pending.finish("refused", { code: "etag_mismatch" }); throw new ApiError(412, "etag_mismatch"); }
       await pending.finish("updated", { etagAfter: etag });
       deps.log(JSON.stringify({ schema: "ccof.admin.audit.v1", at: deps.now().toISOString(), requestId, actorOid, operation: "v3/sync/removal-limits",

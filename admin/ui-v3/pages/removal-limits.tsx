@@ -19,6 +19,9 @@ const EXPIRY = [
   { value: "30", label: "30 days" }, { value: "90", label: "90 days (maximum)" }, { value: "never", label: "No expiry" },
 ];
 
+// "Keep current expiry" only while the saved expiry is still in the future; the server refuses a past one.
+const keepable = (saved: any) => Boolean(saved?.expiresAt) && Date.parse(saved.expiresAt) > Date.now();
+
 interface Draft { enabled: boolean; maxRemovalsPerRun: string; maxRemovalFraction: string; expiry: string; reason: string }
 
 export function RemovalLimits() {
@@ -28,7 +31,7 @@ export function RemovalLimits() {
   const saved = q.data?.limits ?? null;
   const initial = useMemo<Draft>(() => ({
     enabled: saved?.enabled ?? true, maxRemovalsPerRun: String(saved?.maxRemovalsPerRun ?? 5), maxRemovalFraction: saved?.maxRemovalFraction ?? "0.1",
-    expiry: saved?.expiresAt ? "keep" : saved ? "never" : "7", reason: "",
+    expiry: keepable(saved) ? "keep" : saved && !saved.expiresAt ? "never" : "7", reason: "",
   }), [saved]);
   const [draft, setDraft] = useState<Draft>(initial);
   const [review, setReview] = useState<{ body: any; before: any } | null>(null);
@@ -45,7 +48,7 @@ export function RemovalLimits() {
     count: !/^\d+$/.test(draft.maxRemovalsPerRun) || count > 10_000_000 ? "A whole number from 0 to 10,000,000." : null,
     fraction: FRACTION.test(draft.maxRemovalFraction) ? null : "A decimal from 0 to 1, at most six decimal places (0.1 = 10%).",
     reason: draft.reason.trim() && draft.reason.trim().length <= 200 ? null : "Required, up to 200 characters. It is stored with the change.",
-    expiry: draft.expiry === "keep" && !saved?.expiresAt ? "Choose an expiry." : null,
+    expiry: draft.expiry === "keep" && !keepable(saved) ? "Choose an expiry." : null,
   };
   const valid = !Object.values(problems).some(Boolean);
   const expiresAt = draft.expiry === "keep" ? saved?.expiresAt ?? null : draft.expiry === "never" ? null
@@ -92,7 +95,7 @@ export function RemovalLimits() {
               <Field label="Max removals per run" error={problems.count}>{(id, d) => <input id={id} aria-describedby={d} className="input" inputMode="numeric" value={draft.maxRemovalsPerRun} onChange={(e) => setDraft({ ...draft, maxRemovalsPerRun: e.target.value.trim() })} />}</Field>
               <Field label="Max removal fraction" hint="0.1 = 10% of current memberships." error={problems.fraction}>{(id, d) => <input id={id} aria-describedby={d} className="input" value={draft.maxRemovalFraction} onChange={(e) => setDraft({ ...draft, maxRemovalFraction: e.target.value.trim() })} />}</Field>
               <Field label="Expires" error={problems.expiry}>{(id, d) => <select id={id} aria-describedby={d} className="input" value={draft.expiry} onChange={(e) => setDraft({ ...draft, expiry: e.target.value })}>
-                {EXPIRY.filter((o) => o.value !== "keep" || saved?.expiresAt).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}</Field>
+                {EXPIRY.filter((o) => o.value !== "keep" || keepable(saved)).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}</Field>
               <Field label="Reason" error={draft.reason ? problems.reason : null} hint="Stored with the change, for example the change ticket.">{(id, d) => <input id={id} aria-describedby={d} className="input" maxLength={200} value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} />}</Field>
             </div>
             <div className="form-actions"><Button variant="primary" disabled={!valid} onClick={() => { setError(null); setReview({ body, before }); }}>Review change</Button></div>

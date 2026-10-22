@@ -157,10 +157,11 @@ async function classificationUpdate(
   };
 }
 
-// A write that throws leaves no confirmed result: the record says so before the error propagates.
+// A write that throws (timeout, lost connection, 503) may still have committed in Cosmos, so the record
+// says "unconfirmed", never "failed". Definite refusals (ETag, conflict) are recorded as "refused".
 async function recorded<T>(pending: PendingChange, write: () => Promise<T>): Promise<T> {
   try { return await write(); } catch (err) {
-    await pending.finish("failed", { code: err instanceof ApiError ? err.code : "write_failed" });
+    await pending.finish("unconfirmed", { code: err instanceof ApiError ? err.code : "write_failed" });
     throw err;
   }
 }

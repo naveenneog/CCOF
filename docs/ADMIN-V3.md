@@ -127,7 +127,7 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/reconciler/runs` | Latest run per outcome and reason, with `ageMinutes` and `freshness` against the interval |
 | `GET /api/v3/reconciler/snapshots`, `/summary` | `period`, `scope` (person, group), `project`, `classification`, `person`, `state` (current, expired, historical, invalid_event), `budgetState`, `limit`, `offset`; exact USD equivalents |
 | `GET /api/v3/audit` | `project`, `actor`, `operation`, `outcome`, `from`, `to` (≤ 93 days, default last 31), `limit`, `offset` |
-| `GET /api/v3/audit/changes` | Same parameters; reads the change record. Outcomes: `created`, `updated`, `retired`, `refused` (ETag race), `failed`, `pending` (result not confirmed) |
+| `GET /api/v3/audit/changes` | Same parameters; reads the change record. Outcomes: `created`, `updated`, `retired`, `refused` (ETag race or conflict; not applied), `unconfirmed` (the write raised an error such as a timeout; it may have been applied, so check the item), `pending` (the result was never recorded) |
 | `GET /api/v3/sync/removal-limits` | Reader. The override (`enabled`, `maxRemovalsPerRun`, `maxRemovalFraction` text with ≤ 6 decimals, `expiresAt`, `reason`, `updatedAt`, `updatedBy`), its ETag and state: `none`, `disabled`, `expired`, `in_effect`, `invalid` |
 | `PUT /api/v3/sync/removal-limits` | Editor. Body: the five editable fields only. First save needs `If-None-Match: *`, later saves `If-Match`. Validated with the sync's own rules plus expiry in the future and ≤ 90 days; 422 `invalid_removal_limits` with `problems` |
 | `POST /api/projects/{id}/retire` | Editor, `If-Match`, body exactly `{"confirmProjectId":"<id>"}`. 409 when already retired. One-way in the console |

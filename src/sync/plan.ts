@@ -302,7 +302,10 @@ export function planSync(input: PlanInput): Plan {
     const count = drafts.filter((d) => d.retiredRemoved.includes(projectId)).length;
     events.push({ event: "notice", reason: "project_retired", projectId, counts: { removals: count } });
   }
-  const existingMemberships = [...existing.values()].reduce((n, e) => n + new Set(e.effective.filter(isActive).map((m) => m.projectId)).size, 0);
+  // Memberships of retired projects are removed whatever the limits say, so they are not part of the
+  // base the fraction is measured against: they would loosen the check on the other removals.
+  const existingMemberships = [...existing.values()].reduce((n, e) =>
+    n + new Set(e.effective.filter(isActive).map((m) => m.projectId).filter((p) => !state.retired.has(p as string))).size, 0);
   let removalsWithheld: RemovalsWithheld = state.unidentified ? "project_document_unidentified" : null;
   if (!removalsWithheld && removalLimitExceeded(removals, existingMemberships, input.removalLimits)) {
     removalsWithheld = "removal_limit_exceeded";

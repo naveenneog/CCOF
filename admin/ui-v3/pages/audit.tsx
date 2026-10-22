@@ -9,7 +9,7 @@ import { UserIdentity } from "../components/user-identity.tsx";
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPERATIONS = ["create", "settings", "limits", "familyPolicy", "retire", "v2/catalog", "v3/sync/removal-limits"];
-const OUTCOMES = ["created", "updated", "retired", "unchanged", "refused", "failed", "pending"];
+const OUTCOMES = ["created", "updated", "retired", "unchanged", "refused", "unconfirmed", "failed", "pending"];
 type Source = "changes" | "telemetry";
 const dateToIso = (v: string, end = false) => v ? new Date(`${v}T00:00:00Z`).getTime() + (end ? 86_400_000 : 0) : null;
 

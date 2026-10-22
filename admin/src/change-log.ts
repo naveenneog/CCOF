@@ -14,7 +14,8 @@ export interface ChangeRecord {
   at: string;
   actorOid: string;
   operation: string;
-  // pending until completed; then created, updated, retired or failed.
+  // pending until completed; then created, updated, retired, refused (definitely not applied) or
+  // unconfirmed (the write threw; it may or may not have been applied).
   outcome: string;
   projectId: string | null;
   changes: ChangeEntry[];

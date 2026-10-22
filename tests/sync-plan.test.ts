@@ -307,6 +307,27 @@ test("retirement removals are not withheld by the removal limits, while director
   assert.equal(plan.writes.length, 3);
 });
 
+test("a retired project's memberships do not loosen the removal fraction for other projects", () => {
+  const retired = readProjectDocument(projectDoc("RETIRED1", { status: "retired", retiredAt: RETIRED_AT }));
+  const live = readProjectDocument(projectDoc("PILOT1"));
+  const retiredMembership = () => stdMembership({ projectId: "RETIRED1" });
+  const plan = planSync(input({
+    projects: [retired, live],
+    // One of PILOT1's two members dropped (1/2 = 0.5 > 0.4). Counting RETIRED1's three memberships
+    // in the base would make it 1/5 = 0.2 and let the removal through.
+    groups: groupsOf({ [GROUP_STD]: users(PERSON_B), [GROUP_PRM]: [] }),
+    existing: [
+      existingDoc(PERSON_A, [stdMembership(), retiredMembership()]),
+      existingDoc(PERSON_B, [stdMembership(), retiredMembership()]),
+      existingDoc(PERSON_C, [retiredMembership()]),
+    ],
+    removalLimits: { maxRemovalsPerRun: 0, maxRemovalFraction: 0.4 },
+  }));
+  assert.equal(plan.removalsWithheld, "removal_limit_exceeded");
+  assert.equal(plan.counts.withheldRemovals, 1);
+  assert.equal(plan.counts.removedMemberships, 3, "the retirement removals still apply");
+});
+
 test("a project with an unknown status is still frozen: memberships are carried, nobody is added or removed", () => {
   const plan = planSync(input({
     projects: [readProjectDocument(projectDoc("PILOT1", { status: "suspended" }))],

@@ -190,7 +190,7 @@ export async function handleV2Request(request: ApiRequest, deps: V2Dependencies)
       const pending = await beginChange(deps.changeLog, { requestId, at: deps.now().toISOString(), actorOid: actor.oid, operation: "v2/catalog",
         projectId: null, changes: mappingChanges, details: summary }, deps.now, deps.log);
       let etag: string | null;
-      try { etag = await deps.catalogStore.save(doc, current?.etag ?? null); } catch (err) { await pending.finish("failed", { code: "write_failed" }); throw err; }
+      try { etag = await deps.catalogStore.save(doc, current?.etag ?? null); } catch (err) { await pending.finish("unconfirmed", { code: "write_failed" }); throw err; }
       if (!etag) { await pending.finish("refused", { code: "etag_mismatch" }); throw new ApiError(412, "etag_mismatch"); }
       await pending.finish("updated", {});
       audit("updated", { ...summary, changes: mappingChanges.slice(0, 20), changesTruncated: mappingChanges.length > 20 });
