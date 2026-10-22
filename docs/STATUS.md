@@ -19,9 +19,9 @@ Evidence:
   tests reproduced them before the fixes.
 - Repository packet gate passes; existing file-size warnings remain.
 
-The local ZIP is `ccof-admin-v3.1.0.zip` in this session's files. No live directory lookup, customer
-deployment or Graph permission change was performed. This packet's commit is the Git change
-containing this status update.
+Implementation commit: `41c2c2e`. The local ZIP is `ccof-admin-v3.1.0.zip` in this session's files
+(SHA-256 `f25438c857b7058ec9bdc8b55c48491dc9d33b2e7f27fa1e0ce472a90e857554`).
+No live directory lookup, customer deployment or Graph permission change was performed.
 
 ## Standard v2 and Foundry, two tenants (S3, complete with open items)
 
