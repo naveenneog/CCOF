@@ -55,10 +55,8 @@ function Read-StgConfig {
             $problems.Add("backend $($b.id) requests privateEndpoint but Stage 6 creates endpoints (modes existing/create) only for accounts in the deployment subscription and resource group")
         }
     }
-    foreach ($g in @($c.groups)) {
-        if (-not $g.projectId -or -not $g.classification) { $problems.Add('every group needs projectId and classification') }
-        if (-not $g.groupId -and -not $g.groupDisplayName) { $problems.Add("group $($g.projectId)/$($g.classification) needs groupId or groupDisplayName") }
-    }
+    $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
+    foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
     if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
@@ -403,9 +401,10 @@ function Get-StgQuickstartParameters {
     $names.cosmosDatabase = $Cfg.cosmos.databaseName
     $names.cosmosRoles = $Cfg.cosmos.roleNames
     $names.resourceGroupMode = 'existing'
-    $groups = foreach ($g in $Cfg.groups) {
+    # Group entries (kind group) are seeded by the staged layer (Staged.Groups.ps1), not by the quickstart.
+    $groups = foreach ($g in (Select-StgBaselineGroups $Cfg.groups)) {
         $copy = $g | ConvertTo-Json -Depth 30 | ConvertFrom-Json -AsHashtable
-        $copy.groupId = $entra.groups["$($g.projectId)/$($g.classification)"].id
+        $copy.groupId = $entra.groups[(Get-StgGroupKey $g)].id
         $copy.Remove('groupDisplayName'); $copy.Remove('members')
         $copy
     }

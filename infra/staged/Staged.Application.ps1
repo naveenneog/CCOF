@@ -35,7 +35,8 @@ function Invoke-Stage5 {
     $policy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.xml") -Raw
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
-    @(Get-QsWorkbookGroups -P $ctx.P) | ConvertTo-Json -Depth 20 -AsArray | Set-Content -LiteralPath $groupsPath -Encoding utf8NoBOM
+    $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
+    @(@(Get-QsWorkbookGroups -P $ctx.P) + $groupRows) | ConvertTo-Json -Depth 20 -AsArray | Set-Content -LiteralPath $groupsPath -Encoding utf8NoBOM
     $wb = Invoke-QsWorkbookBuild -AnswersPath $answers -GroupsPath $groupsPath -Directory $ctx.GeneratedDir
     $report = (Get-Content -LiteralPath $wb.parametersPath -Raw | ConvertFrom-Json -AsHashtable -Depth 100).parameters
     $admin = @{ enabled = [bool]$Cfg.stage1.includeAdmin }
@@ -81,13 +82,15 @@ function Invoke-Stage7 {
     $ctx = New-StgQsContext $Cfg
     $ctx.PollSeconds = 15
     $docs = New-QsSeedDocuments -P $ctx.P -ClassificationGroupDisplayNames $ctx.State.completed['1'].outputs.classificationGroupDisplayNames
+    $groupDocs = @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
-        Write-Host "preview: seed $(@($docs.projects).Count) projects and $(@($docs.backends).Count) backends through the sync app's registrySeed function"
+        Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function"
         Write-Host "preview: delegated snapshot of $(@($entra.groups.Values).Count) groups, applied through the sync app's snapshotApply function"
-        Write-Host 'preview: write the client config.json for client.projectId/classification'
+        Write-Host "preview: write the client config.json for $(if ($Cfg.client.Contains('group')) { "group $($Cfg.client.group)" } else { 'client.projectId/classification' })"
         return $null
     }
+    Assert-StgGroupsExist $groupDocs
     $code = Invoke-QsCode $ctx
     $result = @{ code = $code }
     if ($Cfg.stage1.includeAdmin) {
@@ -101,9 +104,9 @@ function Invoke-Stage7 {
         Assert-Stg (-not @($want | Where-Object { $listed -cnotcontains $_ }).Count) "admin lists $($listed -join ',')"
         $result.admin = @{ sha256 = (Get-FileHash $zip -Algorithm SHA256).Hash; functions = $listed }
     }
-    # Invoke-QsSeed validates each projects document against onboarding's schema first; with the runner
-    # off it seeds through the sync app's registrySeed function.
-    $result.seed = Invoke-QsSeed $ctx
+    # Invoke-StgSeed checks baseline documents against onboarding's schema and adds the group documents;
+    # with the runner off it seeds through the sync app's registrySeed function.
+    $result.seed = Invoke-StgSeed -Ctx $ctx -GroupDocuments $groupDocs
     # Delegated snapshot (docs/runbooks/CLOUD-SHELL-QUICKSTART.md section 5): the operator's own
     # Graph read through Azure CLI; no application permission.
     $groupsFile = Join-Path $ctx.GeneratedDir 'snapshot-groups.json'
@@ -120,7 +123,7 @@ function Invoke-Stage7 {
         -FunctionApp $s1.names.apps.sync.functionApp -AppInsights $s1.names.apps.sync.appInsights -SnapshotPath $snapshot -ExpectedSnapshotSha256 $sha | Out-Host
     if ($LASTEXITCODE) { throw 'snapshot_apply_failed: infra/sync/Invoke-SnapshotApplyThroughFunction.ps1' }
     $result.snapshot = @{ sha256 = $sha; groups = @($entra.groups.Keys) }
-    $client = Invoke-QsClient $ctx
+    $client = Invoke-StgClient -Ctx $ctx -Cfg $Cfg -EntraGroups $entra.groups
     $null = & node (Join-Path $script:Repo 'client/bin/validate-config.mjs') $client.clientConfig
     Assert-Stg ($LASTEXITCODE -eq 0) 'client config failed the client validator'
     $result.client = $client
@@ -152,7 +155,8 @@ function Invoke-Stage8 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1; $config = Get-StgStage $Cfg 5; $entra = Get-StgStage $Cfg 4; $null = Get-StgStage $Cfg 7
     $t = $Cfg.acceptance
-    if (-not $Apply) { Write-Host "preview: gateway $($config.gatewayUrl): anonymous 401, $(@($t.allowed).Count) allowed and $(@($t.denied).Count) denied requests, resolver 401, admin console checks, telemetry query"; return $null }
+    $expectedGroup = Get-StgExpectedGroupId -Cfg $Cfg -EntraGroups $entra.groups
+    if (-not $Apply) { Write-Host "preview: gateway $($config.gatewayUrl): anonymous 401, $(@($t.allowed).Count) allowed and $(@($t.denied).Count) denied requests, resolver 401, admin console checks, telemetry query$(if ($expectedGroup) { ", requests charged to group $expectedGroup" })"; return $null }
     $checks = [ordered]@{}
     $probe = @(@($t.allowed) + @($t.denied))[0]
     $checks.anonymous = Invoke-StgGateway -Url $config.gatewayUrl -Project $probe.project -Model $probe.model -ProjectHeader $Cfg.gateway.projectHeaderName
@@ -210,6 +214,21 @@ function Invoke-Stage8 {
     }
     $checks.telemetry = @{ query = $q; requestIds = $ids; rows = $rows }
     Assert-Stg ($rows.Count -and [int]$rows[0].requests -eq $ids.Count) "only $(if ($rows.Count) { $rows[0].requests } else { 0 }) of this run's $($ids.Count) requests reached ApiManagementGatewayLlmLog within 15 minutes"
+    if ($expectedGroup) {
+        # Without a selector the resolver picks the lowest-priority group (ADR-0034); a caller in another
+        # group could otherwise pass on that group's models. The usage trace names the scope charged.
+        $sq = New-StgSelectionQuery -RequestIds $ids
+        $sel = @()
+        for ($i = 0; $i -lt 20; $i++) {
+            $resp = Invoke-RestMethod -Method Post -Uri "https://api.loganalytics.io/v1/workspaces/$($s1.workspaceCustomerId)/query" -Headers @{ Authorization = "Bearer $laToken" } -ContentType 'application/json' -Body (@{ query = $sq } | ConvertTo-Json)
+            $table = $resp.tables[0]
+            $sel = @($table.rows | ForEach-Object { $r = $_; $o = [ordered]@{}; for ($c = 0; $c -lt $table.columns.Count; $c++) { $o[$table.columns[$c].name] = $r[$c] }; $o })
+            if ($sel.Count -and [int]$sel[0].requests -ge $ids.Count) { break }
+            Start-Sleep 30
+        }
+        $checks.selection = @{ query = $sq; expectedGroupId = $expectedGroup; rows = $sel }
+        Assert-StgSelectedGroup -Row $(if ($sel.Count) { $sel[0] } else { @{ requests = 0; projectIds = @() } }) -ExpectedGroupId $expectedGroup -Requests $ids.Count
+    }
     $null = Write-StgEvidence 'stage8.verify.json' $checks
     return $checks
 }

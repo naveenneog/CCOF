@@ -693,7 +693,7 @@ function Invoke-QsSmoke {
 
 function Invoke-QsClient {
     param($Ctx)
-    $p = $Ctx.P; $r = $p.registrations
+    $p = $Ctx.P
     $documents=New-QsSeedDocuments $p
     $selection=$p.client
     if($selection -isnot [Collections.IDictionary] -or
@@ -704,14 +704,21 @@ function Invoke-QsClient {
     $project=@($documents.projects | Where-Object {$_.projectId -ceq $selection.projectId})
     $group=@($p.groups | Where-Object {$_.projectId -ceq $selection.projectId -and $_.classification -ceq $selection.classification})
     if($project.Count -ne 1 -or $group.Count -ne 1) {throw 'client_selection_invalid: select one configured project/classification.'}
-    $backend=@($p.backends | Where-Object {$_.id -ceq $project[0].backendId})[0]
+    return New-QsClientFiles -Ctx $Ctx -ProjectId $selection.projectId -FamilyPolicy $group[0].familyPolicy -BackendId $project[0].backendId -Aliases $selection.models
+}
+
+function New-QsClientFiles {
+    <# The client configuration for one selection: the project selector value, its family policy, its backend and the explicit aliases. Also used by the staged deployment for a group (infra/staged/Staged.Groups.ps1). #>
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] [string]$ProjectId, [Parameter(Mandatory)] $FamilyPolicy, [Parameter(Mandatory)] [string]$BackendId, $Aliases)
+    $p = $Ctx.P; $r = $p.registrations
+    $backend=@($p.backends | Where-Object {$_.id -ceq $BackendId})[0]
     $admitted=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    foreach($family in $group[0].familyPolicy.families.Values) {
+    foreach($family in $FamilyPolicy.families.Values) {
         foreach($model in $family.models) {
             if(@($backend.deploymentInferenceGeo.Keys | Where-Object {$_ -ceq $model}).Count -eq 1) {[void]$admitted.Add($model)}
         }
     }
-    $aliases=$selection.models
+    $aliases=$Aliases
     if($aliases -isnot [Collections.IDictionary] -or $aliases.Count -ne 4 -or
        @($aliases.Keys | Where-Object {$_ -cnotin @('default','opus','sonnet','haiku')}).Count) {
         throw 'client_aliases_invalid: provide default, opus, sonnet and haiku exact deployment IDs.'
@@ -727,7 +734,7 @@ function Invoke-QsClient {
         helperTtlSeconds = 300; minimumTokenLifetimeSeconds = 360; loginTimeoutSeconds = 120; tokenTimeoutSeconds = 30; disableNonessentialTraffic = $true
         models = [ordered]@{ default = $aliases.default; opus = $aliases.opus; sonnet = $aliases.sonnet; haiku = $aliases.haiku; available = @($admitted | Sort-Object -CaseSensitive) }
         desktop = [ordered]@{ profileId = [guid]::NewGuid().ToString(); profileName = 'Claude gateway (quick-start)' }
-        project = [ordered]@{ id = $selection.projectId; selectorHeader = $p.gateway.projectHeaderName }
+        project = [ordered]@{ id = $ProjectId; selectorHeader = $p.gateway.projectHeaderName }
     }
     $candidate=Join-Path $Ctx.GeneratedDir '.env.client-config.pending.json'
     try {

@@ -106,13 +106,13 @@ The driver refuses it until the placeholders are replaced. Sections:
 | `sharedResourceGroup` | 1 | `true` to deploy beside existing resources: apply only when what-if shows no Modify or Delete outside the exact resource IDs recorded by the prior Stage 1 deployment |
 | `backends` | 0, 3, 5, 6 | Foundry accounts, deployment names and inference geography; `privateEndpoint: true` makes Stage 6 check (or, in modes `existing`/`create`, create) its private endpoint and DNS |
 | `entra` | 4 | Display names to create, or `existing` app IDs to merge into; `allowAzureCliClient` |
-| `groups` | 4, 7 | Project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets |
+| `groups` | 4, 5, 7 | Group entries (`kind: "group"`: `groupId` or `groupDisplayName`, members, budget, priority, surfaces, chargeback ID, cache profile, family policy; [infra/staged/Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1)), or project entries (project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets) |
 | `resolver`, `sync`, `reconciler`, `budgetState`, `gateway`, `syncTimerEnabled` | 5 | Same meaning as in the quickstart. `gateway.surfaceClients` (default `[]`, not enforced) maps admitted client app IDs to surfaces; in this path only the gateway app and, with `allowAzureCliClient`, Azure CLI are admitted, and any other ID fails Stage 5 with `render_failed` |
 | `rateCard`, `workbook` | 5, 7 | Repository-relative rate card; a new workbook GUID |
 | `admin` | 5 | `v3Enabled`; `extraAllowedClientIds` (empty; test clients only); `groupSearchEnabled` (default `false`; needs the admin identity's `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` grants; ignored without `stage1.includeAdmin`) |
 | `network` | 6 | `mode: verify` (default; customer-built, checked only) with `existing` subnet IDs in one VNet; `existing` (driver creates endpoints and integrations; also zone IDs); `create` (lab only; driver also creates the VNet from `create`) |
-| `client` | 7 | Project, classification and model aliases for `config.json` |
-| `acceptance` | 8 | Allowed and denied project/model pairs with the expected status |
+| `client` | 7 | `group` (a group entry) or project and classification, and model aliases for `config.json` |
+| `acceptance` | 8 | Allowed and denied requests (model, optional project selector) with the expected status; without a selector, `expectedGroup` (or the single group entry) is the group every request must be charged to |
 
 ## Stage notes
 

@@ -111,9 +111,12 @@ No application secret is created. APIM and the Function Apps use managed identit
 
 **Groups.** Each team that uses Claude is an existing Entra **security** group, created by the
 customer's identity team (Portal: **Microsoft Entra ID → Groups → New group**, type Security). The
-sync reads **direct** members only; nested groups are not expanded ([SYNC.md](SYNC.md)). The groups
-are onboarded in the admin console after Stage 8 ([section 5](#5-onboard-groups)). The staged
-configuration's `groups` list creates the pilot group used by the Stage 8 acceptance test.
+sync reads **direct** members only; nested groups are not expanded ([SYNC.md](SYNC.md)). The pilot
+group is seeded by Stage 7; additional groups are onboarded in the admin console after Stage 8
+([section 5](#5-onboard-groups)). The staged
+configuration's `groups` list holds the pilot group used by the Stage 8 acceptance test. In the
+example it is a group entry (`"kind": "group"`): its own budget, models, surfaces, priority and
+chargeback ID, with no project or classification ([section 3.3](#33-configuration-file)).
 
 ### 2.4 Microsoft Graph application permissions
 
@@ -184,6 +187,9 @@ Settings added for group onboarding:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
+| `groups[]` with `"kind": "group"` | example pilot | An Entra group onboarded as its own entity: `groupDisplayName` (Stage 4 creates or reuses it) or `groupId`, `members`, `displayName`, `backendId`, `priority`, `chargebackId` (or `null`), `budget` (`autoScale` with `groupCap: null`, or `cap` with a cap), `restrictedFamiliesApproved`, `familyPolicy`, `surfaces`, `cacheProfile`. No `projectId` or `classification`. Stage 7 seeds it as a group document; the sync app's `registrySeed` function checks it against the group contract ([group-registration.ts](../src/contracts/group-registration.ts)) and writes nothing if it fails. Entries with `projectId` and `classification` keep the earlier project model |
+| `client.group` | `CCOF-PILOT01` | The group entry (by `groupDisplayName` or `groupId`) the developer client file is written for, with `client.models`. The client sends the group's object ID as the project selector |
+| `acceptance` | no `project` | Stage 8 requests without a project selector, and checks in the usage trace that every request was charged to the pilot group. With more than one group entry, `acceptance.expectedGroup` names the expected one (`groupDisplayName` or `groupId`) |
 | `admin.groupSearchEnabled` | `false` | Sets `ADMIN_GROUP_SEARCH_ENABLED` on the admin app (Stage 5). Requires the admin Graph grants in section 6.1; without them the admin API answers `502 group_directory_permission_required`. Ignored when `stage1.includeAdmin` is `false` |
 | `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
@@ -299,19 +305,31 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 ### Stage 7: code and initial data
 
 - **Does:** publishes the four Function App packages, seeds the registry (backends and the pilot
-  group), loads the pilot group's members from a delegated snapshot through the sync app, and writes
-  the developer client file.
+  group's group document), loads the pilot group's members from a delegated snapshot through the
+  sync app, and writes the developer client file for `client.group`.
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 7`, preview then `-Apply`. One Stage 7 at a time per checkout.
 - **Portal:** workbook sections 18 (Deployment Center), 21 (registry seed), 22 (client configuration).
-- **Worked when:** every app lists its functions, the seed reports its documents, the snapshot is
-  applied and the client file passes the validator.
+- **Worked when:** every app lists its functions, the seed reports each document `created` (or
+  `present-equal` on a rerun), the snapshot is applied and the client file passes the validator. A
+  group entry that fails the group contract stops the seed with `seed_refused` and the field paths,
+  and nothing is written. Before any write, Stage 7 reads each group from Graph again and stops with
+  `group_missing` if one was deleted since Stage 4.
+- **Limits and recovery:** the seed is create-only and travels in one app setting of at most 96 KiB
+  of base64 (7,000 characters when `az` runs on Windows, so Cloud Shell is used for more than a few
+  groups) ([registry-seed.ts](../src/sync/registry-seed.ts), [Deploy-Quickstart.ps1](../infra/quickstart/Deploy-Quickstart.ps1)).
+  A document already present is reported `present-equal`, or `present-differs` with the field names,
+  and is never replaced; a pilot group that needs a change after seeding is edited in the admin
+  console. A rerun of Stage 7 after a failure seeds only what is missing.
 
 ### Stage 8: acceptance
 
 - **Does:** calls the gateway: without a token (`401`), as an allowed caller (`200`), for a model
   that is not allowed (`403`); calls the admin endpoints; and finds every accepted call in
-  `ApiManagementGatewayLlmLog`.
+  `ApiManagementGatewayLlmLog`. With the example configuration the requests carry no project
+  selector, so the caller's lowest-priority group applies ([ADR-0034](adr/0034-group-centric-onboarding.md));
+  Stage 8 reads the `ccof.usage.v1` trace and stops with `verify_failed` unless every request was
+  charged to the expected pilot group.
 - **Who:** platform engineer with a caller identity in the pilot group.
 - **Cloud Shell:** `-Stage 8`, preview then `-Apply`.
 - **Portal:** workbook section 22 (acceptance) and Log Analytics → Logs.

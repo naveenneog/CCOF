@@ -125,14 +125,25 @@
   },
   "groups": [
     {
-      "projectId": "PROJECT01",
-      "classification": "STD",
-      "groupDisplayName": "CCOF-PROJECT01-STD",
+      "kind": "group",
+      "groupDisplayName": "CCOF-PILOT01",
       "members": [
         "@me"
       ],
-      "displayName": "PROJECT01 STD",
+      "displayName": "Pilot 01",
       "backendId": "REPLACE-backend-id",
+      "priority": 100,
+      "chargebackId": null,
+      "budget": {
+        "mode": "autoScale",
+        "perUser": {
+          "amount": 25000,
+          "currency": "CCU",
+          "period": "monthly"
+        },
+        "groupCap": null
+      },
+      "restrictedFamiliesApproved": false,
       "familyPolicy": {
         "aggregateLimits": {
           "person": {
@@ -179,104 +190,17 @@
           }
         }
       },
-      "personBudget": {
-        "amount": 25000,
-        "currency": "CCU",
-        "period": "monthly"
-      },
-      "aggregateBudget": {
-        "amount": 2000000,
-        "currency": "CCU",
-        "period": "monthly"
-      },
-      "aggregateMode": "strict",
-      "onboardingMode": "block"
-    },
-    {
-      "projectId": "PROJECT01",
-      "classification": "PRM",
-      "groupDisplayName": "CCOF-PROJECT01-PRM",
-      "members": [],
-      "displayName": "PROJECT01 PRM",
-      "backendId": "REPLACE-backend-id",
-      "familyPolicy": {
-        "aggregateLimits": {
-          "person": {
-            "tokensPerMinute": 200000,
-            "tokenQuota": 500000,
-            "tokenQuotaPeriod": "Daily"
-          },
-          "group": {
-            "tokensPerMinute": null,
-            "tokenQuota": 2000000,
-            "tokenQuotaPeriod": "Daily"
-          }
-        },
-        "families": {
-          "haiku": {
-            "models": [
-              "claude-haiku-4-5"
-            ],
-            "person": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            },
-            "group": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            }
-          },
-          "sonnet": {
-            "models": [
-              "claude-sonnet-5"
-            ],
-            "person": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            },
-            "group": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            }
-          },
-          "opus": {
-            "models": [
-              "claude-opus-5-5"
-            ],
-            "person": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            },
-            "group": {
-              "tokensPerMinute": null,
-              "tokenQuota": null,
-              "tokenQuotaPeriod": null
-            }
-          }
-        }
-      },
-      "personBudget": {
-        "amount": 25000,
-        "currency": "CCU",
-        "period": "monthly"
-      },
-      "aggregateBudget": {
-        "amount": 2000000,
-        "currency": "CCU",
-        "period": "monthly"
-      },
-      "aggregateMode": "notify",
-      "onboardingMode": "block"
+      "surfaces": [
+        "code"
+      ],
+      "cacheProfile": {
+        "expectedCacheReadPercent": 85,
+        "basis": "suggested"
+      }
     }
   ],
   "client": {
-    "projectId": "PROJECT01",
-    "classification": "STD",
+    "group": "CCOF-PILOT01",
     "models": {
       "default": "claude-sonnet-5",
       "sonnet": "claude-sonnet-5",
@@ -378,18 +302,17 @@
     "groupSearchEnabled": false
   },
   "acceptance": {
+    "selectorNote": "Requests carry no project selector: the caller's only group applies (ADR-0034, lowest priority).",
     "allowed": [
       {
-        "project": "PROJECT01",
         "model": "claude-haiku-4-5"
       }
     ],
     "denied": [
       {
-        "project": "PROJECT01",
         "model": "claude-opus-5-5",
         "expectedStatus": 403,
-        "reason": "opus is not admitted for STD"
+        "reason": "opus is not in the pilot group's model families"
       }
     ]
   },

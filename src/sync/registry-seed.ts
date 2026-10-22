@@ -12,9 +12,12 @@
 // backend registry check (src/resolver/backend.ts); one invalid document refuses the whole seed.
 // One ccof.seed.result.v1 line per run (telemetry.ts). Framework-free: function-app.ts registers the
 // timer and azure.ts supplies the Cosmos containers.
+// A projects entry with kind "group" (ADR-0034) is checked by the group contract's reader instead, and
+// only an active group is seeded (staged deployment, infra/staged/Staged.Application.ps1 Stage 7).
 
 import { checkBackendRecord } from "../resolver/backend.ts";
 import { parseFamilyPolicy } from "../contracts/model-families.ts";
+import { GROUP_DOCUMENT_KEYS, readGroupRegistration } from "../contracts/group-registration.ts";
 import { isIdentifier } from "../resolver/freshness.ts";
 import { readHostSettings, readSyncConfig } from "./config.ts";
 import type { SyncConfig } from "./config.ts";
@@ -96,9 +99,22 @@ function isBudget(value: unknown): boolean {
   );
 }
 
+// A group document (ADR-0034, kind "group"): the group contract's own reader decides; a seed creates
+// active groups only, and nothing beyond the contract's keys (no Cosmos system keys either).
+function checkGroup(doc: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  if (Object.keys(doc).some((key) => !GROUP_DOCUMENT_KEYS.includes(key))) problems.push("document:unexpected_key");
+  const read = readGroupRegistration(doc);
+  if (!read.ok) problems.push(...read.problems.filter((p) => !problems.includes(p)));
+  if (doc.status !== "active") problems.push("status:not_active");
+  return problems;
+}
+
 // Problems are field paths with codes; a classification code appears only when it is an identifier.
-function checkProject(doc: unknown): string[] {
+// Exported for tests/helpers/check-group-documents.ts (the staged deployment's cross-language check).
+export function checkSeedProjectDocument(doc: unknown): string[] {
   if (!isObject(doc)) return ["document:not_an_object"];
+  if (doc.kind === "group") return checkGroup(doc);
   const problems: string[] = [];
   if (!hasOnlyKeys(doc, PROJECT_KEYS)) problems.push("document:unexpected_key");
   const read = readProjectDocument(doc);
@@ -192,7 +208,7 @@ function toEntries(decoded: { projects: unknown[]; backends: unknown[] }): { ent
     refused.push({ container, id, outcome: "failed", code: "batch_refused" });
   };
   for (const doc of decoded.backends) add("backends", doc, checkBackend(doc), "backendId");
-  for (const doc of decoded.projects) add("projects", doc, checkProject(doc), "projectId");
+  for (const doc of decoded.projects) add("projects", doc, checkSeedProjectDocument(doc), "projectId");
   return { entries, refused, invalid };
 }
 

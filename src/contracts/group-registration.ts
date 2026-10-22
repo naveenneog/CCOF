@@ -49,10 +49,11 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 // a URL query value. It may contain `/` and `..`: never put it in a URL path.
 export const CHARGEBACK_ID = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,63}$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
-const KEYS = [
+export const GROUP_DOCUMENT_KEYS: readonly string[] = [
   "id", "kind", "groupId", "projectId", "displayName", "status", "retiredAt", "backendId", "priority", "chargebackId",
   "budget", "restrictedFamiliesApproved", "familyPolicy", "surfaces", "cacheProfile",
 ];
+const KEYS = GROUP_DOCUMENT_KEYS;
 // Cosmos system properties (_rid, _self, _etag, _attachments, _ts).
 const isSystemKey = (key: string) => key.startsWith("_");
 

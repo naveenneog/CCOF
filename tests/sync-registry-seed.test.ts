@@ -393,6 +393,52 @@ for (const [name, mutate, problem] of invalidBackends) {
   });
 }
 
+// A group document (ADR-0034), as the staged deployment seeds it (infra/staged, New-StgGroupDocuments).
+const SEED_GROUP = "0000000a-0000-4000-8000-0000000000aa";
+function groupDocument(groupId = SEED_GROUP): Record<string, unknown> {
+  return {
+    id: groupId, kind: "group", groupId, projectId: groupId, displayName: "Pilot group", status: "active", retiredAt: null,
+    backendId: "foundry-1", priority: 100, chargebackId: "WBS-1.2",
+    budget: { mode: "autoScale", perUser: { amount: 25000, currency: "CCU", period: "monthly" }, groupCap: null },
+    restrictedFamiliesApproved: false, familyPolicy: familyPolicy(["claude-haiku-4-5", "claude-sonnet-5"]),
+    surfaces: ["code"], cacheProfile: { expectedCacheReadPercent: 85, basis: "suggested" },
+  };
+}
+
+test("a group document is seeded into projects with its group ID as id and partition key", async () => {
+  const h = harness();
+  const result = await runRegistrySeed(seedSettings({ seedId: SEED_ID, projects: [project(), groupDocument()], backends: [backend()] }), h.deps);
+  assert.equal(result?.outcome, "succeeded", JSON.stringify(h.parsed()));
+  assert.deepEqual(h.store.calls.at(-1), { op: "create", container: "projects", id: SEED_GROUP, partitionKey: SEED_GROUP });
+  const { _rid, _self, _etag, _attachments, _ts, ...stored } = h.store.docs.get(`projects/${SEED_GROUP}/${SEED_GROUP}`) as Record<string, unknown>;
+  assert.deepEqual(stored, groupDocument());
+});
+
+const invalidGroups: [string, (g: Record<string, any>) => void, string][] = [
+  ["a retired group", (g) => { g.status = "retired"; g.retiredAt = "2026-10-01T00:00:00Z"; }, "status:not_active"],
+  ["a baseline-only key", (g) => { g.designatedSubscriptionId = SUBSCRIPTION; }, "document:unexpected_key"],
+  ["a Cosmos system key", (g) => { g._etag = "x"; }, "document:unexpected_key"],
+  ["id not equal to groupId", (g) => { g.id = "0000000b-0000-4000-8000-0000000000bb"; }, "id:not_equal_to_groupId"],
+  ["an upper-case group ID", (g) => { g.groupId = g.id = g.projectId = SEED_GROUP.toUpperCase(); }, "groupId:invalid"],
+  ["Fable without approval", (g) => { g.familyPolicy.families.fable = { models: ["claude-fable-1"], ...aggregateLimits() }; }, "familyPolicy:family_classification_forbidden"],
+  ["no surfaces", (g) => { g.surfaces = []; }, "surfaces:invalid"],
+  ["a cap without a group cap", (g) => { g.budget.mode = "cap"; }, "budget.groupCap:invalid"],
+];
+
+for (const [name, mutate, problem] of invalidGroups) {
+  test(`invalid group document (${name}) refuses the whole seed before any Cosmos call`, async () => {
+    const h = harness();
+    const bad = groupDocument() as Record<string, any>;
+    mutate(bad);
+    await runRegistrySeed(seedSettings({ seedId: SEED_ID, projects: [project(), bad], backends: [backend()] }), h.deps);
+    assert.equal(h.opened.length + h.store.calls.length, 0);
+    const line = onlyLine(h);
+    assert.equal(line.reason, "seed_documents_invalid");
+    const refused = line.documents.find((d: { code?: string }) => d.code === "invalid_document");
+    assert.ok(refused && refused.container === "projects" && refused.problems.includes(problem), JSON.stringify(line.documents));
+  });
+}
+
 test("an id outside the identifier pattern is logged as null, never echoed", async () => {
   const h = harness();
   const bad = project() as Record<string, any>;

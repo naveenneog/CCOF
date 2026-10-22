@@ -72,3 +72,6 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 - Rolling back means deleting group documents; baseline documents are untouched.
 - Only the staged configuration (`gateway.surfaceClients`) can turn surface enforcement on. The quickstart,
   Core and manual producers emit an empty `surfaceClients`, so surfaces are not enforced on those paths.
+- The staged deployment onboards its pilot as a group entry (`kind: "group"`, G-SEED): Stage 7 seeds the group
+  document through the sync app's `registrySeed` function, which checks it with `readGroupRegistration` and
+  seeds active groups only. The quickstart's seed and client still take project/classification entries only.

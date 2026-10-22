@@ -108,7 +108,7 @@ Assert-Contract (($s1.parameters.apimSku.allowedValues -join ',') -ceq 'BasicV2,
 # Driver: parses, every stage has an entry function, no az argument holds a cmd.exe metacharacter,
 # preview is the default, and later stages read earlier stage state.
 $driverPath = Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1'
-$driverFiles = @($driverPath) + @('Staged.Common.ps1', 'Staged.Resources.ps1', 'Staged.Entra.ps1', 'Staged.Application.ps1' | ForEach-Object { Join-Path $root "infra\staged\$_" })
+$driverFiles = @($driverPath) + @('Staged.Common.ps1', 'Staged.Groups.ps1', 'Staged.Resources.ps1', 'Staged.Entra.ps1', 'Staged.Application.ps1' | ForEach-Object { Join-Path $root "infra\staged\$_" })
 $functionAsts = @()
 foreach ($file in $driverFiles) {
     $tokens = $null; $errors = $null
@@ -148,6 +148,113 @@ $dnsTargets = Get-StgNetworkDnsTargets -Cfg $dnsConfig -Outputs $dnsOutputs -Has
 Assert-Contract ($dnsTargets.vnetId -ceq '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet' -and $dnsTargets.zoneIds.Count -eq 5) 'Stage 6 must derive DNS targets when earlier deployment outputs lack VNet and Foundry zone IDs.'
 $headers = New-StgGatewayHeaders -Token 'token-placeholder' -Project 'PROJECT01' -ProjectHeader 'x-customer-project'
 Assert-Contract ($headers['x-customer-project'] -ceq 'PROJECT01' -and -not $headers.ContainsKey('x-ccof-project')) 'Stage 8 must use the configured project selector header.'
+# Group entries (ADR-0034, G-SEED): a staged group is its own entity, with no project or classification.
+$exampleCfg = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable -Depth 100
+$groupEntry = @($exampleCfg.groups | Where-Object { $_.kind -ceq 'group' })[0]
+Assert-Contract ($null -ne $groupEntry -and -not @($exampleCfg.groups | Where-Object { $_.kind -cne 'group' }).Count) 'The example configuration must onboard its pilot as a group (kind group), with no classification entries.'
+$baselineEntry = @{ projectId = 'P1'; classification = 'STD'; groupDisplayName = 'CCOF-P1-STD' }
+$byId = @{ kind = 'group'; groupId = '0000000A-0000-4000-8000-0000000000AA' }
+Assert-Contract ((Get-StgGroupKey $baselineEntry) -ceq 'P1/STD' -and (Get-StgGroupKey $groupEntry) -ceq "group/$($groupEntry.groupDisplayName)" -and (Get-StgGroupKey $byId) -ceq 'group/0000000a-0000-4000-8000-0000000000aa') 'Stage 4 keys: project/classification for baseline entries, group/<name or id> for group entries.'
+Assert-Contract (-not @(Get-StgGroupEntryProblems $groupEntry).Count -and -not @(Get-StgGroupEntryProblems $baselineEntry).Count) 'A group entry without project/classification and a baseline entry must both be accepted.'
+$mixed = $groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable; $mixed.classification = 'STD'
+Assert-Contract (@(@(Get-StgGroupEntryProblems $mixed) -match 'no projectId or classification').Count -eq 1) 'A group entry that also names a classification must be refused.'
+Assert-Contract (@(@(Get-StgGroupEntryProblems @{ projectId = 'P1'; groupDisplayName = 'x' }) -match 'needs projectId and classification').Count -eq 1) 'A baseline entry without classification must still be refused.'
+$nameless = $groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable; $nameless.Remove('groupDisplayName')
+Assert-Contract (@(@(Get-StgGroupEntryProblems $nameless) -match 'needs groupId or groupDisplayName').Count -eq 1) 'A group entry without groupId or groupDisplayName must be refused.'
+Assert-Contract (@(Select-StgBaselineGroups @($baselineEntry, $groupEntry)).Count -eq 1 -and (@(Select-StgBaselineGroups @($baselineEntry, $groupEntry))[0].projectId -ceq 'P1')) 'Only baseline entries reach the quickstart functions.'
+$entraGroups = @{ (Get-StgGroupKey $groupEntry) = @{ id = '0000000A-0000-4000-8000-0000000000AA'; displayName = $groupEntry.groupDisplayName } }
+$groupDocs = @(New-StgGroupDocuments -Groups @($baselineEntry, $groupEntry) -EntraGroups $entraGroups)
+$gd = $groupDocs[0]
+Assert-Contract ($groupDocs.Count -eq 1 -and $gd.id -ceq '0000000a-0000-4000-8000-0000000000aa' -and $gd.groupId -ceq $gd.id -and $gd.projectId -ceq $gd.id -and $gd.kind -ceq 'group' -and $gd.status -ceq 'active' -and $null -eq $gd.retiredAt) 'A group document carries the lower-case Entra object ID as id, groupId and projectId, active.'
+Assert-Contract (-not $gd.Contains('members') -and -not $gd.Contains('groupDisplayName') -and -not $gd.Contains('classification')) 'A group document must not carry configuration-only fields.'
+$sparse = $groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable; $sparse.Remove('restrictedFamiliesApproved'); $sparse.chargebackId = ''
+$sd = @(New-StgGroupDocuments -Groups @($sparse) -EntraGroups $entraGroups)[0]
+Assert-Contract ($sd.Contains('chargebackId') -and $null -eq $sd.chargebackId -and $sd.restrictedFamiliesApproved -is [bool] -and -not $sd.restrictedFamiliesApproved) 'An entry without chargebackId or approval yields chargebackId null and restrictedFamiliesApproved false (the contract requires both keys).'
+$missingGroup = $false
+try { $null = New-StgGroupDocuments -Groups @($groupEntry) -EntraGroups @{} } catch { $missingGroup = $_.Exception.Message -match 'group_not_resolved' }
+Assert-Contract $missingGroup 'A group entry without its Stage 4 Entra group must be refused.'
+$rows = @(Get-StgGroupWorkbookRows -Documents $groupDocs)
+Assert-Contract ($rows.Count -eq 1 -and $rows[0].projectId -ceq $gd.id -and $rows[0].classification -ceq 'group' -and $rows[0].groupId -ceq $gd.id -and $rows[0].displayName -ceq $gd.displayName) 'Workbook rows for groups use the wire scope (projectId = group ID, code group).'
+# Cross-language: the staged group document passes the group contract and the registry seed check.
+$docFile = Join-Path ([IO.Path]::GetTempPath()) "staged-group-$([guid]::NewGuid().ToString('N')).json"
+try {
+    ConvertTo-Json -InputObject @($groupDocs) -Depth 50 | Set-Content -LiteralPath $docFile -Encoding utf8NoBOM
+    $checker = Join-Path $root 'tests\helpers\check-group-documents.ts'
+    $verdict = & node $checker $docFile 2>&1
+    Assert-Contract ($LASTEXITCODE -eq 0) "The staged group document fails the group contract: $verdict"
+    $bad = $groupDocs[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable; $bad.surfaces = @()
+    ConvertTo-Json -InputObject @($bad) -Depth 50 | Set-Content -LiteralPath $docFile -Encoding utf8NoBOM
+    $null = & node $checker $docFile 2>&1
+    Assert-Contract ($LASTEXITCODE -ne 0) 'Negative control: the contract checker must refuse a group document without surfaces.'
+} finally { Remove-Item -LiteralPath $docFile -ErrorAction SilentlyContinue }
+$noSelector = New-StgGatewayHeaders -Token 'token-placeholder' -Project $exampleCfg.acceptance.allowed[0].project -ProjectHeader 'x-ccof-project'
+Assert-Contract (-not $exampleCfg.acceptance.allowed[0].Contains('project') -and -not $noSelector.ContainsKey('x-ccof-project')) 'Group acceptance requests must carry no project selector.'
+# Stage 7 client file for a group: client.group selects the entry; the selector value is the group's object ID.
+$realClientFiles = ${function:New-QsClientFiles}
+try {
+    Set-Item function:New-QsClientFiles { param($Ctx, $ProjectId, $FamilyPolicy, $BackendId, $Aliases) @{ projectId = $ProjectId; backendId = $BackendId; families = @($FamilyPolicy.families.Keys | Sort-Object); aliases = $Aliases } }
+    $clientCfg = @{ client = $exampleCfg.client; groups = $exampleCfg.groups }
+    $made = Invoke-StgClient -Ctx @{} -Cfg $clientCfg -EntraGroups $entraGroups
+    Assert-Contract ($made.projectId -ceq '0000000a-0000-4000-8000-0000000000aa' -and $made.backendId -ceq $groupEntry.backendId -and ($made.families -join ',') -ceq 'haiku,sonnet' -and $made.aliases.haiku -ceq 'claude-haiku-4-5') 'client.group must build the client file from that group''s ID, backend, families and aliases.'
+    foreach ($case in 'unknown-group', 'extra-key', 'unapproved-fable') {
+        $badCfg = $clientCfg | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable -Depth 100
+        switch ($case) {
+            'unknown-group' { $badCfg.client.group = 'CCOF-ABSENT' }
+            'extra-key' { $badCfg.client.classification = 'STD' }
+            'unapproved-fable' { $badCfg.groups[0].familyPolicy.families.fable = @{ models = @('claude-fable-1') } }
+        }
+        $refusedClient = $false
+        try { $null = Invoke-StgClient -Ctx @{} -Cfg $badCfg -EntraGroups $entraGroups } catch { $refusedClient = $_.Exception.Message -match 'client_selection_invalid' }
+        Assert-Contract $refusedClient "client.group case $case must be refused."
+    }
+} finally { Set-Item function:New-QsClientFiles $realClientFiles }
+$stage7Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage7')[0].Body.Extent.Text
+$stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
+$qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
+Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'
+Assert-Contract ($stage5Body -match 'Get-StgGroupWorkbookRows' -and $qsParamsBody -match 'Select-StgBaselineGroups \$Cfg\.groups') 'Stage 5 must add group workbook rows; only baseline entries may reach the quickstart parameters.'
+# Council G-SEED fixes: backend reference, Entra group still present before the seed, Stage 8 selected group.
+Assert-Contract (@(@(Get-StgGroupEntryProblems $groupEntry -BackendIds @('other')) -match 'not in backends').Count -eq 1 -and -not @(Get-StgGroupEntryProblems $groupEntry -BackendIds @($groupEntry.backendId)).Count) 'A group entry naming an unconfigured backendId must be refused.'
+$realGraph = ${function:Get-StgGraph}
+try {
+    Set-Item function:Get-StgGraph { param($Path) @{ id = '0000000a-0000-4000-8000-0000000000aa'; securityEnabled = $true } }
+    Assert-StgGroupsExist $groupDocs
+    $script:passed++
+    foreach ($graph in @({ param($Path) throw 'Request_ResourceNotFound' }, { param($Path) @{ id = '0000000a-0000-4000-8000-0000000000aa'; securityEnabled = $false } })) {
+        Set-Item function:Get-StgGraph $graph
+        $gone = $false
+        try { Assert-StgGroupsExist $groupDocs } catch { $gone = $_.Exception.Message -match 'group_missing' }
+        Assert-Contract $gone 'A group deleted (or no longer a security group) since Stage 4 must stop Stage 7 before any seed.'
+    }
+} finally { Set-Item function:Get-StgGraph $realGraph }
+$stage7Text = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage7')[0].Body.Extent.Text
+Assert-Contract ($stage7Text.IndexOf('Assert-StgGroupsExist $groupDocs') -gt 0 -and $stage7Text.IndexOf('Assert-StgGroupsExist $groupDocs') -lt $stage7Text.IndexOf('Invoke-QsCode $ctx')) 'Stage 7 must recheck the Entra groups before publishing or seeding.'
+$expected = Get-StgExpectedGroupId -Cfg @{ acceptance = $exampleCfg.acceptance; groups = $exampleCfg.groups } -EntraGroups $entraGroups
+Assert-Contract ($expected -ceq '0000000a-0000-4000-8000-0000000000aa') 'Stage 8 must expect the single group entry when requests carry no selector.'
+Assert-Contract ($null -eq (Get-StgExpectedGroupId -Cfg @{ acceptance = @{ allowed = @(@{ project = 'P1'; model = 'm' }) }; groups = @($baselineEntry) } -EntraGroups @{})) 'Requests that name a project need no expected group.'
+$mixedAcceptance = @{ allowed = @(@{ model = 'm' }, @{ project = 'P1'; model = 'm' }); denied = @() }
+$mixedRefused = $false
+try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $mixedAcceptance; groups = $exampleCfg.groups } -EntraGroups $entraGroups } catch { $mixedRefused = $_.Exception.Message -match 'acceptance_mixed_selectors' }
+Assert-Contract $mixedRefused 'Allowed requests mixing a project selector with none must be refused, not left unverified.'
+$deniedNamed = @{ allowed = @(@{ model = 'm' }); denied = @(@{ project = 'P1'; model = 'x'; expectedStatus = 403 }) }
+Assert-Contract ((Get-StgExpectedGroupId -Cfg @{ acceptance = $deniedNamed; groups = $exampleCfg.groups } -EntraGroups $entraGroups) -ceq '0000000a-0000-4000-8000-0000000000aa') 'A denied request naming a project must not switch off the selected-group check.'
+$two = @($groupEntry, ($groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable)); $two[1].groupDisplayName = 'CCOF-OTHER'
+$ambiguous = $false
+try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $exampleCfg.acceptance; groups = $two } -EntraGroups $entraGroups } catch { $ambiguous = $_.Exception.Message -match 'acceptance_group_ambiguous' }
+Assert-Contract $ambiguous 'Two group entries without acceptance.expectedGroup must be refused.'
+$reqId = '11111111-2222-4333-8444-555555555555'
+Assert-Contract ((New-StgSelectionQuery -RequestIds @($reqId)) -match "in \('$reqId'\)" -and (New-StgSelectionQuery -RequestIds @($reqId)) -match "ccof\.usage\.v1") 'The selection query must filter this run''s request IDs in the usage trace.'
+$injection = $false
+try { $null = New-StgSelectionQuery -RequestIds @("x') | take 1 //") } catch { $injection = $_.Exception.Message -match 'request_id_invalid' }
+Assert-Contract $injection 'A non-GUID request ID must not reach the query text.'
+Assert-StgSelectedGroup -Row @{ requests = 1; projectIds = @('0000000A-0000-4000-8000-0000000000AA') } -ExpectedGroupId $expected -Requests 1
+$script:passed++
+foreach ($row in @(@{ requests = 1; projectIds = @('0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 2; projectIds = @($expected, '0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 0; projectIds = @() })) {
+    $wrong = $false
+    try { Assert-StgSelectedGroup -Row $row -ExpectedGroupId $expected -Requests $row.requests } catch { $wrong = $_.Exception.Message -match 'verify_failed' }
+    if ($row.requests -eq 0) { $wrong = $false; try { Assert-StgSelectedGroup -Row $row -ExpectedGroupId $expected -Requests 1 } catch { $wrong = $_.Exception.Message -match 'verify_failed' } }
+    Assert-Contract $wrong "Stage 8 must refuse requests charged to another group or untraced ($($row.projectIds -join ','))."
+}
 $priorResourceId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/shared/providers/Microsoft.Storage/storageAccounts/prefix-owned/blobServices/default'
 $changes = @(
     @{ changeType = 'Create'; resourceId = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/prefix-new' }

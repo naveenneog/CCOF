@@ -68,7 +68,7 @@ function Invoke-Stage4 {
         Write-Host ('preview: gateway app: api://<appId>, access_as_user, v2 tokens, public client (localhost, WAM), self preauthorized' + $(if ($e.allowAzureCliClient) { ' and Azure CLI' } else { '' }))
         Write-Host 'preview: resolver app: api://<appId>, v2 tokens, no redirects or secrets'
         if ($Cfg.stage1.includeAdmin) { Write-Host ('preview: admin app: Projects.Manage scope, CCOF.Projects.Read/Write roles, SPA redirects /api/console and /api/console-v3, assignment required, self preauthorized' + $(if (@($Cfg.admin.extraAllowedClientIds).Count) { " and $(@($Cfg.admin.extraAllowedClientIds) -join ', ')" } else { '' })) }
-        foreach ($g in $Cfg.groups) { Write-Host "preview: group $($g.projectId)/$($g.classification): $(if ($g.groupId) { "use $($g.groupId)" } else { "create or reuse '$($g.groupDisplayName)'" }), members $(@($g.members) -join ',')" }
+        foreach ($g in $Cfg.groups) { Write-Host "preview: group $(Get-StgGroupKey $g): $(if ($g.groupId) { "use $($g.groupId)" } else { "create or reuse '$($g.groupDisplayName)'" }), members $(@($g.members) -join ',')" }
         Write-Host 'not done here: Microsoft Graph application permission for the sync identity (sync.mode delegated-snapshot needs none); a Privileged Role Administrator runs infra/quickstart/Grant-SyncGraphPermissions.ps1 if approved.'
         return $null
     }
@@ -115,7 +115,7 @@ function Invoke-Stage4 {
     }
     $groups = @{}
     foreach ($g in $Cfg.groups) {
-        $key = "$($g.projectId)/$($g.classification)"
+        $key = Get-StgGroupKey $g
         $grp = if ($g.groupId) { Get-StgGraph "groups/$($g.groupId)?`$select=id,displayName,securityEnabled" }
                else { @((Get-StgGraph "groups?`$filter=displayName eq '$($g.groupDisplayName)'").value) | Select-Object -First 1 }
         if (-not $grp) {

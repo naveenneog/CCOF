@@ -4,6 +4,22 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-SEED — staged pilot as a group (complete)
+
+- A staged `groups` entry with `"kind": "group"` has no project or classification ([Staged.Groups.ps1](../infra/staged/Staged.Groups.ps1)).
+  Stage 4 creates or finds its Entra group (key `group/<name or id>`; baseline keys unchanged), Stage 5 lists it in
+  the workbook, and Stage 7 rechecks the group in Graph, seeds its group document and writes the client file for
+  `client.group`. Stage 8 sends no selector and checks in the `ccof.usage.v1` trace that requests were charged to
+  the pilot group. `registrySeed` ([registry-seed.ts](../src/sync/registry-seed.ts)) accepts active group documents
+  checked by `readGroupRegistration`. The example pilot is `CCOF-PILOT01`.
+- Tests: staged 398 checks (was 360); registry seed 67/67; root 1117 pass, 0 fail; quickstart client 19/19 (refactor
+  guard); selection KQL 0 errors in the offline checker (negative control 1 error). Mutants 19/19 caught.
+- Live (Contoso, read-only): Stage 0 with the new example configuration completed in 59 s.
+- Council round 1: ARCHITECT, CODER, QA BLOCK (a group deleted after Stage 4 could be seeded permanently;
+  `backendId` not checked for group entries; Stage 8 could pass on another group); UX PASS-WITH-NOTES; SECURITY PASS.
+  Round 2: QA BLOCK (mixed selector/no-selector acceptance switched the check off), others PASS. Round 3: QA PASS.
+  Each fix has a test and a mutant.
+
 ### G9 — live verification (partial, 2026-10-23, Contoso)
 
 Isolated `AZURE_CONFIG_DIR` per tenant; no Azure or Entra resource was created or changed.

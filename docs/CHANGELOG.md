@@ -15,6 +15,11 @@
   with evidence class, group detail and retire (`/api/groups`).
 - **Staged deployment**: `gateway.surfaceClients` and `admin.groupSearchEnabled`; new
   [staged deployment guide](STAGED-DEPLOYMENT-GUIDE.md) with prerequisites, Cloud Shell and Portal steps.
+- **Staged pilot as a group (G-SEED)**: a `groups` entry with `"kind": "group"` has no project or classification;
+  Stage 7 seeds it as a group document and writes the client file for `client.group`; the sync app's
+  `registrySeed` accepts active group documents checked by the group contract. The example configuration's pilot
+  is now `CCOF-PILOT01` (group) instead of `CCOF-PROJECT01-STD`/`-PRM`. `Invoke-QsClient` is split into selection
+  and `New-QsClientFiles` (unchanged behaviour).
 - Open: precedence and chargeback-ID-per-group are assumptions (UNKNOWNS G-A1, G-A2); requirement 9 (G-A3);
   Power BI connector sign-in (G-R3); live verification (G9).
 
