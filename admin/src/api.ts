@@ -40,6 +40,8 @@ export interface ApiResponse {
   status: number;
   headers?: Record<string, string>;
   jsonBody?: unknown;
+  // A text body (CSV export); used instead of jsonBody when present.
+  body?: string;
 }
 
 export interface ApiDependencies {

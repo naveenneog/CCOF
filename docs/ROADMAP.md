@@ -13,8 +13,8 @@
 | G5 — Cache suggesters | Complete | Suggested cache-read share per surface, with cited sources; group value derived from enabled surfaces |
 | G6 — Admin group API | Complete | Search Entra groups, onboard, edit, list and retire group registrations with change records |
 | G7a — Chargeback ID in usage and workbook | Complete | Usage trace, ledger KQL and workbook carry chargeback ID and surface; a per-developer view lists the ID |
-| G7b — Export for Power BI | Active | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
-| G8 — Admin UI | Pending | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
+| G7b — Export for Power BI | Complete | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
+| G8 — Admin UI | Active | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
 | G9 — Live verification | Pending | Contoso (admin/Entra) and FDPO (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant |
 | G-WIRE — Wire rename | Pending | Replace `projectId`/`classification` wire fields with group fields across resolver, APIM, ledger, workbook |
 | G-DOC — Staged deployment guide | Pending | One guide: prerequisites (network, Entra apps and what creating each needs), Portal steps and Cloud Shell helper scripts per stage, using the staged configuration files |

@@ -28,6 +28,7 @@ import { readUserIds } from "./user-directory.ts";
 import type { UserDirectory } from "./user-directory.ts";
 import { auditRow, beginChange } from "./change-log.ts";
 import type { ChangeLog } from "./change-log.ts";
+import { handleExport } from "./export.ts";
 import { limitsFromBody, MAX_OVERRIDE_DAYS, overrideState, publicLimits } from "./sync-limits.ts";
 import type { LimitsStore } from "./sync-limits.ts";
 import { ValidationError } from "./validation.ts";
@@ -278,6 +279,9 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
       const files = buildClientFiles(found.doc, classification, readClientSettings(deps.env), deps.now());
       return response(200, { projectId, classification, ...files, observedAt: deps.now().toISOString() });
     }
+
+    const exported = /^export\/([a-z]+)$/.exec(path);
+    if (exported) return await handleExport(exported[1], url.searchParams, deps, { capability, currentRateCard, groupMetadata });
 
     const chargeback = /^chargeback\/([A-Za-z]+)$/.exec(path);
     if (chargeback) {

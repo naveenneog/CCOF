@@ -16,10 +16,10 @@ import { ccuToUsdText, DECIMAL_TEXT } from "./units.ts";
 import { CHARGEBACK_ID } from "../../src/contracts/group-registration.ts";
 import type { LogTable } from "./operations.ts";
 
-export const CHARGEBACK_VIEWS = ["totals", "groups", "chargebackIds", "developers", "models", "families", "trend", "coverage", "unpriced", "diagnostics", "projects", "classifications"] as const;
+export const CHARGEBACK_VIEWS = ["totals", "groups", "chargebackIds", "chargebackUsage", "developers", "models", "families", "trend", "coverage", "unpriced", "diagnostics", "projects", "classifications"] as const;
 export type ChargebackView = typeof CHARGEBACK_VIEWS[number];
 const QUERY_KEY: Record<ChargebackView, string> = {
-  totals: "totals", groups: "groups", chargebackIds: "chargebackIds", developers: "developers", models: "models", families: "families",
+  totals: "totals", groups: "groups", chargebackIds: "chargebackIds", chargebackUsage: "chargebackUsage", developers: "developers", models: "models", families: "families",
   trend: "trends", coverage: "health", unpriced: "unpriced", diagnostics: "diagnostics", projects: "projects", classifications: "classifications",
 };
 // Tags resolve to project IDs from the registry; a larger match is refused rather than truncated.

@@ -2,7 +2,17 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G7b — export for Power BI ([ROADMAP](ROADMAP.md)).
+**Active packet:** G8 — admin UI for groups ([ROADMAP](ROADMAP.md)).
+
+### G7b — export for Power BI (complete)
+
+- `GET /api/v3/export/usage` (per chargeback ID, group and person; up to 5,000 rows) and `/api/v3/export/groups`
+  (group configuration), JSON or CSV with formula-injection guard, truncation headers, and refusal of filters the
+  export cannot apply ([admin/src/export.ts](../admin/src/export.ts), [ADMIN-API.md](ADMIN-API.md)).
+- Tests: export 7/7; admin suite green. Mutants 13/13 caught (one equivalent mutant removed by simplifying the code).
+- Council round 1: CODER BLOCK (`tags` accepted but ignored, so the export was unfiltered). Fixed with truncation
+  headers and the explicit rate-card error. Round 2: ARCHITECT, CODER, QA PASS; SECURITY, UX PASS-WITH-NOTES.
+- Power BI connector sign-in is unverified (G-R3); CSV/JSON download is the documented path.
 
 ### G7a — chargeback ID in usage and workbook (complete)
 

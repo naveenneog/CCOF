@@ -140,6 +140,33 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 - **Projects API:** `/api/projects` and the V2/V3 project lists do not return group documents, and
   `GET /api/projects/{groupId}` is 404, so no project route can change a group.
 
+### Export for Power BI ([admin/src/export.ts](../admin/src/export.ts))
+
+Two datasets join on the group ID (`groupId` = usage `projectLabel`). Both need the Reader role and
+accept `format=json` (default) or `format=csv`. CSV quotes every field and prefixes values starting
+with `=`, `+`, `-`, `@`, tab or carriage return with an apostrophe
+([OWASP CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection)).
+
+| Request | Rows |
+|---|---|
+| `GET /api/v3/export/usage?period=month\|previous\|custom[&from&to][&project][&group][&developer][&model][&backend][&family][&classification][&chargeback=<id>]` | One per chargeback ID, group and person: token categories, known/complete list cost in USD and CCU, observed cache-hit request share. At most 5,000 rows. List price at the rate card, not an Azure invoice |
+| `GET /api/v3/export/groups` | One per onboarded group: chargeback ID, priority, budget mode, per-user amount, group cap, surfaces, expected cache-read share and its basis |
+
+Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, so
+an export is never broader than its request. The JSON echoes every applied filter. Both formats return
+`x-ccof-truncated` (`true` when more than 5,000 rows matched; the JSON also has `truncated`) and
+`x-ccof-row-limit`. A truncated export understates totals: narrow the period or filters.
+
+When the chargeback source is not configured or fails, `export/usage` returns `503 export_unavailable`
+with the capability state, never an empty file.
+
+Connecting Power BI: the documented Entra path for a custom API is a Power Query custom connector with
+`Aad` authentication ([Handling authentication](https://learn.microsoft.com/en-us/power-query/handling-authentication)).
+Whether Power BI's built-in Web connector with "Organizational account" can sign in to this API has not
+been verified (UNKNOWNS G-R3); the token must come from a client in `ADMIN_ALLOWED_CLIENT_IDS` with the
+admin scope. Until that is verified, the supported path is to download the CSV (or JSON) and load it as a
+file source.
+
 ## Sign-in
 
 A new app registration, "CCOF Admin", serves both the console and the API. It has **no Graph or

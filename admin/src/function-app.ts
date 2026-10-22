@@ -189,7 +189,9 @@ app.http("adminV3", {
       operations: createOperations(process.env, credential, log), env: process.env,
       sources: await querySources(log), cache: v3Cache, directory, now: () => new Date(), newId: randomUUID, log,
     });
-    return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
+    return response.body !== undefined
+      ? { status: response.status, headers: response.headers, body: response.body }
+      : { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
   },
 });
 

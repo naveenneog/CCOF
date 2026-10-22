@@ -144,7 +144,11 @@ export function reportRollup(groupBy: string, withGroupNames = false): string {
 | project-away ${costColumns.map(c => `${c}CostSum`).join(", ")}, cacheReadSavingsSum`;
 }
 
-export type ChargebackQueries = Record<"health" | "developers" | "usage" | "groups" | "chargebackIds" | "models" | "families" | "totals" | "trends" | "diagnostics" | "unpriced", string> & { projects?: string; classifications?: string };
+export type ChargebackQueries = Record<"health" | "developers" | "usage" | "groups" | "chargebackIds" | "models" | "families" | "totals" | "trends" | "diagnostics" | "unpriced", string> & { projects?: string; classifications?: string; chargebackUsage?: string };
+
+// Rows without a chargeback ID are reported as "(none)", after the filters ran on the raw value.
+const noneLabel = (base: string) =>
+  base.replace("let PricedUsage = BasePricedUsage", "let PricedUsage = BasePricedUsage\n| extend chargebackId = iff(isempty(chargebackId), \"(none)\", chargebackId)");
 
 // The chargeback report queries. `usage` is the result of usageQueryBase for the same settings, rate
 // card and ledger; `maxRows` bounds every row view.
@@ -185,7 +189,7 @@ export function chargebackQueries(usage: UsageQueryBase, maxRows: number, groups
     usage: report("projectLabel, groupId, person", "knownListUsd desc nulls last", true),
     groups: report("groupId", "knownListUsd desc nulls last", true),
     // Requirement 6 (ADR-0034 decision 7): the chargeback ID each developer's usage carried.
-    chargebackIds: base.replace("let PricedUsage = BasePricedUsage", "let PricedUsage = BasePricedUsage\n| extend chargebackId = iff(isempty(chargebackId), \"(none)\", chargebackId)")
+    chargebackIds: noneLabel(base)
       + bounded(reportRollup("chargebackId, person") + provenance, maxRows, "chargebackId asc, knownListUsd desc nulls last", offset),
     models: report("model"),
     families: report("modelFamily"),
@@ -208,6 +212,9 @@ export function chargebackQueries(usage: UsageQueryBase, maxRows: number, groups
     queries.projects = report("projectLabel");
     // Project → classification drill-down (STD, PRM, CYB, ...).
     queries.classifications = report("projectLabel, classification");
+    // Power BI export (ADR-0034, G7b): chargeback ID, group (projectLabel is the group ID) and person.
+    queries.chargebackUsage = noneLabel(base) + bounded(reportRollup("chargebackId, projectLabel, person") + provenance, maxRows,
+      "chargebackId asc, projectLabel asc, knownListUsd desc nulls last", offset);
   }
   return queries;
 }
