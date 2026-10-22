@@ -2,7 +2,24 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G9 — live verification ([ROADMAP](ROADMAP.md)).
+**Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
+
+### G9 — live verification (partial, 2026-10-23, Contoso)
+
+Isolated `AZURE_CONFIG_DIR` per tenant; no Azure or Entra resource was created or changed.
+
+- Admin group directory ([group-directory.ts](../admin/src/group-directory.ts)) run against Microsoft Graph with a
+  delegated token: search `ccof` returned 8 security groups; hyphenated (`CCOF-CONLAB1`, 2) and partial (`conlab`, 4)
+  terms matched; group read with `members/$count` returned the member count (1); unknown ID `not_found`; disabled
+  flag `disabled`; negative control with an invalid token `permission_required` (Graph 401).
+- Stage 0 with a configuration derived from the example (new keys included): a backend without deployments stopped
+  with `verify_failed: backend con1020 lacks deployments` (negative); with `stage1.foundry.create: true` it completed
+  and verified in 60 s (providers registered, Flex in eastus2, planned deployments listed).
+- `stage5-config.bicep` builds with `ADMIN_GROUP_SEARCH_ENABLED` from `admin.groupSearchEnabled`.
+- Not done: the admin identity's Graph grants (needs a Privileged Role Administrator); deploying the group-centric
+  packages to a lab and gateway calls with group decisions, surfaces and chargeback ID (models are in FDPO, whose
+  profile needs an interactive `az login`). The Contoso lab `ccof-stdv2-20261020-rg` has no Claude deployments and
+  its staged state is not in this checkout.
 
 ### G-DOC — staged deployment guide (complete)
 

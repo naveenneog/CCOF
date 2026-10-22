@@ -16,7 +16,7 @@
 | G7b — Export for Power BI | Complete | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
 | G8 — Admin UI | Complete | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
 | G-STAGE — Staged settings for groups | Complete | Staged config exposes gateway.surfaceClients and admin.groupSearchEnabled; Stage 5 applies them |
-| G9 — Live verification | Active | Contoso (admin/Entra) and FDPO (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant |
+| G9 — Live verification | Partial | Contoso (admin/Entra) and FDPO (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant. Done: live Graph group directory, Stage 0. Open: end-to-end gateway run (FDPO login needed) |
 | G-WIRE — Wire rename | Pending | Replace `projectId`/`classification` wire fields with group fields across resolver, APIM, ledger, workbook |
 | G-DOC — Staged deployment guide | Complete | [STAGED-DEPLOYMENT-GUIDE.md](STAGED-DEPLOYMENT-GUIDE.md): prerequisites (network, Entra apps and what creating each needs), Portal steps and Cloud Shell helper scripts per stage, using the staged configuration files |
 | G-REM — Requirement 9 | Blocked | Waiting for owner to state what "removal of the group as a requirement" means (UNKNOWNS G-A3) |
