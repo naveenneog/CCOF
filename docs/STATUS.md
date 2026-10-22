@@ -2,7 +2,22 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G2 — sync and reconciler read group documents ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G2b — resolver and gateway carry group attributes ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+### G2 — sync and reconciler read group documents (complete)
+
+- `readProjectDocument` and `readRegistry` dispatch on `kind: "group"`; the scope code `group` is
+  reserved for groups at both boundaries ([src/sync/projects.ts](../src/sync/projects.ts),
+  [src/reconciler/registry.ts](../src/reconciler/registry.ts)). Memberships carry `priority`,
+  `surfaces`, `chargebackId`, `restrictedFamiliesApproved` ([src/sync/membership.ts](../src/sync/membership.ts)).
+- Tests: `tests/sync-group-documents.test.ts` 11/11; sync and reconciler suites 393 pass, 4 skipped (live).
+- Mutants: 8/8 caught after strengthening two tests that let mutants survive (unchanged-run clock,
+  cap `aggregateMode` on the sync side).
+- Council: ARCHITECT PASS-WITH-NOTES (until G2b, a group approved for Fable/Mythos is refused for all
+  of its models, failing closed: do not onboard such a group before G2b), CODER PASS, QA PASS,
+  SECURITY PASS; UX not applicable.
+- The admin console lists a group document with no classifications; baseline edit routes refuse it
+  (G6 adds group routes).
 
 ### G1 — group registration contract (complete)
 
@@ -16,14 +31,15 @@
   applicable (no user-facing change).
 - Gate: `node .ironclad/gate.mjs --stage packet` PASS before the redesign; rerun at G2.
 
-G2 acceptance:
+G2b acceptance:
 
-- A `kind: "group"` document in `projects` is read by the sync as one scope with code `group`;
-  each member's membership carries `priority`, `surfaces`, `chargebackId` and
-  `restrictedFamiliesApproved`. An invalid group document freezes only that group.
-- The reconciler registers the scope `"<groupId>:group"`: `autoScale` gives no group cap and
-  `notify`; `cap` gives the cap and `strict`.
-- A baseline project may not use the reserved code `group`.
+- `validateMembership` accepts a `group` membership only with valid `priority`, `surfaces`,
+  `chargebackId` and boolean `restrictedFamiliesApproved`, and checks the family policy with that
+  approval; a baseline membership's approval grants nothing.
+- The resolver success carries `surfaces`, `chargebackId` and `restrictedFamiliesApproved` for a
+  group membership only.
+- The APIM policy (fresh decision, cached decision, per-request family check) admits Fable/Mythos
+  for `CYB`, or for `group` with `restrictedFamiliesApproved: true`; a non-boolean value is refused.
 
 Open unknowns for the work stream: G-A1 to G-A4, G-R3 ([UNKNOWNS](UNKNOWNS.md)).
 

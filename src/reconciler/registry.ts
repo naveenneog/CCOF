@@ -7,7 +7,8 @@
 import type { Decimal } from "decimal.js";
 import { budgetInBothUnits, parseBudget, parseOptionalBudget } from "../cost/budget-units.ts";
 import { CostConfigError } from "../cost/errors.ts";
-import { parseFamilyPolicy } from "../contracts/model-families.ts";
+import { parseFamilyPolicy, GROUP_SCOPE_CODE } from "../contracts/model-families.ts";
+import { readGroupRegistration } from "../contracts/group-registration.ts";
 import { GUID } from "./settings.ts";
 
 export type AggregateMode = "strict" | "notify";
@@ -88,8 +89,36 @@ function readClassification(projectId: string, classification: string, value: un
   };
 }
 
+// An onboarded group (ADR-0034): one scope "<groupId>:group". autoScale has no
+// group cap and notify; cap has the shared cap and strict.
+function readGroup(doc: Record<string, unknown>, scopes: Map<string, ScopeRegistration>, problems: RegistryProblem[]): void {
+  const read = readGroupRegistration(doc);
+  if (!read.ok) {
+    problems.push(read.groupId === null ? { code: "project_invalid" } : { code: "project_invalid", projectId: read.groupId });
+    return;
+  }
+  const reg = read.registration;
+  if (reg.status !== "active") return;
+  const perUser = budgetInBothUnits(parseBudget(reg.budget.perUser, "budget.perUser")).ccu;
+  const cap = reg.budget.groupCap === null ? null : budgetInBothUnits(parseBudget(reg.budget.groupCap, "budget.groupCap")).ccu;
+  const scopeId = `${reg.groupId}:${GROUP_SCOPE_CODE}`;
+  scopes.set(scopeId, {
+    projectId: reg.groupId,
+    classification: GROUP_SCOPE_CODE,
+    scopeId,
+    modelAllowList: Object.values(reg.familyPolicy.families).flatMap((family) => family.models),
+    aggregateMode: reg.budget.mode === "cap" ? "strict" : "notify",
+    personBudgetCcu: perUser,
+    aggregateBudgetCcu: cap,
+  });
+}
+
 function readProjects(docs: readonly unknown[], scopes: Map<string, ScopeRegistration>, problems: RegistryProblem[]): void {
   for (const doc of docs) {
+    if (isObject(doc) && doc.kind === "group") {
+      readGroup(doc, scopes, problems);
+      continue;
+    }
     if (!isObject(doc) || !isId(doc.projectId) || doc.id !== doc.projectId || !isObject(doc.classifications)) {
       problems.push({ code: "project_invalid" });
       continue;
@@ -100,6 +129,11 @@ function readProjects(docs: readonly unknown[], scopes: Map<string, ScopeRegistr
     for (const [classification, value] of Object.entries(doc.classifications).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
       if (!ID.test(classification)) {
         problems.push({ code: "project_invalid", projectId });
+        continue;
+      }
+      // Reserved for onboarded groups (ADR-0034 decision 4).
+      if (classification === GROUP_SCOPE_CODE) {
+        problems.push({ code: "classification_invalid", projectId, classification, field: "(reserved_code)" });
         continue;
       }
       const result = readClassification(projectId, classification, value);

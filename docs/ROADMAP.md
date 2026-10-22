@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | G0 — Baseline and contract | Complete | ADR-0033 records the baseline model; ADR-0034 records the decision; unknowns logged |
 | G1 — Group registration contract | Complete | Given a group document, the parser returns a typed registration or field-path problems; Fable/Mythos only with explicit approval |
-| G2 — Sync and reconciler read groups | Active | A `kind: "group"` document produces memberships for its Entra members and a reconciler scope; memberships carry priority, surfaces and chargeback ID |
+| G2 — Sync and reconciler read groups | Complete | A `kind: "group"` document produces memberships for its Entra members and a reconciler scope; memberships carry priority, surfaces and chargeback ID |
+| G2b — Resolver and gateway carry group attributes | Active | Resolver validates and returns surfaces, chargeback ID and approval; APIM admits Fable/Mythos for a group only with approval |
 | G3 — Precedence | Pending | No selector and several active groups: lowest priority applies; equal lowest refused; a selector still wins |
 | G4 — Surfaces | Pending | Decision carries allowed surfaces; APIM maps client app ID to surface and refuses a surface the group does not allow; no mapping means no enforcement |
 | G5 — Cache suggesters | Pending | Suggested cache-read share per surface, with cited sources; group value derived from enabled surfaces |

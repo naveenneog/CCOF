@@ -84,7 +84,8 @@ export function isActive(m: RawMembership): m is RawMembership & { projectId: st
   return typeof m.projectId === "string" && m.status === "active";
 }
 
-// The fields copied from `projects` (C-4), in the stored order.
+// The fields copied from `projects` (C-4), in the stored order, plus an
+// onboarded group's attributes (ADR-0034).
 function copiedFields(reg: ClassificationRegistration) {
   return {
     projectId: reg.projectId,
@@ -94,10 +95,21 @@ function copiedFields(reg: ClassificationRegistration) {
     ...(reg.classificationGroupDisplayName !== undefined ? { classificationGroupDisplayName: reg.classificationGroupDisplayName } : {}),
     backendId: reg.backendId,
     aggregateMode: reg.aggregateMode,
+    ...(reg.group !== undefined
+      ? {
+        priority: reg.group.priority,
+        surfaces: [...reg.group.surfaces],
+        chargebackId: reg.group.chargebackId,
+        restrictedFamiliesApproved: reg.group.restrictedFamiliesApproved,
+      }
+      : {}),
   };
 }
 
-const COPIED_KEYS = ["projectId", "classification", "classificationGroupId", "classificationGroupDisplayName", "familyPolicy", "backendId", "aggregateMode", "status"];
+const COPIED_KEYS = [
+  "projectId", "classification", "classificationGroupId", "classificationGroupDisplayName", "familyPolicy", "backendId", "aggregateMode", "status",
+  "priority", "surfaces", "chargebackId", "restrictedFamiliesApproved",
+];
 
 function sameCopiedFields(prior: RawMembership, reg: ClassificationRegistration): boolean {
   const stored = Object.fromEntries(COPIED_KEYS.map((k) => [k, prior[k]]));

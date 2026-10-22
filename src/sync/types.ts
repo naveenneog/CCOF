@@ -1,5 +1,6 @@
 // The entitlement projection uses the same pure policy contract as the resolver.
 import type { FamilyPolicy } from "../contracts/model-families.ts";
+import type { Surface } from "../contracts/group-registration.ts";
 
 export type AggregateMode = "strict" | "notify";
 
@@ -12,6 +13,11 @@ export interface ProjectMembership {
   familyPolicy: FamilyPolicy;
   backendId: string;
   aggregateMode: AggregateMode;
+  // Present only on a membership of an onboarded group (ADR-0034).
+  priority?: number;
+  surfaces?: Surface[];
+  chargebackId?: string | null;
+  restrictedFamiliesApproved?: boolean;
   denormalizedAt: string;
   joinedAt: string;
   status: string;
