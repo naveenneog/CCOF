@@ -31,6 +31,8 @@ const paths: Record<string, string> = {
   warn: "M10 3l8 14H2zM10 8v4M10 14.5v.2",
   arrow: "M4 10h12M12 6l4 4-4 4",
   user: "M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 17.5a6.5 6.5 0 0 1 13 0",
+  search: "M8.5 15a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM13.3 13.3L18 18",
+  groups: "M7 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM1.5 17a5.5 5.5 0 0 1 11 0M13.5 9a2.5 2.5 0 1 0 0-5M14.5 12a4.5 4.5 0 0 1 4 5",
 };
 export function Icon({ name, size = 18, label }: { name: string; size?: number; label?: string }) {
   return (

@@ -12,7 +12,9 @@ import { UserIdentity } from "../components/user-identity.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-interface Filters { period: string; from: string; to: string; project: string; group: string; developer: string; model: string; backend: string; family: string; classification: string; tags: string; interval: string }
+// The server refuses any other chargeback filter (src/contracts/group-registration.ts), so it is checked before querying.
+const CHARGEBACK_ID = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,63}$/;
+interface Filters { period: string; from: string; to: string; project: string; group: string; developer: string; model: string; backend: string; family: string; classification: string; chargeback: string; tags: string; interval: string }
 
 const money = (k: string, label = "Known cost"): Column<any> => ({ key: k, label, align: "end", render: (r) => usd(r[k]) });
 const common: Column<any>[] = [
@@ -27,6 +29,8 @@ const VIEWS: Record<string, { label: string; columns: Column<any>[] }> = {
   groups: { label: "Groups", columns: [{ key: "groupId", label: "Entra group", render: (r) => <><span>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown name)"}</span><code className="block muted">{r.groupId}</code></> },
     { key: "groupProjects", label: "Projects", render: (r) => (r.groupProjects ?? []).join(", ") }, ...common] },
   developers: { label: "Developers", columns: [{ key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
+  chargebackIds: { label: "Chargeback IDs", columns: [{ key: "chargebackId", label: "Chargeback ID", render: (r) => r.chargebackId === "(none)" ? <span className="muted">none</span> : <code>{r.chargebackId}</code> },
+    { key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
   models: { label: "Models", columns: [{ key: "model", label: "Model", render: (r) => <code>{r.model}</code> }, ...common] },
   families: { label: "Families", columns: [{ key: "modelFamily", label: "Family", render: (r) => <span className="cap">{r.modelFamily}</span> }, ...common] },
   projects: { label: "Projects", columns: [{ key: "projectLabel", label: "Project", render: (r) => <a href={href(`/projects/${encodeURIComponent(r.projectLabel)}`)}>{r.projectLabel}</a> }, ...common] },
@@ -52,9 +56,9 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
   const [f, setF] = useState<Filters>({
     period: query.get("period") ?? "month", from: monthStart, to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString(),
     project: query.get("project") ?? "", group: "", developer: GUID.test(query.get("developer") ?? "") ? query.get("developer")!.toLowerCase() : "",
-    model: "", backend: "", family: "", classification: (query.get("classification") ?? "").toUpperCase(), tags: query.get("tags") ?? "", interval: "day",
+    model: "", backend: "", family: "", classification: (query.get("classification") ?? "").toUpperCase(), chargeback: CHARGEBACK_ID.test(query.get("chargeback") ?? "") ? query.get("chargeback")! : "", tags: query.get("tags") ?? "", interval: "day",
   });
-  const [draftText, setDraftText] = useState({ group: "", developer: f.developer });
+  const [draftText, setDraftText] = useState({ group: "", developer: f.developer, chargeback: f.chargeback });
   const fq = useDebounced(f, 250);
   const tagList = fq.tags.split(",").map((t) => t.trim()).filter(Boolean).join(",");
   const [view, setView] = useState("groups");
@@ -63,7 +67,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
   const filterQs = (extra: Record<string, string | number> = {}) => qs({
     period: fq.period, from: fq.period === "custom" ? fq.from : null, to: fq.period === "custom" ? fq.to : null,
     project: fq.project, group: fq.group, developer: fq.developer, model: fq.model, backend: fq.backend, family: fq.family,
-    classification: fq.classification, tags: tagList, ...extra,
+    classification: fq.classification, chargeback: fq.chargeback, tags: tagList, ...extra,
   });
   useEffect(() => setOffset(0), [JSON.stringify(f), view]);
   const totals = useQuery(`/api/v3/chargeback/totals${filterQs()}`);
@@ -139,6 +143,8 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
         )}</Field>
         <Field label="Classification">{(id) => <input id={id} className="input input-short" value={f.classification} placeholder="STD"
           onChange={(e) => setF({ ...f, classification: e.target.value.trim().toUpperCase() })} autoComplete="off" spellCheck={false} />}</Field>
+        <Field label="Chargeback ID" hint="For example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <input id={id} aria-describedby={d} className="input mono" value={draftText.chargeback} maxLength={64}
+          onChange={(e) => { const v = e.target.value.trim(); setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} autoComplete="off" spellCheck={false} />}</Field>
         <Field label="Tags" hint="All must match">{(id, d) => <input id={id} aria-describedby={d} className="input" value={f.tags} placeholder="finance, pilot"
           onChange={(e) => setF({ ...f, tags: e.target.value })} autoComplete="off" />}</Field>
         <Field label="Foundry backend">{(id) => (

@@ -34,8 +34,10 @@ function rebalance(split: Record<string, number>, changed: string, value: number
   return next;
 }
 
-export function BudgetAssistant({ families, initialBudget, initialGroupBudget, onApply, applyLabel = "Apply to limits" }: {
+export function BudgetAssistant({ families, initialBudget, initialGroupBudget, initialCacheReadPercent, onApply, applyLabel = "Apply to limits" }: {
   families: { family: string; models: string[] }[]; initialBudget?: PlannerBudget; initialGroupBudget?: PlannerBudget | null;
+  // An onboarded group's expected cache-read share of input (ADR-0034 decision 8).
+  initialCacheReadPercent?: number;
   onApply?: (patch: LimitsPatch, summary: string, budgets: { personBudget: PlannerBudget; groupBudget: PlannerBudget | null }) => void; applyLabel?: string;
 }) {
   const options = useQuery<{ models: PlanModel[] }>("/api/v3/plan");
@@ -47,7 +49,10 @@ export function BudgetAssistant({ families, initialBudget, initialGroupBudget, o
   const [groupCurrency, setGroupCurrency] = useState<"USD" | "CCU">(initialGroupBudget?.currency ?? "USD");
   const [geography, setGeography] = useState("global");
   const [sizing, setSizing] = useState<"expected" | "guaranteed">("guaranteed");
-  const [mix, setMix] = useState({ outputPercentOfTokens: 20, cacheReadPercentOfInput: 50, cacheWrite5mPercentOfInput: 10, cacheWrite1hPercentOfInput: 0 });
+  const startCache = initialCacheReadPercent !== undefined && Number.isFinite(initialCacheReadPercent)
+    ? Math.min(90, Math.max(0, initialCacheReadPercent)) : 50;
+  const [mix, setMix] = useState({ outputPercentOfTokens: 20, cacheReadPercentOfInput: startCache, cacheWrite5mPercentOfInput: Math.min(10, 100 - startCache), cacheWrite1hPercentOfInput: 0 });
+  useEffect(() => { setMix((m) => ({ ...m, cacheReadPercentOfInput: startCache, cacheWrite5mPercentOfInput: Math.min(m.cacheWrite5mPercentOfInput, 100 - startCache) })); }, [startCache]);
   const [split, setSplit] = useState<Record<string, number>>({});
   const [models, setModels] = useState<Record<string, string>>({});
   const [days, setDays] = useState(22);

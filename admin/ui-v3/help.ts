@@ -51,6 +51,35 @@ export const HELP: Record<string, HelpTopic> = {
     permissions: ["CCOF.Projects.Write."],
     troubleshooting: [["The registry refused the project", "The review lists each problem by field path, for example classifications.STD.groupId:invalid."]],
   },
+  groups: {
+    title: "Groups",
+    summary: "Entra security groups onboarded to Claude. Each group has its own per-user budget (auto-scale or capped), models and rate limits, allowed surfaces, priority, chargeback ID and expected cache-read share.",
+    figures: [
+      ["Budget", "Auto-scale: every member gets the per-user budget and the group has no total. Capped: members share one monthly total; a member can be refused before using their own budget."],
+      ["Priority", "When a person is in several groups and the request names none, the lowest number applies. Equal lowest numbers are refused and the person must name the group in the project header."],
+      ["Chargeback ID", "For example a WBS element. Copied into each request's usage record, so chargeback and exports group usage by it."],
+      ["Usage CSV / Groups CSV", "Exports for Power BI or a spreadsheet: usage by chargeback ID, group and person for this month, and each group's configuration."],
+    ],
+    permissions: ["CCOF.Projects.Read to view; CCOF.Projects.Write to onboard, change or retire.", "Group search needs Microsoft Graph Group.ReadBasic.All and GroupMember.ReadBasic.All on the admin app (ADMIN_GROUP_SEARCH_ENABLED=true)."],
+    troubleshooting: [["The export says it is incomplete", "More than 5,000 rows matched. Narrow the period or filter by chargeback ID."]],
+  },
+  "new-group": {
+    title: "Onboard a group",
+    summary: "Find an existing Entra security group, set its per-user budget and group total, choose surfaces, models and limits, and review the request. Members get access after the next entitlement sync.",
+    figures: [
+      ["Surfaces", "Code, Chat and Microsoft 365 (Office add-ins) can be routed through this gateway. Cowork runs on Anthropic's servers; Design is a placeholder."],
+      ["Expected cache reads", "Suggested from the enabled surfaces, labelled with its evidence (illustrative, analogue or assumed). Replace it with the group's observed value from chargeback."],
+    ],
+    permissions: ["CCOF.Projects.Write."],
+    troubleshooting: [["No groups found", "Create the security group in Microsoft Entra ID first, then search again. New groups can take a few minutes to appear."]],
+  },
+  group: {
+    title: "Group",
+    summary: "Change a group's budget, surfaces, models, priority, chargeback ID or expected cache reads, or retire it. Changes reach members at the next entitlement sync.",
+    figures: [["Retire", "One way. The next sync removes every member's access. The Entra group itself is not changed."]],
+    permissions: ["CCOF.Projects.Write to change or retire."],
+    troubleshooting: [["Someone else changed this", "Reload the page to see their change, then make yours again."]],
+  },
   chargeback: {
     title: "Chargeback",
     summary: "The chargeback workbook's figures inside the console, computed server-side from the same ledger, pricing and rate card. The browser never sends a query; filters are validated and bound on the server.",

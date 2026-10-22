@@ -1,6 +1,6 @@
 # Admin console V3: settings, permissions, upgrade and rollback
 
-Release source: `feat/admin-console-v2`; package version **3.2.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
+Release source: `feat/admin-console-v2`; package version **3.3.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
 One ZIP serves both consoles. V2 stays at `/api/console` and is unchanged; V3 is at
 `/api/console-v3` and is served only when `ADMIN_V3_ENABLED=true`. This is an
 **admin-app-only** upgrade up to 3.1.0: no gateway, sync or reconciler change, no new Entra app, roles or scopes.
@@ -11,6 +11,22 @@ Budgets/Reconciler and Audit/Activity. The admin managed identity needs Graph ap
 `User.Read.All` with tenant admin consent, plus `ADMIN_USER_NAMES_ENABLED=true`.
 The [step-by-step VDI upgrade](ADMIN-V3-VDI-UPGRADE.md) covers the manual grant, private publishing,
 settings, verification and rollback. Names are memory-only; filters and exports retain object IDs.
+
+**3.3.0** ([ADR-0034](adr/0034-group-centric-onboarding.md)): group-centric onboarding.
+
+- **Groups** page (`#/groups`): onboarded Entra groups with status, chargeback ID, budget mode,
+  surfaces and priority; Usage CSV (this month) and Groups CSV downloads
+  ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI").
+- **Onboard a group** (`#/groups/new`): search Entra security groups (direct member count shown),
+  set the per-user budget and auto-scale or a monthly group cap (with an estimate for the current
+  members), allowed surfaces, chargeback ID, priority, models and limits (Fable/Mythos only with
+  approval), expected cache-read share (suggested from the surfaces with its evidence class), and the
+  budget assistant seeded with that share. Group detail (`#/groups/{id}`) edits and retires a group.
+- **Chargeback**: a "Chargeback IDs" breakdown and a chargeback ID filter.
+- Needs: the gateway, resolver, sync and reconciler packages from the same release (group documents
+  are read by all four), Graph application `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` on the
+  admin managed identity with `ADMIN_GROUP_SEARCH_ENABLED=true` for search (without them, paste the
+  group's Object ID), and `entra.surfaceClients` in the gateway configuration to enforce surfaces.
 
 **3.2.0:**
 

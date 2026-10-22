@@ -13,6 +13,9 @@ import { Overview } from "./pages/overview.tsx";
 import { Projects } from "./pages/projects.tsx";
 import { ProjectDetail } from "./pages/project-detail.tsx";
 import { NewProject } from "./pages/new-project.tsx";
+import { Groups } from "./pages/groups.tsx";
+import { GroupOnboard } from "./pages/group-onboard.tsx";
+import { GroupDetail } from "./pages/group-detail.tsx";
 import { Chargeback } from "./pages/chargeback.tsx";
 import { Budgets } from "./pages/budgets.tsx";
 import { Reconciler } from "./pages/reconciler.tsx";
@@ -30,7 +33,7 @@ function Page() {
   const route = useRoute();
   const [first, second, third] = route.parts;
   // Focus moves to the page title when the page changes, not when a tab within it changes.
-  const pageKey = first === "projects" ? `${first}/${second ?? ""}` : first ?? "overview";
+  const pageKey = first === "projects" || first === "groups" ? `${first}/${second ?? ""}` : first ?? "overview";
   useEffect(() => {
     const t = setTimeout(() => document.getElementById("page-title")?.focus({ preventScroll: true }), 0);
     document.getElementById("main")?.scrollTo({ top: 0 });
@@ -40,6 +43,7 @@ function Page() {
   switch (first ?? "overview") {
     case "overview": page = <Overview />; break;
     case "projects": page = second === "new" ? <NewProject /> : second ? <ProjectDetail id={second} tab={third ?? "overview"} /> : <Projects query={route.query} />; break;
+    case "groups": page = second === "new" ? <GroupOnboard /> : second ? <GroupDetail id={second} /> : <Groups />; break;
     case "chargeback": page = <Chargeback query={route.query} />; break;
     case "budgets": page = <Budgets />; break;
     case "reconciler": page = <Reconciler />; break;

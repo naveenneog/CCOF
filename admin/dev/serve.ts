@@ -27,6 +27,18 @@ import { createMemoryLimitsStore } from "../src/sync-limits.ts";
 import { QueryCache } from "../src/chargeback.ts";
 import { createDemoTelemetry } from "./demo-data.ts";
 import type { DemoGroup } from "./demo-data.ts";
+import { handleGroupRequest } from "../src/groups.ts";
+import type { GroupDirectory } from "../src/groups.ts";
+
+// Synthetic Entra groups for the demo; the demo never calls Microsoft Graph.
+const DEMO_ENTRA_GROUPS = [
+  { id: "7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", displayName: "Payments engineering", description: "Demo security group", securityEnabled: true, memberCount: 42 },
+  { id: "8b2d3c4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e", displayName: "Payments data science", description: null, securityEnabled: true, memberCount: 7 },
+];
+const demoGroupDirectory: GroupDirectory = {
+  async search(text) { return { state: "available", groups: DEMO_ENTRA_GROUPS.filter((g) => g.displayName.toLowerCase().includes(text.toLowerCase())).map(({ memberCount: _m, ...g }) => g) }; },
+  async get(id) { const g = DEMO_ENTRA_GROUPS.find((x) => x.id === id); return g ? { state: "available", group: g } : { state: "not_found" }; },
+};
 
 const PORT = Number(process.env.PORT ?? 7171);
 const UI = fileURLToPath(new URL("../ui-dist/", import.meta.url));
@@ -62,7 +74,8 @@ class MemoryStore implements ProjectStore {
   fail() { if (mode === "down") throw Object.assign(new Error("Request blocked by network rules"), { code: 403 }); }
   async list() { this.fail(); return [...this.docs.values()].map((p) => structuredClone(p)); }
   async listPage(query: { search: string; tag: string; backendId: string; limit: number; cursor?: string; tags?: string[]; classification?: string }) {
-    const all = (await this.list()).filter((p) => `${p.doc.projectId} ${p.doc.displayName}`.toLowerCase().includes(query.search.toLowerCase()) &&
+    // Like the Cosmos store (cosmos-store.ts), onboarded group documents are not projects.
+    const all = (await this.list()).filter((p) => p.doc.kind !== "group" && `${p.doc.projectId} ${p.doc.displayName}`.toLowerCase().includes(query.search.toLowerCase()) &&
       (!query.tag || Array.isArray(p.doc.adminTags) && p.doc.adminTags.includes(query.tag)) && (!query.backendId || p.doc.backendId === query.backendId) &&
       (query.tags ?? []).every((t) => Array.isArray(p.doc.adminTags) && p.doc.adminTags.includes(t)) &&
       (!query.classification || Object.hasOwn(p.doc.classifications as Doc, query.classification)))
@@ -259,6 +272,16 @@ const server = createServer(async (req, res) => {
     const r = await serveUiV3(asset, V3_ENABLED, UI_V3);
     return send(r.status, r.headers, r.body);
   }
+  if (url.pathname.startsWith("/api/groups")) {
+    const chunks: Buffer[] = [];
+    for await (const c of req) chunks.push(c as Buffer);
+    const body = chunks.length ? Buffer.concat(chunks).toString("utf8") : null;
+    const r = await handleGroupRequest({
+      method: req.method ?? "GET", path: url.pathname, query: (n) => url.searchParams.get(n), body,
+      headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; },
+    }, { authenticate, store, changeLog, directory: demoGroupDirectory, log: demoLog, now: () => new Date(), newId: randomUUID });
+    return sendJson(r.status, r.jsonBody, r.headers);
+  }
   if (url.pathname.startsWith("/api/projects") || url.pathname.startsWith("/api/v2/") || url.pathname.startsWith("/api/v3/")) {
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
@@ -270,6 +293,7 @@ const server = createServer(async (req, res) => {
       : url.pathname.startsWith("/api/v2/")
         ? await handleV2Request(request, { authenticate, projects: store, catalogStore, changeLog, defaultCatalog, operations, log: demoLog, now: () => new Date(), newId: randomUUID })
         : await handleAdminRequest(request, { authenticate, store, changeLog, log: demoLog, now: () => new Date(), newId: randomUUID });
+    if (r.body !== undefined) return send(r.status, r.headers ?? {}, r.body);
     return sendJson(r.status, r.jsonBody, r.headers);
   }
   send(404, { "content-type": "text/plain" }, "Not found");

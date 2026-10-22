@@ -2,7 +2,19 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G8 — admin UI for groups ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-STAGE — staged deployment settings for groups ([ROADMAP](ROADMAP.md)).
+
+### G8 — admin UI for groups (complete, admin 3.3.0)
+
+- Groups page, four-step onboarding (Entra search, budget with auto-scale/cap estimate, access and models,
+  cache suggestion with evidence, budget assistant), group detail (edit, retire), Chargeback IDs view and filter,
+  Help topics ([ADMIN-V3.md](ADMIN-V3.md) 3.3.0).
+- Tests: `admin/tests/ui-groups.test.ts` 7/7 (pure form logic); admin 144/144; build OK. Mutants 7/7 caught.
+- Browser (Edge via Playwright, demo server): 18/18 checks in light, dark and 390 px; 0 console errors, 0 failed
+  requests. The name fix was negative-tested. Script: session file `ui-groups-walk.py`.
+- Council: round 1 ARCHITECT and SECURITY PASS; CODER, QA, UX PASS-WITH-NOTES (wrong name or member count after
+  re-picking a group; the detail page overwrote the stored cache share; an invalid chargeback filter broke
+  queries). Fixed. Round 2: two low notes (re-pick after Back, deep-link filter), fixed and walk-tested.
 
 ### G7b — export for Power BI (complete)
 

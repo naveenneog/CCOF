@@ -14,6 +14,7 @@ export const useSession = () => useContext(SessionContext);
 
 export const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
+  { id: "groups", label: "Groups", icon: "groups" },
   { id: "projects", label: "Projects", icon: "projects" },
   { id: "chargeback", label: "Chargeback", icon: "chargeback" },
   { id: "budgets", label: "Budgets", icon: "budgets" },
@@ -30,6 +31,8 @@ export function helpKey(route: Route): string {
   const [first, second] = route.parts;
   if (first === "projects" && second === "new") return "new-project";
   if (first === "projects" && second) return "project";
+  if (first === "groups" && second === "new") return "new-group";
+  if (first === "groups" && second) return "group";
   return first ?? "overview";
 }
 
@@ -38,6 +41,7 @@ function Breadcrumb({ route }: { route: Route }) {
   const section = NAV.find((n) => n.id === first) ?? NAV[0];
   const crumbs: { label: string; to?: string }[] = [{ label: section.label, to: second ? `/${section.id}` : undefined }];
   if (first === "projects" && second) crumbs.push({ label: second === "new" ? "New project" : second });
+  if (first === "groups" && second) crumbs.push({ label: second === "new" ? "Onboard a group" : second });
   return (
     <nav className="breadcrumb" aria-label="Breadcrumb">
       <ol>
