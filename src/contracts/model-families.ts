@@ -18,6 +18,18 @@ export interface FamilyPolicy {
   families: Partial<Record<ModelFamily, FamilyEntry>>;
 }
 
+// The one scope code of every onboarded group (ADR-0034). It is stable, so the
+// budget scope "<groupId>:group" does not move when the group's settings
+// change, and it is reserved: a baseline project may not use it.
+export const GROUP_SCOPE_CODE = "group";
+
+// Fable and Mythos: under the baseline CYB classification (ADR-0033), or in a
+// group whose owner approved them (ADR-0034 decision 3). The approval is an
+// explicit flag, never inferred from a code a document can choose.
+export function restrictedFamiliesAllowed(classification: string, restrictedApproved: boolean): boolean {
+  return classification === "CYB" || (classification === GROUP_SCOPE_CODE && restrictedApproved);
+}
+
 const families: readonly ModelFamily[] = ["haiku", "sonnet", "opus", "fable", "mythos"];
 const periods: readonly TokenQuotaPeriod[] = ["Hourly", "Daily", "Weekly", "Monthly", "Yearly"];
 const canonicalModel = /^claude-(haiku|sonnet|opus|fable|mythos)-[A-Za-z0-9][A-Za-z0-9._-]{0,105}$/;
@@ -61,10 +73,11 @@ function validModel(model: unknown, family: ModelFamily): model is string {
 export function parseFamilyPolicy(
   value: unknown,
   classification: string,
+  restrictedApproved = false,
 ): { ok: true; value: FamilyPolicy } | { ok: false; detail: "invalid_family_policy" | "family_classification_forbidden" } {
   const invalid = { ok: false, detail: "invalid_family_policy" } as const;
   if (!object(value) || !exactKeys(value, ["aggregateLimits", "families"]) || !object(value.families)) return invalid;
-  if (classification !== "CYB" && (Object.hasOwn(value.families, "fable") || Object.hasOwn(value.families, "mythos"))) {
+  if (!restrictedFamiliesAllowed(classification, restrictedApproved) && (Object.hasOwn(value.families, "fable") || Object.hasOwn(value.families, "mythos"))) {
     return { ok: false, detail: "family_classification_forbidden" };
   }
   if (!object(value.aggregateLimits) || !exactKeys(value.aggregateLimits, ["person", "group"])) return invalid;
@@ -93,8 +106,8 @@ export function parseFamilyPolicy(
   return { ok: true, value: parsed };
 }
 
-export function admittedModelFamily(policy: FamilyPolicy, classification: string, model: string): ModelFamily | null {
-  const parsed = parseFamilyPolicy(policy, classification);
+export function admittedModelFamily(policy: FamilyPolicy, classification: string, model: string, restrictedApproved = false): ModelFamily | null {
+  const parsed = parseFamilyPolicy(policy, classification, restrictedApproved);
   if (!parsed.ok) return null;
   for (const family of families) {
     if (parsed.value.families[family]?.models.includes(model)) return family;

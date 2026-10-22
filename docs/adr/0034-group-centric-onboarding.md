@@ -21,13 +21,17 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
    (`aggregateBudget: null`, `aggregateMode: notify`). `cap`: each member gets the per-user budget
    and the group shares a fixed monthly cap (`aggregateMode: strict`).
 3. **Restricted families.** Fable and Mythos require `restrictedFamiliesApproved: true` on the group.
-   This replaces the `CYB` code as the carrier of that approval.
+   The approval travels as that explicit flag (`restrictedFamiliesAllowed`,
+   [src/contracts/model-families.ts](../../src/contracts/model-families.ts)); it is never inferred
+   from a code a document can choose. Baseline `CYB` keeps its meaning.
 4. **Transitional storage and wire format.** A group document is stored in the existing `projects`
-   container with `kind: "group"` and `id == groupId`. One adapter converts it, at each read
-   boundary, to the baseline shape: `projectId = groupId`, one scope whose code is the access tier
-   (`standard` or `restricted`). Sync, resolver, reconciler and APIM consume that shape unchanged.
-   A later packet (ROADMAP G-WIRE) renames the wire fields. Baseline project documents remain
-   readable until then, so deployed data does not break before migration.
+   container with `kind: "group"`; `id`, `groupId` and the partition key `projectId` are the same
+   lower-case object ID, so Cosmos id uniqueness gives one document per group and a baseline project
+   with the same GUID cannot coexist. Each read boundary (sync, reconciler) dispatches on `kind` and
+   builds the baseline structures: `projectId = groupId` and the single scope code `group`. The code
+   is the same for every group and reserved (baseline projects may not use it), so the budget scope
+   `"<groupId>:group"` does not move when the group's settings change. A later packet (ROADMAP
+   G-WIRE) renames the wire fields. Baseline project documents remain readable until then.
 5. **Precedence (ASSUMED, G-A1).** A selector header names the group. Without one, the active
    membership with the lowest `priority` number applies; equal lowest priorities are refused with
    `project_selection_required`, as today.
@@ -46,9 +50,14 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 
 ## Consequences
 
-- No STD/PRM/CYB code is entered or shown for a group. The access tier code exists only on the wire
+- No STD/PRM/CYB code is entered or shown for a group. The scope code `group` exists only on the wire
   until G-WIRE.
-- The CYB rule gains a second accepted code (`restricted`) in TypeScript and in the APIM policy.
+- The membership carries `restrictedFamiliesApproved`; the resolver and the APIM policy check it
+  together with the scope code (G2b). Until then a group's Fable/Mythos models are refused at the
+  gateway, which fails closed.
+- Council review of the first draft (2026-10-22) found that a tier-based scope code
+  (`standard`/`restricted`) moved the budget scope when approval changed, and that any baseline
+  project could declare the `restricted` code. Both are removed by decisions 3 and 4.
 - A person in several groups gets one membership per group; the reconciler's per-person budget is
   per group, as it was per project.
 - Rolling back means deleting group documents; baseline documents are untouched.

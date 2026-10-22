@@ -2,18 +2,30 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G1 — group registration contract ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G2 — sync and reconciler read group documents ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
 
-Acceptance:
+### G1 — group registration contract (complete)
 
-- Given a valid group document, `readGroupRegistration` returns a typed registration.
-- Given an invalid document, it returns field-path problem codes and never a value.
-- `groupToProjectDocument` yields the baseline project shape: `projectId = groupId`, one scope
-  coded `standard` or `restricted`; `autoScale` gives `aggregateBudget: null` and `notify`, `cap`
-  gives the cap and `strict`.
-- Fable/Mythos are accepted only when `restrictedFamiliesApproved` is true.
+- `readGroupRegistration` ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)) and
+  `restrictedFamiliesAllowed` ([src/contracts/model-families.ts](../src/contracts/model-families.ts)).
+- Tests: `tests/group-registration.test.ts` 9/9; related family-policy suites 24/24.
+- Mutants: 7/7 caught, each with the suite loading all 9 tests and the named test failing.
+- Council: first round BLOCK (Architect, QA, Security): a tier-based scope code moved budget scopes
+  and could be declared by any project; group/project ID collision possible. Redesigned (ADR-0034
+  decisions 3, 4). Second round: ARCHITECT PASS, CODER PASS, QA PASS, SECURITY PASS; UX not
+  applicable (no user-facing change).
+- Gate: `node .ironclad/gate.mjs --stage packet` PASS before the redesign; rerun at G2.
 
-Open unknowns for the work stream: G-A1 to G-A4, G-R1 to G-R4 ([UNKNOWNS](UNKNOWNS.md)).
+G2 acceptance:
+
+- A `kind: "group"` document in `projects` is read by the sync as one scope with code `group`;
+  each member's membership carries `priority`, `surfaces`, `chargebackId` and
+  `restrictedFamiliesApproved`. An invalid group document freezes only that group.
+- The reconciler registers the scope `"<groupId>:group"`: `autoScale` gives no group cap and
+  `notify`; `cap` gives the cap and `strict`.
+- A baseline project may not use the reserved code `group`.
+
+Open unknowns for the work stream: G-A1 to G-A4, G-R3 ([UNKNOWNS](UNKNOWNS.md)).
 
 ## Admin V3 user names
 
