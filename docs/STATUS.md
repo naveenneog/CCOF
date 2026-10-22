@@ -1,8 +1,23 @@
 # Current work
 
+## Group-centric onboarding
+
+**Active packet:** G1 — group registration contract ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+Acceptance:
+
+- Given a valid group document, `readGroupRegistration` returns a typed registration.
+- Given an invalid document, it returns field-path problem codes and never a value.
+- `groupToProjectDocument` yields the baseline project shape: `projectId = groupId`, one scope
+  coded `standard` or `restricted`; `autoScale` gives `aggregateBudget: null` and `notify`, `cap`
+  gives the cap and `strict`.
+- Fable/Mythos are accepted only when `restrictedFamiliesApproved` is true.
+
+Open unknowns for the work stream: G-A1 to G-A4, G-R1 to G-R4 ([UNKNOWNS](UNKNOWNS.md)).
+
 ## Admin V3 user names
 
-**Active packet:** V3-names — complete: Admin 3.1.0 displays current Entra names beside full object
+**Completed packet:** V3-names — complete: Admin 3.1.0 displays current Entra names beside full object
 IDs. Only admin code/package changed; no gateway, sync or reconciler code, config or deployment.
 Manual upgrade: [VDI procedure](ADMIN-V3-VDI-UPGRADE.md); new permission: admin managed identity
 Graph application `User.Read.All`, consent, `ADMIN_USER_NAMES_ENABLED=true`.
