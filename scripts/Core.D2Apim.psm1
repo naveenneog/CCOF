@@ -96,7 +96,7 @@ function New-CoreGatewayConfig {
             audiences = @(@($reg.gatewayApi.identifierUri, $reg.gatewayApi.appId) | Where-Object { $_ } | Select-Object -Unique)
             delegatedScope = $a.identity.gatewayApi.scope
             delegatedClientAppIds = @(([string]$reg.developerSignIn.appId).ToLowerInvariant())
-            testIdentities = [ordered]@{ allowAppOnlyTokens = [bool]$a.identity.allowAppOnlyTestTokens; clientAppIds = @($a.identity.testClientAppIds); appRole = $a.identity.testClientAppRole }
+            testIdentities = [ordered]@{ allowAppOnlyTokens = [bool]$a.identity.allowAppOnlyTestTokens; clientAppIds = @($a.identity.testClientAppIds); appRole = $a.identity.testClientAppRole }; surfaceClients = @()
         }
         admission = $g.admission
         resolver = [ordered]@{ url = "https://$($D1.apps.resolver.hostName)/api/resolve"; tokenAudience = $reg.resolverApi.appId; timeoutSeconds = $g.resolverTimeoutSeconds; projectHeaderName = $g.projectHeaderName }

@@ -1,11 +1,12 @@
 import { strict as assert } from "node:assert";
-import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
 import { attr, descendants, parseApimXml } from "../infra/gateway/apim-xml.ts";
 import type { GatewayConfig } from "../infra/gateway/config.ts";
 import { renderPolicy } from "../infra/gateway/render.ts";
 import { sampleConfig } from "./helpers/gateway-fixtures.ts";
+import { runExpressions } from "./helpers/policy-csharp.ts";
+import type { Vector } from "./helpers/policy-csharp.ts";
 
 const xml = renderPolicy(sampleConfig() as GatewayConfig).policyXml;
 const root = parseApimXml(xml);
@@ -81,88 +82,7 @@ test("usage telemetry carries trusted family/group ID without introducing a stre
   assert.equal([...xml.matchAll(/context\.Response\.Body/g)].length, 1, "existing non-streamed reader only");
 });
 
-interface Vector {
-  label: string;
-  method: string;
-  vars?: Record<string, unknown>;
-  status?: number;
-  policyId?: string;
-  reason?: string;
-  expected: unknown;
-  json?: boolean;
-  property?: string;
-}
 
-// Compile and execute the actual rendered C# expressions, not a TypeScript imitation.
-// PowerShell 7 and its Newtonsoft assembly are already required by the repository.
-function runExpressions(methods: Record<string, string>, vectors: Vector[]): unknown[] {
-  const bodies = Object.entries(methods).map(([name, source]) => {
-    const body = source.startsWith("@{") ? source.slice(2, -1) : `return ${source.slice(2, -1)};`;
-    return `public static object ${name}(Context context) { ${body} }`;
-  }).join("\n");
-  const source = `
-using System;
-using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
-public class Bag : Dictionary<string, object> {
-  public T GetValueOrDefault<T>(string key, T fallback) { return ContainsKey(key) ? (T)this[key] : fallback; }
-}
-public class Body { public string Text; public T As<T>() { return (T)(object)JObject.Parse(Text); } }
-public interface IResponse { int StatusCode { get; } Body Body { get; } }
-public class Response : IResponse { public int StatusCode { get; set; } public Body Body { get; set; } }
-public class Error { public string Source = ""; public string PolicyId = ""; public string Reason = ""; }
-public class Context {
-  public Bag Variables = new Bag();
-  public Response Response = new Response();
-  public Error LastError = new Error();
-  public Guid RequestId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-}
-public static class PolicyExpressions { ${bodies} }`;
-  const script = `
-$ErrorActionPreference = 'Stop'
-$inputJson = [Console]::In.ReadToEnd() | ConvertFrom-Json -AsHashtable
-$refs = @([Newtonsoft.Json.Linq.JObject].Assembly.Location, (Join-Path $PSHOME 'ref\\System.Collections.dll'), (Join-Path $PSHOME 'ref\\System.Linq.dll'), (Join-Path $PSHOME 'ref\\System.Text.RegularExpressions.dll'))
-# Only suppress the assembly unification warning between PowerShell's bundled Newtonsoft
-# and the host's System.Runtime. C# errors and every other warning remain failures.
-Add-Type -TypeDefinition $inputJson.source -ReferencedAssemblies $refs -CompilerOptions '/nowarn:1701', '/langversion:7'
-$results = @()
-foreach ($v in $inputJson.vectors) {
-  $ctx = [Context]::new()
-  $ctx.Response.StatusCode = [int]$v.status
-  $ctx.LastError.PolicyId = [string]$v.policyId
-  $ctx.LastError.Reason = [string]$v.reason
-  foreach ($key in $v.vars.Keys) {
-    $value = $v.vars[$key]
-    if ($key -eq 'ccofResolverResponse') {
-      $response = [Response]::new()
-      $response.StatusCode = [int]$value.status
-      $response.Body = [Body]::new()
-      $response.Body.Text = $value.body | ConvertTo-Json -Depth 50 -Compress
-      $ctx.Variables[$key] = $response
-    } elseif ($value -is [System.Collections.IDictionary] -or $value -is [array]) {
-      $encoded = $value | ConvertTo-Json -Depth 50 -Compress
-      $ctx.Variables[$key] = $encoded.PSObject.BaseObject
-    } elseif ($key.EndsWith('Tpm')) { $ctx.Variables[$key] = [int]$value
-    } elseif ($key.EndsWith('Quota')) { $ctx.Variables[$key] = [long]$value
-    } else { $ctx.Variables[$key] = if ($null -eq $value) { $null } else { $value.PSObject.BaseObject } }
-  }
-  $method = [PolicyExpressions].GetMethod($v.method)
-  try { $result = $method.Invoke($null, @($ctx)) } catch { throw ($v.label + ': ' + $_.Exception.ToString()) }
-  if ($v.json) { $result = $result | ConvertFrom-Json -AsHashtable }
-  $results += ,$result
-}
-ConvertTo-Json -InputObject $results -Depth 50 -Compress
-`;
-  const result = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script], {
-    input: JSON.stringify({ source, vectors }),
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 4_000_000,
-    env: { ...process.env, CCOF_LIVE_TESTS: "0" },
-  });
-  assert.equal(result.status, 0, `C# expression harness failed:\n${result.stdout}\n${result.stderr}`);
-  return JSON.parse(result.stdout.trim());
-}
 
 const nullLimit = () => ({ tokensPerMinute: null, tokenQuota: null, tokenQuotaPeriod: null });
 function decision(): Record<string, any> {
@@ -316,6 +236,7 @@ test("actual C# rejects invalid v3 policies, admits only exact IDs, scopes keys 
       ["baseline STD with approval", "STD", true, false], ["CYB with approval false", "CYB", false, true],
     ] as [string, string, unknown, boolean][]) {
       const d = decision(); d.classification = classification;
+      if (classification === "group") d.surfaces = ["code"];
       if (approval !== undefined) d.restrictedFamiliesApproved = approval;
       d.familyPolicy.families[restricted] = { models: ["deployment-approved"], person: nullLimit(), group: nullLimit() };
       resolver(`${restricted} ${label}`, d, allowed);
@@ -325,12 +246,12 @@ test("actual C# rejects invalid v3 policies, admits only exact IDs, scopes keys 
           expected: allowed ? restricted : "" });
       }
     }
-    const approved = decision(); approved.classification = "group"; approved.restrictedFamiliesApproved = true;
+    const approved = decision(); approved.classification = "group"; approved.surfaces = ["code"]; approved.restrictedFamiliesApproved = true;
     vectors.push({ label: `${restricted} approval copied to the decision`, method: "Resolve",
       vars: { ccofResolverResponse: { status: 200, body: approved } }, json: true, property: "d.restrictedFamiliesApproved", expected: true });
-    const groupDefault = decision(); groupDefault.classification = "group";
+    const groupDefault = decision(); groupDefault.classification = "group"; groupDefault.surfaces = ["code"];
     resolver(`${restricted} group without restricted families needs no approval`, groupDefault, true);
-    const notBoolean = decision(); notBoolean.classification = "group"; notBoolean.restrictedFamiliesApproved = "yes";
+    const notBoolean = decision(); notBoolean.classification = "group"; notBoolean.surfaces = ["code"]; notBoolean.restrictedFamiliesApproved = "yes";
     resolver(`${restricted} non-boolean approval refused even without restricted families`, notBoolean, false);
   }
   for (const restricted of ["fable", "mythos"]) {

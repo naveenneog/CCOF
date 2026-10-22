@@ -81,7 +81,7 @@ $gateway = [ordered]@{
         tenantId=$c.tenantId;authorityHost='https://login.microsoftonline.com';v1IssuerHost='https://sts.windows.net'
         audiences=@($c.gatewayIdentifierUri,$c.gatewayAppId) | Select-Object -Unique
         delegatedScope='access_as_user';delegatedClientAppIds=@($c.gatewayAppId.ToLowerInvariant())
-        testIdentities=@{allowAppOnlyTokens=$false;clientAppIds=@();appRole=$null}
+        testIdentities=@{allowAppOnlyTokens=$false;clientAppIds=@();appRole=$null};surfaceClients=@()
     }
     admission=@{perPerson=@{calls=120;renewalPeriodSeconds=60};resolverMisses=@{calls=200;renewalPeriodSeconds=1;maxConcurrent=100}}
     resolver=@{url="https://$($c.apps.resolver.defaultHostName)/api/resolve";tokenAudience=$c.resolverApiAppId;timeoutSeconds=10;projectHeaderName='x-ccof-project'}

@@ -43,6 +43,13 @@
         var jwt = (Jwt)context.Variables["ccofJwt"];
         return jwt.Claims.GetValueOrDefault("azp", jwt.Claims.GetValueOrDefault("appid", "")).ToLowerInvariant();
     }" />
+    <!-- The surface the calling client application serves (ADR-0034 decision 6); "" when unmapped. -->
+    <set-variable name="ccofSurface" value="@{
+        var clients = new string[] { %%SURFACE_CLIENT_IDS%% };
+        var names = new string[] { %%SURFACE_NAMES%% };
+        var index = Array.IndexOf(clients, (string)context.Variables["ccofClientAppId"]);
+        return index < 0 ? "" : names[index];
+    }" />
     <set-variable name="ccofRefusal" value="@{
         if ((string)context.Variables["ccofOid"] == "") { return "token_identity_missing"; }
         var scopes = ((Jwt)context.Variables["ccofJwt"]).Claims.GetValueOrDefault("scp", "").Trim();
@@ -127,6 +134,9 @@
                 var groupId = body["classificationGroupId"];
                 if (groupId == null || groupId.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)groupId, "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z")) { return false; }
                 if (body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type != JTokenType.Boolean) { return false; }
+                var surfaces = body["surfaces"];
+                if (surfaces == null ? (string)body["classification"] == "group" : (surfaces.Type != JTokenType.Array || ((JArray)surfaces).Count < 1 || ((JArray)surfaces).Count > 5)) { return false; }
+                if (surfaces != null) { var seenSurfaces = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal); foreach (var s in (JArray)surfaces) { if (s.Type != JTokenType.String || Array.IndexOf(new string[] { "chat", "code", "cowork", "design", "m365" }, (string)s) < 0 || !seenSurfaces.Add((string)s)) { return false; } } }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return false; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -297,6 +307,9 @@
                 var groupId = body["classificationGroupId"];
                 if (groupId == null || groupId.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)groupId, "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z")) { return unavailable; }
                 if (body["restrictedFamiliesApproved"] != null && body["restrictedFamiliesApproved"].Type != JTokenType.Boolean) { return unavailable; }
+                var surfaces = body["surfaces"];
+                if (surfaces == null ? (string)body["classification"] == "group" : (surfaces.Type != JTokenType.Array || ((JArray)surfaces).Count < 1 || ((JArray)surfaces).Count > 5)) { return unavailable; }
+                if (surfaces != null) { var seenSurfaces = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal); foreach (var s in (JArray)surfaces) { if (s.Type != JTokenType.String || Array.IndexOf(new string[] { "chat", "code", "cowork", "design", "m365" }, (string)s) < 0 || !seenSurfaces.Add((string)s)) { return unavailable; } } }
                 var familyPolicy = body["familyPolicy"] as JObject;
                 if (familyPolicy == null || familyPolicy.Count != 2) { return unavailable; }
                 var aggregate = familyPolicy["aggregateLimits"] as JObject;
@@ -341,6 +354,7 @@
                 decision["familyPolicy"] = familyPolicy;
                 var approval = body["restrictedFamiliesApproved"];
                 if (approval != null) { decision["restrictedFamiliesApproved"] = (bool)approval; }
+                if (surfaces != null) { decision["surfaces"] = surfaces; }
                 var displayName = body["classificationGroupDisplayName"];
                 if (displayName != null && displayName.Type == JTokenType.String && ((string)displayName).Length >= 1 && ((string)displayName).Length <= 256) {
                     decision["classificationGroupDisplayName"] = (string)displayName;
@@ -488,12 +502,26 @@
             return matches == 1 ? admitted : "";
         }" />
         <set-variable name="ccofModelAllowed" value="@((string)context.Variables["ccofModelFamily"] != "")" />
+        <set-variable name="ccofSurfaceAllowed" value="@{
+            var enforced = %%SURFACE_ENFORCED%%;
+            if (!enforced) { return true; }
+            var decision = JObject.Parse((string)context.Variables["ccofDecision"]);
+            if ((string)decision["classification"] != "group") { return true; }
+            var surfaces = decision["surfaces"] as JArray;
+            var surface = (string)context.Variables["ccofSurface"];
+            if (surfaces == null || surface == "") { return false; }
+            foreach (var s in surfaces) { if (s.Type == JTokenType.String && (string)s == surface) { return true; } }
+            return false;
+        }" />
         <choose>
           <when condition="@(!(bool)context.Variables["ccofBackendAllowed"])">
             <set-variable name="ccofRefusal" value="backend_not_configured" />
           </when>
           <when condition="@(!(bool)context.Variables["ccofModelAllowed"])">
             <set-variable name="ccofRefusal" value="model_family_not_allowed" />
+          </when>
+          <when condition="@(!(bool)context.Variables["ccofSurfaceAllowed"])">
+            <set-variable name="ccofRefusal" value="surface_not_allowed" />
           </when>
         </choose>
         <choose>
@@ -623,7 +651,7 @@
         <set-variable name="ccofRefusalStatus" value="@{
             switch ((string)context.Variables["ccofRefusal"]) {
                 case "token_identity_missing": return 401;
-                case "token_scope_missing": case "token_client_not_allowed": case "app_token_not_allowed": case "not_authorized": case "model_family_not_allowed": return 403;
+                case "token_scope_missing": case "token_client_not_allowed": case "app_token_not_allowed": case "not_authorized": case "model_family_not_allowed": case "surface_not_allowed": return 403;
                 case "budget_exhausted": case "aggregate_budget_exhausted": return 403;
                 case "project_header_invalid": case "request_body_invalid": case "request_model_missing": case "project_selection_required": return 400;
                 default: return 503;
@@ -685,6 +713,11 @@
                 case "model_family_not_allowed":
                     type = "permission_error";
                     message = "The requested model family is not available to your project classification. Ask your platform team for an approved model.";
+                    break;
+                case "surface_not_allowed":
+                    var surfaceName = context.Variables.GetValueOrDefault<string>("ccofSurface", "");
+                    type = "permission_error";
+                    message = "This application" + (surfaceName == "" ? "" : " (" + surfaceName + ")") + " is not enabled for your Claude group. Ask your platform team to enable it, or use an enabled application.";
                     break;
                 case "entitlement_unavailable":
                     type = "api_error";

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import type { JsonSchema } from "./json-schema.ts";
 import { assertSupportedSchema, validateAgainstSchema } from "./json-schema.ts";
+import type { Surface } from "../../src/contracts/group-registration.ts";
 
 export const SCHEMA_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "gateway-config.schema.json");
 
@@ -44,6 +45,7 @@ export interface GatewayConfig {
     delegatedScope: string;
     delegatedClientAppIds: string[];
     testIdentities: { allowAppOnlyTokens: boolean; clientAppIds: string[]; appRole: string | null };
+    surfaceClients: { clientAppId: string; surface: Surface }[];
   };
   admission: {
     perPerson: { calls: number; renewalPeriodSeconds: number };
@@ -136,6 +138,15 @@ function crossFieldProblems(config: GatewayConfig): string[] {
   }
   if (!allowAppOnlyTokens && appRole !== null) {
     problems.push("entra.testIdentities.appRole: must be null when allowAppOnlyTokens is false");
+  }
+
+  const admitted = new Set([...config.entra.delegatedClientAppIds, ...clientAppIds].map((id) => id.toLowerCase()));
+  const mapped = new Set<string>();
+  for (const { clientAppId } of config.entra.surfaceClients) {
+    const key = clientAppId.toLowerCase();
+    if (!admitted.has(key)) problems.push(`entra.surfaceClients: ${clientAppId} is not in delegatedClientAppIds or testIdentities.clientAppIds`);
+    if (mapped.has(key)) problems.push(`entra.surfaceClients: ${clientAppId} is mapped more than once`);
+    mapped.add(key);
   }
 
   const headerFields: Array<[string, string]> = [

@@ -180,7 +180,7 @@ function New-QsGatewayConfig {
             tenantId = $P.tenantId; authorityHost = 'https://login.microsoftonline.com'; v1IssuerHost = 'https://sts.windows.net'
             audiences = @(@($Checks.gatewayIdentifierUri, $r.gatewayApi.appId) | Where-Object { $_ } | Select-Object -Unique)
             delegatedScope = $r.gatewayApi.scope; delegatedClientAppIds = @(([string]$r.developerSignIn.appId).ToLowerInvariant())
-            testIdentities = [ordered]@{ allowAppOnlyTokens = $false; clientAppIds = @(); appRole = $null }
+            testIdentities = [ordered]@{ allowAppOnlyTokens = $false; clientAppIds = @(); appRole = $null }; surfaceClients = @()
         }
         admission = $g.admission
         resolver = [ordered]@{ url = "https://$($P.names.apps.resolver.functionApp).azurewebsites.net/api/resolve"; tokenAudience = $r.resolverApi.appId; timeoutSeconds = $g.resolverTimeoutSeconds; projectHeaderName = $g.projectHeaderName }

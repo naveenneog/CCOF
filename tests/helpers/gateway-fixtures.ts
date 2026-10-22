@@ -21,6 +21,7 @@ export function sampleConfig(): Record<string, any> {
       delegatedScope: "access_as_user",
       delegatedClientAppIds: ["00000000-0000-0000-0000-00000000000f"],
       testIdentities: { allowAppOnlyTokens: true, clientAppIds: ["00000000-0000-0000-0000-00000000000c"], appRole: "Gateway.Test" },
+      surfaceClients: [],
     },
     admission: {
       perPerson: { calls: 120, renewalPeriodSeconds: 60 },

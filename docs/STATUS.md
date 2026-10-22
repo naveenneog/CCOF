@@ -2,7 +2,21 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G4 — surfaces ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+**Active packet:** G6 — admin group API ([ROADMAP](ROADMAP.md), [ADR-0034](adr/0034-group-centric-onboarding.md)).
+
+### G4 — surfaces (complete)
+
+- Gateway setting `entra.surfaceClients` maps admitted client apps (token `azp`/`appid`) to a surface;
+  empty means not enforced ([gateway-config.schema.json](../infra/gateway/gateway-config.schema.json),
+  [config.ts](../infra/gateway/config.ts)). The policy requires valid `surfaces` on `group` decisions and
+  refuses 403 `surface_not_allowed` before any token counter ([claude-messages.template.xml](../infra/gateway/policy/claude-messages.template.xml)).
+  Quickstart, Core and manual producers emit an empty list. [GATEWAY.md](GATEWAY.md) documents it.
+- Tests: gateway suites 133/133 (vectors run as compiled C#); full packet gate PASS (all PowerShell suites).
+- Mutants: 10/10 caught after adding a structural refusal-wiring test and fixing a duplicate-mapping
+  test that the schema short-circuited.
+- Council: ARCHITECT PASS-WITH-NOTES (deploy the resolver before the policy), CODER PASS, QA PASS,
+  SECURITY PASS-WITH-NOTES (one re-resolve per group user at rollout), UX PASS.
+- Follow-up: staged and quickstart inputs do not yet expose `surfaceClients` (G-DOC).
 
 ### G5 — cache suggesters (complete)
 

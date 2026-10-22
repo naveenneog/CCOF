@@ -60,6 +60,10 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
   TTL plus last-known-good grace, as for CYB today; the immediate path is a cache `keyVersion` bump.
 - APIM receives `surfaces` and `chargebackId` but neither validates nor copies them until G4/G7,
   which must validate them in both the cached and fresh blocks before use.
+- G4 requires `surfaces` on every `group` decision. Deployment order: the resolver (G2b or later)
+  before the gateway policy, or every group request returns 503. Group decisions cached by an older
+  policy lack `surfaces`, fail the cached check and are re-resolved once; those users have no
+  last-known-good fallback until that re-resolve succeeds.
 - Council review of the first draft (2026-10-22) found that a tier-based scope code
   (`standard`/`restricted`) moved the budget scope when approval changed, and that any baseline
   project could declare the `restricted` code. Both are removed by decisions 3 and 4.

@@ -188,6 +188,39 @@ describe("gateway configuration", () => {
   });
 });
 
+describe("surface clients (ADR-0034 decision 6)", () => {
+  const CODE_APP = "00000000-0000-0000-0000-00000000000f";
+  const TEST_APP = "00000000-0000-0000-0000-00000000000c";
+
+  test("an empty list is valid and turns surface enforcement off", () => {
+    assert.deepEqual(problemsFor((c) => { c.entra.surfaceClients = []; }), []);
+  });
+
+  test("a missing list refuses, naming it", () => {
+    assertRefused((c) => { delete c.entra.surfaceClients; }, "entra");
+  });
+
+  test("an entry maps an admitted client application to one surface", () => {
+    assert.deepEqual(problemsFor((c) => { c.entra.surfaceClients = [{ clientAppId: CODE_APP, surface: "code" }, { clientAppId: TEST_APP, surface: "chat" }]; }), []);
+  });
+
+  test("an unknown surface, an extra field or a non-GUID client refuses", () => {
+    assertRefused((c) => { c.entra.surfaceClients = [{ clientAppId: CODE_APP, surface: "email" }]; }, "entra.surfaceClients");
+    assertRefused((c) => { c.entra.surfaceClients = [{ clientAppId: CODE_APP, surface: "code", note: "x" }]; }, "entra.surfaceClients");
+    assertRefused((c) => { c.entra.surfaceClients = [{ clientAppId: "not-a-guid", surface: "code" }]; }, "entra.surfaceClients");
+  });
+
+  test("a client that the gateway does not admit cannot be mapped", () => {
+    assertRefused((c) => { c.entra.surfaceClients = [{ clientAppId: "00000000-0000-0000-0000-0000000000ee", surface: "code" }]; }, "entra.surfaceClients");
+  });
+
+  test("one client cannot map to two surfaces", () => {
+    assertRefused((c) => {
+      c.entra.surfaceClients = [{ clientAppId: CODE_APP, surface: "code" }, { clientAppId: CODE_APP, surface: "chat" }];
+    }, "entra.surfaceClients");
+  });
+});
+
 describe("schema interpreter", () => {
   test("the committed schema uses only supported keywords", () => {
     assert.doesNotThrow(() => assertSupportedSchema(JSON.parse(readFileSync(schemaPath, "utf8"))));

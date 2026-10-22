@@ -20,7 +20,8 @@
       "allowAppOnlyTokens": true,
       "clientAppIds": ["00000000-0000-0000-0000-00000000000c"],
       "appRole": "Gateway.Test"
-    }
+    },
+    "surfaceClients": []
   },
   "admission": {
     "perPerson": { "calls": 120, "renewalPeriodSeconds": 60 },

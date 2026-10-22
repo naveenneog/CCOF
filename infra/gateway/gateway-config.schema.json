@@ -24,7 +24,7 @@
     "entra": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tenantId", "authorityHost", "v1IssuerHost", "audiences", "delegatedScope", "delegatedClientAppIds", "testIdentities"],
+      "required": ["tenantId", "authorityHost", "v1IssuerHost", "audiences", "delegatedScope", "delegatedClientAppIds", "testIdentities", "surfaceClients"],
       "properties": {
         "tenantId": { "$ref": "#/$defs/guid" },
         "authorityHost": { "$ref": "#/$defs/httpsOrigin", "description": "Entra authority, for the v2 issuer and the OpenID configuration." },
@@ -40,6 +40,20 @@
             "allowAppOnlyTokens": { "type": "boolean", "description": "true admits app-only tokens, only from clientAppIds and only with appRole in roles; false refuses every app-only token." },
             "clientAppIds": { "type": "array", "maxItems": 20, "uniqueItems": true, "items": { "$ref": "#/$defs/guid" } },
             "appRole": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$", "description": "The app role an app-only token must carry in its roles claim (exact match; WP-NET S1). null when allowAppOnlyTokens is false." }
+          }
+        },
+        "surfaceClients": {
+          "type": "array",
+          "maxItems": 20,
+          "description": "Maps an admitted client application (azp/appid) to the surface it serves (ADR-0034 decision 6). Empty: surfaces are not enforced. Non-empty: a group's request from an unmapped client, or from a surface the group does not allow, is refused.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clientAppId", "surface"],
+            "properties": {
+              "clientAppId": { "$ref": "#/$defs/guid" },
+              "surface": { "enum": ["chat", "code", "cowork", "design", "m365"] }
+            }
           }
         }
       }

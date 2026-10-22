@@ -41,6 +41,13 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 4. **Allow-lists.** The resolver's `backendId` must be a configured static backend or come with the
    resolver's backend descriptor (C-8: the gateway routes only to what the resolver returns), and the
    request's `model` must be in the person's `modelAllowList`.
+   - **Surfaces** ([ADR-0034](adr/0034-group-centric-onboarding.md) decision 6). `entra.surfaceClients`
+     maps a client application already admitted in step 1 (`azp`/`appid`) to one of `chat`, `code`,
+     `cowork`, `design`, `m365`. An empty list turns surface checks off. With a non-empty list, a request
+     resolved to an onboarded group (scope code `group`) is refused 403 `surface_not_allowed` when its
+     client is unmapped or its surface is not in the group's `surfaces`. Baseline project decisions are
+     not surface-scoped. The client application ID is taken from the validated token, so a client cannot
+     choose its surface by header.
 5. **Token limits.** The resolver's `tokenLimits` (C-2): the group's limits on counter
    `g:{projectId}:{classification}`, then the person's on `p:{projectId}:{oid}`. A `null` limit is not
    applied. A rate refusal is 429, a quota refusal 403.
@@ -109,6 +116,7 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | Token without the scope; a person's token from a client application not in `entra.delegatedClientAppIds`; an application token that is not a test identity or lacks the app role | 403 | `permission_error` |
 | Not entitled (no active membership for the project) | 403 | `permission_error` |
 | Model not in the person's allow-list (the message lists the allowed models) | 403 | `permission_error` |
+| Group request from a client application whose surface the group does not allow, or that `entra.surfaceClients` does not map (only when the list is non-empty) | 403 | `permission_error` |
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
 | A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500) | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
