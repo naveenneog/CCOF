@@ -1,5 +1,23 @@
 # Change log
 
+## 2026-10-23 — Group-centric onboarding (ADR-0034), admin 3.3.0
+
+- **Group as the unit** ([ADR-0034](adr/0034-group-centric-onboarding.md)): an Entra group is onboarded as
+  its own entity (`kind: "group"` document in `projects`, scope code `group`) with a per-user budget
+  (auto-scale or cap), models and rate limits, allowed surfaces, chargeback ID, priority and cache share.
+  No STD/PRM/CYB classification is entered for a group. Fable/Mythos need `restrictedFamiliesApproved`.
+- **Sync, reconciler, resolver, gateway**: memberships carry priority, surfaces, chargeback ID and approval;
+  with no selector the lowest-priority group applies, ties are refused; APIM maps client app IDs to surfaces
+  (`entra.surfaceClients`) and refuses `403 surface_not_allowed`.
+- **Chargeback**: the usage trace and ledger carry `chargebackId` and `surface`; the workbook and console add
+  the Chargeback IDs view; `GET /api/v3/export/usage` and `/api/v3/export/groups` give CSV/JSON for Power BI.
+- **Admin 3.3.0**: Groups page, four-step onboarding with Entra group search, budget estimate, cache suggestion
+  with evidence class, group detail and retire (`/api/groups`).
+- **Staged deployment**: `gateway.surfaceClients` and `admin.groupSearchEnabled`; new
+  [staged deployment guide](STAGED-DEPLOYMENT-GUIDE.md) with prerequisites, Cloud Shell and Portal steps.
+- Open: precedence and chargeback-ID-per-group are assumptions (UNKNOWNS G-A1, G-A2); requirement 9 (G-A3);
+  Power BI connector sign-in (G-R3); live verification (G9).
+
 ## 2026-10-22 — Admin 3.2.0: project retirement, removal limits, change record
 
 - **Retire project** (V3 project Settings, `POST /api/projects/{id}/retire`, If-Match and the project ID

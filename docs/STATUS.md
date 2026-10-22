@@ -2,7 +2,29 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-STAGE — staged deployment settings for groups ([ROADMAP](ROADMAP.md)).
+**Active packet:** G9 — live verification ([ROADMAP](ROADMAP.md)).
+
+### G-DOC — staged deployment guide (complete)
+
+- [STAGED-DEPLOYMENT-GUIDE.md](STAGED-DEPLOYMENT-GUIDE.md): roles per stage, network, Entra applications (the
+  settings Stage 4 applies), Graph permissions per identity, Foundry; Cloud Shell setup; per stage the command,
+  Portal workbook sections and success check; group onboarding; Graph grant helper; rollback. Linked from README
+  and the staged runbook.
+- Checks: 6/6 PowerShell blocks parse; every relative link and anchor resolves.
+- Council (fact check against code): round 1 BLOCK with 8 errors (wrong state path `completed` for `stages`,
+  `-Stage <n>` not runnable, Stage 6 `existing` described as creating the network, missing APIM NSG and
+  Azure Monitor egress, Stage 6 WARNs presented as checked, timers described as always off, Stage 1 non-empty
+  RG rule, cleanup deleting reused Entra objects) and 3 notes. All fixed against the cited code.
+
+### G-STAGE — staged settings for groups (complete)
+
+- `gateway.surfaceClients` (Stage 5 writes `entra.surfaceClients`, IDs lower-cased) and `admin.groupSearchEnabled`
+  (`ADMIN_GROUP_SEARCH_ENABLED`) in the staged configuration ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1),
+  [stage5-config.bicep](../infra/staged/stage5-config.bicep)). Both default off.
+- Tests: `tests/Test-StagedStages.ps1` 360/360. Mutants 4/4 caught.
+- Council: CODER PASS; ARCHITECT, QA, SECURITY, UX PASS-WITH-NOTES. Notes: the staged path admits only the gateway
+  app and Azure CLI, so only those can be mapped (documented); `groupSearchEnabled` is ignored without the admin
+  app (documented); the admin Graph grants are manual (guide section 6.1); new checks are source-level.
 
 ### G8 — admin UI for groups (complete, admin 3.3.0)
 
@@ -62,7 +84,7 @@
   test that the schema short-circuited.
 - Council: ARCHITECT PASS-WITH-NOTES (deploy the resolver before the policy), CODER PASS, QA PASS,
   SECURITY PASS-WITH-NOTES (one re-resolve per group user at rollout), UX PASS.
-- Follow-up: staged and quickstart inputs do not yet expose `surfaceClients` (G-DOC).
+- Follow-up: quickstart inputs do not expose `surfaceClients`; the staged configuration does (G-STAGE).
 
 ### G5 — cache suggesters (complete)
 

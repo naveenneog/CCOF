@@ -26,6 +26,8 @@ function Invoke-Stage5 {
     try { npx tsc -p tsconfig.json | Out-Host; if ($LASTEXITCODE) { throw 'build_failed: npx tsc -p tsconfig.json' } } finally { Pop-Location }
     $config = New-QsGatewayConfig -P $ctx.P -Checks $ctx.State.completed['1'].outputs
     if ($entra.azureCliClientAllowed) { $config.entra.delegatedClientAppIds = @($config.entra.delegatedClientAppIds) + @($script:AzureCliClientId) }
+    # Surface enforcement (ADR-0034 decision 6): empty unless the configuration maps client apps to surfaces.
+    $config.entra.surfaceClients = @($Cfg.gateway.surfaceClients | Where-Object { $_ } | ForEach-Object { [ordered]@{ clientAppId = ([string]$_.clientAppId).ToLowerInvariant(); surface = [string]$_.surface } })
     $configPath = Join-Path $ctx.GeneratedDir 'gateway-config.json'
     $config | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
     node (Join-Path $script:Repo 'infra/gateway/render.ts') --config $configPath --out (Join-Path $ctx.GeneratedDir 'gateway') | Out-Host
@@ -39,6 +41,7 @@ function Invoke-Stage5 {
     $admin = @{ enabled = [bool]$Cfg.stage1.includeAdmin }
     if ($admin.enabled) {
         $admin += @{ uiClientId = $entra.admin.appId; editorIds = @(); readerIds = @(); v3Enabled = ($Cfg.admin.v3Enabled -ne $false); extraAllowedClientIds = @($Cfg.admin.extraAllowedClientIds | Where-Object { $_ -match $script:Guid })
+            groupSearchEnabled = ($Cfg.admin.groupSearchEnabled -eq $true)
             clientId = $entra.registrations.developerSignIn.appId; gatewayUrl = $ctx.GatewayUrl; projectHeader = $Cfg.gateway.projectHeaderName }
     }
     $params = @{

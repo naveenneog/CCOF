@@ -91,6 +91,14 @@ Assert-Contract ($syncConfig.Count -eq 1 -and $syncConfig[0].role -ceq '00000000
 Assert-Contract ($grants.variables.activeAssignments -match "not\(equals\(lambdaVariables\('a'\)\.container, 'adminConfig'\)\), not\(empty\(coalesce\(tryGet\(parameters\('principals'\), 'admin'\)") 'adminConfig assignments must require the admin principal.'
 $settingsArm = Build-Arm 'infra\quickstart\modules\app-settings.bicep'
 Assert-Contract (($settingsArm.parameters.syncLimitsContainer.defaultValue -ceq '') -and ((Get-Content -Raw 'infra\staged\stage5-config.bicep') -match "syncLimitsContainer: \(admin\.\?enabled \?\? false\) \? 'adminConfig' : ''")) 'Stage 5 must set SYNC_LIMITS_CONTAINER=adminConfig only with the admin app.'
+# Group-centric onboarding (ADR-0034): Entra group search on the admin app and gateway surface clients.
+$stage5Text = Get-Content -Raw (Join-Path $root 'infra\staged\stage5-config.bicep')
+$appText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Application.ps1')
+$example = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable
+Assert-Contract ($stage5Text -match "ADMIN_GROUP_SEARCH_ENABLED: \(admin\.\?groupSearchEnabled \?\? false\) \? 'true' : 'false'") 'Stage 5 must set ADMIN_GROUP_SEARCH_ENABLED from admin.groupSearchEnabled, off by default.'
+Assert-Contract ($appText -match 'groupSearchEnabled = \(\$Cfg\.admin\.groupSearchEnabled -eq \$true\)') 'Stage 5 must pass admin.groupSearchEnabled to the template.'
+Assert-Contract ($appText -match '\$config\.entra\.surfaceClients = @\(\$Cfg\.gateway\.surfaceClients') 'Stage 5 must copy gateway.surfaceClients into the gateway configuration.'
+Assert-Contract ($example.gateway.ContainsKey('surfaceClients') -and @($example.gateway.surfaceClients).Count -eq 0 -and $example.admin.groupSearchEnabled -eq $false) 'The example configuration must show gateway.surfaceClients (empty) and admin.groupSearchEnabled (false).'
 
 # Stage 1 publishes the names later stages read.
 $s1 = Build-Arm 'infra\staged\main.bicep'

@@ -1,5 +1,8 @@
 # Configurable staged deployment
 
+The step-by-step operator guide, with prerequisites, Cloud Shell commands and Portal steps per stage,
+is [STAGED-DEPLOYMENT-GUIDE.md](../STAGED-DEPLOYMENT-GUIDE.md). This runbook holds the stage internals.
+
 CCOF deploys in nine stages, run one at a time by
 [`infra/staged/Invoke-StagedDeployment.ps1`](../../infra/staged/Invoke-StagedDeployment.ps1).
 Each stage has its own operator permission boundary, a preview, an apply, and a read-back
@@ -104,9 +107,9 @@ The driver refuses it until the placeholders are replaced. Sections:
 | `backends` | 0, 3, 5, 6 | Foundry accounts, deployment names and inference geography; `privateEndpoint: true` makes Stage 6 check (or, in modes `existing`/`create`, create) its private endpoint and DNS |
 | `entra` | 4 | Display names to create, or `existing` app IDs to merge into; `allowAzureCliClient` |
 | `groups` | 4, 7 | Project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets |
-| `resolver`, `sync`, `reconciler`, `budgetState`, `gateway`, `syncTimerEnabled` | 5 | Same meaning as in the quickstart |
+| `resolver`, `sync`, `reconciler`, `budgetState`, `gateway`, `syncTimerEnabled` | 5 | Same meaning as in the quickstart. `gateway.surfaceClients` (default `[]`, not enforced) maps admitted client app IDs to surfaces; in this path only the gateway app and, with `allowAzureCliClient`, Azure CLI are admitted, and any other ID fails Stage 5 with `render_failed` |
 | `rateCard`, `workbook` | 5, 7 | Repository-relative rate card; a new workbook GUID |
-| `admin` | 5 | `v3Enabled`; `extraAllowedClientIds` (empty; test clients only) |
+| `admin` | 5 | `v3Enabled`; `extraAllowedClientIds` (empty; test clients only); `groupSearchEnabled` (default `false`; needs the admin identity's `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` grants; ignored without `stage1.includeAdmin`) |
 | `network` | 6 | `mode: verify` (default; customer-built, checked only) with `existing` subnet IDs in one VNet; `existing` (driver creates endpoints and integrations; also zone IDs); `create` (lab only; driver also creates the VNet from `create`) |
 | `client` | 7 | Project, classification and model aliases for `config.json` |
 | `acceptance` | 8 | Allowed and denied project/model pairs with the expected status |

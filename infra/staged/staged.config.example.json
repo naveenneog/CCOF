@@ -321,6 +321,7 @@
   },
   "gateway": {
     "configurationId": "ccof-staged-gateway-1",
+    "surfaceClients": [],
     "admission": {
       "perPerson": {
         "calls": 120,
@@ -373,7 +374,8 @@
   },
   "admin": {
     "v3Enabled": true,
-    "extraAllowedClientIds": []
+    "extraAllowedClientIds": [],
+    "groupSearchEnabled": false
   },
   "acceptance": {
     "allowed": [

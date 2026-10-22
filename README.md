@@ -92,7 +92,9 @@ Do not aim a mock-only load command at an existing real Foundry route.
 
 The [configurable staged deployment](docs/runbooks/STAGED-DEPLOYMENT-V2.md)
 runs CCOF in nine stages (`infra/staged/Invoke-StagedDeployment.ps1`), each with its own operator
-permissions, preview, apply and read-back. The [live run report](docs/STAGED-LIVE-RUN-2026-10-20.md)
+permissions, preview, apply and read-back. The [staged deployment guide](docs/STAGED-DEPLOYMENT-GUIDE.md)
+lists the prerequisites (network, Entra applications, Graph permissions) and gives the Cloud Shell
+command and Portal steps for each stage, then the group onboarding steps. The [live run report](docs/STAGED-LIVE-RUN-2026-10-20.md)
 records all nine stages in a lab RG, from resources to authenticated model calls, with screenshots.
 
 Offline tests are not live acceptance. Earlier quickstart seed resynchronization was

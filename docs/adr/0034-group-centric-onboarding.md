@@ -70,3 +70,5 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 - A person in several groups gets one membership per group; the reconciler's per-person budget is
   per group, as it was per project.
 - Rolling back means deleting group documents; baseline documents are untouched.
+- Only the staged configuration (`gateway.surfaceClients`) can turn surface enforcement on. The quickstart,
+  Core and manual producers emit an empty `surfaceClients`, so surfaces are not enforced on those paths.
