@@ -2,7 +2,20 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-PUB — scrubbed public repository ([ROADMAP](ROADMAP.md)).
+**Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
+
+### G-PUB — public repository (complete)
+
+- `https://github.com/naveenneog/CCOF` (public) holds one commit, `95f0b86`, made from this tree on the orphan
+  branch `public-main`: lab tenant, subscription and resource names replaced by neutral labels (21 rules, 168 hits),
+  and the 47 live-run screenshots that show lab resource names removed (`docs/images/staged`,
+  `docs/images/staged-stdv2`, `docs/runbooks/images/staged-portal`). The 86 middle-masked Portal images stay.
+- Checks on the public tree: identifier scan 0 hits; gitleaks 1 commit, 2 findings, both the known false positive
+  `projectApi: "v1-compatible"`; root 1132 pass, admin 159, staged 398, resolver auth 36; gate PASS.
+- Local `main` keeps the full history and is not pushed. A later release is made on `public-main`:
+  `git checkout public-main; git checkout main -- .`, rerun the scrub script (kept outside the repository because it
+  lists the lab names it removes), commit, push `public-main:main`.
+- History up to `55b816f` remains public in `naveenneog/ccof-bicep`, with the lab names this scrub removed.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 
