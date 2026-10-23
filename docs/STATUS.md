@@ -37,6 +37,9 @@
   PowerShell blocks parsed. Sanitized Portal sign-in and local admin screenshots are linked in the guide.
 - Local implementation commits: G-LIMIT `7df518e`, G-LABEL `711b9f2`. Root Node results: 1,182 passed, six
   opt-in live tests skipped, zero failed. Those skips are not live deployment or spend acceptance.
+- G-WALK documentation and evidence: `024cec6`. Public release 7: `c987d02`, identifier scan clean, gitleaks clean,
+  scrubbed-tree tests and strict typecheck pass. Public CI passes on Node 22 and 26
+  ([run](https://github.com/naveenneog/CCOF/actions/runs/39999794528)).
 
 ### G-HA — Cosmos DB redundancy and consistency (complete offline)
 
