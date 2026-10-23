@@ -26,7 +26,7 @@ let CcofBudgetEvents = (fromTime:datetime, toTime:datetime, resourceId:string) {
         and bag_has_key(payload, "budgetCcu")
         and ((gettype(payload.budgetCcu) == "string" and isnotnull(budgetCcu) and budgetCcu >= decimal(0))
             or (scope == "group" and isnull(payload.budgetCcu)))
-        and isnotnull(toguid(runId)) and gettype(payload.projectId) == "string" and isnotempty(projectId)
+        and isnotnull(toguid(runId)) and gettype(payload.projectId) in ("string", "guid") and isnotempty(projectId)
         and gettype(payload.classification) == "string" and isnotempty(classification)
         and gettype(payload.exhausted) == "bool" and mode in ("strict", "notify")
         and completeness in ("complete", "partial") and isnotempty(rateCardVersion)

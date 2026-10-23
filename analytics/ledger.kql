@@ -14,9 +14,10 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
     let gatewayOutcomes = gatewayRows
         | extend observedBackendId = tostring(BackendId), observedBackendUrl = tostring(BackendUrl),
             observedErrorSource = tostring(LastErrorSource), observedErrorSection = tostring(LastErrorSection),
+            observedOperationId = tostring(OperationId),
             outcomeSignature = tostring(pack_array(ResponseCode, BackendResponseCode, BackendId, BackendUrl, LastErrorReason, Errors, LastErrorSource, LastErrorSection))
         | summarize arg_max(gatewayIngestedAt, ResponseCode, BackendResponseCode, observedBackendId, observedBackendUrl,
-                LastErrorReason, Errors, observedErrorSource, observedErrorSection),
+                LastErrorReason, Errors, observedErrorSource, observedErrorSection, observedOperationId),
             outcomeVariants = make_set(outcomeSignature, 2) by gatewayResourceId, gatewayRequestId;
     let identity = gatewayRows
         | extend traceIngestedAt = gatewayIngestedAt
@@ -49,10 +50,13 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
     | extend nativeCountsKnown = gatewayOutcomeKnown and not(llmConflict)
         and ResponseCode between (200 .. 299) and BackendResponseCode between (200 .. 299)
         and isempty(LastErrorReason) and (isnull(Errors) or array_length(Errors) == 0),
-        noBackendCall = gatewayOutcomeKnown and ResponseCode between (400 .. 599)
+        noBackendCall = gatewayOutcomeKnown and ((ResponseCode between (400 .. 599)
             and (isnull(BackendResponseCode) or BackendResponseCode == 0) and isempty(observedBackendId) and isempty(observedBackendUrl)
             and ((observedErrorSection in ("", "inbound") and observedErrorSource !in ("forward-request", "set-backend-service"))
-                or (observedErrorSource == "configuration" and LastErrorReason == "OperationNotFound"))
+                or (observedErrorSource == "configuration" and LastErrorReason == "OperationNotFound")))
+            // GET /ccof/me/usage answers from the gateway (docs/USAGE.md); the API-wide LLM diagnostic still logs it.
+            or (observedOperationId =~ "get-my-usage" and (isnull(BackendResponseCode) or BackendResponseCode == 0)
+                and isempty(observedBackendId) and isempty(observedBackendUrl)))
     | extend traceKnown = isnotnull(traceVariants) and array_length(traceVariants) == 1
         and gettype(payload.schemaVersion) == "long" and tolong(payload.schemaVersion) == 1
         and tolower(tostring(payload.requestId)) == gatewayRequestId
@@ -70,22 +74,22 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
         cacheWrite1hTokens = iff(bodyUsageKnown, ReadCount(usage.cache_creation.ephemeral_1h_input_tokens), long(null)),
         cacheReadTokens = iff(bodyUsageKnown, ReadCount(usage.cache_read_input_tokens), long(null)),
         personId = iff(traceKnown and isnotnull(toguid(tostring(payload.personId))), tostring(payload.personId), ""),
-        projectId = iff(traceKnown and gettype(payload.projectId) == "string", tostring(payload.projectId), ""),
+        projectId = iff(traceKnown and gettype(payload.projectId) in ("string", "guid"), tostring(payload.projectId), ""),
         classification = iff(traceKnown and gettype(payload.classification) == "string", tostring(payload.classification), ""),
         classificationGroupId = iff(traceKnown and isnotnull(toguid(tostring(payload.classificationGroupId))),
             tolower(tostring(payload.classificationGroupId)), ""),
-        classificationGroupDisplayName = iff(traceKnown and gettype(payload.classificationGroupDisplayName) == "string"
+        classificationGroupDisplayName = iff(traceKnown and gettype(payload.classificationGroupDisplayName) in ("string", "guid")
             and strlen(tostring(payload.classificationGroupDisplayName)) between (1 .. 256),
             tostring(payload.classificationGroupDisplayName), ""),
         classificationGroupNameState = iff(traceKnown and payload.classificationGroupNameState in ("snapshot", "retained_snapshot"),
             tostring(payload.classificationGroupNameState), "unknown"),
         // An onboarded group's chargeback ID at request time and the request's surface (ADR-0034 decision 7).
-        chargebackId = iff(traceKnown and gettype(payload.chargebackId) == "string"
+        chargebackId = iff(traceKnown and gettype(payload.chargebackId) in ("string", "guid")
             and tostring(payload.chargebackId) matches regex @"^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$", tostring(payload.chargebackId), ""),
         surface = iff(traceKnown and payload.surface in ("chat", "code", "cowork", "design", "m365"), tostring(payload.surface), ""),
         admittedModelFamily = iff(traceKnown and payload.modelFamily in ("haiku", "sonnet", "opus", "fable", "mythos"),
             tostring(payload.modelFamily), ""),
-        backendId = iff(traceKnown and gettype(payload.backendId) == "string", tostring(payload.backendId), ""),
+        backendId = iff(traceKnown and gettype(payload.backendId) in ("string", "guid"), tostring(payload.backendId), ""),
         model = iff(isempty(model) and traceKnown, tostring(payload.model), model),
         deployment = iff(isempty(deployment) and traceKnown, tostring(payload.deployment), deployment),
         inference_geo = iff(traceKnown and payload.inferenceGeoSource == "deployment"
