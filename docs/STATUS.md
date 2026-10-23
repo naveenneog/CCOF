@@ -18,6 +18,7 @@
 - Council round 1: ARCHITECT, QA BLOCK (Stage 6 accepted a Cosmos endpoint without every regional DNS name); notes on
   the bounded-staleness read-back, capacity pairs and cost wording. Round 2: all PASS (QA note: executable test for the
   verify-mode check, added).
+- Public release 5: `d4a73ff`, public CI passes (Node 22 and 26).
 - Live: not deployed. Stage 1 is create-only, so it needs a new resource group, and the labs are in use by another
   session.
 
