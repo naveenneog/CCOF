@@ -302,7 +302,7 @@
     "groupSearchEnabled": false
   },
   "acceptance": {
-    "selectorNote": "Requests carry no project selector: the caller's only group applies (ADR-0034, lowest priority).",
+    "selectorNote": "Requests carry no project selector: the caller's group with the higher per-user budget applies (ADR-0034).",
     "allowed": [
       {
         "model": "claude-haiku-4-5"

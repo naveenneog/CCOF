@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-23 — Precedence by spend, removal as retirement
+
+- **Precedence (owner decision):** without a project selector, a person in several groups gets the group with the
+  higher per-user monthly budget (USD and CCU compared at 100 CCU = 1 USD), then the lower priority number;
+  anything still tied, or a missing or malformed budget or priority, is refused `project_selection_required`.
+  Memberships now carry `perUserBudget`. Rollout: raise `gateway.keyVersion` to drop cached decisions.
+- **Removal (owner decision):** removing a group is retirement, the same as a project; documented in ADR-0034
+  decision 9, with a test that retired-group removal ignores the sync removal limits.
+
 ## 2026-10-23 — Group-centric onboarding (ADR-0034), admin 3.3.0
 
 - **Group as the unit** ([ADR-0034](adr/0034-group-centric-onboarding.md)): an Entra group is onboarded as

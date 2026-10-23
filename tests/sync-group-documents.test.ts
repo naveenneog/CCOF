@@ -35,7 +35,8 @@ test("the sync reads a group document as one scope carrying the group's attribut
   if (!read.ok) assert.fail(JSON.stringify(read.problems));
   assert.equal(read.projectId, GROUP_A);
   assert.equal(read.classifications.length, 1);
-  assert.deepEqual(read.classifications[0].group, { priority: 100, surfaces: ["chat", "code"], chargebackId: "WBS-1234.01", restrictedFamiliesApproved: false });
+  assert.deepEqual(read.classifications[0].group, { priority: 100, surfaces: ["chat", "code"], chargebackId: "WBS-1234.01", restrictedFamiliesApproved: false,
+    perUserBudget: (groupDoc() as { budget: { perUser: unknown } }).budget.perUser });
   assert.equal(read.classifications[0].classification, "group");
 });
 
@@ -64,6 +65,7 @@ test("a group member's membership carries priority, surfaces and chargeback ID",
   const plan = planSync(input([groupDoc()], { [GROUP_A]: [{ id: PERSON_A, kind: "user" }] }));
   assert.equal(plan.writes.length, 1);
   const [membership] = plan.writes[0].document.projectMemberships;
+  assert.deepEqual(membership.perUserBudget, (groupDoc() as { budget: { perUser: unknown } }).budget.perUser);
   assert.equal(membership.projectId, GROUP_A);
   assert.equal(membership.classification, "group");
   assert.equal(membership.classificationGroupId, GROUP_A);
@@ -104,6 +106,25 @@ test("a changed chargeback ID rewrites the membership with a new denormalizedAt"
   const [membership] = changed.writes[0].document.projectMemberships;
   assert.equal(membership.chargebackId, "WBS-9999");
   assert.equal(membership.denormalizedAt, later.toISOString());
+});
+
+test("a changed per-user budget rewrites the membership, since it decides precedence", () => {
+  const first = planSync(input([groupDoc()], { [GROUP_A]: [{ id: PERSON_A, kind: "user" }] }));
+  const stored = { doc: { ...first.writes[0].document, lastVerifiedAt: "2026-10-22T11:00:00.000Z" }, etag: '"e1"' };
+  const perUser = { amount: 99, currency: "USD", period: "monthly" };
+  const changed = planSync({ ...input([groupDoc(GROUP_A, { budget: { mode: "autoScale", perUser, groupCap: null } })], { [GROUP_A]: [{ id: PERSON_A, kind: "user" }] }, [stored]), now: new Date("2026-10-22T13:00:00.000Z") });
+  assert.equal(changed.writes.length, 1);
+  assert.deepEqual(changed.writes[0].document.projectMemberships[0].perUserBudget, perUser);
+});
+
+test("a retired group removes every member's membership even beyond the removal limits, as a retired project does", () => {
+  const people = [PERSON_A, "00000000-0000-4000-8000-00000000000b", "00000000-0000-4000-8000-00000000000c"];
+  const first = planSync(input([groupDoc()], { [GROUP_A]: people.map((id) => ({ id, kind: "user" as const })) }));
+  const stored = first.writes.map((w, i) => ({ doc: w.document as unknown as Record<string, unknown>, etag: `"e${i}"` }));
+  const retired = planSync({ ...input([groupDoc(GROUP_A, { status: "retired", retiredAt: "2026-10-22T11:30:00Z" })], {}, stored),
+    removalLimits: { maxRemovalsPerRun: 0, maxRemovalFraction: 0 } });
+  assert.equal(retired.writes.length, people.length);
+  assert.ok(retired.writes.every((w) => w.document.projectMemberships.length === 0));
 });
 
 test("a retired group removes its members' memberships", () => {

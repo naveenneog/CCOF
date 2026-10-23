@@ -4,8 +4,8 @@
 // - the selector path (docs/PILOT.md C-1, ADR-0006's rule): no key; an
 //   optional projectId selector chooses among the person's active memberships,
 //   and with no selector the single active project is used, or, when every
-//   active membership is an onboarded group, the one with the lowest priority
-//   (ADR-0034 decision 5).
+//   active membership is an onboarded group, the one with the higher per-user
+//   budget, then the lower priority (ADR-0034 decision 5).
 // Either way the selector only chooses; authorization comes from the record.
 
 import type { EntitlementRecord, ProjectMembership, ResolveDependencies, ResolveInput } from "./decide.ts";
@@ -13,6 +13,9 @@ import { checkEntitlementRecord } from "./freshness.ts";
 import type { ResolveRefusal } from "./refusals.ts";
 import { refuse, settledValue } from "./refusals.ts";
 import { GROUP_SCOPE_CODE } from "../contracts/model-families.ts";
+import { budgetInBothUnits, parseBudget } from "../cost/budget-units.ts";
+import { MAX_PRIORITY } from "../contracts/group-registration.ts";
+import type { Decimal } from "decimal.js";
 
 export type Selection = { membership: ProjectMembership } | ResolveRefusal;
 
@@ -73,19 +76,24 @@ export async function selectByKey(
   return selection;
 }
 
-// Without a selector, among memberships that are all onboarded groups, the
-// lowest priority applies (ADR-0034 decision 5). Equal lowest priorities, or
-// any baseline membership (no priority), leave the choice to the caller.
-function lowestPriorityProject(active: ProjectMembership[]): string | null {
-  const ranked: { projectId: string; priority: number }[] = [];
+// Without a selector, among memberships that are all onboarded groups, the group with the higher
+// per-user monthly budget applies, compared in CCU; equal budgets fall back to the lower priority
+// (ADR-0034 decision 5, owner decision 2026-10-23). Anything still tied, a missing or malformed
+// budget or priority, or any baseline membership leaves the choice to the caller.
+function preferredGroup(active: ProjectMembership[]): string | null {
+  const ranked: { projectId: string; ccu: Decimal; priority: number }[] = [];
   for (const m of active) {
-    const priority = (m as unknown as Record<string, unknown>).priority;
-    if (m.classification !== GROUP_SCOPE_CODE || !Number.isSafeInteger(priority) || (priority as number) < 1) return null;
-    ranked.push({ projectId: m.projectId, priority: priority as number });
+    const raw = m as unknown as Record<string, unknown>;
+    const priority = raw.priority;
+    if (m.classification !== GROUP_SCOPE_CODE || !Number.isSafeInteger(priority) || (priority as number) < 1 || (priority as number) > MAX_PRIORITY) return null;
+    let ccu: Decimal;
+    try { ccu = budgetInBothUnits(parseBudget(raw.perUserBudget, "perUserBudget")).ccu; } catch { return null; }
+    ranked.push({ projectId: m.projectId, ccu, priority: priority as number });
   }
-  const lowest = Math.min(...ranked.map((r) => r.priority));
-  const winners = new Set(ranked.filter((r) => r.priority === lowest).map((r) => r.projectId));
-  return winners.size === 1 ? [...winners][0] : null;
+  ranked.sort((a, b) => b.ccu.comparedTo(a.ccu) || a.priority - b.priority);
+  const best = ranked[0];
+  const winners = new Set(ranked.filter((r) => r.ccu.equals(best.ccu) && r.priority === best.priority).map((r) => r.projectId));
+  return winners.size === 1 ? best.projectId : null;
 }
 
 export async function selectBySelector(
@@ -105,7 +113,7 @@ export async function selectBySelector(
   const projects = new Set(active.map((m) => m.projectId));
   if (projects.size === 0) return refuse("no_entitlement");
   if (projects.size > 1) {
-    const chosen = lowestPriorityProject(active);
+    const chosen = preferredGroup(active);
     return chosen === null ? refuse("project_selection_required") : pickInProject(active, chosen, true);
   }
   return pickInProject(active, active[0].projectId, true);

@@ -32,12 +32,17 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
    is the same for every group and reserved (baseline projects may not use it), so the budget scope
    `"<groupId>:group"` does not move when the group's settings change. A later packet (ROADMAP
    G-WIRE) renames the wire fields. Baseline project documents remain readable until then.
-5. **Precedence (ASSUMED, G-A1).** A selector header names the group. Without one, when every active
-   membership is an onboarded group, the one with the lowest `priority` number applies; equal lowest
-   priorities, or any baseline project among the candidates, are refused with
-   `project_selection_required`, as today
-   ([src/resolver/select-membership.ts](../../src/resolver/select-membership.ts)). APIM caches the
-   no-selector decision per person, so a priority change applies after the allow TTL.
+5. **Precedence (owner decision 2026-10-23, G-A1).** A selector header names the group. Without one,
+   when every active membership is an onboarded group, the group with the higher per-user monthly
+   budget applies ("higher usage spend"), compared in CCU (100 CCU = 1 USD,
+   [src/cost/budget-units.ts](../../src/cost/budget-units.ts)); equal budgets fall back to the lower
+   `priority` number. Still tied, a missing or malformed budget or priority, or any baseline project
+   among the candidates is refused with `project_selection_required`
+   ([src/resolver/select-membership.ts](../../src/resolver/select-membership.ts)). Memberships carry
+   `perUserBudget` for this. Reading "higher usage spend" as the per-user budget, rather than
+   month-to-date spend or remaining budget, is an assumption: it is known in advance and does not
+   switch groups during a month. APIM caches the no-selector decision per person, so a budget change
+   applies after the sync writes it and the allow TTL passes.
 6. **Surfaces.** Allowed surfaces are a subset of `chat`, `cowork`, `code`, `m365`, `design`.
    `design` is accepted and stored but has no Foundry path yet. The resolver returns the list with
    the decision; APIM maps the calling client app ID (`azp`/`appid`, policy lines 42-44) to a
@@ -48,8 +53,12 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 8. **Cache profile.** Each group stores an expected cache-read share of input tokens, either
    suggested from its enabled surfaces or entered by the admin. It feeds the budget assistant and
    the export; it does not affect enforcement.
-9. **Requirement 9 ("removal of the group as a requirement")** is not designed until the owner
-   states which meaning applies (G-A3).
+9. **Removal (owner decision 2026-10-23, G-A3).** Removing a group is retirement, as for a project
+   (admin 3.2.0): `POST /api/groups/{id}/retire` with `If-Match` and the group ID repeated
+   (`confirmGroupId`); the document becomes `status: "retired"` with `retiredAt`; later edits return
+   `409 group_retired`; the change record is written first; the next sync removes every member's
+   membership outside the removal limits, and the reconciler stops registering its scope. The Entra
+   group is not changed ([admin/src/groups.ts](../../admin/src/groups.ts), [src/sync/plan.ts](../../src/sync/plan.ts)).
 
 ## Consequences
 
@@ -70,6 +79,10 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 - A person in several groups gets one membership per group; the reconciler's per-person budget is
   per group, as it was per project.
 - Rolling back means deleting group documents; baseline documents are untouched.
+- Precedence by per-user budget (decision 5) reaches a person after the sync writes `perUserBudget` into
+  their memberships. Until then, a person in several groups is refused `project_selection_required`
+  without a selector. APIM can keep an earlier decision for the allow TTL plus the last-known-good
+  grace; raising `gateway.keyVersion` at rollout drops those cached decisions at once.
 - Only the staged configuration (`gateway.surfaceClients`) can turn surface enforcement on. The quickstart,
   Core and manual producers emit an empty `surfaceClients`, so surfaces are not enforced on those paths.
 - The staged deployment onboards its pilot as a group entry (`kind: "group"`, G-SEED): Stage 7 seeds the group

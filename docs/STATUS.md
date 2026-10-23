@@ -2,7 +2,20 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-TAG — user tags ([ROADMAP](ROADMAP.md)).
+
+### G-PREC and G-REM — precedence by spend, removal as retirement (complete)
+
+- Owner decisions 2026-10-23. Without a selector, a person in several groups gets the group with the higher
+  per-user monthly budget (CCU), then the lower priority; ties, a missing or malformed budget or priority are
+  refused ([select-membership.ts](../src/resolver/select-membership.ts)). Memberships carry `perUserBudget`
+  ([membership.ts](../src/sync/membership.ts)). Console help and hints updated.
+- Removal is retirement: group retirement already matched project retirement; a new test proves removal ignores
+  the removal limits ([sync-group-documents.test.ts](../tests/sync-group-documents.test.ts)).
+- Tests: precedence 10/10, sync group 13/13; root suite green; admin 144/144. Mutants 8/8 caught (incl. the
+  priority upper bound); retirement-limits negative control fails as expected.
+- Council round 1: CODER, QA BLOCK (priority above 10,000 could win); fixed with a test. ARCHITECT PASS-WITH-NOTES
+  (rollout: bump `gateway.keyVersion`, recorded in ADR-0034), UX and SECURITY PASS.
 
 ### G-SEED — staged pilot as a group (complete)
 
