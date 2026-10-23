@@ -379,7 +379,7 @@ function Get-StgSite {
     return @{
         name = $site.name
         publicNetworkAccess = (& $pick 'publicNetworkAccess')
-        virtualNetworkSubnetId = (& $pick 'virtualNetworkSubnetId')
+        virtualNetworkSubnetId = [string](& $pick 'virtualNetworkSubnetId')
         httpsOnly = (& $pick 'httpsOnly')
         runtimeName = (& $pick 'functionAppConfig').runtime.name
         runtimeVersion = (& $pick 'functionAppConfig').runtime.version

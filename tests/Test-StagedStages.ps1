@@ -545,6 +545,16 @@ try {
     Assert-Contract ($null -ne $reacquired) 'Stage 7 lock must be released for a later retry.'
     $reacquired.Dispose()
 } finally { Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue }
+# A Flex Consumption app without VNet integration reports virtualNetworkSubnetId null, and $null -ieq '' is false:
+# Get-StgSite returns a string so the Stage 1 read-back accepts an app that is not integrated yet (live 2026-10-24).
+$savedAz = ${function:Invoke-StgAzJson}
+try {
+    function Invoke-StgAzJson { param([string[]]$Arguments)
+        if ($Arguments[1] -ceq 'show') { return @{ name = 'app'; properties = @{ publicNetworkAccess = 'Enabled'; virtualNetworkSubnetId = $null; httpsOnly = $true } } }
+        return @{ ftpsState = 'Disabled' } }
+    $flexSite = Get-StgSite @{ subscriptionId = 's'; resourceGroup = 'rg' } 'app'
+    Assert-Contract ($flexSite.virtualNetworkSubnetId -is [string] -and $flexSite.virtualNetworkSubnetId -ceq '') "A site without VNet integration must report subnet '' (got [$($flexSite.virtualNetworkSubnetId)])."
+} finally { ${function:Invoke-StgAzJson} = $savedAz }
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
 
