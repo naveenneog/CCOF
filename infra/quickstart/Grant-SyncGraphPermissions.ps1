@@ -59,6 +59,18 @@ function Get-QsActiveAdminRole {
     return @($roles | Where-Object { $script:AllowedRoles.Contains([string]$_.roleTemplateId) } | ForEach-Object { $script:AllowedRoles[[string]$_.roleTemplateId] })
 }
 
+function ConvertTo-QsPermissionNames {
+    # `pwsh -File ... -Permissions A,B,C` passes one string "A,B,C" (a comma list is parsed into an array only inside
+    # PowerShell); split it so both forms work. Blanks and repeats are dropped, order is kept.
+    param([string[]]$Names)
+    $seen = [Collections.Generic.List[string]]::new()
+    foreach ($n in @($Names | ForEach-Object { ([string]$_) -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        if (-not $seen.Contains($n)) { $seen.Add($n) }
+    }
+    if (-not $seen.Count) { throw 'no_permissions: -Permissions holds no permission names; nothing would be granted.' }
+    return @($seen)
+}
+
 function Get-QsPlan {
     param([string]$PrincipalId, [string[]]$Names)
     $graph = @((Invoke-QsGraph 'get' "servicePrincipals?`$filter=appId eq '$script:GraphAppId'&`$select=id,appRoles").value)[0]
@@ -80,6 +92,7 @@ if (-not $SyncPrincipalId) {
 }
 if ($SyncPrincipalId -notmatch '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') { throw 'no_principal: the sync principal id is not a GUID.' }
 
+$Permissions = @(ConvertTo-QsPermissionNames $Permissions)
 $plan = @(Get-QsPlan -PrincipalId $SyncPrincipalId -Names $Permissions)
 $plan | ForEach-Object { Write-Host "$($_.Permission): $(if ($_.AssignmentId) { 'already granted, skipped' } else { 'to grant' })" }
 if ($PlanOnly) { return }

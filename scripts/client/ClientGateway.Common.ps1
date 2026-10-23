@@ -61,16 +61,22 @@ function New-ClientSnapshot {
     $id = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N')
     $directory = Join-Path $BackupRoot $id
     [void][IO.Directory]::CreateDirectory($directory)
-    $records = @(); $index = 0
+    $records = @(); $index = 0; $createdDirectories = [Collections.Generic.List[string]]::new()
     foreach ($path in $Paths) {
         $exists = Test-Path -LiteralPath $path -PathType Leaf
         $backupFile = "$index.bin"
         if ($exists) { Copy-Item -LiteralPath $path -Destination (Join-Path $directory $backupFile) -ErrorAction Stop }
         $records += @{ path = [IO.Path]::GetFullPath($path); existed = $exists; backupFile = $backupFile
             beforeSha256 = Get-ClientFileHash $path; afterSha256 = $null }
+        # Folders setup will create for this file (for example skills\usage), so restore can remove them again.
+        $parent = Split-Path ([IO.Path]::GetFullPath($path)) -Parent
+        while ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
+            if (-not $createdDirectories.Contains($parent)) { $createdDirectories.Add($parent) }
+            $parent = Split-Path $parent -Parent
+        }
         $index++
     }
-    $snapshot = @{ schemaVersion = 1; kind = $Kind; changeId = $id; complete = $false; files = $records }
+    $snapshot = @{ schemaVersion = 1; kind = $Kind; changeId = $id; complete = $false; files = $records; createdDirectories = @($createdDirectories) }
     Write-ClientJson (Join-Path $directory 'snapshot.json') $snapshot
     return @{ Directory = $directory; Manifest = $snapshot }
 }
@@ -106,6 +112,12 @@ function Restore-ClientSnapshot {
     foreach ($record in $manifest.files) {
         if ($record.existed) { Copy-Item -LiteralPath (Join-Path $BackupPath $record.backupFile) -Destination $record.path -Force -ErrorAction Stop }
         elseif (Test-Path -LiteralPath $record.path) { Remove-Item -LiteralPath $record.path -Force -ErrorAction Stop }
+    }
+    # Folders setup created, deepest first, only when empty: anything the person put there stays.
+    foreach ($dir in @($manifest.createdDirectories | Where-Object { $_ -and [IO.Path]::IsPathFullyQualified($_) } | Sort-Object { $_.Length } -Descending)) {
+        if ((Test-Path -LiteralPath $dir -PathType Container) -and -not (Get-ChildItem -LiteralPath $dir -Force | Select-Object -First 1)) {
+            Remove-Item -LiteralPath $dir -Force -ErrorAction Stop
+        }
     }
     return (@{ event = 'restored'; component = $Kind; changeId = $manifest.changeId } | ConvertTo-Json -Compress)
 }

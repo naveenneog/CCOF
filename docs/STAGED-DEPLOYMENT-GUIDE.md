@@ -166,6 +166,24 @@ billed in every region. Zone-redundant regions are charged a premium, which is w
 mode used here ([reliability, Cost](https://learn.microsoft.com/en-us/azure/reliability/reliability-cosmos-db);
 [pricing](https://azure.microsoft.com/pricing/details/cosmos-db/)).
 
+Region capacity is per subscription and changes over time. A live check on 2026-10-23 (lab subscription, a
+Cosmos-only Bicep file with the same `locations` shape as `main.bicep`, not a full Stage 1 run) gave:
+
+| Requested layout | Result |
+| --- | --- |
+| `eastus2` zone-redundant + `centralus` zone-redundant | Refused: `ServiceUnavailable`, "high demand in East US 2 region for the zonal redundant (Availability Zones) accounts" |
+| `eastus2` + `centralus` zone-redundant | Refused: `ServiceUnavailable`, "high demand in this region East US 2" |
+| `centralus` zone-redundant + `westus3` zone-redundant | Account created in `centralus` only; the deployment failed on `westus3` ("high demand … zonal redundant") |
+| Same account, `westus3` without zone redundancy | Succeeded; `Get-StgCosmosAccountProblems` (the Stage 1 read-back function, called directly) returned no problems |
+
+When ARM refuses a region, Stage 1 stops with the ARM error (`az deployment group failed: … ServiceUnavailable`)
+and does not record the stage as complete. The account can exist with fewer regions than configured; for such an
+account the read-back function returns "Cosmos has 1 region(s); the configuration has 2". The ways forward are a
+region access request at <https://aka.ms/cosmosdbquota>, or another region or `isZoneRedundant` value, followed by
+Stage 1 with `-Apply` again. When the resource group holds resources from the failed attempt, that rerun runs a
+what-if first and refuses any Delete and any Modify of a resource the earlier attempt did not record; it can still
+create resources ([Staged.Resources.ps1](../infra/staged/Staged.Resources.ps1), `Invoke-Stage1`).
+
 ---
 
 ## 3. Cloud Shell setup
