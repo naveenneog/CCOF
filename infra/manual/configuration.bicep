@@ -21,6 +21,8 @@ param enableAlerts bool = false
 param syncTimerEnabled bool = false
 @minLength(1)
 param policyXml string
+@description('Policy fragments policyXml includes (ADR-0039).')
+param policyFragments array = []
 @minLength(1)
 param apimIdentityAppId string
 // Empty means leave the existing workbook entirely untouched, not create an empty shell.
@@ -104,6 +106,7 @@ module api '../quickstart/modules/apim-api.bicep' = {
     apiDisplayName: apim.apiDisplayName
     backends: [for b in backends: { id: b.id, url: b.url }]
     policyXml: policyXml
+    policyFragments: policyFragments
   }
 }
 module foundryRoles '../quickstart/modules/foundry-role.bicep' = [for b in backends: if (b.assignCognitiveServicesUser) {

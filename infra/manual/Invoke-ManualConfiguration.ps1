@@ -53,7 +53,9 @@ function Invoke-ManualConfigDeploy {
         'enableAlerts', 'syncTimerEnabled')) {
         $values[$key] = @{ value = $p[$key] }
     }
-    $values.policyXml = @{ value = $policy }
+    $deployment = Get-QsPolicyDeployment $build.policyPath
+    $values.policyXml = @{ value = $deployment.apiPolicyXml }
+    $values.policyFragments = @{ value = @($deployment.fragments) }
     $values.apimIdentityAppId = @{ value = [string]$checks.apimIdentityAppId }
     if ($Ctx.WorkbookParametersPath) {
         $wb = (Get-Content -LiteralPath $Ctx.WorkbookParametersPath -Raw | ConvertFrom-Json -AsHashtable).parameters

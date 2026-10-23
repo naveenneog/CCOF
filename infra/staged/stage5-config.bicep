@@ -28,6 +28,8 @@ param backends array
 param policyXml string
 @description('The GET /ccof/me/usage operation policy (render.ts <apiId>.usage.policy.xml); empty leaves the operation out.')
 param usagePolicyXml string = ''
+@description('Policy fragments the API policy includes (ADR-0039).')
+param policyFragments array = []
 
 param resolver object
 param sync object
@@ -100,6 +102,7 @@ module api '../quickstart/modules/apim-api.bicep' = {
     backends: [for b in backends: { id: b.id, url: b.url }]
     policyXml: policyXml
     usagePolicyXml: usagePolicyXml
+    policyFragments: policyFragments
   }
 }
 

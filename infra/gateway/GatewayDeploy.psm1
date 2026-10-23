@@ -174,6 +174,10 @@ function Invoke-GatewayRevisionDeployment {
         throw 'Refused: this run is not interactive and no -AnswersPath was given, so nothing can confirm the deployment. Nothing was changed.'
     }
     $rendered = & $Render $ConfigPath $OutDir
+    # API Management refuses an API policy over 16 KB: render.ts splits the policy into fragments (ADR-0039).
+    if (-not $rendered.Deployment -or -not "$($rendered.Deployment.apiPolicyXml)".Trim() -or @($rendered.Deployment.fragments).Count -lt 1) {
+        throw 'policy_deployment_missing: the render has no fragment split (<apiId>.policy.deployment.json). Nothing was changed.'
+    }
     $auditPath = Join-Path $OutDir 'audit.jsonl'
     $session = if ($ArmSession) { $ArmSession } else { New-ArmInvoker -SubscriptionId $target.SubscriptionId }
     $arm = $session.Invoke
@@ -210,7 +214,12 @@ function Invoke-GatewayRevisionDeployment {
     if ($created.properties.isCurrent -eq $true) { throw "Revision $next was created as the current revision; make revision $($state.Current) current again at once (Invoke-GatewayMakeCurrent)." }
     $null = Write-GatewayAudit -Event 'revision_created' -AuditPath $auditPath -Data $common
     try {
-        $null = Invoke-Arm $arm PUT "$revisionPath/policies/policy?api-version=$script:ApiVersion" @{ properties = @{ format = 'rawxml'; value = $rendered.PolicyXml } } -Expect 200, 201
+        # Fragment IDs follow their content, so saving them does not change the current revision's policy.
+        foreach ($fragment in @($rendered.Deployment.fragments)) {
+            if ("$($fragment.id)" -cnotmatch $script:Name) { throw "fragment ID '$($fragment.id)' is invalid" }
+            $null = Invoke-Arm $arm PUT "$($target.ServiceId)/policyFragments/$($fragment.id)?api-version=$script:ApiVersion" @{ properties = @{ format = 'rawxml'; value = "$($fragment.xml)"; description = "CCOF gateway policy section, $digest12 (ADR-0039)" } } -Expect 200, 201
+        }
+        $null = Invoke-Arm $arm PUT "$revisionPath/policies/policy?api-version=$script:ApiVersion" @{ properties = @{ format = 'rawxml'; value = $rendered.Deployment.apiPolicyXml } } -Expect 200, 201
     } catch {
         $null = Write-GatewayAudit -Event 'policy_refused' -AuditPath $auditPath -Data ($common + @{ reason = 'apim_validation' })
         throw "APIM refused the policy for revision $next, which is left non-current with a copy of revision $($state.Current)'s policy. $($_.Exception.Message)"
@@ -218,7 +227,7 @@ function Invoke-GatewayRevisionDeployment {
     $check = Invoke-Arm $arm GET "$revisionPath`?api-version=$script:ApiVersion"
     if ($check.properties.isCurrent -eq $true) { throw "Revision $next is current after the policy was saved; make revision $($state.Current) current again at once." }
     $stored = Invoke-Arm $arm GET "$revisionPath/policies/policy?api-version=$script:ApiVersion&format=rawxml"
-    $matches = [string]::Equals((Format-PolicyForCompare "$($stored.properties.value)"), (Format-PolicyForCompare $rendered.PolicyXml), 'Ordinal')
+    $matches = [string]::Equals((Format-PolicyForCompare "$($stored.properties.value)"), (Format-PolicyForCompare $rendered.Deployment.apiPolicyXml), 'Ordinal')
     $url = "$($target.GatewayBaseUrl)/$($target.ApiPath);rev=$next"
     $null = Write-GatewayAudit -Event 'policy_saved' -AuditPath $auditPath -Data ($common + @{ storedMatchesRendered = $matches })
     $result = [pscustomobject]@{ Action = 'createRevision'; ApiId = $target.ApiId; Revision = $next; CurrentRevision = $state.Current; RevisionUrl = $url; PolicySha256 = $rendered.PolicySha256; StoredMatchesRendered = $matches; ConfigurationId = $rendered.ConfigurationId }
@@ -340,6 +349,7 @@ function Invoke-GatewayRender {
     [pscustomobject]@{
         ConfigurationId = $summary.configurationId; ApiId = $summary.apiId; PolicySha256 = $summary.policySha256
         ConfigSha256 = $summary.configSha256; TemplateSha256 = $summary.templateSha256; PolicyXml = (Get-Content -LiteralPath $summary.policyPath -Raw)
+        Deployment = (Get-Content -LiteralPath $summary.deploymentPath -Raw | ConvertFrom-Json -AsHashtable)
     }
 }
 

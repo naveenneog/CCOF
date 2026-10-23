@@ -85,6 +85,17 @@ function Invoke-QsAz {
     return $text
 }
 
+function Get-QsPolicyDeployment {
+    # The rendered gateway policy as API Management accepts it: an API policy under 16 KB and one fragment
+    # per section, written by infra/gateway/render.ts beside <apiId>.policy.xml (ADR-0039).
+    param([string]$PolicyPath)
+    $path = $PolicyPath -replace '\.policy\.xml$', '.policy.deployment.json'
+    if ($path -ceq $PolicyPath -or -not (Test-Path -LiteralPath $path)) { throw "policy_deployment_missing: $path was not written by infra/gateway/render.ts; rerun the render step." }
+    $d = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
+    if (-not ([string]$d.apiPolicyXml).Trim() -or @($d.fragments).Count -lt 1) { throw "policy_deployment_invalid: $path has no API policy or no fragments." }
+    return $d
+}
+
 function Resolve-QsParametersPath {
     <#
     .SYNOPSIS
@@ -280,7 +291,11 @@ function Invoke-QsDeploy {
     if ($LASTEXITCODE -ne 0) { throw 'workbook_content_required: generated content digest failed verification; rerun step 2.' }
     $built = Invoke-QsAz @('bicep', 'build-params', '--file', $Ctx.ParametersPath, '--stdout')
     $doc = $built.parametersJson | ConvertFrom-Json -AsHashtable -Depth 100
-    if ($build.policyPath -and (Test-Path -LiteralPath $build.policyPath)) { $doc.parameters.policyXml = @{ value = (Get-Content -LiteralPath $build.policyPath -Raw) } }
+    if ($build.policyPath -and (Test-Path -LiteralPath $build.policyPath)) {
+        $deployment = Get-QsPolicyDeployment $build.policyPath
+        $doc.parameters.policyXml = @{ value = $deployment.apiPolicyXml }
+        $doc.parameters.policyFragments = @{ value = @($deployment.fragments) }
+    }
     $doc.parameters.workbookContent = @{ value = $report.workbookContent.value }
     $doc.parameters.workbookContentTags = @{ value = $report.contentTags.value }
     $doc.parameters.apimIdentityAppId = @{ value = [string]$checks.apimIdentityAppId }
