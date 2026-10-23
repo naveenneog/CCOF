@@ -36,6 +36,8 @@
 | G9 — Live verification | Partial | Lab A (admin/Entra) and Lab B (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant. Done: live Graph group directory, Stage 0. Open: end-to-end gateway run (Lab B login needed) |
 | G-WIRE — Wire rename | Pending | Replace `projectId`/`classification` wire fields with group fields across resolver, APIM, ledger, workbook |
 | G-DOC — Staged deployment guide | Complete | [STAGED-DEPLOYMENT-GUIDE.md](STAGED-DEPLOYMENT-GUIDE.md): prerequisites (network, Entra apps and what creating each needs), Portal steps and Cloud Shell helper scripts per stage, using the staged configuration files |
+| G-LIMIT — Live budget and group acceptance | Complete (live) | USD 10 through the gateway, family limit, higher-spend selection, bypass attempts, WBS ID chargeback, guide walkthrough ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)). Open: E2E-01 |
+| G-FRAG — Policy fragment cleanup | Pending | Content-addressed fragments (ADR-0039) from earlier policies stay in API Management. Remove fragments no API policy or revision references, after a deployment verifies |
 
 ## Earlier packets
 

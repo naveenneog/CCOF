@@ -46,6 +46,7 @@ module core 'main.bicep' = {
     enableAlerts: p.enableAlerts
     syncTimerEnabled: p.syncTimerEnabled
     policyXml: p.?policyXml ?? ''
+    policyFragments: p.?policyFragments ?? []
     workbookContent: p.?workbookContent ?? {}
     workbookContentTags: p.?workbookContentTags ?? {}
     apimIdentityAppId: p.?apimIdentityAppId ?? ''

@@ -168,7 +168,9 @@ function Invoke-CoreD2Policy {
         # WP-SEC C7: the recorded digest sits in the shared record, so only a live revision that holds the
         # render is unchanged. Any other answer, an error included, deploys the policy again.
         $check = try {
-            $rendered = if ($render.policyPath -and (Test-Path -LiteralPath $render.policyPath -PathType Leaf)) { Get-Content -LiteralPath $render.policyPath -Raw } else { $null }
+            # The stored API policy is the one that includes the fragments (render.ts, ADR-0039).
+            $deploymentPath = if ($render.policyPath) { $render.policyPath -replace '\.policy\.xml$', '.policy.deployment.json' } else { $null }
+            $rendered = if ($deploymentPath -and (Test-Path -LiteralPath $deploymentPath -PathType Leaf)) { (Get-Content -LiteralPath $deploymentPath -Raw | ConvertFrom-Json -AsHashtable).apiPolicyXml } else { $null }
             Test-CoreD2PolicyLive -Ctx $Ctx -Previous $previous -RenderedPolicy $rendered
         }
         catch { [pscustomobject]@{ Verified = $false; Lines = @("The live check failed: $($_.Exception.Message)") } }

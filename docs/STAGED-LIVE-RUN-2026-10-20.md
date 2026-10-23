@@ -96,7 +96,7 @@ complete. The console rounds this to $0.00 (finding 9).
 | # | Stage | Observed | Change |
 | --- | --- | --- | --- |
 | 1 | all | The driver exited silently: dot-sourcing `Deploy-Quickstart.ps1 -DotSourceOnly` sets `$DotSourceOnly` in the caller's scope | The driver keeps its own switch before dot-sourcing |
-| 2 | 1 | What-if failed (`DeploymentWhatIfResourceInvalidResponse`) on the APIM diagnostic setting with a conditional `scope: apim!` | APIM and its setting moved to [`apim-service.bicep`](../infra/staged/apim-service.bicep), deployed as a conditional module; the Stage 1 test now checks the module's condition |
+| 2 | 1 | What-if failed (`DeploymentWhatIfResourceInvalidResponse`) on the APIM diagnostic setting with a conditional `scope: apim!` | APIM and its setting moved to `apim-service.bicep`, deployed as a conditional module; the Stage 1 test now checks the module's condition |
 | 3 | 1, 2 | `az functionapp show` returns Flex values under `properties`, so public access read as empty | `Get-StgSite` reads both shapes |
 | 4 | 5 | Creating an app registration failed with `Directory_QuotaExceeded` for the operator | `entra.existing` reuses registrations by app ID with merge-only updates; groups by `groupId`. The existing lab admin console's redirect URI was preserved (read back) |
 | 5 | 5 | Graph rejected a one-item list (`StartArray expected`): PowerShell unrolls single-item function output | List helpers return arrays intact |

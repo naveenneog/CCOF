@@ -24,6 +24,9 @@ param policyXml string
 @description('The GET /ccof/me/usage operation policy rendered by infra/gateway/render.ts (<apiId>.usage.policy.xml), or empty: then the operation is not created (docs/USAGE.md).')
 param usagePolicyXml string = ''
 
+@description('[{ id, xml }] policy fragments that policyXml includes (<apiId>.policy.deployment.json from infra/gateway/render.ts). API Management refuses an API policy over 16 KB, so the rendered policy is deployed as one fragment per section (ADR-0039). Empty when policyXml is self-contained.')
+param policyFragments array = []
+
 // scripts/Core.D2Apim.psm1 $script:InitialPolicy: the gateway never serves unchecked.
 var initialPolicy = '<policies><inbound><return-response><set-status code="503" reason="Service Unavailable" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header><set-body>{"type":"error","error":{"type":"api_error","message":"The gateway is not configured yet."}}</set-body></return-response></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
 
@@ -64,6 +67,16 @@ resource apimBackends 'Microsoft.ApiManagement/service/backends@2024-05-01' = [f
   }
 }]
 
+resource fragments 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = [for f in policyFragments: {
+  parent: apim
+  name: f.id
+  properties: {
+    format: 'rawxml'
+    value: f.xml
+    description: 'CCOF gateway policy section, rendered by infra/gateway/render.ts (ADR-0039).'
+  }
+}]
+
 resource policy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: api
   name: 'policy'
@@ -71,7 +84,7 @@ resource policy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
     format: 'rawxml'
     value: empty(policyXml) ? initialPolicy : policyXml
   }
-  dependsOn: [operation, apimBackends]
+  dependsOn: [operation, apimBackends, fragments]
 }
 
 // The caller's own budget figures. Its operation policy has no <base />, so the API policy above does

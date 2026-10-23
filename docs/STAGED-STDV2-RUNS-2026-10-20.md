@@ -1,6 +1,6 @@
 # Standard v2 and Foundry staged runs — Lab B and Lab A, 2026-10-20
 
-Two independent runs of [`Invoke-StagedDeployment.ps1`](../infra/staged/Invoke-StagedDeployment.ps1)
+Two independent runs of `Invoke-StagedDeployment.ps1`
 with a **Standard v2** API Management instance, a **new private Foundry account** created by Stage 1,
 and a separate configuration and state directory each. Stage numbers in this report are the order\nbefore 2026-10-21 (network = Stage 2, schema 3, grants 4, Entra 5, configuration 6); the runbook now\nruns the network as Stage 6. Runbook:
 [configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
@@ -54,7 +54,7 @@ local paths are replaced by `<config-dir>`; no token or setting value is shown.
 
 | # | Observed | Change |
 | --- | --- | --- |
-| 1 | Claude deployments failed with `InvalidModelProviderData`. Preflight passed; the deployment failed. API versions 2025-06-01, 2025-07-01-preview and 2025-09-01 ignore `modelProviderData` | [`foundry-account.bicep`](../infra/staged/foundry-account.bicep) deploys models with `2025-10-01-preview` and `properties.modelProviderData`. `stage1.foundry.modelProviderData` (organizationName, countryCode, industry) is required configuration with no default: it is the Anthropic attestation that accepts the Marketplace offer for the real organization. The lab runs used `Microsoft`, `US`, `technology` |
+| 1 | Claude deployments failed with `InvalidModelProviderData`. Preflight passed; the deployment failed. API versions 2025-06-01, 2025-07-01-preview and 2025-09-01 ignore `modelProviderData` | `foundry-account.bicep` deploys models with `2025-10-01-preview` and `properties.modelProviderData`. `stage1.foundry.modelProviderData` (organizationName, countryCode, industry) is required configuration with no default: it is the Anthropic attestation that accepts the Marketplace offer for the real organization. The lab runs used `Microsoft`, `US`, `technology` |
 | 2 | Lab A subscription: "This subscription is internal or sandbox. Only $0.00 products or test products can be purchased." | Subscription limit, not a template defect. `stage1.foundry.modelDeploymentsBlocked` records the reason; Stage 0 warns and Stage 8 records telemetry as not applicable |
 | 3 | Standard v2 alone did not integrate APIM with the VNet | Stage 2 PATCHes APIM to `virtualNetworkType: External` on the APIM subnet (keeping its identity), waits for `Succeeded`, and verifies subnet and identity |
 | 4 | Foundry provisioning and its private path were outside the stages | Stage 1 optionally creates the account and deployments; Stage 2 creates its private endpoint with the cognitiveservices, openai and services.ai zones |

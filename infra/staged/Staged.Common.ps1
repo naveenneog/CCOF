@@ -379,7 +379,7 @@ function Get-StgSite {
     return @{
         name = $site.name
         publicNetworkAccess = (& $pick 'publicNetworkAccess')
-        virtualNetworkSubnetId = (& $pick 'virtualNetworkSubnetId')
+        virtualNetworkSubnetId = [string](& $pick 'virtualNetworkSubnetId')
         httpsOnly = (& $pick 'httpsOnly')
         runtimeName = (& $pick 'functionAppConfig').runtime.name
         runtimeVersion = (& $pick 'functionAppConfig').runtime.version
@@ -387,7 +387,12 @@ function Get-StgSite {
     }
 }
 
-function Get-StgArm { param([string]$Path, [string]$ApiVersion) Invoke-QsAz @('rest', '--method', 'get', '--url', "https://management.azure.com$Path`?api-version=$ApiVersion") }
+function Get-StgArm {
+    # Accept JSON: APIM otherwise answers a policy GET with raw XML that starts with U+FEFF, which az rest
+    # prints as text and az on Windows cannot encode (live 2026-10-24).
+    param([string]$Path, [string]$ApiVersion)
+    Invoke-QsAz @('rest', '--method', 'get', '--url', "https://management.azure.com$Path`?api-version=$ApiVersion", '--headers', 'Accept=application/json')
+}
 function Get-StgGraph { param([string]$Path) Invoke-QsAz @('rest', '--method', 'get', '--url', "https://graph.microsoft.com/v1.0/$Path") }
 function Send-StgGraph {
     param([string]$Method, [string]$Path, $Body)

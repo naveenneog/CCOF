@@ -98,7 +98,7 @@ The default (`network.mode: verify`) expects the customer's network team to buil
 Stage 6 check it without changing it. In `existing` mode Stage 6 uses the customer's subnets and DNS
 zones and creates only the private endpoints, DNS zone groups and VNet integrations. In `create` mode
 (labs) it also creates the VNet, subnets, NSG and DNS zones
-([stage6-network.bicep](../infra/staged/stage6-network.bicep); [NETWORK.md](NETWORK.md)).
+(stage6-network.bicep; [NETWORK.md](NETWORK.md)).
 
 | Item | Requirement |
 | --- | --- |
@@ -121,7 +121,7 @@ DNS resolution or routing from inside the VNet ([CLOUD-SHELL-QUICKSTART.md](runb
 ### 2.3 Entra applications
 
 Stage 4 creates these registrations, or merges settings into existing ones named in `entra.existing`
-([infra/staged/Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1)). The table lists what each one
+(infra/staged/Staged.Entra.ps1). The table lists what each one
 needs, so an Entra administrator can also create them by hand (Portal path: **Microsoft Entra ID →
 App registrations**).
 
@@ -169,7 +169,7 @@ Stage 4 needs verified Stage 1 outputs to calculate the admin redirects. New adm
 `entra.adminEditors` (object IDs, or `@me` for the operator); `adminReaders` is optional. Prefer
 explicit object IDs for a multi-person handoff. Stage 4 does not grant the managed identities Graph
 application permissions. These are separate from the delegated gateway/admin scopes
-([Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1);
+(Staged.Entra.ps1;
 [Learn: expose an API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis);
 [Learn: SPA registration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-spa-app-registration)).
 
@@ -246,7 +246,7 @@ account the read-back function returns "Cosmos has 1 region(s); the configuratio
 region access request at <https://aka.ms/cosmosdbquota>, or another region or `isZoneRedundant` value, followed by
 Stage 1 with `-Apply` again. When the resource group holds resources from the failed attempt, that rerun runs a
 what-if first and refuses any Delete and any Modify of a resource the earlier attempt did not record; it can still
-create resources ([Staged.Resources.ps1](../infra/staged/Staged.Resources.ps1), `Invoke-Stage1`).
+create resources (Staged.Resources.ps1, `Invoke-Stage1`).
 
 ---
 
@@ -305,7 +305,7 @@ Settings added for group onboarding:
 | `resolver.budgetEnforcement` | `token-limits-only` | Example compatibility mode: enforces token/rate limits, **not a dollar budget**. Use `budget-state` only after reviewing the reconciliation/accounting tradeoff below |
 | `resolver.requireCompleteUsage` | `false` | Stage 5 writes `RESOLVER_REQUIRE_COMPLETE_USAGE`. Optional fail-closed accounting check; `true` requires `budgetEnforcement: budget-state`, otherwise configuration is refused |
 | `gateway.admission.usage` | 10 per 60 s | Per-person limit of `GET /ccof/me/usage`, separate from the `/v1/messages` limit |
-| `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
+| `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) (Staged.Application.ps1). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
 The state of each stage is written next to the configuration file in `.staged-state/state.json`. One
 state folder belongs to one tenant, subscription and resource group.
@@ -359,8 +359,8 @@ Stages that need earlier outputs refuse to preview without them; do not fabricat
 that guard. If the new resource group does not exist, Stage 1 preview only reports that `-Apply`
 would create it: **no ARM what-if has run yet**. On an existing eligible target, Bicep-backed previews
 run what-if; script-backed previews print a plan. Only a successful Stage 0 or `-Apply` records a
-completed stage ([driver](../infra/staged/Invoke-StagedDeployment.ps1),
-[Stage 1 guard](../infra/staged/Staged.Resources.ps1)).
+completed stage (driver,
+Stage 1 guard).
 
 Each stage lists: what it does, who runs it, the Cloud Shell command, the Portal equivalent (section
 numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how to see that it worked.
@@ -394,7 +394,7 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** creates the `ccof` database and eight containers: `entitlement`, `projects` (group
   documents live here), `subscriptionIndex`, `budgetState`, `aggregateBudgetState`, `syncLease`,
   `reconcilerLease`, `backends`; plus `adminConfig` when the admin app is included
-  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)).
+  (stage2-schema.bicep).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 2`, preview then `-Apply`.
 - **Portal:** workbook section 08 (Cosmos DB → Data Explorer).
@@ -489,26 +489,41 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Portal:** workbook section 22 (acceptance) and Log Analytics → Logs.
 - **Worked when:** `stage8.verify.json` shows the full `401`/`200`/`403` matrix and the telemetry rows.
 
-### Walkthrough evidence (2026-10-23)
+### Walkthrough evidence (2026-10-24)
 
-This pass read this guide in a **visible Playwright-controlled Edge automation profile**, then
-attempted **Microsoft Entra ID → App registrations**. The browser reached the real Microsoft account
-picker, not an authenticated Portal blade. CLI authentication did not remove this interactive
-browser prerequisite. No account was selected, consent granted, or app registration changed.
+The stages above were run in order, from this guide, into a new resource group in a lab subscription
+(`network.mode: create`, a Foundry account created by Stage 1, Standard v2 APIM, serverless Cosmos DB,
+two onboarded groups). Every stage completed and passed its read-back. A Playwright-driven Edge window,
+signed in once by the operator, then opened each Portal screen named in the stages; 21 of 21 screens
+showed the expected text. Account, directory and subscription names and GUIDs are masked in the
+captures. Evidence: [live acceptance report](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 
-![Actual Microsoft account-picker blocker; account and directory details redacted](images/deployment-walk/portal-sign-in-blocker.png)
+| Stage | Time | Result |
+| --- | --- | --- |
+| 0 | 54 s | Providers registered, Flex Consumption in `eastus2`, Claude models offered |
+| 1 | 160 s deploy, 132 s read-back | Resources created; Foundry account with Haiku 5.5 and Sonnet 5.5 deployments |
+| 2 | 197 s | Database and containers |
+| 3 | 397 s | Azure RBAC and Cosmos data roles |
+| 4 | 47 s | Existing app registrations merged (`entra.existing`); two existing groups (`groupId`) |
+| 5 | 113 s | Settings, resolver authentication, gateway policy as fragments, usage operation, workbook |
+| 6 | 832 s | VNet, private endpoints, DNS links, Function App and APIM VNet integration |
+| 7 | about 21 minutes | Four packages, seed (`created`), snapshot (2 members admitted), client file |
+| 8 | 144 s | 401 anonymous; 200 Haiku and Sonnet; 403 Opus; admin 302/200/401; both request IDs in telemetry; charged to the expected group |
 
-| Check | Actual result, not a deployment claim |
-| --- | --- |
-| Stage 0, first test subscription | Refused: the configured existing backend had no model deployments. Provider and Flex-region checks had passed before this failure |
-| Stage 0, model-enabled test subscription | Passed against two existing deployment names and the signed-in operator's Graph identity. The pilot group was planned by name, so this did not verify existing group membership or inference |
-| Stage 1, isolated empty test resource group | Real ARM what-if succeeded: 32 `Create`, zero `Modify`/`Delete`. No Stage 1 apply or workload provisioning. The empty group created for what-if was deleted; absence was checked |
-| Stages 2–8 | Not applied. Stage 4/6/8 previews correctly refused the missing verified Stage 1 prerequisite; no state was fabricated to bypass it |
-| Paid model calls | None in this walkthrough; Stage 8 acceptance remains unverified |
+*(Screenshot not published: the live-run capture shows lab resource names.)*
+*(Screenshot not published: the live-run capture shows lab resource names.)*
+*(Screenshot not published: the live-run capture shows lab resource names.)*
+*(Screenshot not published: the live-run capture shows lab resource names.)*
 
-The screenshot documents an authentication blocker, **not** proof that the app settings or later
-Portal steps were completed. Resume with an approved interactive sign-in, then use each stage's
-read-back evidence above. Existing workloads and their deployed policies were not overwritten.
+Problems met on the way, and what resolved them:
+
+| Symptom | Cause | Resolution |
+| --- | --- | --- |
+| Stage 0/1: `InsufficientQuota` for a Claude deployment | The subscription's model quota (`az cognitiveservices usage list -l <region>`; the `.Azure` line applies to Foundry Claude deployments) was used by other deployments | Lower `capacity`, or another model/version with quota |
+| Stage 4: "The directory object quota limit for the Principal has been exceeded" | The operator owns the maximum number of directory objects (deleted objects count until purged) | `entra.existing` app IDs and `groupId` for existing groups, or an Entra administrator creates them (section 2.3) |
+| Stage 5: "Policy size exceeds allowed limit of 16 KB" | The APIM instance (Standard v2, created 2026-10-23) limited the API policy document | Fixed in the code: the policy is deployed as fragments ([ADR-0039](adr/0039-gateway-policy-fragments.md)) |
+| Stage 7: package upload `403 (This request is not authorized to perform this operation.)` | Minutes-old private endpoint and VNet integration from Stage 6 | Rerun Stage 7 after about five minutes; it passed unchanged |
+| A new user tag did not appear on requests | In `sync.mode: delegated-snapshot` the sync timer is off; tags reach requests when a snapshot is applied | Rerun Stage 7 (applies a snapshot), or turn on the sync timer after the Graph grants (section 6.1) |
 
 ---
 
@@ -526,21 +541,21 @@ panel and in [ADMIN-V3.md](ADMIN-V3.md) (3.4.0).
 | 4 | **Review** | The request that is sent. **Onboard group** saves it |
 | 5 | **User tags → Tag field name**, then **Tag a person** | Set the deployment-wide display name (for example **WBS ID**), then assign each person's own value by Entra object ID. Saved values are suggested while typing |
 
-**Local demonstration evidence, not live Portal evidence:** the three admin screenshots below use
-synthetic identities and report telemetry. The real UI/APIs and in-memory persistence passed
-[21 browser checks](images/deployment-walk/admin-g-label-acceptance.json), with no runtime errors or
-outbound browser requests. This does not prove Azure persistence, entitlement sync or live usage
-accounting. The [reusable local walkthrough](../tests/playwright/g-label-local-walk.py) records that scope.
-
+**Live evidence (2026-10-24, deployed lab):** an editor signed in to the deployed console, saved the
+field name `WBS ID`, tagged a person `WBS-1001.01`, saw the saved tag suggested while typing `WBS-1`,
+and downloaded the chargeback CSV, whose header has a `WBS ID` column and whose row for that person
+lists `WBS-1001.01` for the requests made after the tag reached the person's entitlement
+([script](../tests/playwright/admin-wbs.cjs); [report](status/BUDGET-ACCEPTANCE-2026-10-23.md)).
 **Set the field name and tag people.** In **User tags → Tag field name**, enter `WBS ID` (or your
 organization's term) and choose **Save field name**. One persisted setting applies to all admins;
 the navigation item remains **User tags**. In **Tag a person**, select an onboarded group's direct
 member or enter the person's Entra object ID, type a value such as `WBS-1001.01` or choose a saved
 suggestion, then **Save tag**. Repeat for each individual; reusing a suggestion does not tag the
-whole group. Confirm the [Tagged people list](images/deployment-walk/admin-wbs-tagged-people.png).
+whole group. Confirm the person in the **Tagged people** list (deployed console).
 Clearing a person's tag restores the group's default chargeback ID after the next sync.
 
-![Local demonstration: save a deployment-wide field name and tag an individual](images/deployment-walk/admin-wbs-field-name.png)
+*(Screenshot not published: the live-run capture shows lab resource names.)*
+*(Screenshot not published: the live-run capture shows lab resource names.)*
 
 **Review family token limits.** In the group's **Access and models → Models and rate limits**, set
 **All Families** limits and the separate family **Person**/**Group** TPM, token quota and period.
@@ -548,7 +563,7 @@ Choose the exact **Admitted models**; allowing a family is not permission for ev
 Empty limits mean no limit at that scope. Review the generated request before saving; family token
 limits are not separate family dollar budgets (see [section 6.5](#65-token-limits-are-not-dollar-enforcement)).
 
-![Local demonstration: person/group family token limits and exact admitted models](images/deployment-walk/admin-family-token-limits-models.png)
+![Local demonstration with synthetic data: person/group family token limits and exact admitted models. The family limit was verified live through the gateway (429 after the limit)](images/deployment-walk/admin-family-token-limits-models.png)
 
 Members get access, and their user tags, at the next entitlement sync: when the sync timer is on, or
 after a delegated snapshot as in Stage 7. A group is retired on its detail page; the next sync removes
@@ -629,14 +644,14 @@ connection to the API is not yet verified ([UNKNOWNS](UNKNOWNS.md) G-R3).
 
 **Filter and download individual chargeback.** In **Chargeback**, use the configured field-name
 filter (for example **WBS ID**) and select a saved value; see the
-[local filter example](images/deployment-walk/admin-wbs-chargeback-filter.png). Open **Breakdown →
+saved-value suggestion. Open **Breakdown →
 Developers** or the configured tag tab and choose **Export CSV**. Check that the individual tag values
 match the report and that the downloaded column heading is **WBS ID**
-([synthetic sample CSV](images/deployment-walk/admin-wbs-chargeback.csv)). Only display headings
+(deployed lab, 2026-10-24: header column `WBS ID`, row value `WBS-1001.01`). Only display headings
 change: JSON/Power BI keys (`chargebackId`, `userTag`) and filter query parameters stay stable.
 **Groups CSV** retains its group-default schema ([ADR-0037](adr/0037-deployment-user-tag-label.md)).
 
-![Local demonstration: developer chargeback breakdown with the configured WBS ID heading](images/deployment-walk/admin-wbs-chargeback-report.png)
+*(Screenshot not published: the live-run capture shows lab resource names.)*
 
 ### 6.4 People's own budget: `/usage`
 
@@ -666,14 +681,24 @@ strict dollar cap: reconciliation, cached decisions and concurrent requests can 
 reconciler healthy, monitor refusals, and agree the availability-versus-accounting tradeoff with
 the budget owner before changing the defaults.
 
-A separate [live acceptance report](status/BUDGET-ACCEPTANCE-2026-10-23.md) records direct Foundry
-Haiku smoke and cold/warm streaming requests: **USD 0.011476 estimated list cost**, not USD 10
-consumed and not APIM traffic. Gateway token acquisition remained blocked by
-`AADSTS65001`/`AADSTS650057`; neither those calls nor the local admin demonstrations prove a full
-live gateway dollar-budget or chargeback run.
+Measured on the deployed lab (2026-10-24, `budget-state`, reconciler every minute, a USD 10 person
+budget, eight concurrent Sonnet requests of 6,000 output tokens, about USD 0.50 per minute):
+
+| Measure | Value |
+| --- | --- |
+| Reconciler marks the person exhausted | 21:24:00 UTC, at USD 10.35 recorded |
+| First gateway refusal (`403`, "Your CCU budget ... is used up") | 21:24:25 UTC |
+| Last admitted request still in flight completes | 21:24:38 UTC |
+| Spend recorded by the reconciler | USD 11.25 (12.5% over the budget) |
+| List-price spend from the response bodies | USD 11.97; the USD 0.72 difference is the cache writes of six streamed requests, which the ledger does not see |
+
+The overshoot is the spend rate multiplied by about two minutes (Log Analytics ingestion plus one
+reconciler run) plus requests already in flight. A budget owner sets the budget lower by that amount
+when a hard ceiling matters. Every later attempt was refused: another model, streaming, no selector,
+the selector header in other case. The person's other group still admitted requests within its own
+budget, by design ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)).
 
 ---
-
 ## 7. Rerun, rollback and cleanup
 
 | Symptom | Recovery without widening permissions |

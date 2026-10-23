@@ -4,7 +4,7 @@ The step-by-step operator guide, with prerequisites, Cloud Shell commands and Po
 is [STAGED-DEPLOYMENT-GUIDE.md](../STAGED-DEPLOYMENT-GUIDE.md). This runbook holds the stage internals.
 
 CCOF deploys in nine stages, run one at a time by
-[`infra/staged/Invoke-StagedDeployment.ps1`](../../infra/staged/Invoke-StagedDeployment.ps1).
+`infra/staged/Invoke-StagedDeployment.ps1`.
 Each stage has its own operator permission boundary, a preview, an apply, and a read-back
 verification.
 
@@ -77,12 +77,12 @@ the deployed identities receive, and are created only by Stage 3.
 | Stage | Entry point | Creates or changes | Operator permission | Verified by read-back |
 | --- | --- | --- | --- | --- |
 | 0 | driver only | Nothing (read-only) | Reader on the target subscription, RG and backend accounts; directory read of groups | Tenant, empty RG, providers, Flex region, backend deployments, operator |
-| 1 | [`main.bicep`](../../infra/staged/main.bicep) | Workspace, Cosmos account, identities, four Flex apps with storage and Insights, optional new APIM and Foundry | RG Contributor; subscription `resourceGroups/write` to create the RG | Apps with zero settings, keyless storage, no database, zero role assignments |
-| 2 | [`stage2-schema.bicep`](../../infra/staged/stage2-schema.bicep) | Cosmos database and containers | Cosmos database/container write (Contributor on the account) | Containers and partition keys; no data roles yet |
-| 3 | [`stage3-grants.bicep`](../../infra/staged/stage3-grants.bicep) | Azure RBAC, Cosmos SQL role definitions and assignments, APIM grant on Foundry | Role Based Access Control Administrator (or Owner) at each scope, including the Foundry account; Cosmos `sqlRoleDefinitions/write` and `sqlRoleAssignments/write` | Every assignment by principal and scope; none for other principals |
+| 1 | `main.bicep` | Workspace, Cosmos account, identities, four Flex apps with storage and Insights, optional new APIM and Foundry | RG Contributor; subscription `resourceGroups/write` to create the RG | Apps with zero settings, keyless storage, no database, zero role assignments |
+| 2 | `stage2-schema.bicep` | Cosmos database and containers | Cosmos database/container write (Contributor on the account) | Containers and partition keys; no data roles yet |
+| 3 | `stage3-grants.bicep` | Azure RBAC, Cosmos SQL role definitions and assignments, APIM grant on Foundry | Role Based Access Control Administrator (or Owner) at each scope, including the Foundry account; Cosmos `sqlRoleDefinitions/write` and `sqlRoleAssignments/write` | Every assignment by principal and scope; none for other principals |
 | 4 | driver (Microsoft Graph) | App registrations (new or merged), scopes, roles, preauthorized clients, groups and members | Application owner or Application Administrator; group owner or Groups Administrator | Identifier URI, v2 tokens, `access_as_user` scope |
-| 5 | [`stage5-config.bicep`](../../infra/staged/stage5-config.bicep) | App settings, resolver authentication, APIM API/backends/policy, API telemetry, workbook | Site config write, APIM service contributor, workbook write | Setting names per app, resolver `Return401`, API path, policy hash; timers off |
-| 6 | `verify` (default): [`Test-NetworkConfiguration.ps1`](../../scripts/manual/Test-NetworkConfiguration.ps1). `existing`/`create`: [`stage6-network.bicep`](../../infra/staged/stage6-network.bicep) + VNet integration | `verify`: nothing. `existing`: private endpoints and integrations in the customer's subnets. `create` (lab): also the VNet, subnets and DNS zones | `verify`: Reader on the VNet, endpoints, zones and apps. `existing`/`create`: Network Contributor on the VNet, private DNS zone write and link, site write | Subnet delegations, endpoints Approved with DNS zone groups, zones linked to the VNet, every app and the Standard v2 APIM integrated |
+| 5 | `stage5-config.bicep` | App settings, resolver authentication, APIM API/backends/policy, API telemetry, workbook | Site config write, APIM service contributor, workbook write | Setting names per app, resolver `Return401`, API path, policy hash; timers off |
+| 6 | `verify` (default): [`Test-NetworkConfiguration.ps1`](../../scripts/manual/Test-NetworkConfiguration.ps1). `existing`/`create`: `stage6-network.bicep` + VNet integration | `verify`: nothing. `existing`: private endpoints and integrations in the customer's subnets. `create` (lab): also the VNet, subnets and DNS zones | `verify`: Reader on the VNet, endpoints, zones and apps. `existing`/`create`: Network Contributor on the VNet, private DNS zone write and link, site write | Subnet delegations, endpoints Approved with DNS zone groups, zones linked to the VNet, every app and the Standard v2 APIM integrated |
 | 7 | driver | Code packages, registry seed, delegated membership snapshot, client file | Function publishing (site write); settings write on the sync app; Graph read of the groups (delegated) | Functions listed, seed outcomes, sync run counts, client validator |
 | 8 | driver | Model calls only | A gateway caller identity; Log Analytics read | 401/200/403 matrix, admin endpoints, LLM logs in the workspace |
 
@@ -93,7 +93,7 @@ storage through its VNet.
 ## Configuration file
 
 One JSON file drives every stage:
-[`infra/staged/staged.config.example.json`](../../infra/staged/staged.config.example.json).
+`infra/staged/staged.config.example.json`.
 The driver refuses it until the placeholders are replaced. Sections:
 
 | Section | Read by | Notes |
@@ -106,7 +106,7 @@ The driver refuses it until the placeholders are replaced. Sections:
 | `sharedResourceGroup` | 1 | `true` to deploy beside existing resources: apply only when what-if shows no Modify or Delete outside the exact resource IDs recorded by the prior Stage 1 deployment |
 | `backends` | 0, 3, 5, 6 | Foundry accounts, deployment names and inference geography; `privateEndpoint: true` makes Stage 6 check (or, in modes `existing`/`create`, create) its private endpoint and DNS |
 | `entra` | 4 | Display names to create, or `existing` app IDs to merge into; `allowAzureCliClient` |
-| `groups` | 4, 5, 7 | Group entries (`kind: "group"`: `groupId` or `groupDisplayName`, members, budget, priority, surfaces, chargeback ID, cache profile, family policy; [infra/staged/Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1)), or project entries (project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets) |
+| `groups` | 4, 5, 7 | Group entries (`kind: "group"`: `groupId` or `groupDisplayName`, members, budget, priority, surfaces, chargeback ID, cache profile, family policy; infra/staged/Staged.Groups.ps1), or project entries (project, classification, `groupId` or `groupDisplayName`, members, family policy and budgets) |
 | `resolver`, `sync`, `reconciler`, `budgetState`, `gateway`, `syncTimerEnabled` | 5 | Same meaning as in the quickstart. `gateway.surfaceClients` (default `[]`, not enforced) maps admitted client app IDs to surfaces; in this path only the gateway app and, with `allowAzureCliClient`, Azure CLI are admitted, and any other ID fails Stage 5 with `render_failed` |
 | `rateCard`, `workbook` | 5, 7 | Repository-relative rate card; a new workbook GUID |
 | `admin` | 5 | `v3Enabled`; `extraAllowedClientIds` (empty; test clients only); `groupSearchEnabled` (default `false`; needs the admin identity's `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` grants; ignored without `stage1.includeAdmin`); `userNamesEnabled` (default `false`; needs `User.Read.All`) |
@@ -124,7 +124,7 @@ done by the driver.
 ### Stage 1: resources only
 No settings, schema, grants, network attachment or code. With
 `approveNewPublicApimBootstrap: true` a new APIM is created through
-[`apim-service.bicep`](../../infra/staged/apim-service.bicep), with public ingress (APIM cannot be
+`apim-service.bicep`, with public ingress (APIM cannot be
 created with public access disabled before a private endpoint exists). `BasicV2` has no VNet
 integration; use `StandardV2` when any backend is private. Application Insights adds one
 "Failure Anomalies" smart-detector rule per component a few minutes after creation
@@ -132,7 +132,7 @@ integration; use `StandardV2` when any backend is private. Application Insights 
 
 ### Stage 1: Foundry (optional)
 `stage1.foundry.create` adds a keyless AIServices account and its Claude deployments
-([`foundry-account.bicep`](../../infra/staged/foundry-account.bicep)). Claude deployments are
+(`foundry-account.bicep`). Claude deployments are
 Marketplace offers:
 
 - `modelProviderData` (organizationName, countryCode, lowercase industry) is required and is
@@ -212,7 +212,7 @@ endpoints in the VNet's resource group and zones in the deployment subscription;
 DNS resolution from inside the VNet or firewall egress. Read access is enough to run it.
 
 **`network.mode: existing` (opt-in).** The driver deploys
-[`stage6-network.bicep`](../../infra/staged/stage6-network.bicep) into the customer's subnets and
+`stage6-network.bicep` into the customer's subnets and
 zones (subnet and zone IDs in `network.existing`), attaches each Function App to the Functions
 subnet one at a time (parallel joins failed with `ServiceAssociationLinkLease`) and, for a
 Stage 1 Standard v2 APIM, sets outbound VNet integration (`virtualNetworkType: External`, through

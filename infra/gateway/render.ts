@@ -42,6 +42,53 @@ export interface RenderResult {
   usagePolicyXml: string;
   usagePolicySha256: string;
   usageTemplateSha256: string;
+  // The form deployed to API Management: policyXml split into one fragment per section (ADR-0039).
+  deployment: PolicyDeployment;
+}
+
+export interface PolicyFragment {
+  id: string;
+  xml: string;
+}
+
+export interface PolicyDeployment {
+  apiPolicyXml: string;
+  fragments: PolicyFragment[];
+}
+
+// API Management refuses an API policy over 16 KB ("Policy size exceeds allowed limit of 16 KB",
+// Standard v2 instance created 2026-10-23); policy fragments of 68 KB were accepted (ADR-0039).
+export const API_POLICY_LIMIT_BYTES = 16 * 1024;
+const POLICY_SECTIONS = ["inbound", "backend", "outbound", "on-error"] as const;
+
+// Moves each section's content into a policy fragment and leaves the API policy with the section's
+// leading <base /> (where it had one) and an <include-fragment>. Putting each fragment's content back
+// in place of its <include-fragment> gives policyXml byte for byte (tests/gateway-policy-fragments.test.ts).
+export function splitPolicyForDeployment(policyXml: string, apiId: string): PolicyDeployment {
+  // The gateway schema's apiId pattern, shortened so the longest fragment name ("-on-error-" + 12 hex) stays
+  // within APIM's 80-character fragment name limit.
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,57}$/.test(apiId)) throw new Error(`apiId "${apiId}" cannot name a policy fragment (at most 58 characters, letters, digits, _ and -)`);
+  let apiPolicyXml = policyXml;
+  const fragments: PolicyFragment[] = [];
+  for (const section of POLICY_SECTIONS) {
+    const open = `<${section}>`;
+    const close = `</${section}>`;
+    if (apiPolicyXml.split(open).length !== 2 || apiPolicyXml.split(close).length !== 2) {
+      throw new Error(`the rendered policy must contain exactly one ${open} and one ${close}`);
+    }
+    const start = apiPolicyXml.indexOf(open) + open.length;
+    const end = apiPolicyXml.indexOf(close);
+    const inner = apiPolicyXml.slice(start, end);
+    const base = /^\s*<base\s*\/>/.exec(inner)?.[0] ?? "";
+    const xml = `<fragment>${inner.slice(base.length)}</fragment>`;
+    // Content-addressed: a changed section gets a new fragment, so the live API policy keeps its own
+    // fragments until the new API policy replaces it (and an API revision keeps its fragments).
+    const id = `${apiId}-${section}-${sha256(xml).slice(0, 12)}`;
+    fragments.push({ id, xml });
+    apiPolicyXml = `${apiPolicyXml.slice(0, start)}${base}<include-fragment fragment-id="${id}" />${apiPolicyXml.slice(end)}`;
+  }
+  if (Buffer.byteLength(apiPolicyXml, "utf8") >= API_POLICY_LIMIT_BYTES) throw new Error("the API policy is still over the API Management limit after the split");
+  return { apiPolicyXml, fragments };
 }
 
 // admission.usage is optional (docs/USAGE.md): a configuration written before the usage operation existed
@@ -224,6 +271,7 @@ export function renderPolicy(input: GatewayConfig, options: { templates?: Templa
     usagePolicyXml,
     usagePolicySha256: sha256(usagePolicyXml),
     usageTemplateSha256,
+    deployment: splitPolicyForDeployment(policyXml, config.apim.apiId),
   };
 }
 
@@ -237,19 +285,21 @@ function checkRendered(policyXml: string, config: GatewayConfig): void {
   }
 }
 
-export function renderFromFile(configPath: string, outDir: string): { result: RenderResult; policyPath: string; usagePolicyPath: string; manifestPath: string } {
+export function renderFromFile(configPath: string, outDir: string): { result: RenderResult; policyPath: string; usagePolicyPath: string; deploymentPath: string; manifestPath: string } {
   const loaded = loadGatewayConfig(configPath);
   if (!loaded.ok) throw new Error(`configuration ${configPath} is invalid:\n - ${loaded.problems.join("\n - ")}`);
   const result = renderPolicy(loaded.config);
   mkdirSync(outDir, { recursive: true });
   const policyPath = path.join(outDir, `${result.apiId}.policy.xml`);
   const usagePolicyPath = path.join(outDir, `${result.apiId}.usage.policy.xml`);
+  const deploymentPath = path.join(outDir, `${result.apiId}.policy.deployment.json`);
   const manifestPath = path.join(outDir, "render.json");
   writeFileSync(policyPath, result.policyXml, "utf8");
   writeFileSync(usagePolicyPath, result.usagePolicyXml, "utf8");
-  const { policyXml: _omitted, usagePolicyXml: _omittedUsage, ...manifest } = result;
-  writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, policyFile: path.basename(policyPath), usagePolicyFile: path.basename(usagePolicyPath) }, null, 2)}\n`, "utf8");
-  return { result, policyPath, usagePolicyPath, manifestPath };
+  writeFileSync(deploymentPath, `${JSON.stringify(result.deployment, null, 2)}\n`, "utf8");
+  const { policyXml: _omitted, usagePolicyXml: _omittedUsage, deployment: _omittedDeployment, ...manifest } = result;
+  writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, policyFile: path.basename(policyPath), usagePolicyFile: path.basename(usagePolicyPath), deploymentFile: path.basename(deploymentPath) }, null, 2)}\n`, "utf8");
+  return { result, policyPath, usagePolicyPath, deploymentPath, manifestPath };
 }
 
 function main(argv: string[]): number {
@@ -269,9 +319,9 @@ function main(argv: string[]): number {
   try {
     const loaded = loadGatewayConfig(configPath);
     const outDir = args.get("out") ?? path.join(DEFAULT_OUT_DIR, loaded.ok ? loaded.config.configurationId : "invalid");
-    const { result, policyPath, usagePolicyPath, manifestPath } = renderFromFile(configPath, outDir);
-    const { policyXml: _omitted, usagePolicyXml: _omittedUsage, ...summary } = result;
-    process.stdout.write(`${JSON.stringify({ ...summary, policyPath, usagePolicyPath, manifestPath })}\n`);
+    const { result, policyPath, usagePolicyPath, deploymentPath, manifestPath } = renderFromFile(configPath, outDir);
+    const { policyXml: _omitted, usagePolicyXml: _omittedUsage, deployment: _omittedDeployment, ...summary } = result;
+    process.stdout.write(`${JSON.stringify({ ...summary, policyPath, usagePolicyPath, deploymentPath, manifestPath })}\n`);
     return 0;
   } catch (err: unknown) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);

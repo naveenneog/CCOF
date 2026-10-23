@@ -4,6 +4,23 @@
 
 **Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
 
+### G-LIMIT live acceptance (2026-10-24)
+
+- New staged deployment from the guide, Stages 0–8 verified, lab subscription, resource group `lab-e2e-rg`
+  (prefix `e2e1024`, own Foundry account, existing Entra registrations and two existing groups). Portal walkthrough:
+  21 of 21 screens, masked captures (not published in the public repository).
+- Through the gateway: 15 of 15 admission and bypass cases; family limit 429 (Beta Haiku, 20,000 TPM); higher-spend
+  selection (Alpha at equal spend, Beta after Beta spent more; no fallback); USD 10 Alpha budget used up: exhausted at
+  21:24:00 (USD 10.35 recorded), first refusal 21:24:25, final recorded USD 11.25, list-price USD 11.97 (USD 0.72 =
+  streamed cache writes the ledger cannot see); 8 of 8 attempts after exhaustion refused or confined to Beta's budget.
+  Total estimated spend USD 11.98 against the USD 10 authorised (in-flight overshoot of the test itself).
+- Chargeback: `WBS ID` field name, a person's `WBS-1001.01`, suggestion, CSV column and value, in the deployed console.
+- Fixed with tests: ledger GUID typing (group usage was never attributed, `d9b6978`); policy fragments for the 16 KB
+  API policy limit (ADR-0039, `8773205`); Stage 1 null subnet (`3beb2bb`); BOM read, usage-policy comments, Stage 8
+  JSON column (`8773205`); `/usage` rows classified `no-backend-call` in the ledger (`d9b6978`). Mutants: split 3/3 caught; RED shown for
+  every other new test.
+- Open: E2E-01 (backend 429 shown as unpriced in chargeback; owner decision). Report:
+  [BUDGET-ACCEPTANCE-2026-10-23.md](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 ### Owner acceptance request (2026-10-23)
 
 - G-LIMIT: test model-family restrictions, overlapping memberships, higher-spend selection, exhaustion, streaming,
@@ -37,12 +54,15 @@
   PowerShell blocks parsed. Sanitized Portal sign-in and local admin screenshots are linked in the guide.
 - Local implementation commits: G-LIMIT `7df518e`, G-LABEL `711b9f2`. Root Node results: 1,182 passed, six
   opt-in live tests skipped, zero failed. Those skips are not live deployment or spend acceptance.
+- G-WALK documentation and evidence: `024cec6`. Public release 7: `c987d02`, identifier scan clean, gitleaks clean,
+  scrubbed-tree tests and strict typecheck pass. Public CI passes on Node 22 and 26
+  ([run](https://github.com/naveenneog/CCOF/actions/runs/39999794528)).
 
 ### G-HA — Cosmos DB redundancy and consistency (complete offline)
 
 - Owner: "a cosmos with consistency model ... so its not a single point of failure". `stage1.cosmosLocations` (regions in
   failover order, `isZoneRedundant`), `stage1.cosmosConsistency`; two or more regions turn on service-managed failover;
-  configuration checks and a Stage 1 read-back ([Staged.Cosmos.ps1](../infra/staged/Staged.Cosmos.ps1)); the resolver
+  configuration checks and a Stage 1 read-back (Staged.Cosmos.ps1); the resolver
   reads in `COSMOS_PREFERRED_REGIONS` order, set by Stage 5. Example: two zone-redundant regions (`eastus2`,
   `centralus`), provisioned autoscale, Session. [ADR-0036](adr/0036-cosmos-redundancy-and-consistency.md), guide 2.6.
 - Tests: staged 446 checks; network DNS 5 (the real network check against a fake `az`); resolver config and Cosmos
@@ -103,7 +123,7 @@
 
 ### G-NAMES — staged user names setting (complete)
 
-- `admin.userNamesEnabled` → `ADMIN_USER_NAMES_ENABLED` in Stage 5 ([stage5-config.bicep](../infra/staged/stage5-config.bicep));
+- `admin.userNamesEnabled` → `ADMIN_USER_NAMES_ENABLED` in Stage 5 (stage5-config.bicep);
   guide section 6.1 grants `User.Read.All` with the group permissions and cites the ~24-hour managed identity token
   cache. Staged 400 checks; the mutant (setting not passed) is caught; template builds offline (isolated az profile).
 
@@ -170,7 +190,7 @@
 
 ### G-SEED — staged pilot as a group (complete)
 
-- A staged `groups` entry with `"kind": "group"` has no project or classification ([Staged.Groups.ps1](../infra/staged/Staged.Groups.ps1)).
+- A staged `groups` entry with `"kind": "group"` has no project or classification (Staged.Groups.ps1).
   Stage 4 creates or finds its Entra group (key `group/<name or id>`; baseline keys unchanged), Stage 5 lists it in
   the workbook, and Stage 7 rechecks the group in Graph, seeds its group document and writes the client file for
   `client.group`. Stage 8 sends no selector and checks in the `ccof.usage.v1` trace that requests were charged to
@@ -216,8 +236,8 @@ Isolated `AZURE_CONFIG_DIR` per tenant; no Azure or Entra resource was created o
 ### G-STAGE — staged settings for groups (complete)
 
 - `gateway.surfaceClients` (Stage 5 writes `entra.surfaceClients`, IDs lower-cased) and `admin.groupSearchEnabled`
-  (`ADMIN_GROUP_SEARCH_ENABLED`) in the staged configuration ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1),
-  [stage5-config.bicep](../infra/staged/stage5-config.bicep)). Both default off.
+  (`ADMIN_GROUP_SEARCH_ENABLED`) in the staged configuration (Staged.Application.ps1,
+  stage5-config.bicep). Both default off.
 - Tests: `tests/Test-StagedStages.ps1` 360/360. Mutants 4/4 caught.
 - Council: CODER PASS; ARCHITECT, QA, SECURITY, UX PASS-WITH-NOTES. Notes: the staged path admits only the gateway
   app and Azure CLI, so only those can be mapped (documented); `groupSearchEnabled` is ignored without the admin

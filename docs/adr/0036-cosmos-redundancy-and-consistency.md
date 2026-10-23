@@ -48,7 +48,7 @@ sets how much recent data a regional failover can lose.
   level the components were written for (each writer reads its own writes). Strong would add cross-region latency to
   every write; Bounded Staleness is accepted with the multi-region minimums.
 - Configuration checks: serverless with one region only; the two capacity-mode settings must agree; region names,
-  uniqueness, consistency values and bounded-staleness minimums ([Staged.Cosmos.ps1](../../infra/staged/Staged.Cosmos.ps1)).
+  uniqueness, consistency values and bounded-staleness minimums (Staged.Cosmos.ps1).
 - Stage 1 reads the account back: regions in order, zone redundancy, failover and consistency (with the
   bounded-staleness bounds). Stage 6 requires the Cosmos private endpoint to carry the global DNS name and one
   `<account>-<region>` name per region, in every network mode (checked against a live single-region endpoint:

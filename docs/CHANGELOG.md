@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-10-24 — Live budget, family-limit and chargeback acceptance; fixes found live
+
+- **Group usage now reaches budgets and chargeback.** Kusto types a GUID-shaped string in a dynamic value as `guid`;
+  the ledger accepted `projectId` only as `string`, so every group-centric request was unattributed. Fixed in
+  `analytics/ledger.kql` and `analytics/budget-events.kql`.
+- **Gateway policy deployed as policy fragments.** A Standard v2 API Management instance created on 2026-10-23 refused an API policy over 16 KB; the
+  rendered policy is now deployed as one fragment per section with a small API policy (ADR-0039). All deployment paths.
+- `GET /ccof/me/usage` calls are no longer listed as unattributed ledger rows.
+- Staged: Stage 1 accepts a Flex app without VNet integration; ARM reads ask for JSON; the usage-policy read-back
+  ignores comments; Stage 8 reads the Log Analytics JSON column.
+- Guide: live walkthrough (Stages 0–8, Portal captures), problems met and their resolutions, measured budget
+  overshoot, live WBS ID evidence.
 ## 2026-10-23 — Budget, chargeback-label and deployment acceptance
 
 - Requested acceptance covers a USD 10 total consumption ceiling, budget-bypass attempts, group model-family

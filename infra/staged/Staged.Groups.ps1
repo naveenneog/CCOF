@@ -90,7 +90,9 @@ function New-StgSelectionQuery {
 
 function Assert-StgSelectedGroup {
     param($Row, [string]$ExpectedGroupId, [int]$Requests)
-    $ids = @($Row.projectIds | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    # The Log Analytics query API returns a dynamic column (make_set) as JSON text.
+    $set = if ($Row.projectIds -is [string]) { @([string]$Row.projectIds | ConvertFrom-Json) } else { @($Row.projectIds) }
+    $ids = @($set | ForEach-Object { ([string]$_).ToLowerInvariant() })
     if ([int]$Row.requests -ne $Requests -or $ids.Count -ne 1 -or $ids[0] -cne $ExpectedGroupId.ToLowerInvariant()) {
         throw "verify_failed: requests without a selector were charged to $($ids -join ', ') ($($Row.requests) of $Requests traced), expected group $ExpectedGroupId"
     }

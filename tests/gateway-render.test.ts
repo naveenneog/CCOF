@@ -539,12 +539,14 @@ describe("rendering from files", () => {
     rmSync(scratch, { recursive: true, force: true });
     mkdirSync(scratch, { recursive: true });
     const out = renderFromFile(path.join(repoRoot, "tests", "fixtures", "gateway-public.json"), scratch);
-    assert.deepEqual(readdirSync(scratch).sort(), ["claude-messages.policy.xml", "claude-messages.usage.policy.xml", "render.json"]);
+    assert.deepEqual(readdirSync(scratch).sort(), ["claude-messages.policy.deployment.json", "claude-messages.policy.xml", "claude-messages.usage.policy.xml", "render.json"]);
     assert.match(out.result.policyXml, /\{\{foundry-crosstenant-client-secret\}\}/);
     const ignored = spawnSync("git", ["check-ignore", "-q", path.relative(repoRoot, out.policyPath)], { cwd: repoRoot });
     assert.equal(ignored.status, 0, "rendered output is not git-ignored");
     const usageIgnored = spawnSync("git", ["check-ignore", "-q", path.relative(repoRoot, out.usagePolicyPath)], { cwd: repoRoot });
     assert.equal(usageIgnored.status, 0, "rendered usage policy is not git-ignored");
+    const deploymentIgnored = spawnSync("git", ["check-ignore", "-q", path.relative(repoRoot, out.deploymentPath)], { cwd: repoRoot });
+    assert.equal(deploymentIgnored.status, 0, "the rendered fragment split is not git-ignored");
     rmSync(scratch, { recursive: true, force: true });
   });
 });

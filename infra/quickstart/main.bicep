@@ -72,6 +72,8 @@ param syncTimerEnabled bool = false
 
 @description('Written by the wrapper (step 2): the policy rendered by infra/gateway/render.ts. Empty: the API answers 503.')
 param policyXml string = ''
+@description('Policy fragments policyXml includes (infra/gateway/render.ts <apiId>.policy.deployment.json, ADR-0039).')
+param policyFragments array = []
 
 @description('Written by step 2: analytics/workbooks/chargeback.ts output. Empty: preserve any existing workbook; never deploy an empty shell over it.')
 param workbookContent object = {}
@@ -244,6 +246,7 @@ module gatewayApi 'modules/apim-api.bicep' = {
     apiDisplayName: apim.apiDisplayName
     backends: [for b in backends: { id: b.id, url: b.url }]
     policyXml: policyXml
+    policyFragments: policyFragments
   }
 }
 

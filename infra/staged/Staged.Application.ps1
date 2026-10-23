@@ -16,6 +16,13 @@ function New-StgQsContext {
     return @{ P = $p; GeneratedDir = $gen; State = $state; Apim = $apim; GatewayUrl = $gatewayUrl }
 }
 
+# The deployed GET /ccof/me/usage policy, as APIM returns it: its own per-person limit and the resolver's usage
+# route, and no <base /> outside comments (the template's comments mention it; live 2026-10-24).
+function Test-StgUsagePolicyDeployed {
+    param([string]$Text)
+    $code = $Text -replace '<!--[\s\S]*?-->', ''
+    return ($code.Contains('ccof-usage-person') -and $code.Contains('/api/me/usage') -and $code -notmatch '<base\s*/>')
+}
 function Invoke-Stage5 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1; $null = Get-StgStage $Cfg 3; $entra = Get-StgStage $Cfg 4
@@ -35,6 +42,8 @@ function Invoke-Stage5 {
     $policy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.xml") -Raw
     # GET /ccof/me/usage (docs/USAGE.md): render.ts writes its operation policy beside the API policy.
     $usagePolicy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).usage.policy.xml") -Raw
+    # API Management refuses an API policy over 16 KB: the policy is deployed as one fragment per section (ADR-0039).
+    $policyDeployment = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.deployment.json") -Raw | ConvertFrom-Json -AsHashtable
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -54,7 +63,7 @@ function Invoke-Stage5 {
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
-        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policy; usagePolicyXml = $usagePolicy
+        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
         resolver = $resolverSettings; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
@@ -80,7 +89,7 @@ function Invoke-Stage5 {
     # The deployed policy, as APIM returns it (normalized XML, so not hash-comparable): it must be this
     # operation's own policy, with its per-person limit and the resolver's usage route.
     $usageDeployed = [string](Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)/apis/$($a.apiId)/operations/get-my-usage/policies/policy" '2024-05-01').properties.value
-    Assert-Stg ($usageDeployed.Contains('ccof-usage-person') -and $usageDeployed.Contains('/api/me/usage') -and $usageDeployed -notmatch '<base\s*/>') 'the deployed get-my-usage policy is not the rendered usage policy'
+    Assert-Stg (Test-StgUsagePolicyDeployed $usageDeployed) 'the deployed get-my-usage policy is not the rendered usage policy'
     $v.usageOperation = @{ method = $usageOp.properties.method; urlTemplate = $usageOp.properties.urlTemplate; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($usagePolicy))) -Algorithm SHA256).Hash; deployedPolicyChecked = $true }
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     $null = Write-StgEvidence 'stage5.verify.json' $v

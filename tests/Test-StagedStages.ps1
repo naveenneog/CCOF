@@ -42,7 +42,7 @@ $boundaries = [ordered]@{
     'infra\staged\stage3-grants.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Authorization/roleAssignments',
         'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')
     'infra\staged\stage5-config.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Web/sites/config', 'Microsoft.ApiManagement/service/apis',
-        'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/apis/operations/policies', 'Microsoft.ApiManagement/service/loggers',
+        'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/apis/operations/policies', 'Microsoft.ApiManagement/service/policyFragments', 'Microsoft.ApiManagement/service/loggers',
         'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks')
 }
 $arms = @{}
@@ -330,6 +330,12 @@ try { $null = New-StgSelectionQuery -RequestIds @("x') | take 1 //") } catch { $
 Assert-Contract $injection 'A non-GUID request ID must not reach the query text.'
 Assert-StgSelectedGroup -Row @{ requests = 1; projectIds = @('0000000A-0000-4000-8000-0000000000AA') } -ExpectedGroupId $expected -Requests 1
 $script:passed++
+# The Log Analytics query API returns a dynamic column (make_set) as JSON text (live Stage 8, 2026-10-24).
+Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa"]' } -ExpectedGroupId $expected -Requests 2
+$script:passed++
+$wrongText = $false
+try { Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa","0000000b-0000-4000-8000-0000000000bb"]' } -ExpectedGroupId $expected -Requests 2 } catch { $wrongText = $_.Exception.Message -match 'verify_failed' }
+Assert-Contract $wrongText 'Stage 8 must refuse JSON text naming two groups.'
 foreach ($row in @(@{ requests = 1; projectIds = @('0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 2; projectIds = @($expected, '0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 0; projectIds = @() })) {
     $wrong = $false
     try { Assert-StgSelectedGroup -Row $row -ExpectedGroupId $expected -Requests $row.requests } catch { $wrong = $_.Exception.Message -match 'verify_failed' }
@@ -545,6 +551,29 @@ try {
     Assert-Contract ($null -ne $reacquired) 'Stage 7 lock must be released for a later retry.'
     $reacquired.Dispose()
 } finally { Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue }
+# A Flex Consumption app without VNet integration reports virtualNetworkSubnetId null, and $null -ieq '' is false:
+# Get-StgSite returns a string so the Stage 1 read-back accepts an app that is not integrated yet (live 2026-10-24).
+$savedAz = ${function:Invoke-StgAzJson}
+try {
+    function Invoke-StgAzJson { param([string[]]$Arguments)
+        if ($Arguments[1] -ceq 'show') { return @{ name = 'app'; properties = @{ publicNetworkAccess = 'Enabled'; virtualNetworkSubnetId = $null; httpsOnly = $true } } }
+        return @{ ftpsState = 'Disabled' } }
+    $flexSite = Get-StgSite @{ subscriptionId = 's'; resourceGroup = 'rg' } 'app'
+    Assert-Contract ($flexSite.virtualNetworkSubnetId -is [string] -and $flexSite.virtualNetworkSubnetId -ceq '') "A site without VNet integration must report subnet '' (got [$($flexSite.virtualNetworkSubnetId)])."
+} finally { ${function:Invoke-StgAzJson} = $savedAz }
+# APIM answers a policy GET with raw XML that starts with U+FEFF unless JSON is asked for; az rest then prints
+# it as text, and az on Windows crashed on the character (live 2026-10-24). Get-StgArm asks for JSON.
+$savedQsAz = ${function:Invoke-QsAz}
+try {
+    function Invoke-QsAz { param([string[]]$Arguments) $script:armArgs = $Arguments; @{ properties = @{ value = '<policies />' } } }
+    $null = Get-StgArm '/subscriptions/s/x/policies/policy' '2024-05-01'
+    Assert-Contract ((@($script:armArgs) -join ' ') -cmatch '--headers Accept=application/json') "Get-StgArm must ask ARM for JSON (got: $(@($script:armArgs) -join ' '))."
+} finally { ${function:Invoke-QsAz} = $savedQsAz }
+# The usage operation's read-back ignores comments: the template's comments say "No <base />" (live 2026-10-24).
+$usageText = '<policies><!-- No <base />. --><inbound><rate-limit-by-key counter-key="@(&quot;ccof-usage-person&quot;)" /><send-request><set-url>https://r/api/me/usage</set-url></send-request></inbound></policies>'
+Assert-Contract (Test-StgUsagePolicyDeployed $usageText) 'A usage policy whose comments mention <base /> is the rendered one.'
+Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inbound>', '<inbound><base />'))) 'A usage policy with a real <base /> inherits the API policy and must be refused.'
+Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
 

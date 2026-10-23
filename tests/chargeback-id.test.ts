@@ -17,7 +17,8 @@ const groups = [{ projectId: "P1", classification: "STD", groupId: "6f3a2c1e-4b5
 const reporting = { ...card, entries: card.entries.filter((e: { model: string }) => !/^claude-(fable|mythos)/.test(e.model)) };
 
 test("the ledger exposes a validated chargeback ID and surface from the usage trace", () => {
-  assert.match(ledger, /chargebackId = iff\(traceKnown and gettype\(payload\.chargebackId\) == "string"/);
+  // string or guid: Kusto types a GUID-shaped chargeback ID as guid (tests/ledger-guid-fields.test.ts).
+  assert.match(ledger, /chargebackId = iff\(traceKnown and gettype\(payload\.chargebackId\) in \("string", "guid"\)/);
   assert.match(ledger, /matches regex @"\^\[A-Za-z0-9\]\[A-Za-z0-9\._\/-\]\{0,63\}\$"/);
   assert.match(ledger, /surface = iff\(traceKnown and payload\.surface in \("chat", "code", "cowork", "design", "m365"\)/);
   assert.match(ledger, /\| project [^;]*\bchargebackId, surface\b/);
