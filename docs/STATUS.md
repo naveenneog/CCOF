@@ -26,6 +26,8 @@
   Identifier scan 0 hits; gitleaks only the known false positive; root 1137 pass; staged 398. The scrub's
   `git rm` had refused the re-checked-out images (staged files need `-f`); they were removed before the commit,
   and the script now uses `-f` and stops if any image path is still tracked or present.
+- Release 3 (2026-10-23): `b72e527`, the user names setting and the Graph grant steps (`670c715`). The script
+  removed the images itself; identifier scan 0; gitleaks no findings in the change; staged 400.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 
