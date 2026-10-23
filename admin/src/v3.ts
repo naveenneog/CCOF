@@ -6,7 +6,7 @@
 import { ApiError, isGuid } from "./auth.ts";
 import type { Authenticator } from "./auth.ts";
 import type { ApiRequest, ApiResponse, ProjectStore } from "./api.ts";
-import { canonical, isIdentifier, isObject } from "./validation.ts";
+import { canonical, isIdentifier, isObject, ValidationError } from "./validation.ts";
 import type { Doc } from "./validation.ts";
 import type { Capability, Operations, QueryMeta } from "./operations.ts";
 import { ProviderError } from "./operations.ts";
@@ -31,13 +31,13 @@ import type { ChangeLog } from "./change-log.ts";
 import { handleExport } from "./export.ts";
 import { limitsFromBody, MAX_OVERRIDE_DAYS, overrideState, publicLimits } from "./sync-limits.ts";
 import type { LimitsStore } from "./sync-limits.ts";
-import { ValidationError } from "./validation.ts";
 
 export const MAX_PLAN_BYTES = 16 * 1024;
 export const MAX_RATE_CARD_BYTES = 1024 * 1024;
 export const LIST_PRICE_BASIS = "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.";
 
 export interface V3Dependencies {
+  userTagStore?: import("./user-tags.ts").UserTagStore | null;
   authenticate: Authenticator | null;
   projects: ProjectStore | null;
   catalogStore: CatalogStore | null;

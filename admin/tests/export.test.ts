@@ -11,6 +11,7 @@ import type { Capability, LogTable, Operations, QueryMeta } from "../src/operati
 import type { ProjectStore } from "../src/api.ts";
 import type { Doc } from "../src/validation.ts";
 import { EXPORT_ROWS_MAX, toCsv } from "../src/export.ts";
+import { createMemoryUserTagStore } from "../src/user-tags.ts";
 
 const rateCard = JSON.parse(await readFile(new URL("../../config/rate-card.json", import.meta.url), "utf8")) as Doc;
 const sources = {
@@ -47,7 +48,7 @@ function setup(table: (meta: QueryMeta, query: string) => LogTable = () => ({
     read: async () => null, create: async () => "conflict", replace: async () => "precondition_failed",
   };
   const deps: V3Dependencies = {
-    authenticate: async () => ({ oid: "reader", canWrite: false }), projects, catalogStore: null,
+    authenticate: async () => ({ oid: "reader", canWrite: false }), projects, catalogStore: null, userTagStore: createMemoryUserTagStore(),
     defaultCatalog: { schemaVersion: 1, models: [], rateCard }, operations, env: ENV, sources, cache: new QueryCache(),
     now: () => NOW, newId: () => "req-1", log: () => {},
   };
@@ -88,7 +89,24 @@ test("export/usage returns per chargeback ID, group and person rows for the peri
   assert.match(queries[0], new RegExp(`take ${EXPORT_ROWS_MAX}\\b|ReportRows > ${EXPORT_ROWS_MAX}`));
   const csv = await call("export/usage?period=month&format=csv");
   assert.equal(csv.status, 200);
-  assert.equal(String(csv.body).split("\r\n")[0], '"chargebackId","projectLabel","person","knownListUsd"');
+  assert.equal(String(csv.body).split("\r\n")[0], '"User tag","projectLabel","person","knownListUsd"');
+});
+
+test("configured export label changes CSV headings only and never loses tag values on collision", async () => {
+  const { call, deps } = setup();
+  await deps.userTagStore!.writeSettings({ label: "person" }, null);
+  const csv = await call("export/usage?period=month&format=csv");
+  assert.equal(String(csv.body).split("\r\n")[0], '"person (chargebackId)","projectLabel","person","knownListUsd"');
+  assert.match(String(csv.body), /"WBS-1234.01"/);
+  const json = await call("export/usage?period=month&format=json");
+  assert.deepEqual((json.jsonBody as Doc).columns, ["chargebackId", "projectLabel", "person", "knownListUsd"]);
+  assert.equal(((json.jsonBody as Doc).rows as Doc[])[0].chargebackId, "WBS-1234.01");
+  deps.userTagStore!.readSettings = async () => { throw new Error("unavailable"); };
+  assert.equal((await call("export/usage?period=month&format=csv")).status, 500);
+  assert.equal(((await call("export/usage?period=month&format=csv")).jsonBody as Doc).error, "user_tag_settings_unavailable");
+  assert.equal((await call("export/usage?period=month&format=json")).status, 200);
+  deps.userTagStore = null;
+  assert.equal((await call("export/usage?period=month&format=csv")).status, 503);
 });
 
 test("export refuses filters it cannot apply, and echoes every filter it applied", async () => {

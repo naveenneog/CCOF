@@ -20,6 +20,7 @@ import { ValidationError, isObject, stripSystem } from "./validation.ts";
 import type { Doc } from "./validation.ts";
 import {
   MAX_SAVED_TAGS, USER_TAG_CATALOG_ID, USER_TAG_KIND, isUserTag, mergeSavedTags, readUserTagDocument, suggestTags, userTagDocumentId,
+  DEFAULT_USER_TAG_LABEL, USER_TAG_SETTINGS_ID, isUserTagLabel,
 } from "../../src/contracts/user-tags.ts";
 
 export interface UserTagStore {
@@ -30,6 +31,8 @@ export interface UserTagStore {
   readSaved(): Promise<{ tags: string[]; etag: string } | null>;
   // The new ETag, or null when the stored list changed meanwhile (or appeared).
   writeSaved(tags: string[], etag: string | null): Promise<string | null>;
+  readSettings(): Promise<{ label: string; etag: string } | null>;
+  writeSettings(doc: Doc, etag: string | null): Promise<string | null>;
 }
 
 export interface UserTagRequest {
@@ -52,7 +55,7 @@ export interface UserTagDependencies {
 export const MAX_LISTED_PEOPLE = 500;
 const SEARCH_TEXT = /^[A-Za-z0-9._\/-]{0,64}$/;
 
-type Route = { op: "suggest" } | { op: "list" } | { op: "read"; personId: string } | { op: "set"; personId: string };
+type Route = { op: "suggest" } | { op: "list" } | { op: "settings"; write: boolean } | { op: "read"; personId: string } | { op: "set"; personId: string };
 
 function route(method: string, path: string): Route | "method_not_allowed" | null {
   const parts = path.replace(/^\/+|\/+$/g, "").split("/").map((p) => decodeURIComponent(p));
@@ -60,6 +63,7 @@ function route(method: string, path: string): Route | "method_not_allowed" | nul
   if (parts[0] !== "user-tags") return null;
   const m = method.toUpperCase();
   if (parts.length === 1) return m === "GET" ? { op: "suggest" } : "method_not_allowed";
+  if (parts.length === 2 && parts[1] === "settings") return ["GET", "PUT"].includes(m) ? { op: "settings", write: m === "PUT" } : "method_not_allowed";
   if (parts[1] !== "people") return null;
   if (parts.length === 2) return m === "GET" ? { op: "list" } : "method_not_allowed";
   if (parts.length !== 3 || !isGuid(parts[2])) return null;
@@ -107,11 +111,38 @@ export async function handleUserTagRequest(request: UserTagRequest, deps: UserTa
     if (matched === "method_not_allowed") throw new ApiError(405, "method_not_allowed");
     operation = matched.op;
     personId = "personId" in matched ? matched.personId : null;
-    if (matched.op === "set" && !actor.canWrite) throw new ApiError(403, "write_permission_required");
+    if ((matched.op === "set" || matched.op === "settings" && matched.write) && !actor.canWrite) throw new ApiError(403, "write_permission_required");
     if (!deps.store) throw new ApiError(503, "user_tags_not_configured");
     const store = deps.store;
 
     switch (matched.op) {
+      case "settings": {
+        if (!matched.write) {
+          const current = await store.readSettings();
+          return json(200, { label: current?.label ?? DEFAULT_USER_TAG_LABEL, exists: current !== null, etag: current?.etag ?? null }, current ? { etag: current.etag } : {});
+        }
+        const body = parseBody(request);
+        if (!isObject(body) || Object.keys(body).length !== 1 || !isUserTagLabel(body.label)) throw new ValidationError(["label:invalid"]);
+        const creating = request.headers("if-none-match")?.trim() === "*";
+        const etag = creating ? null : requireIfMatch(request);
+        const current = await store.readSettings();
+        if ((current?.etag ?? null) !== etag) throw new ApiError(412, "etag_mismatch");
+        if (!creating && !current) throw new ApiError(404, "user_tag_settings_not_found");
+        const id = USER_TAG_SETTINGS_ID;
+        const doc = { id, scopeId: id, kind: id, schemaVersion: 1, label: body.label, updatedAt: deps.now().toISOString(), updatedBy: actor.oid };
+        const pending = await beginChange(deps.changeLog, {
+          requestId, at: deps.now().toISOString(), actorOid: actor.oid, operation: "userTag.settings", projectId: null,
+          changes: [{ path: "label", before: current?.label ?? DEFAULT_USER_TAG_LABEL, after: body.label }], details: {},
+        }, deps.now, deps.log);
+        const written = await recorded(pending, () => store.writeSettings(doc, etag));
+        if (written === null) {
+          await pending.finish("refused", { code: "etag_mismatch" });
+          throw new ApiError(412, "etag_mismatch");
+        }
+        await pending.finish(current ? "updated" : "created", { etagAfter: written });
+        audit({ outcome: current ? "updated" : "created", before: current?.label ?? DEFAULT_USER_TAG_LABEL, after: body.label });
+        return json(current ? 200 : 201, { label: body.label, exists: true, etag: written }, { etag: written });
+      }
       case "suggest": {
         const text = request.query("search") ?? "";
         if (!SEARCH_TEXT.test(text)) throw new ApiError(400, "invalid_search_text");
@@ -166,7 +197,7 @@ export async function handleUserTagRequest(request: UserTagRequest, deps: UserTa
     }
   } catch (err) {
     if (err instanceof ApiError) {
-      if (operation === "set" || err.status === 401 || err.status === 403) audit({ outcome: "refused", status: err.status, code: err.code });
+      if (operation === "set" || operation === "settings" || err.status === 401 || err.status === 403) audit({ outcome: "refused", status: err.status, code: err.code });
       const body: Record<string, unknown> = { error: err instanceof ValidationError ? "invalid_user_tag" : err.code, requestId };
       if (err instanceof ValidationError) body.problems = err.problems;
       return json(err.status, body);
@@ -186,6 +217,21 @@ export function createCosmosUserTagStore(container: Container): UserTagStore {
     } catch (err) { if (statusOf(err) === 404) return null; throw err; }
   };
   return {
+    async readSettings() {
+      const found = await readItem(USER_TAG_SETTINGS_ID);
+      if (!found) return null;
+      const d = found.doc;
+      if (d.id !== USER_TAG_SETTINGS_ID || d.scopeId !== USER_TAG_SETTINGS_ID || d.kind !== USER_TAG_SETTINGS_ID || d.schemaVersion !== 1 || !isUserTagLabel(d.label) || !found.etag) throw new Error("user_tag_settings_invalid");
+      return { label: d.label, etag: found.etag };
+    },
+    async writeSettings(doc, etag) {
+      try {
+        const r = etag === null ? await container.items.create(doc)
+          : await container.item(USER_TAG_SETTINGS_ID, USER_TAG_SETTINGS_ID).replace(doc, { accessCondition: { type: "IfMatch", condition: etag } });
+        if (!r.etag) throw new Error("user_tag_settings_etag_missing");
+        return r.etag;
+      } catch (err) { if ([404, 409, 412].includes(statusOf(err))) return null; throw err; }
+    },
     read: (personId) => readItem(userTagDocumentId(personId)),
     async create(doc) {
       try { return (await container.items.create(doc)).etag ?? ""; } catch (err) { if (statusOf(err) === 409) return "conflict"; throw err; }
@@ -221,6 +267,13 @@ export function createMemoryUserTagStore(): UserTagStore & { docs: Map<string, {
   let n = 0;
   const next = () => `"tag-${++n}"`;
   const store = {
+    settings: null as { label: string; etag: string } | null,
+    async readSettings() { return store.settings ? structuredClone(store.settings) : null; },
+    async writeSettings(doc: Doc, etag: string | null) {
+      if ((store.settings?.etag ?? null) !== etag) return null;
+      store.settings = { label: String(doc.label), etag: next() };
+      return store.settings.etag;
+    },
     docs: new Map<string, { doc: Doc; etag: string }>(),
     saved: null as { tags: string[]; etag: string } | null,
     async read(personId: string) { const d = store.docs.get(userTagDocumentId(personId)); return d ? structuredClone(d) : null; },

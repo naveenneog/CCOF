@@ -1,5 +1,6 @@
 // Display formatting. Money arrives as exact decimal text; it is rounded only for display and a
 // blank (null) amount is shown as "—" with its reason, never as 0.
+import { userTagHeaders } from "../../../src/contracts/user-tags.ts";
 export const BLANK = "—";
 
 export function usd(v: unknown, digits = 2): string {
@@ -52,13 +53,15 @@ export function ago(v: unknown, now = Date.now()): string {
 export const shortId = (id: unknown) => typeof id === "string" && id.length > 13 ? `${id.slice(0, 8)}…${id.slice(-4)}` : String(id ?? BLANK);
 export const human = (code: unknown) => String(code ?? "").replace(/_/g, " ");
 
-export function toCsv(columns: string[], rows: Record<string, unknown>[], meta: Record<string, unknown>): string {
+export function toCsv(columns: string[], rows: Record<string, unknown>[], meta: Record<string, unknown>, tagLabel?: string): string {
   const cell = (v: unknown) => {
-    const s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = Object.entries(meta).map(([k, v]) => `# ${k}: ${v}`).join("\n");
-  return `${head}\n${columns.map(cell).join(",")}\n${rows.map((r) => columns.map((c) => cell(r[c])).join(",")).join("\n")}\n`;
+  const headings = tagLabel === undefined ? columns : userTagHeaders(columns, tagLabel);
+  return `${head}\n${headings.map(cell).join(",")}\n${rows.map((r) => columns.map((c) => cell(r[c])).join(",")).join("\n")}\n`;
 }
 
 export function download(name: string, text: string, type = "text/csv") {

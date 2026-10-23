@@ -10,6 +10,7 @@ import { PagerLite } from "./project-detail.tsx";
 import { useDebounced } from "./projects.tsx";
 import { UserIdentity } from "../components/user-identity.tsx";
 import { TagInput } from "../components/tag-input.tsx";
+import { loadedLabel } from "../lib/user-tags.ts";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,6 +54,12 @@ const fromLocalInput = (v: string) => v ? `${v}:00Z` : "";
 
 export function Chargeback({ query }: { query: URLSearchParams }) {
   const toast = useToast();
+  const settings = useQuery("/api/user-tags/settings");
+  const tagLabel = loadedLabel(settings.data, settings.loading, settings.error);
+  const views = Object.fromEntries(Object.entries(VIEWS).map(([key, value]) => [key, {
+    label: key === "chargebackIds" ? tagLabel ?? "" : value.label,
+    columns: value.columns.map((column) => column.key === "userTag" || column.key === "chargebackId" ? { ...column, label: tagLabel ?? "" } : column),
+  }]));
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
   const [f, setF] = useState<Filters>({
@@ -113,19 +120,26 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
   }, [trend.data, budgets.data, f.period, f.interval]);
 
   const exportRows = async () => {
+    if (!tagLabel) return;
     setExporting(true);
     try {
+      // Refresh for the download: do not silently use a cached field name after another admin's edit.
+      const latest = await api("/api/user-tags/settings", { refresh: true });
+      const exportLabel = loadedLabel(latest.data, false, null);
+      if (!exportLabel) throw new Error("Invalid user-tag settings; export refused.");
       const r = await api(`/api/v3/chargeback/${view}${filterQs({ limit: 500, offset: 0 })}`);
       if (!ok(r.data)) throw new Error(`Export unavailable: ${r.data.state}`);
       const d = r.data.data;
       download(`ccof-chargeback-${view}-${d.period.from.slice(0, 10)}.csv`, toCsv(d.columns, d.rows, {
         view, periodStart: d.period.from, periodEnd: d.period.to, rateCardVersion: d.rateCardVersion, basis: d.basis,
         rows: d.rows.length, matched: d.page?.matched ?? d.rows.length, truncated: d.truncated, observedAt: d.observedAt,
-      }));
+      }, exportLabel));
       toast(d.truncated ? `Exported ${d.rows.length} rows (truncated: more rows exist).` : `Exported ${d.rows.length} rows.`);
     } catch (e) { toast(e instanceof Error ? e.message : "Export failed", "danger"); } finally { setExporting(false); }
   };
 
+  if (settings.error) return <ErrorNote error={settings.error} retry={settings.reload} />;
+  if (!tagLabel) return settings.loading ? <Loading rows={2} /> : <ErrorNote error={new Error("Invalid user-tag settings; chargeback display and export are unavailable.")} retry={settings.reload} />;
   return (
     <div className="page">
       <PageHeader title="Chargeback" subtitle="The workbook's figures, computed on the server from the same ledger, pricing and rate card." observedAt={totals.observedAt} onRefresh={reload} busy={totals.loading} />
@@ -145,7 +159,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
         )}</Field>
         <Field label="Classification">{(id) => <input id={id} className="input input-short" value={f.classification} placeholder="STD"
           onChange={(e) => setF({ ...f, classification: e.target.value.trim().toUpperCase() })} autoComplete="off" spellCheck={false} />}</Field>
-        <Field label="User tag" hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
+        <Field label={tagLabel} hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
           invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
           onChange={(v) => { setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} />}</Field>
         <Field label="Project tags" hint="All must match">{(id, d) => <input id={id} aria-describedby={d} className="input" value={f.tags} placeholder="finance, pilot"
@@ -227,12 +241,12 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
               <h2>Breakdown</h2>
               <Button icon="download" onClick={exportRows} busy={exporting}>Export CSV</Button>
             </div>
-            <Tabs label="Breakdown" active={view} onChange={setView} tabs={Object.entries(VIEWS).map(([id, v]) => ({ id, label: v.label }))} />
+            <Tabs label="Breakdown" active={view} onChange={setView} tabs={Object.entries(views).map(([id, v]) => ({ id, label: v.label }))} />
             <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} className="tab-panel" aria-busy={table.loading}>
               {table.loading && !table.data ? <Loading rows={6} /> : table.error ? <ErrorNote error={table.error} retry={table.reload} />
                 : !ok(table.data) ? <CapabilityNotice cap={table.data} what="This view" /> : (
                   <>
-                    <DataTable caption={VIEWS[view].label} rows={table.data.data.rows} columns={VIEWS[view].columns}
+                    <DataTable caption={views[view].label} rows={table.data.data.rows} columns={views[view].columns}
                       empty={<p className="empty-inline">{view === "unpriced" ? "Every request in this period was priced and attributed." : view === "diagnostics" ? "No failed, refused or incomplete requests in this period." : "No usage in this period: no data, not zero."}</p>} />
                     {table.data.data.page && <PagerLite page={table.data.data.page} onPage={setOffset} />}
                     {table.data.data.truncated && <p className="hint">More rows exist than this page shows (truncated); use paging or export.</p>}

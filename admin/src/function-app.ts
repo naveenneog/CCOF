@@ -133,6 +133,7 @@ app.http("groupAction", { methods: ["GET", "POST"], authLevel: "anonymous", rout
 app.http("groupDirectoryMembers", { methods: ["GET"], authLevel: "anonymous", route: "api/groups/directory/{groupId}/members", handler: groupsHandler });
 // User tags (owner decision 2026-10-23): /api/user-tags, /api/user-tags/people, /api/user-tags/people/{personId}.
 app.http("userTags", { methods: ["GET"], authLevel: "anonymous", route: "api/user-tags", handler: userTagsHandler });
+app.http("userTagSettings", { methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/user-tags/settings", handler: userTagsHandler });
 app.http("userTagPeople", { methods: ["GET"], authLevel: "anonymous", route: "api/user-tags/people", handler: userTagsHandler });
 app.http("userTagPerson", { methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/user-tags/people/{personId}", handler: userTagsHandler });
 app.http("adminV2", {
@@ -203,7 +204,7 @@ app.http("adminV3", {
       method: request.method, path: new URL(request.url).pathname + new URL(request.url).search,
       headers: (name) => request.headers.get(name), body: ["POST", "PUT"].includes(request.method.toUpperCase()) ? await request.text() : null,
     }, {
-      authenticate, projects: store, catalogStore, changeLog, limitsStore, defaultCatalog: await defaultCatalog(log),
+      authenticate, projects: store, catalogStore, changeLog, limitsStore, userTagStore, defaultCatalog: await defaultCatalog(log),
       operations: createOperations(process.env, credential, log), env: process.env,
       sources: await querySources(log), cache: v3Cache, directory, now: () => new Date(), newId: randomUUID, log,
     });

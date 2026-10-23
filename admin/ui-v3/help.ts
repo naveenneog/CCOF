@@ -84,6 +84,7 @@ export const HELP: Record<string, HelpTopic> = {
     title: "User tags",
     summary: "The chargeback ID (for example a WBS element) each person's usage is charged to, set when the person is onboarded. A new tag is saved and suggested next time anyone types. The next entitlement sync copies the tag into the person's group memberships; from then on every request carries it.",
     figures: [
+      ["Field name", "Editors can name the field (for example WBS ID), once for the whole deployment. The name is used in tagging, filters and chargeback CSV headings. Existing tag values and JSON / Power BI keys never change. Failed settings reads/writes are reported, not replaced by defaults."],
       ["No tag", "The group's own chargeback ID applies. Clearing a tag returns the person to it."],
       ["Reports", "Chargeback filters by user tag (with suggestions); the Developers view and its CSV show each developer's tags; User tags lists usage per tag and developer; Usage CSV carries it per row."],
       ["Past usage", "Each request keeps the tag it carried when it was made. Changing a tag does not move earlier usage."],
