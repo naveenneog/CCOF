@@ -69,3 +69,9 @@ sets how much recent data a regional failover can lose.
 - The second region must be one where the private endpoint's virtual network can resolve and reach the account; the
   endpoint in the deployment VNet carries addresses for every region.
 - The quickstart, Core and manual paths still create a single-region account.
+- Zone-redundant capacity is not always available. On 2026-10-23 the lab subscription was refused `eastus2` (with
+  and without zone redundancy) and zone-redundant `westus3` with `ServiceUnavailable` ("high demand"); zone-redundant
+  `centralus` plus `westus3` without zone redundancy deployed (a Cosmos-only Bicep file), and the Stage 1 read-back
+  function, called directly, returned no problems for it.
+  The guide's section 2.6 records the steps (region access request at <https://aka.ms/cosmosdbquota>, or another
+  region).

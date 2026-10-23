@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-23 — Fixes: client restore, Graph grant permissions list, Cosmos capacity notes
+
+- The client installer's restore removes folders it created when they are empty (for example `~/.claude/skills`).
+- `Grant-SyncGraphPermissions.ps1 -Permissions A,B,C` works under `pwsh -File`; before, the list arrived as one
+  string and the script stopped with `app_role_missing`.
+- Guide 2.6 and ADR-0036 record a live Cosmos capacity check: zone-redundant regions can be refused with
+  `ServiceUnavailable`, and how to proceed.
+
 ## 2026-10-23 — Cosmos DB redundancy and consistency
 
 - Staged `stage1.cosmosLocations` (regions in failover order, each `isZoneRedundant`) and `stage1.cosmosConsistency`.

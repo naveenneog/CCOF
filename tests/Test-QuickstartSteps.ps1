@@ -192,6 +192,14 @@ $printed = (Show-QsGraphStep $ctx 6>&1 | ForEach-Object { "$_" }) -join "`n"
 Assert-True 'step 6 prints the grant command and then -Only 3, never -From 3' ($printed -match 'Grant-SyncGraphPermissions\.ps1' -and $printed -match 'syncTimerEnabled = true' -and $printed -match 'Deploy-Quickstart\.ps1 -Only 3' -and $printed -notmatch '-From 3') $printed
 $grant = Get-Content (Join-Path $root 'infra' 'quickstart' 'Grant-SyncGraphPermissions.ps1') -Raw
 Assert-True 'Grant-SyncGraphPermissions.ps1 says -Only 3 after the grant, never -From 3' ($grant -match 'Deploy-Quickstart\.ps1 -Only 3' -and $grant -notmatch '-From 3')
+# pwsh -File hands "-Permissions A,B,C" over as one string; the script splits it (live failure 2026-10-23: app_role_missing).
+. (Join-Path $root 'infra' 'quickstart' 'Grant-SyncGraphPermissions.ps1') -DotSourceOnly
+$names = @(ConvertTo-QsPermissionNames @('Group.ReadBasic.All,GroupMember.ReadBasic.All, User.Read.All'))
+Assert-True 'a comma list from pwsh -File becomes separate permission names' (($names -join '|') -ceq 'Group.ReadBasic.All|GroupMember.ReadBasic.All|User.Read.All') ($names -join '|')
+Assert-True 'an array of names is kept, duplicates and blanks dropped' ((@(ConvertTo-QsPermissionNames @('User.Read.All', '', 'User.Read.All', 'Group.ReadBasic.All')) -join '|') -ceq 'User.Read.All|Group.ReadBasic.All')
+Assert-True 'the script splits -Permissions before planning' ($grant -match '\$Permissions = @\(ConvertTo-QsPermissionNames \$Permissions\)[\s\S]*\$plan = @\(Get-QsPlan')
+$emptyError = try { $null = ConvertTo-QsPermissionNames @(', ,'); '' } catch { $_.Exception.Message }
+Assert-True 'a permission list with no names is refused, not an empty plan' ($emptyError -match '^no_permissions:') $emptyError
 $guide = Get-Content (Join-Path $root 'docs' 'QUICKSTART.md') -Raw
 Assert-True 'docs/QUICKSTART.md: after the grant, syncTimerEnabled = true and -Only 3' ($guide -match 'syncTimerEnabled = true[^\r\n]*\r?\n[^\r\n]*Deploy-Quickstart\.ps1 -Only 3')
 foreach ($file in 'main.bicepparam', 'customer-form.bicepparam') {

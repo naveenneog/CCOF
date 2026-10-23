@@ -18,8 +18,29 @@
 - Council round 1: ARCHITECT, QA BLOCK (Stage 6 accepted a Cosmos endpoint without every regional DNS name); notes on
   the bounded-staleness read-back, capacity pairs and cost wording. Round 2: all PASS (QA note: executable test for the
   verify-mode check, added).
-- Live: not deployed. Stage 1 is create-only, so it needs a new resource group, and the labs are in use by another
-  session.
+- Public release 5: `d4a73ff`, public CI passes (Node 22 and 26).
+- Live (2026-10-23, Lab A, throwaway RG `ccof-g9-cosmosha-rg`, deleted): `eastus2` was refused with and without
+  zone redundancy and zone-redundant `westus3` was refused (`ServiceUnavailable`, "high demand"); zone-redundant
+  `centralus` plus `westus3` without zones deployed with service-managed failover and Session (a Cosmos-only Bicep file,
+  not a full Stage 1 run). The Stage 1 read-back function, called directly, reported 0 problems for the matching
+  configuration, "Cosmos has 1 region(s); the configuration has 2" for the partial account, and the zone mismatch when
+  `westus3` was configured zone-redundant. A data-plane check of the resolver's preferred regions was not run: the
+  account's public network access stayed `Disabled` after two `az cosmosdb update` calls, as a tenant policy that
+  enforces it would cause. Guide 2.6 records the capacity steps. The full staged deployment with two regions still
+  needs a new resource group.
+
+### G-FIX — client restore and Graph grant fixes
+
+- `Restore-ClientSnapshot` now removes folders the installer created (for example `~/.claude/skills`) when they are
+  empty, deepest first; a folder that now holds another file stays; a snapshot without `createdDirectories` (older
+  format) still restores. Installer tests 39; mutants caught 2/2 (count equal to the baseline, one failure each).
+- `Grant-SyncGraphPermissions.ps1 -Permissions A,B,C` under `pwsh -File` passed one string and failed with
+  `app_role_missing` (found live in Lab A, plan-only). Comma lists are now split, trimmed and de-duplicated; a list
+  with no names stops with `no_permissions`. Quickstart step tests 34. The plan-only rerun listed all three
+  permissions. Apply needs an active Privileged Role Administrator role, which the signed-in account does not hold
+  (PIM eligible only).
+- Council: UX BLOCK (guide 2.6 described a Stage 1 read-back and rerun scope the code does not have; imperative
+  wording); Coder and QA notes (empty permission list, old-format snapshot). All fixed; Architect, Security PASS.
 
 ### G-USAGE — a person's own budget: `/usage` (complete offline; live blocked)
 

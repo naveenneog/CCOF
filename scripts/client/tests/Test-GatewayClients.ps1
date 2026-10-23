@@ -152,6 +152,26 @@ try {
         Assert ($kept.statusLine.command -ceq 'my-own-statusline') 'An existing status line was replaced'
         Assert ($result.statusLine -ceq 'kept_existing') 'Keeping the existing status line was not reported'
     }
+    Test-Case 'restore keeps a created folder that now holds another file' {
+        $home3 = Join-Path $work 'keep/.claude'
+        $options = $codeArgs.Clone(); $options.ClaudeHome = $home3; $options.BackupRoot = Join-Path $work 'keep-backups'
+        $r = Set-CcofClaudeCode @options -Confirmed | ConvertFrom-Json -AsHashtable
+        $mine = Join-Path $home3 'skills/mine/SKILL.md'; Write-ClientText $mine 'mine'
+        Restore-ClientSnapshot -BackupPath (Join-Path $options.BackupRoot $r.changeId) -Kind 'claude-code' -Confirmed | Out-Null
+        Assert (Test-Path -LiteralPath $mine) 'A file the person added under a created folder was removed'
+        Assert (-not (Test-Path -LiteralPath (Join-Path $home3 'skills/usage'))) 'The empty created usage folder was left behind'
+    }
+    Test-Case 'a snapshot written before createdDirectories existed still restores its files' {
+        $home4 = Join-Path $work 'old/.claude'
+        $options = $codeArgs.Clone(); $options.ClaudeHome = $home4; $options.BackupRoot = Join-Path $work 'old-backups'
+        $r = Set-CcofClaudeCode @options -Confirmed | ConvertFrom-Json -AsHashtable
+        $backup = Join-Path $options.BackupRoot $r.changeId
+        $manifest = Read-ClientJson (Join-Path $backup 'snapshot.json')
+        Assert ($manifest.Contains('createdDirectories')) 'The new snapshot does not record created folders'
+        $manifest.Remove('createdDirectories'); Write-ClientJson (Join-Path $backup 'snapshot.json') $manifest
+        Restore-ClientSnapshot -BackupPath $backup -Kind 'claude-code' -Confirmed | Out-Null
+        Assert (-not (Test-Path -LiteralPath (Join-Path $home4 'skills/usage/SKILL.md'))) 'An old-format snapshot did not restore its files'
+    }
     Test-Case 'restore detects later edits rather than overwriting them silently' {
         [IO.File]::AppendAllText($settingsPath, "`n")
         Refuses { Restore-ClientSnapshot -BackupPath (Join-Path $backupRoot $codeResult.changeId) -Kind 'claude-code' -Confirmed } 'changed'
@@ -163,6 +183,8 @@ try {
         Assert (-not (Test-Path (Join-Path $claudeHome 'ccof-token.cmd'))) 'New shim not removed'
         Assert (-not (Test-Path (Join-Path $claudeHome 'ccof-usage.ps1'))) 'New usage wrapper not removed'
         Assert (-not (Test-Path (Join-Path $claudeHome 'skills/usage/SKILL.md'))) 'New usage skill not removed'
+        Assert (-not (Test-Path (Join-Path $claudeHome 'skills'))) 'Folders created for the usage skill were left behind'
+        Assert (Test-Path -LiteralPath $claudeHome) 'Restore removed a folder that existed before setup'
         $vscode = Read-ClientJson $vscodePath
         Assert (-not $vscode.Contains('claudeCode.disableLoginPrompt')) 'Restore retained added key'
     }
