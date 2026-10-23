@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-23 — Staged: user names setting, Graph grant steps
+
+- `admin.userNamesEnabled` (default `false`) in the staged configuration; Stage 5 writes `ADMIN_USER_NAMES_ENABLED`.
+  Before, a staged deployment could not turn names on: Stage 5 writes the complete settings set, so a hand-set value
+  was removed on the next run.
+- [Guide](STAGED-DEPLOYMENT-GUIDE.md) section 6.1: one admin grant with `Group.ReadBasic.All`,
+  `GroupMember.ReadBasic.All` and `User.Read.All`; the settings to turn on afterwards; managed identity tokens are
+  cached about 24 hours, so a new grant can take several hours to apply (Learn reference).
+
 ## 2026-10-23 — Precedence by actual spend
 
 - **Precedence:** without a project selector, a person in several groups now gets the group where they have the

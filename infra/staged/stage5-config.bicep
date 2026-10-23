@@ -153,6 +153,7 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     ADMIN_V3_ENABLED: (admin.?v3Enabled ?? true) ? 'true' : 'false'
     // Entra group search for onboarding (ADR-0034); needs Graph Group.ReadBasic.All and GroupMember.ReadBasic.All.
     ADMIN_GROUP_SEARCH_ENABLED: (admin.?groupSearchEnabled ?? false) ? 'true' : 'false'
+    ADMIN_USER_NAMES_ENABLED: (admin.?userNamesEnabled ?? false) ? 'true' : 'false'
     ADMIN_WORKSPACE_ID: workspace.properties.customerId
     ADMIN_GATEWAY_RESOURCE_ID: apimService.id
     ADMIN_LOG_RESOURCE_IDS: join([reconcilerSite.id, adminInsights!.id, adminSite!.id], ',')

@@ -4,6 +4,12 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-NAMES — staged user names setting (complete)
+
+- `admin.userNamesEnabled` → `ADMIN_USER_NAMES_ENABLED` in Stage 5 ([stage5-config.bicep](../infra/staged/stage5-config.bicep));
+  guide section 6.1 grants `User.Read.All` with the group permissions and cites the ~24-hour managed identity token
+  cache. Staged 400 checks; the mutant (setting not passed) is caught; template builds offline (isolated az profile).
+
 ### G-PUB — public repository (complete)
 
 - `https://github.com/naveenneog/CCOF` (public) holds one commit, `95f0b86`, made from this tree on the orphan
@@ -16,6 +22,10 @@
   `git checkout public-main; git checkout main -- .`, rerun the scrub script (kept outside the repository because it
   lists the lab names it removes), commit, push `public-main:main`.
 - History up to `55b816f` remains public in `naveenneog/ccof-bicep`, with the lab names this scrub removed.
+- Release 2 (2026-10-23): `eeff307` on `public-main`, pushed to `main`, carries precedence by spend (`7594b8a`).
+  Identifier scan 0 hits; gitleaks only the known false positive; root 1137 pass; staged 398. The scrub's
+  `git rm` had refused the re-checked-out images (staged files need `-f`); they were removed before the commit,
+  and the script now uses `-f` and stops if any image path is still tracked or present.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 
