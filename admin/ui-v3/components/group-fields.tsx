@@ -76,7 +76,7 @@ export function AccessFields({ form, set, errors }: { form: GroupForm; set: Set;
         <Field label="Chargeback ID" hint="Optional. For example a WBS element; shown per developer in chargeback and exports." error={errors.chargebackId}>{(id, d) => (
           <input id={id} aria-describedby={d} aria-invalid={Boolean(errors.chargebackId)} className="input mono" value={form.chargebackId} maxLength={64} onChange={(e) => set({ chargebackId: e.target.value })} autoComplete="off" spellCheck={false} />
         )}</Field>
-        <Field label="Priority" hint="When a person is in several groups and sends no project header, the group with the higher per-user budget applies; with equal budgets, the lower number." error={errors.priority}>{(id, d) => (
+        <Field label="Priority" hint="When a person is in several groups and sends no project header, the group where they have spent the most this month applies; with equal spend, the lower number." error={errors.priority}>{(id, d) => (
           <input id={id} aria-describedby={d} aria-invalid={Boolean(errors.priority)} className="input input-num" inputMode="numeric" value={form.priority} onChange={(e) => set({ priority: e.target.value })} />
         )}</Field>
       </div>

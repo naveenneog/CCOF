@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-23 — Precedence by actual spend
+
+- **Precedence:** without a project selector, a person in several groups now gets the group where they have the
+  higher month-to-date spend (the reconciler's `spentCcu` for the current UTC month; no state counts as zero),
+  then the lower priority number. The earlier rule of this release compared per-user budgets, which is not usage
+  spend. A malformed spend is refused `budget_state_invalid`; ties are refused `project_selection_required`.
+  Memberships no longer carry `perUserBudget`. Rollout: resolver package, then raise `gateway.keyVersion`.
+
 ## 2026-10-23 — Admin 3.4.0: user tags
 
 - **User tags (owner decision):** the chargeback ID (for example a WBS element) is set per person on the new

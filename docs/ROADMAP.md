@@ -16,7 +16,7 @@
 | G7b — Export for Power BI | Complete | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
 | G8 — Admin UI | Complete | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
 | G-STAGE — Staged settings for groups | Complete | Staged config exposes gateway.surfaceClients and admin.groupSearchEnabled; Stage 5 applies them |
-| G-PREC — Precedence by spend | Complete | No selector and several groups: the higher per-user budget (CCU) applies, then the lower priority; still tied, malformed or missing values refused |
+| G-PREC — Precedence by spend | Complete | No selector and several groups: the group with the higher month-to-date spend (reconciler `spentCcu`, current UTC month) applies, then the lower priority; still tied or malformed priority refused; malformed spend `budget_state_invalid` |
 | G-REM — Removal | Complete | Removing a group is retirement, as for a project (ADR-0034 decision 9); retired-group removal ignores the removal limits (tested) |
 | G-TAG — User tags | Complete | A tag per person (the chargeback ID) set in the console, saved tags suggested while typing; the sync stamps it on the person's group memberships; reports filter by it and show it per user; exports carry it |
 | G-PUB — Public repository | Complete | `naveenneog/CCOF` created public from one squashed commit of a scrubbed tree (lab tenant, subscription, resource names replaced; live-run screenshots removed); identifier scan of the pushed tree is clean |

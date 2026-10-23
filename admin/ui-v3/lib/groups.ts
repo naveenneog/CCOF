@@ -74,7 +74,7 @@ export function formProblems(form: GroupForm): Record<string, string> {
   if (!form.displayName.trim() || form.displayName.trim().length > 256) p.displayName = "A name of 1 to 256 characters.";
   if (!ID.test(form.backendId.trim())) p.backendId = "The APIM backend ID the group routes to.";
   const priority = num(form.priority);
-  if (!Number.isInteger(priority) || priority < 1 || priority > 10000) p.priority = "A whole number from 1 to 10,000; between groups with equal per-user budgets, the lower number wins.";
+  if (!Number.isInteger(priority) || priority < 1 || priority > 10000) p.priority = "A whole number from 1 to 10,000; between groups where a person has equal spend this month, the lower number wins.";
   const chargeback = form.chargebackId.trim();
   if (chargeback !== "" && !CHARGEBACK_ID.test(chargeback)) p.chargebackId = "Letters, digits and . _ / - only, starting with a letter or digit; up to 64.";
   const perUser = num(form.perUserAmount);

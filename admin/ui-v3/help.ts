@@ -56,7 +56,7 @@ export const HELP: Record<string, HelpTopic> = {
     summary: "Entra security groups onboarded to Claude. Each group has its own per-user budget (auto-scale or capped), models and rate limits, allowed surfaces, priority, chargeback ID and expected cache-read share.",
     figures: [
       ["Budget", "Auto-scale: every member gets the per-user budget and the group has no total. Capped: members share one monthly total; a member can be refused before using their own budget."],
-      ["Priority", "When a person is in several groups and the request names none, the group with the higher per-user monthly budget applies (USD and CCU compared at 100 CCU = 1 USD). With equal budgets the lower priority number applies; if that is also equal, the request is refused and the person must name the group in the project header."],
+      ["Priority", "When a person is in several groups and the request names none, the group where that person has the higher usage spend this month applies (the reconciler's month-to-date figure). With equal spend, including none at the start of a month, the lower priority number applies; if that is also equal, the request is refused and the person must name the group in the project header."],
       ["Chargeback ID", "For example a WBS element. Copied into each request's usage record, so chargeback and exports group usage by it."],
       ["Usage CSV / Groups CSV", "Exports for Power BI or a spreadsheet: usage by chargeback ID, group and person for this month, and each group's configuration."],
     ],

@@ -4,7 +4,7 @@
 
 | ID | State | Question / evidence |
 | --- | --- | --- |
-| G-A1 | RESOLVED / ASSUMED | Owner decision 2026-10-23: "person in multiple groups will receive a group with higher usage spend". Implemented as the higher per-user monthly budget (CCU), then lower priority, else refused (G-PREC). ASSUMED part: "usage spend" read as the per-user budget, not month-to-date spend or remaining budget; owner asked, unavailable. Blast radius: resolver selection only. |
+| G-A1 | RESOLVED | Owner decision 2026-10-23: "person in multiple groups will receive a group with higher usage spend". Implemented as the higher month-to-date spend in that group (reconciler `spentCcu` for the current UTC month), then the lower priority, else refused (G-PREC, ADR-0034 decision 5). Blast radius: resolver selection only. |
 | G-A2 | RESOLVED | Owner decision 2026-10-23: the chargeback ID is an individual user tag set when the user is onboarded, not per group; saved tags are suggested; reports filter by it and show it per user (G-TAG). The group's own chargeback ID stays as the default for members without a tag (ASSUMED; owner asked, unavailable). |
 | G-A3 | RESOLVED | Owner decision 2026-10-23: removal is retirement, as the project retirement (ADR-0034 decision 9). Group retirement already matches it; a test now proves removal ignores the removal limits, as for projects. |
 | G-A4 | ASSUMED | Owner decision 2026-10-22: no STD/PRM/CYB; each group is a separate entity. Transitional wire keeps `projectId`/`classification` (ADR-0034 decision 4) until G-WIRE. |

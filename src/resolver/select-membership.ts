@@ -4,16 +4,16 @@
 // - the selector path (docs/PILOT.md C-1, ADR-0006's rule): no key; an
 //   optional projectId selector chooses among the person's active memberships,
 //   and with no selector the single active project is used, or, when every
-//   active membership is an onboarded group, the one with the higher per-user
-//   budget, then the lower priority (ADR-0034 decision 5).
+//   active membership is an onboarded group, the one where the person has the
+//   higher month-to-date spend, then the lower priority (ADR-0034 decision 5).
 // Either way the selector only chooses; authorization comes from the record.
 
-import type { EntitlementRecord, ProjectMembership, ResolveDependencies, ResolveInput } from "./decide.ts";
+import type { BudgetStateRecord, EntitlementRecord, ProjectMembership, ResolveDependencies, ResolveInput } from "./decide.ts";
 import { checkEntitlementRecord } from "./freshness.ts";
 import type { ResolveRefusal } from "./refusals.ts";
 import { refuse, settledValue } from "./refusals.ts";
 import { GROUP_SCOPE_CODE } from "../contracts/model-families.ts";
-import { budgetInBothUnits, parseBudget } from "../cost/budget-units.ts";
+import { Money } from "../cost/money.ts";
 import { MAX_PRIORITY } from "../contracts/group-registration.ts";
 import type { Decimal } from "decimal.js";
 
@@ -76,24 +76,45 @@ export async function selectByKey(
   return selection;
 }
 
-// Without a selector, among memberships that are all onboarded groups, the group with the higher
-// per-user monthly budget applies, compared in CCU; equal budgets fall back to the lower priority
-// (ADR-0034 decision 5, owner decision 2026-10-23). Anything still tied, a missing or malformed
-// budget or priority, or any baseline membership leaves the choice to the caller.
-function preferredGroup(active: ProjectMembership[]): string | null {
-  const ranked: { projectId: string; ccu: Decimal; priority: number }[] = [];
+// Without a selector, among memberships that are all onboarded groups, the group where the person has
+// spent the most this UTC month applies (ADR-0034 decision 5; owner decision 2026-10-23, "higher usage
+// spend"). Spend is the reconciler's exact decimal spentCcu in the person's budgetState for that group
+// (src/reconciler/reconcile-person.ts); no state, or a state for an earlier month, is no spend this month.
+// Equal spend falls back to the lower priority. Anything still tied, a malformed priority or any baseline
+// membership leaves the choice to the caller; a malformed spend is budget_state_invalid. A failed read
+// fails the request, as every other registry read does.
+// A non-negative plain decimal as Decimal.toFixed() writes it (no exponent, no sign, no length cap: the writer
+// has none either). Construction and comparedTo are exact at any length; precision applies only to arithmetic.
+const SPENT_CCU = /^\d+(\.\d+)?$/;
+
+async function preferredGroup(
+  active: ProjectMembership[], personId: string, deps: ResolveDependencies, nowMs: number, signal?: AbortSignal,
+): Promise<{ projectId: string | null } | ResolveRefusal> {
+  const candidates: { projectId: string; priority: number }[] = [];
   for (const m of active) {
-    const raw = m as unknown as Record<string, unknown>;
-    const priority = raw.priority;
-    if (m.classification !== GROUP_SCOPE_CODE || !Number.isSafeInteger(priority) || (priority as number) < 1 || (priority as number) > MAX_PRIORITY) return null;
-    let ccu: Decimal;
-    try { ccu = budgetInBothUnits(parseBudget(raw.perUserBudget, "perUserBudget")).ccu; } catch { return null; }
-    ranked.push({ projectId: m.projectId, ccu, priority: priority as number });
+    const priority = (m as unknown as Record<string, unknown>).priority;
+    if (m.classification !== GROUP_SCOPE_CODE || !Number.isSafeInteger(priority) || (priority as number) < 1 || (priority as number) > MAX_PRIORITY) {
+      return { projectId: null };
+    }
+    candidates.push({ projectId: m.projectId, priority: priority as number });
   }
-  ranked.sort((a, b) => b.ccu.comparedTo(a.ccu) || a.priority - b.priority);
+  // The budget period label, "YYYY-MM" in UTC, as the reconciler writes it (src/reconciler/period.ts).
+  const period = new Date(nowMs).toISOString().slice(0, 7);
+  const states = await Promise.all(candidates.map((c) => deps.readBudgetState(personId, c.projectId, signal)));
+  const ranked: { projectId: string; priority: number; spent: Decimal }[] = [];
+  for (const [i, c] of candidates.entries()) {
+    const s = states[i] as (BudgetStateRecord & { spentCcu?: unknown; period?: unknown }) | null;
+    let spent = new Money(0);
+    if (s && s.period === period) {
+      if (typeof s.spentCcu !== "string" || !SPENT_CCU.test(s.spentCcu)) return refuse("budget_state_invalid", c.projectId);
+      spent = new Money(s.spentCcu);
+    }
+    ranked.push({ ...c, spent });
+  }
+  ranked.sort((a, b) => b.spent.comparedTo(a.spent) || a.priority - b.priority);
   const best = ranked[0];
-  const winners = new Set(ranked.filter((r) => r.ccu.equals(best.ccu) && r.priority === best.priority).map((r) => r.projectId));
-  return winners.size === 1 ? best.projectId : null;
+  const winners = new Set(ranked.filter((r) => r.spent.equals(best.spent) && r.priority === best.priority).map((r) => r.projectId));
+  return { projectId: winners.size === 1 ? best.projectId : null };
 }
 
 export async function selectBySelector(
@@ -113,8 +134,9 @@ export async function selectBySelector(
   const projects = new Set(active.map((m) => m.projectId));
   if (projects.size === 0) return refuse("no_entitlement");
   if (projects.size > 1) {
-    const chosen = preferredGroup(active);
-    return chosen === null ? refuse("project_selection_required") : pickInProject(active, chosen, true);
+    const chosen = await preferredGroup(active, input.personId, deps, nowMs, signal);
+    if ("refused" in chosen) return chosen;
+    return chosen.projectId === null ? refuse("project_selection_required") : pickInProject(active, chosen.projectId, true);
   }
   return pickInProject(active, active[0].projectId, true);
 }

@@ -302,7 +302,7 @@
     "groupSearchEnabled": false
   },
   "acceptance": {
-    "selectorNote": "Requests carry no project selector: the caller's group with the higher per-user budget applies (ADR-0034).",
+    "selectorNote": "Requests carry no project selector: the caller's group with the higher month-to-date spend applies (ADR-0034).",
     "allowed": [
       {
         "model": "claude-haiku-4-5"
