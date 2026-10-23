@@ -19,6 +19,8 @@
   API policy limit (ADR-0039, `8773205`); Stage 1 null subnet (`3beb2bb`); BOM read, usage-policy comments, Stage 8
   JSON column (`8773205`); `/usage` rows classified `no-backend-call` in the ledger (`d9b6978`). Mutants: split 3/3 caught; RED shown for
   every other new test.
+- Council: round 1 Coder BLOCK (fragment ID bounds), fixed; round 2 all PASS. Public release 8: `66ea82c`, public CI
+  passes (Node 22 and 26). The lab stays deployed for inspection.
 - Open: E2E-01 (backend 429 shown as unpriced in chargeback; owner decision). Report:
   [BUDGET-ACCEPTANCE-2026-10-23.md](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 ### Owner acceptance request (2026-10-23)
