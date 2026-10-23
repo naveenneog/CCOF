@@ -4,6 +4,23 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-HA — Cosmos DB redundancy and consistency (complete offline)
+
+- Owner: "a cosmos with consistency model ... so its not a single point of failure". `stage1.cosmosLocations` (regions in
+  failover order, `isZoneRedundant`), `stage1.cosmosConsistency`; two or more regions turn on service-managed failover;
+  configuration checks and a Stage 1 read-back ([Staged.Cosmos.ps1](../infra/staged/Staged.Cosmos.ps1)); the resolver
+  reads in `COSMOS_PREFERRED_REGIONS` order, set by Stage 5. Example: two zone-redundant regions (`eastus2`,
+  `centralus`), provisioned autoscale, Session. [ADR-0036](adr/0036-cosmos-redundancy-and-consistency.md), guide 2.6.
+- Tests: staged 446 checks; network DNS 5 (the real network check against a fake `az`); resolver config and Cosmos
+  options 26; root 1168 pass, 0 fail; strict typecheck 0. Mutants 16/16 caught (two first survived because one test
+  broke two rules at once; it was split). Read-backs run on the live Contoso account and endpoint: a single-region
+  configuration passes; a two-region one names the missing region, the failover setting and the DNS name.
+- Council round 1: ARCHITECT, QA BLOCK (Stage 6 accepted a Cosmos endpoint without every regional DNS name); notes on
+  the bounded-staleness read-back, capacity pairs and cost wording. Round 2: all PASS (QA note: executable test for the
+  verify-mode check, added).
+- Live: not deployed. Stage 1 is create-only, so it needs a new resource group, and the labs are in use by another
+  session.
+
 ### G-USAGE — a person's own budget: `/usage` (complete offline; live blocked)
 
 - Gateway `GET /ccof/me/usage` (operation `get-my-usage`, own policy without `<base />`, token checks byte-equal to

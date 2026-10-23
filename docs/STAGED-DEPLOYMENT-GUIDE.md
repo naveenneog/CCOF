@@ -140,6 +140,32 @@ Either an existing Foundry account with Claude deployments (listed under `backen
 creates one (`stage1.foundry.create: true`), which requires a subscription that can purchase the Claude
 offer from Azure Marketplace. A sandbox subscription cannot ([run report](STAGED-STDV2-RUNS-2026-10-20.md)).
 
+### 2.6 Cosmos DB redundancy
+
+Every component uses one Cosmos DB account. The example configuration makes it redundant
+([ADR-0036](adr/0036-cosmos-redundancy-and-consistency.md)):
+
+| Setting | Example | Effect |
+| --- | --- | --- |
+| `stage1.cosmosCapacityMode` and `cosmos.capacityMode` | `provisioned`, `provisioned-autoscale` | Required for more than one region: a serverless account runs in one region |
+| `stage1.cosmosLocations` | `eastus2` then `centralus`, both `isZoneRedundant: true` | Regions in failover order; the first is the write region and must be `location`. Two or more turn on service-managed failover |
+| `stage1.cosmosConsistency` | `{ "defaultConsistencyLevel": "Session" }` | Data loss window on a region failover: under 15 minutes for Session; `BoundedStaleness` needs at least 100,000 writes or 300 s across regions; `Strong` loses none but adds cross-region latency to every write |
+
+What each layout survives:
+
+| Layout | Datacentre (zone) failure | Region outage |
+| --- | --- | --- |
+| No `cosmosLocations` (one region, the earlier default) | No | No |
+| One region, `isZoneRedundant: true` (serverless allowed) | Yes | No |
+| Two regions with service-managed failover | No, unless zone-redundant | Reads continue from the second region at once (the resolver reads in `COSMOS_PREFERRED_REGIONS` order, set by Stage 5); writes resume after failover |
+| Two zone-redundant regions (example) | Yes | As above |
+
+Choose a second region with availability zones and Cosmos capacity in your subscription. Stage 1 is create-only:
+an account already deployed keeps its layout; a new layout needs a new resource group. Provisioned throughput is
+billed in every region. Zone-redundant regions are charged a premium, which is waived for autoscale throughput, the
+mode used here ([reliability, Cost](https://learn.microsoft.com/en-us/azure/reliability/reliability-cosmos-db);
+[pricing](https://azure.microsoft.com/pricing/details/cosmos-db/)).
+
 ---
 
 ## 3. Cloud Shell setup
@@ -237,7 +263,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Cloud Shell:** preview, then `-Apply` (common command, `-Stage 1`).
 - **Portal:** workbook sections 04, 05, 07 (optional Foundry), 08 (Cosmos account), 09, 10, 11.
 - **Worked when:** the read-back reports every app with zero settings, keyless storage, no database
-  and zero role assignments ([STAGE1-LIVE-VERIFICATION.md](STAGE1-LIVE-VERIFICATION.md)).
+  and zero role assignments ([STAGE1-LIVE-VERIFICATION.md](STAGE1-LIVE-VERIFICATION.md)), and the Cosmos
+  account's regions, zone redundancy, failover and consistency match the configuration ([section 2.6](#26-cosmos-db-redundancy)).
 
 ### Stage 2: Cosmos schema
 

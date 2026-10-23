@@ -48,11 +48,14 @@ function Invoke-Stage5 {
             userNamesEnabled = ($Cfg.admin.userNamesEnabled -eq $true)
             clientId = $entra.registrations.developerSignIn.appId; gatewayUrl = $ctx.GatewayUrl; projectHeader = $Cfg.gateway.projectHeaderName }
     }
+    # The resolver reads Cosmos in the configured failover order when the account has two or more regions (ADR-0036).
+    $resolverSettings = @{}; foreach ($k in $Cfg.resolver.Keys) { $resolverSettings[$k] = $Cfg.resolver[$k] }
+    $resolverSettings.preferredRegions = @((Get-StgCosmosPreferredRegions $Cfg) -split ',' | Where-Object { $_ })
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
         apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policy; usagePolicyXml = $usagePolicy
-        resolver = $Cfg.resolver; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
+        resolver = $resolverSettings; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value

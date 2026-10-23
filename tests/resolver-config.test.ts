@@ -28,6 +28,21 @@ const pilotEnv = {
   RESOLVER_BUDGET_ENFORCEMENT: "token-limits-only",
 };
 
+test("COSMOS_PREFERRED_REGIONS: absent or empty is none; a comma list of ARM region names in order; anything else is a problem", () => {
+  const read = (value?: string) => readResolverConfig(value === undefined ? pilotEnv : { ...pilotEnv, COSMOS_PREFERRED_REGIONS: value });
+  for (const none of [undefined, ""]) {
+    const r = read(none);
+    assert.ok(r.ok && r.config.cosmos.preferredRegions === undefined, String(none));
+  }
+  const two = read("eastus2,centralus");
+  assert.ok(two.ok);
+  assert.deepEqual(two.config.cosmos.preferredRegions, ["eastus2", "centralus"]);
+  for (const bad of ["East US 2", "eastus2,", "eastus2,eastus2", "eastus2;centralus", " eastus2"]) {
+    const r = read(bad);
+    assert.ok(!r.ok && r.problems.some((p) => p.setting === "COSMOS_PREFERRED_REGIONS" && p.problem === "invalid_regions"), bad);
+  }
+});
+
 const cosmos = {
   endpoint: "https://sample-pilot-cosmos.documents.azure.com:443/",
   databaseName: "ccof",
@@ -54,6 +69,7 @@ test("the setting names are the documented app settings", () => {
     budgetStateGraceSeconds: "RESOLVER_BUDGET_STATE_GRACE_SECONDS",
     budgetStateHardLimitSeconds: "RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS",
     usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
+    cosmosPreferredRegions: "COSMOS_PREFERRED_REGIONS",
   });
 });
 

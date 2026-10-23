@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-10-23 — Cosmos DB redundancy and consistency
+
+- Staged `stage1.cosmosLocations` (regions in failover order, each `isZoneRedundant`) and `stage1.cosmosConsistency`.
+  Two or more regions turn on service-managed failover. Absent: the earlier single region.
+- Checks: serverless in one region only, the capacity modes agree, the first region is `location`, ARM region names,
+  no duplicates, consistency values and bounded-staleness minimums. Stage 1 reads the account back.
+- The resolver reads in `COSMOS_PREFERRED_REGIONS` order (Stage 5 sets it), so reads continue from the second region
+  during an outage. The example configuration now uses two zone-redundant regions, provisioned autoscale, Session.
+  [ADR-0036](adr/0036-cosmos-redundancy-and-consistency.md).
+
 ## 2026-10-23 — `/usage`: a person's own budget in Claude Code
 
 - **Gateway:** `GET <gateway>/anthropic/ccof/me/usage` (operation `get-my-usage`). Same token checks as

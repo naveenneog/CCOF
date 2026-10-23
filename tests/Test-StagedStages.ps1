@@ -120,7 +120,7 @@ Assert-Contract (($s1.parameters.apimSku.allowedValues -join ',') -ceq 'BasicV2,
 # Driver: parses, every stage has an entry function, no az argument holds a cmd.exe metacharacter,
 # preview is the default, and later stages read earlier stage state.
 $driverPath = Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1'
-$driverFiles = @($driverPath) + @('Staged.Common.ps1', 'Staged.Groups.ps1', 'Staged.Resources.ps1', 'Staged.Entra.ps1', 'Staged.Application.ps1' | ForEach-Object { Join-Path $root "infra\staged\$_" })
+$driverFiles = @($driverPath) + @('Staged.Common.ps1', 'Staged.Groups.ps1', 'Staged.Cosmos.ps1', 'Staged.Resources.ps1', 'Staged.Entra.ps1', 'Staged.Application.ps1' | ForEach-Object { Join-Path $root "infra\staged\$_" })
 $functionAsts = @()
 foreach ($file in $driverFiles) {
     $tokens = $null; $errors = $null
@@ -160,6 +160,74 @@ $dnsTargets = Get-StgNetworkDnsTargets -Cfg $dnsConfig -Outputs $dnsOutputs -Has
 Assert-Contract ($dnsTargets.vnetId -ceq '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet' -and $dnsTargets.zoneIds.Count -eq 5) 'Stage 6 must derive DNS targets when earlier deployment outputs lack VNet and Foundry zone IDs.'
 $headers = New-StgGatewayHeaders -Token 'token-placeholder' -Project 'PROJECT01' -ProjectHeader 'x-customer-project'
 Assert-Contract ($headers['x-customer-project'] -ceq 'PROJECT01' -and -not $headers.ContainsKey('x-ccof-project')) 'Stage 8 must use the configured project selector header.'
+# Cosmos DB resilience (ADR-0036): regions in failover order, zone redundancy, consistency; read back in Stage 1.
+$haCfg = @{ location = 'eastus2'; stage1 = @{ cosmosCapacityMode = 'provisioned'
+        cosmosLocations = @(@{ locationName = 'eastus2'; isZoneRedundant = $true }, @{ locationName = 'centralus'; isZoneRedundant = $true })
+        cosmosConsistency = @{ defaultConsistencyLevel = 'Session' } }; cosmos = @{ capacityMode = 'provisioned-autoscale' } }
+Assert-Contract (-not @(Get-StgCosmosProblems $haCfg).Count) 'A two-region, zone-redundant, provisioned Session account must be accepted.'
+Assert-Contract ((Get-StgCosmosPreferredRegions $haCfg) -ceq 'eastus2,centralus') 'Preferred read regions follow the failover order.'
+$single = @{ location = 'eastus2'; stage1 = @{ cosmosCapacityMode = 'serverless' }; cosmos = @{ capacityMode = 'serverless' } }
+Assert-Contract (-not @(Get-StgCosmosProblems $single).Count -and (Get-StgCosmosPreferredRegions $single) -ceq '' -and @(Get-StgCosmosRegions $single).Count -eq 1 -and -not (Get-StgCosmosRegions $single)[0].isZoneRedundant) 'No cosmosLocations keeps one region, no zone redundancy, and no preferred-region setting.'
+$zoneServerless = @{ location = 'eastus2'; stage1 = @{ cosmosCapacityMode = 'serverless'; cosmosLocations = @(@{ locationName = 'eastus2'; isZoneRedundant = $true }) }; cosmos = @{ capacityMode = 'serverless' } }
+Assert-Contract (-not @(Get-StgCosmosProblems $zoneServerless).Count) 'Zone-redundant serverless in one region must be accepted.'
+function Test-CosmosRefusal([scriptblock]$Mutate, [string]$Pattern, [string]$Why) {
+    $c = $haCfg | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable; & $Mutate $c
+    Assert-Contract (@(@(Get-StgCosmosProblems $c) -match $Pattern).Count -ge 1) $Why
+}
+Test-CosmosRefusal { param($c) $c.stage1.cosmosCapacityMode = 'serverless'; $c.cosmos.capacityMode = 'serverless' } 'serverless' 'Serverless with two regions must be refused (a serverless account runs in one region).'
+Test-CosmosRefusal { param($c) $c.cosmos.capacityMode = 'serverless' } 'capacityMode' 'Stage 1 and Stage 2 capacity modes must agree.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosLocations[0].locationName = 'centralus'; $c.stage1.cosmosLocations[1].locationName = 'eastus2' } 'first region' 'The first region (the write region) must be the deployment location.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosLocations[1].locationName = 'eastus2' } 'duplicate' 'A region listed twice must be refused.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosLocations[1].locationName = 'East US 2' } 'region name' 'Region names must be ARM names (lower-case letters and digits).'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosLocations[1].isZoneRedundant = 'yes' } 'isZoneRedundant' 'isZoneRedundant must be a boolean.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosConsistency = @{ defaultConsistencyLevel = 'Sesion' } } 'consistency' 'An unknown consistency level must be refused.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosConsistency = @{ defaultConsistencyLevel = 'BoundedStaleness'; maxStalenessPrefix = 1000; maxIntervalInSeconds = 300 } } 'maxStalenessPrefix' 'Bounded staleness across regions needs at least 100,000 writes.'
+Test-CosmosRefusal { param($c) $c.stage1.cosmosConsistency = @{ defaultConsistencyLevel = 'BoundedStaleness'; maxStalenessPrefix = 100000; maxIntervalInSeconds = 60 } } 'maxIntervalInSeconds' 'Bounded staleness across regions needs at least 300 seconds.'
+$bounded = $haCfg | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable; $bounded.stage1.cosmosConsistency = @{ defaultConsistencyLevel = 'BoundedStaleness'; maxStalenessPrefix = 100000; maxIntervalInSeconds = 300 }
+Assert-Contract (-not @(Get-StgCosmosProblems $bounded).Count) 'Bounded staleness at the multi-region minimums must be accepted.'
+# Read-back: az cosmosdb show reports display names ("East US 2") and the failover priority.
+$shown = @{ enableAutomaticFailover = $true; consistencyPolicy = @{ defaultConsistencyLevel = 'Session' }
+    locations = @(@{ locationName = 'Central US'; failoverPriority = 1; isZoneRedundant = $true }, @{ locationName = 'East US 2'; failoverPriority = 0; isZoneRedundant = $true }) }
+Assert-Contract (-not @(Get-StgCosmosAccountProblems $haCfg $shown).Count) 'The deployed account matching the configuration must pass the read-back.'
+foreach ($bad in @(
+    @{ k = 'failover'; f = { param($s) $s.enableAutomaticFailover = $false } },
+    @{ k = 'zone'; f = { param($s) $s.locations[0].isZoneRedundant = $false } },
+    @{ k = 'order'; f = { param($s) $s.locations[0].failoverPriority = 0; $s.locations[1].failoverPriority = 1 } },
+    @{ k = 'consistency'; f = { param($s) $s.consistencyPolicy.defaultConsistencyLevel = 'Eventual' } },
+    @{ k = 'missing'; f = { param($s) $s.locations = @($s.locations[1]) } })) {
+    $s = $shown | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable; & $bad.f $s
+    Assert-Contract (@(Get-StgCosmosAccountProblems $haCfg $s).Count -ge 1) "The read-back must catch a deployed account that differs ($($bad.k))."
+}
+$s1Text = Get-Content -Raw (Join-Path $root 'infra\staged\main.bicep')
+Assert-Contract ($s1Text -match 'param cosmosLocations array = \[\]' -and $s1Text -match 'locations: \[for \(r, i\) in cosmosRegions: \{ locationName: r\.locationName, failoverPriority: i, isZoneRedundant: r\.isZoneRedundant \}\]' -and $s1Text -match 'enableAutomaticFailover: length\(cosmosRegions\) > 1' -and $s1Text -match 'consistencyPolicy: cosmosConsistency') 'Stage 1 must deploy the configured regions in order, failover with two or more, and the configured consistency.'
+$resText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Resources.ps1')
+# Council G-HA: private DNS names for every Cosmos region; bounded-staleness bounds read back; exact capacity pairs.
+$fq = { param($n) "$n.privatelink.documents.azure.com" }
+$okRecords = @((& $fq 'acct'), (& $fq 'acct-eastus2'), (& $fq 'acct-centralus'))
+Assert-Contract (-not @(Get-StgCosmosDnsProblems -AccountName 'acct' -Regions @('eastus2', 'centralus') -Fqdns $okRecords).Count) 'A Cosmos endpoint with the global name and every region name must pass.'
+Assert-Contract (@(Get-StgCosmosDnsProblems -AccountName 'acct' -Regions @('eastus2', 'centralus') -Fqdns @($okRecords[0], $okRecords[1])) -match 'acct-centralus').Count -eq 1 'A missing secondary-region DNS name must be reported by name.'
+Assert-Contract (@(Get-StgCosmosDnsProblems -AccountName 'acct' -Regions @('eastus2') -Fqdns @((& $fq 'acct-eastus2'))) -match "'acct'").Count -eq 1 'A missing global DNS name must be reported.'
+Assert-Contract (-not @(Get-StgCosmosDnsProblems -AccountName 'ACCT' -Regions @('eastus2') -Fqdns @('acct.privatelink.documents.azure.com.', 'Acct-EastUS2.privatelink.documents.azure.com')).Count) 'DNS names compare without case or a trailing dot.'
+$verifyArgs = Get-StgNetworkVerifyArguments @{ subscriptionId = '00000000-0000-4000-8000-000000000002'; resourceGroup = 'rg'; location = 'eastus2'; stage1 = $haCfg.stage1; cosmos = $haCfg.cosmos
+    network = @{ existing = @{ functionsSubnetId = '/subscriptions/s/resourceGroups/n/providers/Microsoft.Network/virtualNetworks/v/subnets/f'; privateEndpointSubnetId = '/subscriptions/s/resourceGroups/n/providers/Microsoft.Network/virtualNetworks/v/subnets/p' } }; backends = @() } @{ names = @{ apps = @{} }; cosmosAccountId = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.DocumentDB/databaseAccounts/acct' }
+Assert-Contract ((@($verifyArgs.CosmosRegions) -join ',') -ceq 'eastus2,centralus') 'Stage 6 verify mode must pass every Cosmos region to the network check.'
+$netText = Get-Content -Raw (Join-Path $root 'scripts\manual\Test-NetworkConfiguration.ps1')
+Assert-Contract ($netText -match '\[string\[\]\]\$CosmosRegions = @\(\)' -and $netText -match "Add-Result 'PrivateDNS' 'Cosmos regional names' 'FAIL'") 'The network check must FAIL when a Cosmos region has no private DNS name.'
+Assert-Contract ($resText -match 'Get-StgCosmosDnsProblems -AccountName \$s1\.names\.cosmosAccount') 'Stage 6 (existing/create) must check the Cosmos endpoint DNS names for every region.'
+$bs = $bounded | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
+$bsShown = $shown | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable
+$bsShown.consistencyPolicy = @{ defaultConsistencyLevel = 'BoundedStaleness'; maxStalenessPrefix = 100000; maxIntervalInSeconds = 300 }
+Assert-Contract (-not @(Get-StgCosmosAccountProblems $bs $bsShown).Count) 'Bounded staleness with the configured bounds must pass the read-back.'
+$bsShown.consistencyPolicy.maxIntervalInSeconds = 600
+Assert-Contract (@(Get-StgCosmosAccountProblems $bs $bsShown) -match 'maxIntervalInSeconds').Count -eq 1 'A deployed bounded-staleness interval that differs must be caught.'
+$bsShown.consistencyPolicy.maxIntervalInSeconds = 300; $bsShown.consistencyPolicy.maxStalenessPrefix = 200000
+Assert-Contract (@(Get-StgCosmosAccountProblems $bs $bsShown) -match 'maxStalenessPrefix').Count -eq 1 'A deployed bounded-staleness prefix that differs must be caught.'
+Test-CosmosRefusal { param($c) $c.cosmos.capacityMode = 'provisioned' } 'capacityMode' 'Only provisioned with provisioned-autoscale (or serverless with serverless) may be paired.'
+$exampleHa = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable -Depth 100
+Assert-Contract (@($exampleHa.stage1.cosmosLocations).Count -ge 2 -and @($exampleHa.stage1.cosmosLocations | Where-Object { -not $_.isZoneRedundant }).Count -eq 0 -and $exampleHa.stage1.cosmosLocations[0].locationName -ceq $exampleHa.location -and -not @(Get-StgCosmosProblems $exampleHa).Count) 'The example configuration must use two zone-redundant regions and pass the Cosmos checks.'
+Assert-Contract ($resText -match 'Get-StgCosmosAccountProblems \$Cfg \$cosmos') 'Stage 1 must read back the Cosmos regions, failover and consistency.'
+Assert-Contract ($settingsModule -match "COSMOS_PREFERRED_REGIONS: join\(resolver\.\?preferredRegions \?\? \[\], ','\)" -and $appText -match 'preferredRegions = @\(\(Get-StgCosmosPreferredRegions \$Cfg\)') 'Stage 5 must give the resolver the preferred read regions.'
+
 # Group entries (ADR-0034, G-SEED): a staged group is its own entity, with no project or classification.
 $exampleCfg = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable -Depth 100
 $groupEntry = @($exampleCfg.groups | Where-Object { $_.kind -ceq 'group' })[0]

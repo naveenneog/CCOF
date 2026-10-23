@@ -56,6 +56,8 @@ var resolverSettings = {
   RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS: string(budgetState.hardLimitSeconds)
   // GET /ccof/me/usage: whether a person also sees their scope's total (docs/USAGE.md). Off unless set.
   RESOLVER_USAGE_GROUP_TOTALS: (resolver.?usageGroupTotals ?? false) ? 'true' : 'false'
+  // Cosmos read regions in failover order (ADR-0036); empty for a single-region account.
+  COSMOS_PREFERRED_REGIONS: join(resolver.?preferredRegions ?? [], ',')
 }
 
 // D2 writes the two budget-state settings only when budgetEnforcement is budget-state.
