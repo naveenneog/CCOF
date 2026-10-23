@@ -16,6 +16,10 @@
   `git checkout public-main; git checkout main -- .`, rerun the scrub script (kept outside the repository because it
   lists the lab names it removes), commit, push `public-main:main`.
 - History up to `55b816f` remains public in `naveenneog/ccof-bicep`, with the lab names this scrub removed.
+- Release 2 (2026-10-23): `eeff307` on `public-main`, pushed to `main`, carries precedence by spend (`7594b8a`).
+  Identifier scan 0 hits; gitleaks only the known false positive; root 1137 pass; staged 398. The scrub's
+  `git rm` had refused the re-checked-out images (staged files need `-f`); they were removed before the commit,
+  and the script now uses `-f` and stops if any image path is still tracked or present.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 
