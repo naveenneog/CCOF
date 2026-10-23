@@ -215,7 +215,7 @@ function Invoke-Stage8 {
     $checks.telemetry = @{ query = $q; requestIds = $ids; rows = $rows }
     Assert-Stg ($rows.Count -and [int]$rows[0].requests -eq $ids.Count) "only $(if ($rows.Count) { $rows[0].requests } else { 0 }) of this run's $($ids.Count) requests reached ApiManagementGatewayLlmLog within 15 minutes"
     if ($expectedGroup) {
-        # Without a selector the resolver picks the group with the higher per-user budget (ADR-0034); a caller in another
+        # Without a selector the resolver picks the group with the higher month-to-date spend (ADR-0034); a caller in another
         # group could otherwise pass on that group's models. The usage trace names the scope charged.
         $sq = New-StgSelectionQuery -RequestIds $ids
         $sel = @()

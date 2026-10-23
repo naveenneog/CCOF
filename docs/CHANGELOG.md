@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-23 — Precedence by actual spend
+
+- **Precedence:** without a project selector, a person in several groups now gets the group where they have the
+  higher month-to-date spend (the reconciler's `spentCcu` for the current UTC month; no state counts as zero),
+  then the lower priority number. The earlier rule of this release compared per-user budgets, which is not usage
+  spend. A malformed spend is refused `budget_state_invalid`; ties are refused `project_selection_required`.
+  Memberships no longer carry `perUserBudget`. Rollout: resolver package, then raise `gateway.keyVersion`.
+
 ## 2026-10-23 — Admin 3.4.0: user tags
 
 - **User tags (owner decision):** the chargeback ID (for example a WBS element) is set per person on the new
@@ -107,7 +115,7 @@
   link, IAM **Role assignments** tab and list filters, reuse of the signed-in tab and its Portal
   host, one re-read for slow blades, literal-string masking. Two weak expectations were tightened;
   a negative control shows the resolver Authentication check fails on the wrong blade.
-- The staged guide embedded 13 masked Lab A captures; they are not published in the public repository.
+- The staged guide embeds 13 masked Lab A captures (`docs/runbooks/images/staged-portal`).
   Pages that list people are not published.
 
 ## 2026-10-20 — Staged deployment bug bash and live recheck
@@ -162,7 +170,7 @@
   `BasicV2` allowed; outputs `names` and `apimName` for later stages.
 - Live run in a new lab RG after deleting the Stage 1 RG: all nine stages verified, gateway
   401/200/403 matrix, Admin V3 with live chargeback data
-  ([report](STAGED-LIVE-RUN-2026-10-20.md), 20 screenshots, not published in the public repository).
+  ([report](STAGED-LIVE-RUN-2026-10-20.md), 20 screenshots in `docs/images/staged`).
 - Tests: `tests/Test-StagedStages.ps1` (stage boundaries with a negative control, Cosmos
   contract against the quickstart, driver and configuration checks).
 - Runbook rewritten: [configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).

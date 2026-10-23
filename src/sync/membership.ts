@@ -102,7 +102,6 @@ function copiedFields(reg: ClassificationRegistration, chargebackId?: string | n
         surfaces: [...reg.group.surfaces],
         chargebackId: chargebackId !== undefined ? chargebackId : reg.group.chargebackId,
         restrictedFamiliesApproved: reg.group.restrictedFamiliesApproved,
-        perUserBudget: structuredClone(reg.group.perUserBudget),
       }
       : {}),
   };
@@ -110,7 +109,7 @@ function copiedFields(reg: ClassificationRegistration, chargebackId?: string | n
 
 const COPIED_KEYS = [
   "projectId", "classification", "classificationGroupId", "classificationGroupDisplayName", "familyPolicy", "backendId", "aggregateMode", "status",
-  "priority", "surfaces", "chargebackId", "restrictedFamiliesApproved", "perUserBudget",
+  "priority", "surfaces", "chargebackId", "restrictedFamiliesApproved",
 ];
 
 function sameCopiedFields(prior: RawMembership, reg: ClassificationRegistration, chargebackId?: string | null): boolean {

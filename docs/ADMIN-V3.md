@@ -35,9 +35,10 @@ settings, verification and rollback. Names are memory-only; filters and exports 
   the person to the group's chargeback ID ([ADMIN-API.md](ADMIN-API.md), "User tags").
 - **Chargeback**: the filter is "User tag" with suggestions; the Developers view and its CSV have a
   User tag column; the former "Chargeback IDs" view is "User tags".
-- **Groups**: help and hints state the precedence rule (higher per-user budget, then lower priority).
-- Needs: the sync package from the same release (it copies tags into memberships, and `perUserBudget`
-  for precedence), the resolver package (precedence), `ADMIN_CONFIG_CONTAINER` on the admin app and
+- **Groups**: help and hints state the precedence rule (higher month-to-date spend, then lower priority).
+- Needs: the sync package from the same release (it copies tags into memberships and rewrites any membership that
+  still carries the earlier `perUserBudget` field), the resolver package (precedence by month-to-date spend, read
+  from the reconciler's `budgetState`), `ADMIN_CONFIG_CONTAINER` on the admin app and
   `SYNC_LIMITS_CONTAINER` on the sync app (both `adminConfig`; the staged Stage 3/5 set them with the
   admin app).
 

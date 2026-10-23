@@ -16,10 +16,10 @@
 | G7b — Export for Power BI | Complete | Usage trace, ledger KQL and workbook carry chargeback ID; per-user monthly export (CSV/JSON) for Power BI, filterable by chargeback ID |
 | G8 — Admin UI | Complete | Find group, budget helper (per-user, autoScale/cap), limits, models, surfaces, chargeback ID, cache %, export page |
 | G-STAGE — Staged settings for groups | Complete | Staged config exposes gateway.surfaceClients and admin.groupSearchEnabled; Stage 5 applies them |
-| G-PREC — Precedence by spend | Complete | No selector and several groups: the higher per-user budget (CCU) applies, then the lower priority; still tied, malformed or missing values refused |
+| G-PREC — Precedence by spend | Complete | No selector and several groups: the group with the higher month-to-date spend (reconciler `spentCcu`, current UTC month) applies, then the lower priority; still tied or malformed priority refused; malformed spend `budget_state_invalid` |
 | G-REM — Removal | Complete | Removing a group is retirement, as for a project (ADR-0034 decision 9); retired-group removal ignores the removal limits (tested) |
 | G-TAG — User tags | Complete | A tag per person (the chargeback ID) set in the console, saved tags suggested while typing; the sync stamps it on the person's group memberships; reports filter by it and show it per user; exports carry it |
-| G-PUB — Public repository | Active | `naveenneog/CCOF` created public from one squashed commit of a scrubbed tree (lab tenant, subscription, resource names replaced; live-run screenshots removed); identifier scan of the pushed tree is clean |
+| G-PUB — Public repository | Complete | `naveenneog/CCOF` created public from one squashed commit of a scrubbed tree (lab tenant, subscription, resource names replaced; live-run screenshots removed); identifier scan of the pushed tree is clean |
 | G-SEED — Staged pilot as a group | Complete | A staged `groups` entry with `kind: "group"` (no project or classification) is created in Stage 4, listed in the workbook (Stage 5), seeded as a group document and given a client file (Stage 7); `registrySeed` checks group documents with the group contract; the example pilot is a group |
 | G9 — Live verification | Partial | Lab A (admin/Entra) and Lab B (Foundry models) runs with isolated `AZURE_CONFIG_DIR` per tenant. Done: live Graph group directory, Stage 0. Open: end-to-end gateway run (Lab B login needed) |
 | G-WIRE — Wire rename | Pending | Replace `projectId`/`classification` wire fields with group fields across resolver, APIM, ledger, workbook |

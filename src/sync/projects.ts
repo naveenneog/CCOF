@@ -8,7 +8,7 @@ import type { AggregateMode } from "./types.ts";
 import { GROUP_SCOPE_CODE, parseFamilyPolicy } from "../contracts/model-families.ts";
 import type { FamilyPolicy } from "../contracts/model-families.ts";
 import { readGroupRegistration } from "../contracts/group-registration.ts";
-import type { StoredBudget, Surface } from "../contracts/group-registration.ts";
+import type { Surface } from "../contracts/group-registration.ts";
 
 // The attributes an onboarded group (ADR-0034) adds to its memberships.
 export interface GroupAttributes {
@@ -16,8 +16,6 @@ export interface GroupAttributes {
   surfaces: Surface[];
   chargebackId: string | null;
   restrictedFamiliesApproved: boolean;
-  // Decides which group applies when a person is in several (ADR-0034 decision 5).
-  perUserBudget: StoredBudget;
 }
 
 export interface ClassificationRegistration {
@@ -104,7 +102,6 @@ function readGroupDocument(doc: Record<string, unknown>): ProjectReadResult {
         surfaces: reg.surfaces,
         chargebackId: reg.chargebackId,
         restrictedFamiliesApproved: reg.restrictedFamiliesApproved,
-        perUserBudget: structuredClone(reg.budget.perUser),
       },
     }],
   };

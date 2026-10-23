@@ -327,7 +327,7 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** calls the gateway: without a token (`401`), as an allowed caller (`200`), for a model
   that is not allowed (`403`); calls the admin endpoints; and finds every accepted call in
   `ApiManagementGatewayLlmLog`. With the example configuration the requests carry no project
-  selector, so the caller's group with the higher per-user budget applies ([ADR-0034](adr/0034-group-centric-onboarding.md));
+  selector, so the caller's group with the higher month-to-date spend applies ([ADR-0034](adr/0034-group-centric-onboarding.md));
   Stage 8 reads the `ccof.usage.v1` trace and stops with `verify_failed` unless every request was
   charged to the expected pilot group.
 - **Who:** platform engineer with a caller identity in the pilot group.
@@ -347,7 +347,7 @@ panel and in [ADMIN-V3.md](ADMIN-V3.md) (3.4.0).
 | --- | --- | --- |
 | 1 | **Groups → Onboard a group → Find the group** | The Entra security group (search, or paste its Object ID), its display name and the Foundry backend |
 | 2 | **Budget** | Per-user monthly budget (USD or CCU). **Auto-scale**: every member gets it and the group has no total. **Cap**: members share one monthly total. The screen shows the total for the current direct members |
-| 3 | **Access and models** | Allowed surfaces; the group's default chargeback ID (used for members without a user tag); priority (when a person is in several groups and names none, the higher per-user budget wins, then the lower priority); model families and rate limits; restricted families (Fable, Mythos) only when approved; expected cache-read share (suggested from the surfaces, with its evidence); the budget assistant |
+| 3 | **Access and models** | Allowed surfaces; the group's default chargeback ID (used for members without a user tag); priority (when a person is in several groups and names none, the group where they have the higher spend this month wins, then the lower priority); model families and rate limits; restricted families (Fable, Mythos) only when approved; expected cache-read share (suggested from the surfaces, with its evidence); the budget assistant |
 | 4 | **Review** | The request that is sent. **Onboard group** saves it |
 | 5 | **User tags → Tag a person** | Each member's own chargeback ID (for example a WBS element), by Entra object ID. Saved tags are suggested while typing |
 
@@ -356,7 +356,7 @@ after a delegated snapshot as in Stage 7. A group is retired on its detail page;
 every member's access and the Entra group itself is not changed.
 
 The rules behind these settings are in [ADR-0034](adr/0034-group-centric-onboarding.md). Precedence
-(higher per-user budget, then lower priority), user tags and removal by retirement are owner decisions
+(higher month-to-date spend, then lower priority), user tags and removal by retirement are owner decisions
 of 2026-10-23 ([UNKNOWNS](UNKNOWNS.md) G-A1 to G-A3).
 
 ---

@@ -33,16 +33,19 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
    `"<groupId>:group"` does not move when the group's settings change. A later packet (ROADMAP
    G-WIRE) renames the wire fields. Baseline project documents remain readable until then.
 5. **Precedence (owner decision 2026-10-23, G-A1).** A selector header names the group. Without one,
-   when every active membership is an onboarded group, the group with the higher per-user monthly
-   budget applies ("higher usage spend"), compared in CCU (100 CCU = 1 USD,
-   [src/cost/budget-units.ts](../../src/cost/budget-units.ts)); equal budgets fall back to the lower
-   `priority` number. Still tied, a missing or malformed budget or priority, or any baseline project
-   among the candidates is refused with `project_selection_required`
-   ([src/resolver/select-membership.ts](../../src/resolver/select-membership.ts)). Memberships carry
-   `perUserBudget` for this. Reading "higher usage spend" as the per-user budget, rather than
-   month-to-date spend or remaining budget, is an assumption: it is known in advance and does not
-   switch groups during a month. APIM caches the no-selector decision per person, so a budget change
-   applies after the sync writes it and the allow TTL passes.
+   when every active membership is an onboarded group, the group where the person has the higher
+   usage spend this month applies: the reconciler's `spentCcu` in the person's `budgetState` for that
+   group ([src/reconciler/reconcile-person.ts](../../src/reconciler/reconcile-person.ts)), compared as an
+   exact decimal, for the current UTC month (`period`). A group with no state, or a state for an earlier
+   month, counts as no spend. Equal spend (including none, at the start of a month) falls back to the
+   lower `priority` number. Still tied, a malformed priority, or any baseline project among the
+   candidates is refused with `project_selection_required`; a malformed `spentCcu` is
+   `budget_state_invalid`; a failed read fails the request
+   ([src/resolver/select-membership.ts](../../src/resolver/select-membership.ts)). The resolver makes one
+   point read per candidate group, in the person's partition. Spend is as fresh as the reconciler's
+   last run, and APIM caches the no-selector decision per person for the allow TTL, so the chosen group
+   can change during a month as spend changes. If the higher-spend group is exhausted, the request is
+   refused (`budget_exhausted`), not moved to another group; a selector names another group.
 6. **Surfaces.** Allowed surfaces are a subset of `chat`, `cowork`, `code`, `m365`, `design`.
    `design` is accepted and stored but has no Foundry path yet. The resolver returns the list with
    the decision; APIM maps the calling client app ID (`azp`/`appid`, policy lines 42-44) to a
@@ -84,9 +87,8 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
 - A person in several groups gets one membership per group; the reconciler's per-person budget is
   per group, as it was per project.
 - Rolling back means deleting group documents; baseline documents are untouched.
-- Precedence by per-user budget (decision 5) reaches a person after the sync writes `perUserBudget` into
-  their memberships. Until then, a person in several groups is refused `project_selection_required`
-  without a selector. APIM can keep an earlier decision for the allow TTL plus the last-known-good
+- Precedence by spend (decision 5) needs only the resolver package: the reconciler already writes
+  `spentCcu` and `period`. APIM can keep an earlier decision for the allow TTL plus the last-known-good
   grace; raising `gateway.keyVersion` at rollout drops those cached decisions at once.
 - Only the staged configuration (`gateway.surfaceClients`) can turn surface enforcement on. The quickstart,
   Core and manual producers emit an empty `surfaceClients`, so surfaces are not enforced on those paths.

@@ -2,7 +2,20 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-PUB — scrubbed public repository ([ROADMAP](ROADMAP.md)).
+**Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
+
+### G-PUB — public repository (complete)
+
+- `https://github.com/naveenneog/CCOF` (public) holds one commit, `95f0b86`, made from this tree on the orphan
+  branch `public-main`: lab tenant, subscription and resource names replaced by neutral labels (21 rules, 168 hits),
+  and the 47 live-run screenshots that show lab resource names removed (`docs/images/staged`,
+  `docs/images/staged-stdv2`, `docs/runbooks/images/staged-portal`). The 86 middle-masked Portal images stay.
+- Checks on the public tree: identifier scan 0 hits; gitleaks 1 commit, 2 findings, both the known false positive
+  `projectApi: "v1-compatible"`; root 1132 pass, admin 159, staged 398, resolver auth 36; gate PASS.
+- Local `main` keeps the full history and is not pushed. A later release is made on `public-main`:
+  `git checkout public-main; git checkout main -- .`, rerun the scrub script (kept outside the repository because it
+  lists the lab names it removes), commit, push `public-main:main`.
+- History up to `55b816f` remains public in `naveenneog/ccof-bicep`, with the lab names this scrub removed.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 
@@ -27,16 +40,24 @@
 
 ### G-PREC and G-REM — precedence by spend, removal as retirement (complete)
 
-- Owner decisions 2026-10-23. Without a selector, a person in several groups gets the group with the higher
-  per-user monthly budget (CCU), then the lower priority; ties, a missing or malformed budget or priority are
-  refused ([select-membership.ts](../src/resolver/select-membership.ts)). Memberships carry `perUserBudget`
-  ([membership.ts](../src/sync/membership.ts)). Console help and hints updated.
-- Removal is retirement: group retirement already matched project retirement; a new test proves removal ignores
+- Owner decisions 2026-10-23. Without a selector, a person in several groups gets the group where they have the
+  higher month-to-date spend (the reconciler's `spentCcu` in their `budgetState` for that group, current UTC month;
+  none counts as zero), then the lower priority; a tie or malformed priority is refused, a malformed spend is
+  `budget_state_invalid` ([select-membership.ts](../src/resolver/select-membership.ts)). Console help and hints
+  updated.
+- Revision (critic review): the first version compared per-user budgets, which is not usage spend. It now reads
+  spend; the membership field `perUserBudget` that only the budget rule used is removed from the sync.
+- Removal is retirement: group retirement already matched project retirement; a test proves removal ignores
   the removal limits ([sync-group-documents.test.ts](../tests/sync-group-documents.test.ts)).
-- Tests: precedence 10/10, sync group 13/13; root suite green; admin 144/144. Mutants 8/8 caught (incl. the
-  priority upper bound); retirement-limits negative control fails as expected.
-- Council round 1: CODER, QA BLOCK (priority above 10,000 could win); fixed with a test. ARCHITECT PASS-WITH-NOTES
-  (rollout: bump `gateway.keyVersion`, recorded in ADR-0034), UX and SECURITY PASS.
+- Tests: precedence 15/15 (spend order, exact decimals of any length including 500 digits, earlier month, no state,
+  missing-state winner refused, ties, exhausted winner refused, malformed spend, failed read, baseline candidate);
+  sync: a leftover `perUserBudget` is rewritten away (with a no-write control); root 1137 pass, 0 fail. Mutants 7/7
+  caught (one first survived and the baseline test was strengthened); negative controls for a digit cap, a float
+  comparison and a comparison that ignores the old field.
+- Council (spend version): round 1 ARCHITECT, CODER, QA BLOCK (30-digit cap could reject valid reconciler output;
+  missing-state winner untested); round 2 BLOCK on a 400-character cap; round 3 all five PASS.
+- Council (first version) round 1: CODER, QA BLOCK (priority above 10,000 could win); fixed with a test. ARCHITECT
+  PASS-WITH-NOTES (rollout: bump `gateway.keyVersion`, recorded in ADR-0034), UX and SECURITY PASS.
 
 ### G-SEED — staged pilot as a group (complete)
 

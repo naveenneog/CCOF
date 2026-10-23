@@ -254,8 +254,8 @@ API 401 without a token. Telemetry: every allowed response's `x-ccof-request-id`
 
 ### Evidence and scope
 
-Each Portal step below lists the blade that shows the result of a stage. Images under
-The Lab A Standard v2 deployment captures (2026-10-21; not published in the public repository) were taken by
+Each Portal step below lists the blade that shows the result of a stage. The Lab A Standard v2
+deployment captures (2026-10-21; not published in the public repository) were taken by
 the Playwright walkthrough from the signed-in Portal; GUIDs, the signed-in account, the directory
 name and the subscription name are masked. The five historical images are middle-masked captures
 from the earlier manual guide and show navigation, not a new deployment's result
