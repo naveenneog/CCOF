@@ -21,9 +21,11 @@
   matched to classification). Round 2: QA BLOCK on the strict typecheck, others PASS. Round 3: QA PASS-WITH-NOTES.
   All fixed with tests.
 - Not changed: restore removes `SKILL.md` but leaves an empty `skills\usage` folder.
-- Live: not run. Session `c9943014` was deploying a usage change to both lab resource groups
-  (`ccof-stdv2-20261020-rg`, `FoundryEUS2Anthropic`) from the protected `ccof-public-manual-update` checkout at the same
-  time (state files written 16:49-17:01); deploying from here would have overwritten it.
+- Live: not run. Session `c9943014` deployed its own usage implementation from the protected `ccof-public-manual-update`
+  checkout to both lab resource groups (`ccof-stdv2-20261020-rg` Stage 7 at 17:16, `FoundryEUS2Anthropic` at 17:48, and
+  was still active at 18:29); deploying from here would overwrite that work. Needs the owner to choose a lab.
+- Public release 4: `bc435de`, pushed; public CI (`public-source-ci`, Node 22 and 26) passes for the first time, the
+  previous three releases failed on the strict typecheck fixed here.
 
 ### G-NAMES — staged user names setting (complete)
 
