@@ -35,6 +35,8 @@
 - Validation: full root suite, strict root/admin typechecks, root/admin builds and packet gate pass. Staged
   configuration: 451 checks. The guide walkthrough checked four images, 16 anchors and 84 local links; seven
   PowerShell blocks parsed. Sanitized Portal sign-in and local admin screenshots are linked in the guide.
+- Local implementation commits: G-LIMIT `7df518e`, G-LABEL `711b9f2`. Root Node results: 1,182 passed, six
+  opt-in live tests skipped, zero failed. Those skips are not live deployment or spend acceptance.
 
 ### G-HA — Cosmos DB redundancy and consistency (complete offline)
 

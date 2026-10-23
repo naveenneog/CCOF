@@ -5,6 +5,11 @@ groups. Each stage has a **Cloud Shell** way (one script command) and a **Portal
 equivalent screens), and the same configuration file drives both. Every stage previews first and
 changes nothing until it is run with `-Apply`.
 
+**Safety:** Stage 0 reads Azure/Graph but writes local evidence. A preview is not a deployment or an
+acceptance pass. Stage 8 with `-Apply` makes billable model calls. Do not run all stages in a loop:
+review each preview and obtain the next owner's approval first. Use a new resource group, prefix and
+state directory for a lab; never point an experiment at an existing workload.
+
 | Part | Contents |
 | --- | --- |
 | [1. What gets deployed](#1-what-gets-deployed) | Components and the order of the stages |
@@ -30,7 +35,7 @@ and the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md). This guide is th
 | Sync | Function App | Reads Entra group membership and writes each person's entitlement document ([SYNC.md](SYNC.md)) |
 | Reconciler | Function App | Prices usage at the rate card and writes budget state ([COST-MODEL.md](COST-MODEL.md)) |
 | Admin console | Function App | Onboards groups, sets budgets and limits, shows chargeback, exports ([ADMIN-V3.md](ADMIN-V3.md)) |
-| Registry | Cosmos DB (serverless) | Group documents, entitlements, budget state, admin change record |
+| Registry | Cosmos DB (capacity mode chosen in section 2.6) | Group documents, entitlements, budget state, admin change record |
 | Telemetry | Log Analytics, Application Insights, workbook | Usage ledger and the chargeback workbook ([CHARGEBACK.md](CHARGEBACK.md)) |
 | Models | Microsoft Foundry account with Claude deployments | Existing or created by Stage 1 |
 
@@ -48,6 +53,25 @@ a verified Stage 6, because the apps reach their private storage and Cosmos only
 ---
 
 ## 2. Prerequisites
+
+Before opening Cloud Shell, have the owners tick this checklist:
+
+- [ ] **Platform:** approved tenant, subscription, region, new resource group/prefix, cost approval,
+  source revision and a private configuration/state location; PowerShell 7.2+, Azure CLI, Bicep,
+  Node.js/npm and Git available.
+- [ ] **Identity:** Stage 4 application/group owner available with active PIM roles; three app
+  registrations approved, pilot security-group members and at least one admin editor identified.
+  Azure subscription Owner does **not** confer Entra application administration or Graph consent.
+- [ ] **Access:** Stage 3 Azure RBAC/Cosmos role writer identified separately from the optional
+  Graph-consent administrator. Activate only the role needed for the current stage.
+- [ ] **Models:** approved existing deployments and network reachability, or permission to purchase
+  the Marketplace offer and create them. Listing a model is not proof of purchase eligibility,
+  quota/capacity, or a successful inference.
+- [ ] **Network:** subnet IDs, DNS ownership, endpoint approval and egress agreed with the network
+  team; an approved connected runner can reach the private app endpoints for Stage 7/8.
+- [ ] **Handoff:** admin editor and a direct pilot-group member available to verify access.
+  Decide whether optional Graph grants are approved; otherwise leave directory-search flags and
+  the sync timer off and use the delegated snapshot.
 
 ### 2.1 People and roles
 
@@ -108,6 +132,46 @@ App registrations**).
 | **CCOF Admin** | The admin console (single-page app) and its API | Delegated scope `Projects.Manage`; app roles `CCOF.Projects.Read` and `CCOF.Projects.Write` (users); SPA redirect URIs `https://<admin-app>.azurewebsites.net/api/console` and `/api/console-v3`; "Assignment required" on; preauthorizes itself; editors and readers from `entra.adminEditors`/`adminReaders` are assigned their role |
 
 No application secret is created. APIM and the Function Apps use managed identities.
+
+#### Entra administrator: short Portal checklist
+
+1. **Microsoft Entra ID → Overview:** confirm the directory, then **App registrations → New
+   registration → Accounts in this organizational directory only**. Use three distinct registrations
+   from the table. Record each **Application (client) ID**, **Directory (tenant) ID** and app
+   **Object ID** privately; these are different from **Enterprise applications → Object ID**.
+   Managed-identity principal IDs are service-principal Object IDs, not client IDs.
+2. **Gateway → Expose an API:** set `api://<gateway-client-id>`, add enabled delegated
+   `access_as_user` (users/admins can consent), and authorize the gateway's own client ID for that
+   scope. Add Azure CLI only when `entra.allowAzureCliClient` is approved. **Authentication → Add
+   a platform → Mobile and desktop applications:** add the localhost and broker redirects in the
+   table; enable public client flows. The developer public client and gateway API are deliberately
+   **one registration**, not a fourth SPA or a confidential client.
+3. **Resolver → Expose an API:** set `api://<resolver-client-id>`; no developer redirect or secret.
+   Stage 5 sets Function App **Authentication** to require Entra authentication and return `401`,
+   accepts the resolver URI/client-ID audiences, and restricts **both** allowed client application
+   and principal to APIM's managed identity. A correct audience alone must not admit other callers.
+   Do not put the gateway developer client in the resolver allowlist
+   ([app-settings.bicep](../infra/quickstart/modules/app-settings.bicep)).
+4. **Admin → Expose an API:** set `api://<admin-client-id>`, add `Projects.Manage`
+   (admins consent), authorize the admin app itself. **Authentication → Single-page application:**
+   register the exact HTTPS URLs in the table, using Stage 1's admin hostname; do not put these
+   redirects under Web or Mobile/desktop. **App roles:** create the two enabled roles with
+   **Users/Groups** member type and the exact values shown. **Enterprise applications → the admin
+   application → Properties:** set **Assignment required? Yes**; **Users and groups:** assign
+   named editors/readers to the matching role. An Azure Contributor role is not a console role.
+5. For each registration, use the **Manifest** to confirm
+   `api.requestedAccessTokenVersion: 2`. Preview Stage 4 before applying; it creates service
+   principals and merges registration settings, assignments and group members. If the identity team
+   supplied apps, set `entra.existing.gatewayAppId`, `resolverAppId`, `adminAppId` to their **client**
+   IDs and arrange change approval/ownership: `-Apply` is **not** a read-only import.
+
+Stage 4 needs verified Stage 1 outputs to calculate the admin redirects. New admin apps require
+`entra.adminEditors` (object IDs, or `@me` for the operator); `adminReaders` is optional. Prefer
+explicit object IDs for a multi-person handoff. Stage 4 does not grant the managed identities Graph
+application permissions. These are separate from the delegated gateway/admin scopes
+([Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1);
+[Learn: expose an API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis);
+[Learn: SPA registration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-spa-app-registration)).
 
 **Groups.** Each team that uses Claude is an existing Entra **security** group, created by the
 customer's identity team (Portal: **Microsoft Entra ID → Groups → New group**, type Security). The
@@ -225,7 +289,8 @@ code $HOME/ccof-private/staged.config.json
 $cfg = "$HOME/ccof-private/staged.config.json"
 ```
 
-The driver refuses the file until every `REPLACE-` placeholder is replaced. The sections, and the
+Replace every applicable `REPLACE-` placeholder; the driver validates selected fields, not every
+unused example value. Review the entire file before applying. The sections, and the
 stages that read them, are listed in the [runbook](runbooks/STAGED-DEPLOYMENT-V2.md#configuration-file).
 Settings added for group onboarding:
 
@@ -237,6 +302,8 @@ Settings added for group onboarding:
 | `admin.groupSearchEnabled` | `false` | Sets `ADMIN_GROUP_SEARCH_ENABLED` on the admin app (Stage 5). Requires the admin Graph grants in section 6.1; without them the admin API answers `502 group_directory_permission_required`. Ignored when `stage1.includeAdmin` is `false` |
 | `admin.userNamesEnabled` | `false` | Sets `ADMIN_USER_NAMES_ENABLED` on the admin app (Stage 5): people's names beside object IDs (User tags page, Developers view). Requires the admin identity's `User.Read.All` (section 6.1); without it the console shows object IDs only |
 | `resolver.usageGroupTotals` | `false` | Whether `/usage` also shows the person's group (scope) total. Stage 5 writes `RESOLVER_USAGE_GROUP_TOTALS` ([USAGE.md](USAGE.md), "Privacy") |
+| `resolver.budgetEnforcement` | `token-limits-only` | Example compatibility mode: enforces token/rate limits, **not a dollar budget**. Use `budget-state` only after reviewing the reconciliation/accounting tradeoff below |
+| `resolver.requireCompleteUsage` | `false` | Stage 5 writes `RESOLVER_REQUIRE_COMPLETE_USAGE`. Optional fail-closed accounting check; `true` requires `budgetEnforcement: budget-state`, otherwise configuration is refused |
 | `gateway.admission.usage` | 10 per 60 s | Per-person limit of `GET /ccof/me/usage`, separate from the `/v1/messages` limit |
 | `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
@@ -256,6 +323,44 @@ run again after the cause is fixed.
 ---
 
 ## 4. Stages 0 to 8
+
+### Quick stage-by-stage commands
+
+Run from the repository root after setting `$cfg` in section 3. Keep the same private `$stateDir`
+for this target; never reuse another deployment's state. The second command below is a deliberate
+write/approval boundary, not a command to paste automatically:
+
+```powershell
+$run = Join-Path $PWD 'infra/staged/Invoke-StagedDeployment.ps1'
+$stateDir = Join-Path (Split-Path $cfg -Parent) '.staged-state'
+pwsh -File $run -Stage 0 -ConfigPath $cfg -StateDirectory $stateDir
+# For exactly ONE approved stage, choose its number from the table:
+$n = 1
+pwsh -File $run -Stage $n -ConfigPath $cfg -StateDirectory $stateDir
+# Stop: inspect the preview and have the stage owner approve it.
+pwsh -File $run -Stage $n -ConfigPath $cfg -StateDirectory $stateDir -Apply
+# After a successful apply, inspect the stage-specific evidence:
+Get-Content (Join-Path $stateDir "evidence/stage$n.verify.json")
+```
+
+| Stage (`$n`) | Stop/go check before apply | Expected result / evidence |
+| --- | --- | --- |
+| 0 | Right directory/subscription; no Azure changes | `stage0.json`, local stage `0`; providers/backend/group metadata verified |
+| 1 | New empty target, approved cost/capacity and APIM bootstrap choice | `stage1.verify.json`; resource-only services and identities |
+| 2 | Verified Stage 1; capacity mode agreed | `stage2.verify.json`; database and containers |
+| 3 | Verified Stage 1/2; grant owner reviews exact principals and scopes | `stage3.verify.json`; Azure/Cosmos assignments, **not** Graph consent |
+| 4 | Verified Stage 1; Entra owner completes section 2.3 | `stage4.verify.json`; apps, admin roles/redirects, pilot group |
+| 5 | Verified Stage 1/3/4; resolver restricted to APIM MI | `stage5.verify.json`; settings, auth, policies and workbook |
+| 6 | Verified Stage 1; network owner chooses verify/existing/create | `stage6.verify.json`; endpoints/DNS/integrations; resolve every warning |
+| 7 | Verified Stage 5/6/4; runner reaches private apps | `stage7.verify.json`; packages, seed, snapshot and client file |
+| 8 | Verified Stage 5/7/4; pilot caller and model-call cost approved | `stage8.verify.json`; actual allow/deny calls and telemetry |
+
+Stages that need earlier outputs refuse to preview without them; do not fabricate state to bypass
+that guard. If the new resource group does not exist, Stage 1 preview only reports that `-Apply`
+would create it: **no ARM what-if has run yet**. On an existing eligible target, Bicep-backed previews
+run what-if; script-backed previews print a plan. Only a successful Stage 0 or `-Apply` records a
+completed stage ([driver](../infra/staged/Invoke-StagedDeployment.ps1),
+[Stage 1 guard](../infra/staged/Staged.Resources.ps1)).
 
 Each stage lists: what it does, who runs it, the Cloud Shell command, the Portal equivalent (section
 numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how to see that it worked.
@@ -384,6 +489,27 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Portal:** workbook section 22 (acceptance) and Log Analytics → Logs.
 - **Worked when:** `stage8.verify.json` shows the full `401`/`200`/`403` matrix and the telemetry rows.
 
+### Walkthrough evidence (2026-10-23)
+
+This pass read this guide in a **visible Playwright-controlled Edge automation profile**, then
+attempted **Microsoft Entra ID → App registrations**. The browser reached the real Microsoft account
+picker, not an authenticated Portal blade. CLI authentication did not remove this interactive
+browser prerequisite. No account was selected, consent granted, or app registration changed.
+
+![Actual Microsoft account-picker blocker; account and directory details redacted](images/deployment-walk/portal-sign-in-blocker.png)
+
+| Check | Actual result, not a deployment claim |
+| --- | --- |
+| Stage 0, first test subscription | Refused: the configured existing backend had no model deployments. Provider and Flex-region checks had passed before this failure |
+| Stage 0, model-enabled test subscription | Passed against two existing deployment names and the signed-in operator's Graph identity. The pilot group was planned by name, so this did not verify existing group membership or inference |
+| Stage 1, isolated empty test resource group | Real ARM what-if succeeded: 32 `Create`, zero `Modify`/`Delete`. No Stage 1 apply or workload provisioning. The empty group created for what-if was deleted; absence was checked |
+| Stages 2–8 | Not applied. Stage 4/6/8 previews correctly refused the missing verified Stage 1 prerequisite; no state was fabricated to bypass it |
+| Paid model calls | None in this walkthrough; Stage 8 acceptance remains unverified |
+
+The screenshot documents an authentication blocker, **not** proof that the app settings or later
+Portal steps were completed. Resume with an approved interactive sign-in, then use each stage's
+read-back evidence above. Existing workloads and their deployed policies were not overwritten.
+
 ---
 
 ## 5. Onboard groups
@@ -398,11 +524,42 @@ panel and in [ADMIN-V3.md](ADMIN-V3.md) (3.4.0).
 | 2 | **Budget** | Per-user monthly budget (USD or CCU). **Auto-scale**: every member gets it and the group has no total. **Cap**: members share one monthly total. The screen shows the total for the current direct members |
 | 3 | **Access and models** | Allowed surfaces; the group's default chargeback ID (used for members without a user tag); priority (when a person is in several groups and names none, the group where they have the higher spend this month wins, then the lower priority); model families and rate limits; restricted families (Fable, Mythos) only when approved; expected cache-read share (suggested from the surfaces, with its evidence); the budget assistant |
 | 4 | **Review** | The request that is sent. **Onboard group** saves it |
-| 5 | **User tags → Tag a person** | Each member's own chargeback ID (for example a WBS element), by Entra object ID. Saved tags are suggested while typing |
+| 5 | **User tags → Tag field name**, then **Tag a person** | Set the deployment-wide display name (for example **WBS ID**), then assign each person's own value by Entra object ID. Saved values are suggested while typing |
+
+**Local demonstration evidence, not live Portal evidence:** the three admin screenshots below use
+synthetic identities and report telemetry. The real UI/APIs and in-memory persistence passed
+[21 browser checks](images/deployment-walk/admin-g-label-acceptance.json), with no runtime errors or
+outbound browser requests. This does not prove Azure persistence, entitlement sync or live usage
+accounting. The [reusable local walkthrough](../tests/playwright/g-label-local-walk.py) records that scope.
+
+**Set the field name and tag people.** In **User tags → Tag field name**, enter `WBS ID` (or your
+organization's term) and choose **Save field name**. One persisted setting applies to all admins;
+the navigation item remains **User tags**. In **Tag a person**, select an onboarded group's direct
+member or enter the person's Entra object ID, type a value such as `WBS-1001.01` or choose a saved
+suggestion, then **Save tag**. Repeat for each individual; reusing a suggestion does not tag the
+whole group. Confirm the [Tagged people list](images/deployment-walk/admin-wbs-tagged-people.png).
+Clearing a person's tag restores the group's default chargeback ID after the next sync.
+
+![Local demonstration: save a deployment-wide field name and tag an individual](images/deployment-walk/admin-wbs-field-name.png)
+
+**Review family token limits.** In the group's **Access and models → Models and rate limits**, set
+**All Families** limits and the separate family **Person**/**Group** TPM, token quota and period.
+Choose the exact **Admitted models**; allowing a family is not permission for every model alias.
+Empty limits mean no limit at that scope. Review the generated request before saving; family token
+limits are not separate family dollar budgets (see [section 6.5](#65-token-limits-are-not-dollar-enforcement)).
+
+![Local demonstration: person/group family token limits and exact admitted models](images/deployment-walk/admin-family-token-limits-models.png)
 
 Members get access, and their user tags, at the next entitlement sync: when the sync timer is on, or
 after a delegated snapshot as in Stage 7. A group is retired on its detail page; the next sync removes
 every member's access and the Entra group itself is not changed.
+
+**Handoff to a developer:** give the gateway URL and generated client configuration through the
+approved private channel, the tenant and gateway public-client ID, the allowed model IDs, and the
+support contact. Follow [CLIENTS.md](CLIENTS.md), sign in as a direct pilot-group member, and verify
+`/usage` and the approved Stage 8 result before expanding membership. A console reader cannot onboard
+groups; an editor role does not itself make someone a gateway caller. Record who will run snapshots
+or enable/monitor the sync timer and reconciler; leave no unattended manual-membership process.
 
 The rules behind these settings are in [ADR-0034](adr/0034-group-centric-onboarding.md). Precedence
 (higher month-to-date spend, then lower priority), user tags and removal by retirement are owner decisions
@@ -470,6 +627,17 @@ data for Power BI or a spreadsheet; the API forms are `GET /api/v3/export/usage`
 `GET /api/v3/export/groups` ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI"). A direct Power BI
 connection to the API is not yet verified ([UNKNOWNS](UNKNOWNS.md) G-R3).
 
+**Filter and download individual chargeback.** In **Chargeback**, use the configured field-name
+filter (for example **WBS ID**) and select a saved value; see the
+[local filter example](images/deployment-walk/admin-wbs-chargeback-filter.png). Open **Breakdown →
+Developers** or the configured tag tab and choose **Export CSV**. Check that the individual tag values
+match the report and that the downloaded column heading is **WBS ID**
+([synthetic sample CSV](images/deployment-walk/admin-wbs-chargeback.csv)). Only display headings
+change: JSON/Power BI keys (`chargebackId`, `userTag`) and filter query parameters stay stable.
+**Groups CSV** retains its group-default schema ([ADR-0037](adr/0037-deployment-user-tag-label.md)).
+
+![Local demonstration: developer chargeback breakdown with the configured WBS ID heading](images/deployment-walk/admin-wbs-chargeback-report.png)
+
 ### 6.4 People's own budget: `/usage`
 
 Stage 5 deploys `GET <gateway>/anthropic/ccof/me/usage` and Stage 7 publishes the resolver route behind it.
@@ -478,9 +646,45 @@ and sees only their own spend, budget and remaining this month, as of the reconc
 figures need `reconciler.timerEnabled: true`; whether a person also sees their group's total is
 `resolver.usageGroupTotals`. Details: [USAGE.md](USAGE.md).
 
+### 6.5 Token limits are not dollar enforcement
+
+**The examples keep `resolver.budgetEnforcement: token-limits-only` and
+`resolver.requireCompleteUsage: false` for backwards compatibility. A displayed monthly budget in
+this mode is not a dollar-spend cap.** Select the enforcement mode explicitly before onboarding.
+
+With `budgetEnforcement: budget-state`, APIM retains the resolver's mode and
+`personCeilingTokensPerMinute` and uses the smaller of the static aggregate person TPM and the
+monetary ceiling. A zero ceiling is refused as `budget_exhausted`. Old cached decisions without the
+new fields are rejected, not silently treated as unconstrained decisions. Deploy the matching
+resolver and gateway policy before claiming this behavior on an existing installation; a local
+source/test pass does not update a deployed policy.
+
+Opting into `requireCompleteUsage: true` makes missing/partial person accounting or strict-group
+accounting return `503` in `budget-state` mode. Streamed responses still have incomplete cache
+categories, so this option can block subsequent usage after streaming. It does **not** guarantee a
+strict dollar cap: reconciliation, cached decisions and concurrent requests can lag. Keep the
+reconciler healthy, monitor refusals, and agree the availability-versus-accounting tradeoff with
+the budget owner before changing the defaults.
+
+A separate [live acceptance report](status/BUDGET-ACCEPTANCE-2026-10-23.md) records direct Foundry
+Haiku smoke and cold/warm streaming requests: **USD 0.011476 estimated list cost**, not USD 10
+consumed and not APIM traffic. Gateway token acquisition remained blocked by
+`AADSTS65001`/`AADSTS650057`; neither those calls nor the local admin demonstrations prove a full
+live gateway dollar-budget or chargeback run.
+
 ---
 
 ## 7. Rerun, rollback and cleanup
+
+| Symptom | Recovery without widening permissions |
+| --- | --- |
+| Portal shows account picker, sign-in, MFA or Conditional Access | Use an approved interactive session in the correct directory. CLI sign-in does not sign the browser in. Stop and record the blocker; no Portal blade has been verified |
+| Stage 0 provider not Registered | Subscription provider-registration owner registers only the named provider, then reruns Stage 0; Reader cannot do it |
+| Stage preview reports missing prerequisite / dependency changed | Return to the named prerequisite and its evidence, correct the cause and rerun downstream stages; never edit completion records |
+| Admin `AADSTS50011`, `AADSTS65001` or no access | Check exact SPA redirect, `Projects.Manage` preauthorization/consent, tenant, enterprise-app assignment and role; do not disable assignment-required |
+| Resolver admits another client, or APIM receives `401`/`403` | Check resolver audience and APIM MI client **and** principal restrictions, then network and token target; never turn authentication off |
+| Stage 7 timeout, storage/DNS failure | Verify private endpoint approval, VNet DNS, egress and runner access; public Cloud Shell is not a substitute for a connected runner |
+| Admin group search `502` / names absent after consent | Check the specific optional grant and managed-identity token propagation in section 6.1; keep ID-based onboarding available |
 
 - **Rerun:** every stage can be rerun; deployments are incremental with deterministic names. A Stage 1
   that already succeeded for the same configuration is read-back only. Stage 1 refuses a non-empty
