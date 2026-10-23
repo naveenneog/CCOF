@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-10-23 — Budget, chargeback-label and deployment acceptance
+
+- Requested acceptance covers a USD 10 total consumption ceiling, budget-bypass attempts, group model-family
+  restrictions, higher-spend group selection, a configurable individual chargeback-field name, and a Playwright
+  deployment-guide walkthrough.
+- G-LABEL adds an admin-defined individual tag name, including WBS ID, to tagging, report filters and CSV headings.
+  Settings are audited and ETag-protected; JSON/Power BI property names are unchanged. Local Playwright verified
+  assignment, persistence, filtering and the downloaded file.
+- G-LIMIT retains the resolver's monetary TPM ceiling at APIM, refuses zero, invalidates legacy cached decisions,
+  and adds an optional complete-accounting guard for personal and strict-group budgets. This is not an atomic
+  dollar cap. [ADR-0038](adr/0038-budget-admission-acceptance.md).
+- Live direct Foundry smoke and streamed cache calls consumed an estimated USD 0.011476 at list rates, not USD 10.
+  Gateway consent and authenticated Portal sign-in blocked full live acceptance; Stage 0 and Stage 1 what-if
+  completed without modifying existing labs. [Evidence](status/BUDGET-ACCEPTANCE-2026-10-23.md).
+
 ## 2026-10-23 — Fixes: client restore, Graph grant permissions list, Cosmos capacity notes
 
 - The client installer's restore removes folders it created when they are empty (for example `~/.claude/skills`).

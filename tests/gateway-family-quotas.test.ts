@@ -88,6 +88,7 @@ const nullLimit = () => ({ tokensPerMinute: null, tokenQuota: null, tokenQuotaPe
 function decision(): Record<string, any> {
   return {
     decisionVersion: 3, resolverOutcome: "success", projectId: "EXAMPLE01", classification: "STD",
+    budgetEnforcement: "token-limits-only", personCeilingTokensPerMinute: null,
     classificationGroupId: "22222222-2222-2222-2222-222222222222", backendId: "foundry-example",
     familyPolicy: {
       aggregateLimits: {

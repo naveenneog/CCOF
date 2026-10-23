@@ -15,8 +15,9 @@ export const RESOLVER_SETTINGS = {
   budgetEnforcement: "RESOLVER_BUDGET_ENFORCEMENT",
   budgetStateGraceSeconds: "RESOLVER_BUDGET_STATE_GRACE_SECONDS",
   budgetStateHardLimitSeconds: "RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS",
-  // GET /ccof/me/usage (src/resolver/my-usage.ts): whether a person also sees their scope's total. The one
-  // optional setting: absent means hidden, the private choice, so a resolver deployed before this setting
+  requireCompleteUsage: "RESOLVER_REQUIRE_COMPLETE_USAGE",
+  // GET /ccof/me/usage (src/resolver/my-usage.ts): whether a person also sees their scope's total. This
+  // optional setting defaults to hidden, so a resolver deployed before this setting
   // existed keeps running. A value other than exactly "true" or "false" is reported like any other.
   usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
   // Cosmos read regions in failover order (ADR-0036): optional, absent for a single-region account.
@@ -53,6 +54,7 @@ export type ConfigProblemCode =
   | "not_whole_seconds"
   | "out_of_range"
   | "not_boolean"
+  | "requires_budget_state"
   | "invalid_regions"
   | "grace_exceeds_hard_limit";
 
@@ -95,6 +97,11 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
   // The durations matter only to budget-state; without a known mode it is not
   // yet known whether they are required.
   const staleness = mode === "budget-state" ? readStaleness(read, report) : undefined;
+  const completeRaw = env[RESOLVER_SETTINGS.requireCompleteUsage];
+  const requireCompleteUsage = completeRaw === undefined || completeRaw === "" || completeRaw === "false"
+    ? false : completeRaw === "true" ? true : undefined;
+  if (requireCompleteUsage === undefined) report(RESOLVER_SETTINGS.requireCompleteUsage, "not_boolean");
+  if (requireCompleteUsage && mode === "token-limits-only") report(RESOLVER_SETTINGS.requireCompleteUsage, "requires_budget_state");
   const groupTotalsRaw = env[RESOLVER_SETTINGS.usageGroupTotals];
   const usageGroupTotals = groupTotalsRaw === undefined || groupTotalsRaw === "" ? false : groupTotalsRaw === "true" ? true : groupTotalsRaw === "false" ? false : undefined;
   if (usageGroupTotals === undefined) report(RESOLVER_SETTINGS.usageGroupTotals, "not_boolean");
@@ -115,12 +122,14 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
     retryMaxWaitSeconds === undefined ||
     requestDeadlineMs === undefined ||
     mode === undefined ||
-    usageGroupTotals === undefined
+    usageGroupTotals === undefined ||
+    requireCompleteUsage === undefined
   ) {
     return { ok: false, problems };
   }
   const budgetEnforcement: BudgetEnforcement =
-    mode === "budget-state" ? { mode, staleness: staleness as BudgetStalenessPolicy } : { mode };
+    mode === "budget-state" ? { mode, staleness: staleness as BudgetStalenessPolicy,
+      ...(requireCompleteUsage ? { requireCompleteUsage: true } : {}) } : { mode };
   return {
     ok: true,
     config: {

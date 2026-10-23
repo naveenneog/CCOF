@@ -109,6 +109,15 @@ test("a partial row counts at its lower bound and marks the state partial", () =
   assert.equal(a?.tally.partial, 1);
 });
 
+test("unknown charges from another member mark the group's accounting partial without changing the caller's completeness", () => {
+  for (const row of [{ ...FULL, personId: PERSON_C, cacheRead: null }, { personId: PERSON_C, model: "unpriced-deployment" }]) {
+    const result = run({ rows: [FULL, row] });
+    assert.equal(personDoc(result, PERSON_A)?.doc.completeness, "complete");
+    assert.equal(groupDoc(result, "CCOFPILOT01:STD")?.doc.completeness, "partial");
+  }
+  assert.equal(groupDoc(run({ rows: [FULL] }), "CCOFPILOT01:STD")?.doc.completeness, "complete");
+});
+
 test("a person's spend is per project, across the classifications of the period; other projects are separate", () => {
   const second = pilotProject({ id: "CCOFPILOT02", projectId: "CCOFPILOT02" });
   const result = run({
@@ -130,6 +139,7 @@ test("a group gets every row of its project and classification, members who left
     exhausted: false,
     mode: "strict",
     activeMemberCount: 1,
+    completeness: "complete",
     computedAt: "2026-10-11T13:00:00.000Z",
     validUntil: "2026-10-11T13:10:00.000Z",
   });

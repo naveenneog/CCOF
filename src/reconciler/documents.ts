@@ -34,6 +34,7 @@ export interface AggregateBudgetStateDocument {
   spentCcu: string;
   budgetCcu: string | null;
   exhausted: boolean;
+  completeness?: Completeness;
   mode: "strict" | "notify";
   activeMemberCount: number;
   computedAt: string;

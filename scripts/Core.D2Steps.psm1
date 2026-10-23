@@ -133,6 +133,7 @@ function Get-CoreAppSettings {
     $r.RESOLVER_COSMOS_RETRY_MAX_WAIT_SECONDS = [string]$a.resolver.cosmosRetryMaxWaitSeconds
     $r.RESOLVER_REQUEST_DEADLINE_MS = [string]$a.resolver.requestDeadlineMs
     $r.RESOLVER_BUDGET_ENFORCEMENT = [string]$a.resolver.budgetEnforcement
+    $r.RESOLVER_REQUIRE_COMPLETE_USAGE = if ($a.resolver.requireCompleteUsage -eq $true) { 'true' } else { 'false' }
     # GET /ccof/me/usage (docs/USAGE.md): the group's remaining budget only when allowed; off by default.
     $r.RESOLVER_USAGE_GROUP_TOTALS = if ($a.resolver.usageGroupTotals -eq $true) { 'true' } else { 'false' }
     # Cosmos read regions in failover order (ADR-0036); D2 deploys a single-region account, so empty.

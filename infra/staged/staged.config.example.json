@@ -215,6 +215,7 @@
   },
   "resolver": {
     "budgetEnforcement": "token-limits-only",
+    "requireCompleteUsage": false,
     "cosmosRequestTimeoutMs": 2000,
     "cosmosRetryAttempts": 2,
     "cosmosRetryMaxWaitSeconds": 2,

@@ -24,6 +24,7 @@ const GROUP = "abcdef01-2345-4678-9abc-def012345678";
 function decision(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     decisionVersion: 3, resolverOutcome: "success", projectId: GROUP, classification: "group", classificationGroupId: GROUP,
+    budgetEnforcement: "token-limits-only", personCeilingTokensPerMinute: null,
     backendId: "foundry-example",
     familyPolicy: { aggregateLimits: { person: nullLimit(), group: nullLimit() }, families: { haiku: { models: ["claude-haiku-4-5"], person: nullLimit(), group: nullLimit() } } },
     surfaces: ["code"], chargebackId: "WBS-1234.01", restrictedFamiliesApproved: false,

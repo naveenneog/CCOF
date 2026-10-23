@@ -28,6 +28,19 @@ const pilotEnv = {
   RESOLVER_BUDGET_ENFORCEMENT: "token-limits-only",
 };
 
+test("complete-usage accounting is explicit, boolean, and cannot masquerade as a token-only dollar limit", () => {
+  const enabled = readResolverConfig({ ...completeEnv, RESOLVER_REQUIRE_COMPLETE_USAGE: "true" });
+  assert.ok(enabled.ok);
+  assert.equal(enabled.config.budgetEnforcement.mode, "budget-state");
+  assert.equal("requireCompleteUsage" in enabled.config.budgetEnforcement && enabled.config.budgetEnforcement.requireCompleteUsage, true);
+  for (const value of ["yes", "TRUE", "0", " true "]) {
+    const result = readResolverConfig({ ...completeEnv, RESOLVER_REQUIRE_COMPLETE_USAGE: value });
+    assert.ok(!result.ok && result.problems.some((p) => p.setting === "RESOLVER_REQUIRE_COMPLETE_USAGE"), value);
+  }
+  const tokenOnly = readResolverConfig({ ...pilotEnv, RESOLVER_REQUIRE_COMPLETE_USAGE: "true" });
+  assert.ok(!tokenOnly.ok && tokenOnly.problems.some((p) => p.setting === "RESOLVER_REQUIRE_COMPLETE_USAGE"));
+});
+
 test("COSMOS_PREFERRED_REGIONS: absent or empty is none; a comma list of ARM region names in order; anything else is a problem", () => {
   const read = (value?: string) => readResolverConfig(value === undefined ? pilotEnv : { ...pilotEnv, COSMOS_PREFERRED_REGIONS: value });
   for (const none of [undefined, ""]) {
@@ -68,6 +81,7 @@ test("the setting names are the documented app settings", () => {
     budgetEnforcement: "RESOLVER_BUDGET_ENFORCEMENT",
     budgetStateGraceSeconds: "RESOLVER_BUDGET_STATE_GRACE_SECONDS",
     budgetStateHardLimitSeconds: "RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS",
+    requireCompleteUsage: "RESOLVER_REQUIRE_COMPLETE_USAGE",
     usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
     cosmosPreferredRegions: "COSMOS_PREFERRED_REGIONS",
   });
