@@ -4,6 +4,23 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-HA — Cosmos DB redundancy and consistency (complete offline)
+
+- Owner: "a cosmos with consistency model ... so its not a single point of failure". `stage1.cosmosLocations` (regions in
+  failover order, `isZoneRedundant`), `stage1.cosmosConsistency`; two or more regions turn on service-managed failover;
+  configuration checks and a Stage 1 read-back ([Staged.Cosmos.ps1](../infra/staged/Staged.Cosmos.ps1)); the resolver
+  reads in `COSMOS_PREFERRED_REGIONS` order, set by Stage 5. Example: two zone-redundant regions (`eastus2`,
+  `centralus`), provisioned autoscale, Session. [ADR-0036](adr/0036-cosmos-redundancy-and-consistency.md), guide 2.6.
+- Tests: staged 446 checks; network DNS 5 (the real network check against a fake `az`); resolver config and Cosmos
+  options 26; root 1168 pass, 0 fail; strict typecheck 0. Mutants 16/16 caught (two first survived because one test
+  broke two rules at once; it was split). Read-backs run on the live Lab A account and endpoint: a single-region
+  configuration passes; a two-region one names the missing region, the failover setting and the DNS name.
+- Council round 1: ARCHITECT, QA BLOCK (Stage 6 accepted a Cosmos endpoint without every regional DNS name); notes on
+  the bounded-staleness read-back, capacity pairs and cost wording. Round 2: all PASS (QA note: executable test for the
+  verify-mode check, added).
+- Live: not deployed. Stage 1 is create-only, so it needs a new resource group, and the labs are in use by another
+  session.
+
 ### G-USAGE — a person's own budget: `/usage` (complete offline; live blocked)
 
 - Gateway `GET /ccof/me/usage` (operation `get-my-usage`, own policy without `<base />`, token checks byte-equal to
@@ -21,9 +38,11 @@
   matched to classification). Round 2: QA BLOCK on the strict typecheck, others PASS. Round 3: QA PASS-WITH-NOTES.
   All fixed with tests.
 - Not changed: restore removes `SKILL.md` but leaves an empty `skills\usage` folder.
-- Live: not run. Session `c9943014` was deploying a usage change to both lab resource groups
-  (`lab-stdv2-rg`, `lab-shared-foundry-rg`) from the protected `ccof-public-manual-update` checkout at the same
-  time (state files written 16:49-17:01); deploying from here would have overwritten it.
+- Live: not run. Session `c9943014` deployed its own usage implementation from the protected `ccof-public-manual-update`
+  checkout to both lab resource groups (`lab-stdv2-rg` Stage 7 at 17:16, `lab-shared-foundry-rg` at 17:48, and
+  was still active at 18:29); deploying from here would overwrite that work. Needs the owner to choose a lab.
+- Public release 4: `bc435de`, pushed; public CI (`public-source-ci`, Node 22 and 26) passes for the first time, the
+  previous three releases failed on the strict typecheck fixed here.
 
 ### G-NAMES — staged user names setting (complete)
 

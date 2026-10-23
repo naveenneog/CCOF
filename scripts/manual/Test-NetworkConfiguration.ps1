@@ -30,6 +30,9 @@ param(
   [Parameter(Mandatory)][string[]]$FunctionAppIds,
   [string]$ApimResourceId = '',
   [string[]]$FoundryResourceId = @(),
+  # Cosmos regions (ARM names). When given, the Cosmos private endpoint must carry the account's global DNS name and
+  # one per region, <account>-<region>; a missing one is a FAIL (ADR-0036).
+  [string[]]$CosmosRegions = @(),
   [string[]]$InboundSitesAppIds = @(),
   [string]$HubVnetResourceId = '',
   [string]$AdminAppId = '',
@@ -84,6 +87,14 @@ function Check-Pe([string]$Area, [string]$TargetId, [string]$Group) {
   }
 }
 Check-Pe 'PrivateEndpoint' $CosmosResourceId 'Sql'
+if ($CosmosRegions.Count) {
+  $account = ($CosmosResourceId -split '/')[-1].ToLowerInvariant()
+  $cosmosPes = @($peAll | Where-Object { @(@($_.privateLinkServiceConnections) + @($_.manualPrivateLinkServiceConnections) | Where-Object { $_ -and $_.privateLinkServiceId -ieq $CosmosResourceId }).Count })
+  $fqdns = @(foreach ($pe in $cosmosPes) { Az network private-endpoint dns-zone-group list -g $vnetRg --endpoint-name $pe.name | ForEach-Object { $_.privateDnsZoneConfigs } | ForEach-Object { $_.recordSets } | ForEach-Object { ([string]$_.fqdn).TrimEnd('.').ToLowerInvariant() } })
+  $missing = @(@($account) + @($CosmosRegions | ForEach-Object { "$account-$($_.ToLowerInvariant())" }) | Where-Object { $fqdns -notcontains "$_.privatelink.documents.azure.com" })
+  if ($missing.Count) { Add-Result 'PrivateDNS' 'Cosmos regional names' 'FAIL' "missing in privatelink.documents.azure.com: $($missing -join ', ')" }
+  else { Add-Result 'PrivateDNS' 'Cosmos regional names' 'PASS' "global and $($CosmosRegions.Count) region name(s) present" }
+}
 foreach ($sa in $StorageAccountIds) { Check-Pe 'PrivateEndpoint' $sa 'blob' }
 foreach ($fid in $FoundryResourceId) { Check-Pe 'PrivateEndpoint' $fid 'account' }
 foreach ($site in $InboundSitesAppIds) { Check-Pe 'PrivateEndpoint' $site 'sites' }

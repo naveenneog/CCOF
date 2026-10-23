@@ -135,6 +135,8 @@ function Get-CoreAppSettings {
     $r.RESOLVER_BUDGET_ENFORCEMENT = [string]$a.resolver.budgetEnforcement
     # GET /ccof/me/usage (docs/USAGE.md): the group's remaining budget only when allowed; off by default.
     $r.RESOLVER_USAGE_GROUP_TOTALS = if ($a.resolver.usageGroupTotals -eq $true) { 'true' } else { 'false' }
+    # Cosmos read regions in failover order (ADR-0036); D2 deploys a single-region account, so empty.
+    $r.COSMOS_PREFERRED_REGIONS = (@($a.resolver.preferredRegions | Where-Object { $_ }) -join ',')
     if ($a.resolver.budgetEnforcement -eq 'budget-state') {
         $r.RESOLVER_BUDGET_STATE_GRACE_SECONDS = [string]$av.budgetState.graceSeconds
         $r.RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS = [string]$av.budgetState.hardLimitSeconds

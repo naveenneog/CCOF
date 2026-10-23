@@ -49,6 +49,7 @@ function Read-StgConfig {
         }
     }
     if (-not $c.cosmos.databaseName) { $problems.Add('cosmos.databaseName is required') }
+    foreach ($p in @(Get-StgCosmosProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {
         if ($b.subscriptionId -ine $c.subscriptionId -or $b.resourceGroup -ine $c.resourceGroup) {

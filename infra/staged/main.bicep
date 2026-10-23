@@ -17,6 +17,14 @@ param retentionInDays int = 30
 @allowed(['serverless', 'provisioned'])
 param cosmosCapacityMode string = 'serverless'
 
+@description('Cosmos DB regions in failover order, [{ locationName, isZoneRedundant }]; the first is the write region. Empty: one region (location), no zone redundancy, no failover. Two or more turn on service-managed failover (ADR-0036).')
+param cosmosLocations array = []
+
+@description('Cosmos DB consistency: { defaultConsistencyLevel[, maxStalenessPrefix, maxIntervalInSeconds] } (ADR-0036).')
+param cosmosConsistency object = { defaultConsistencyLevel: 'Session' }
+
+var cosmosRegions = empty(cosmosLocations) ? [{ locationName: location, isZoneRedundant: false }] : cosmosLocations
+
 @description('Service PNA defaults private. Enabling PNA alone does not configure storage firewall exceptions.')
 @allowed(['Disabled', 'Enabled'])
 param cosmosPublicNetworkAccess string = 'Disabled'
@@ -97,15 +105,15 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
   kind: 'GlobalDocumentDB'
   properties: {
     databaseAccountOfferType: 'Standard'
-    locations: [{ locationName: location, failoverPriority: 0, isZoneRedundant: false }]
+    locations: [for (r, i) in cosmosRegions: { locationName: r.locationName, failoverPriority: i, isZoneRedundant: r.isZoneRedundant }]
     capabilities: cosmosCapacityMode == 'serverless' ? [{ name: 'EnableServerless' }] : []
-    consistencyPolicy: { defaultConsistencyLevel: 'Session' }
+    consistencyPolicy: cosmosConsistency
     disableLocalAuth: true
     publicNetworkAccess: cosmosPublicNetworkAccess
     isVirtualNetworkFilterEnabled: true
     ipRules: []
     enableMultipleWriteLocations: false
-    enableAutomaticFailover: false
+    enableAutomaticFailover: length(cosmosRegions) > 1
   }
 }
 

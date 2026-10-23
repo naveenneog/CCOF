@@ -233,6 +233,8 @@ function Test-Stage1 {
     Assert-Stg ($null -ne $cosmos) 'The Stage 1 Cosmos account is missing'
     Assert-Stg ($cosmos.publicNetworkAccess -ceq $Cfg.stage1.cosmosPublicNetworkAccess) "Cosmos publicNetworkAccess is $($cosmos.publicNetworkAccess)"
     Assert-Stg ($cosmos.disableLocalAuth -eq $true) 'Cosmos local auth is enabled'
+    $cosmosProblems = @(Get-StgCosmosAccountProblems $Cfg $cosmos)
+    Assert-Stg (-not $cosmosProblems.Count) ($cosmosProblems -join '; ')
     $databases = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'database', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     if ($schema) {
         Assert-Stg (@($databases | Where-Object { $_.name -ceq $schema.databaseName }).Count -eq 1) "Stage 2 database $($schema.databaseName) is missing"
@@ -249,7 +251,9 @@ function Test-Stage1 {
     $cosmosRoles = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     $expectedCosmosRoles = if ($grantsStage) { @($grantsStage.verify.cosmos).Count } else { 0 }
     Assert-Stg ($cosmosRoles.Count -eq $expectedCosmosRoles) "found $($cosmosRoles.Count) Cosmos data assignments; completed Stage 3 records $expectedCosmosRoles"
-    $v.cosmos = @{ name = $cosmos.name; publicNetworkAccess = $cosmos.publicNetworkAccess; localAuthDisabled = $cosmos.disableLocalAuth }
+    $v.cosmos = @{ name = $cosmos.name; publicNetworkAccess = $cosmos.publicNetworkAccess; localAuthDisabled = $cosmos.disableLocalAuth
+        regions = @($cosmos.locations | Sort-Object { [int]$_.failoverPriority } | ForEach-Object { "$($_.locationName)$(if ($_.isZoneRedundant) { ' (zones)' })" })
+        automaticFailover = [bool]$cosmos.enableAutomaticFailover; consistency = $cosmos.consistencyPolicy.defaultConsistencyLevel }
     $v.roleAssignmentsOnDeployedResources = $grants.Count
     $v.cosmosDataAssignments = $cosmosRoles.Count
     $v.applicationInsights = @()
@@ -303,6 +307,7 @@ function Get-StgNetworkVerifyArguments {
         FlexSubnet = ($e.functionsSubnetId -split '/')[-1]
         PeSubnet = ($e.privateEndpointSubnetId -split '/')[-1]
         CosmosResourceId = $Stage1.cosmosAccountId
+        CosmosRegions = @(Get-StgCosmosRegions $Cfg | ForEach-Object { [string]$_.locationName })
         StorageAccountIds = @($apps | ForEach-Object { "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.Storage/storageAccounts/$($Stage1.names.apps[$_].storageAccount)" })
         FunctionAppIds = @($apps | ForEach-Object { "/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.Web/sites/$($Stage1.names.apps[$_].functionApp)" })
     }
@@ -408,6 +413,11 @@ function Invoke-Stage6 {
         $records = @($zones.properties.privateDnsZoneConfigs | ForEach-Object { $_.properties.recordSets } | ForEach-Object { "$($_.fqdn)=$(@($_.ipAddresses) -join ',')" })
         Assert-Stg ($conn -ceq 'Approved') "$($pe.name) connection is $conn"
         Assert-Stg ($records.Count -ge 1) "$($pe.name) has no DNS records"
+        if ($id -ieq $out.cosmosPrivateEndpointId) {
+            $fqdns = @($zones.properties.privateDnsZoneConfigs | ForEach-Object { $_.properties.recordSets } | ForEach-Object { $_.fqdn })
+            $dnsProblems = @(Get-StgCosmosDnsProblems -AccountName $s1.names.cosmosAccount -Regions @(Get-StgCosmosRegions $Cfg | ForEach-Object { [string]$_.locationName }) -Fqdns $fqdns)
+            Assert-Stg (-not $dnsProblems.Count) ($dnsProblems -join '; ')
+        }
         $v.privateEndpoints += [ordered]@{ name = $pe.name; connection = $conn; dns = $records }
     }
     foreach ($k in $apps) {

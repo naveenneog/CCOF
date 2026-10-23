@@ -38,6 +38,9 @@ export function cosmosClientOptions(settings: CosmosClientSettings, credential: 
         maxRetryAttemptCount: settings.retryAttempts,
         maxWaitTimeInSeconds: settings.retryMaxWaitSeconds,
       },
+      // Multi-region account (ADR-0036): reads go to the first available region in this order; the SDK
+      // matches names without spaces or case, so ARM names such as eastus2 work.
+      ...(settings.preferredRegions?.length ? { preferredLocations: [...settings.preferredRegions] } : {}),
     },
   };
 }

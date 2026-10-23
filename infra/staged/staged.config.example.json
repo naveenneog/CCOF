@@ -11,7 +11,12 @@
   "stage1": {
     "prefix": "ccofstg",
     "includeAdmin": true,
-    "cosmosCapacityMode": "serverless",
+    "cosmosCapacityMode": "provisioned",
+    "cosmosLocations": [
+      { "locationName": "eastus2", "isZoneRedundant": true },
+      { "locationName": "centralus", "isZoneRedundant": true }
+    ],
+    "cosmosConsistency": { "defaultConsistencyLevel": "Session" },
     "cosmosPublicNetworkAccess": "Disabled",
     "storagePublicNetworkAccess": "Disabled",
     "functionsPublicNetworkAccess": "Disabled",
@@ -81,7 +86,7 @@
   },
   "cosmos": {
     "databaseName": "ccof",
-    "capacityMode": "serverless",
+    "capacityMode": "provisioned-autoscale",
     "autoscaleMaxThroughput": 1000,
     "roleNames": {
       "syncWriter": "ccof sync entitlement writer",

@@ -50,6 +50,13 @@ test("the Cosmos client options are the configured limits, never the SDK default
   });
 });
 
+test("preferred regions, when configured, become the SDK's preferred read locations in order (ADR-0036)", () => {
+  const options = cosmosClientOptions({ ...settings, preferredRegions: ["eastus2", "centralus"] }, credential);
+  assert.deepEqual(options.connectionPolicy?.preferredLocations, ["eastus2", "centralus"]);
+  assert.equal(options.connectionPolicy?.enableEndpointDiscovery, undefined, "endpoint discovery stays at the SDK default (on)");
+  assert.equal("preferredLocations" in (cosmosClientOptions({ ...settings, preferredRegions: [] }, credential).connectionPolicy ?? {}), false);
+});
+
 test("each read names its container, id and partition key, and returns the document", async () => {
   const { database, calls } = fakeDatabase(async (call) => ({ resource: { id: call.id } }));
   const reads = createRegistryReads(database, 1000);

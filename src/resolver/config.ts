@@ -19,6 +19,8 @@ export const RESOLVER_SETTINGS = {
   // optional setting: absent means hidden, the private choice, so a resolver deployed before this setting
   // existed keeps running. A value other than exactly "true" or "false" is reported like any other.
   usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
+  // Cosmos read regions in failover order (ADR-0036): optional, absent for a single-region account.
+  cosmosPreferredRegions: "COSMOS_PREFERRED_REGIONS",
 } as const;
 
 // The Cosmos client's limits are availability settings (ADR-0014 decision 6):
@@ -29,6 +31,8 @@ export interface CosmosClientSettings {
   requestTimeoutMs: number;
   retryAttempts: number;
   retryMaxWaitSeconds: number;
+  // The SDK reads from these regions in order and moves to the next when one is unavailable.
+  preferredRegions?: string[];
 }
 
 export interface ResolverConfig {
@@ -49,6 +53,7 @@ export type ConfigProblemCode =
   | "not_whole_seconds"
   | "out_of_range"
   | "not_boolean"
+  | "invalid_regions"
   | "grace_exceeds_hard_limit";
 
 export interface ConfigProblem {
@@ -93,6 +98,13 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
   const groupTotalsRaw = env[RESOLVER_SETTINGS.usageGroupTotals];
   const usageGroupTotals = groupTotalsRaw === undefined || groupTotalsRaw === "" ? false : groupTotalsRaw === "true" ? true : groupTotalsRaw === "false" ? false : undefined;
   if (usageGroupTotals === undefined) report(RESOLVER_SETTINGS.usageGroupTotals, "not_boolean");
+  const regionsRaw = env[RESOLVER_SETTINGS.cosmosPreferredRegions];
+  let preferredRegions: string[] | undefined;
+  if (regionsRaw !== undefined && regionsRaw !== "") {
+    const list = regionsRaw.split(",");
+    if (list.every((r) => /^[a-z][a-z0-9]{1,39}$/.test(r)) && new Set(list).size === list.length) preferredRegions = list;
+    else report(RESOLVER_SETTINGS.cosmosPreferredRegions, "invalid_regions");
+  }
 
   if (
     problems.length > 0 ||
@@ -112,7 +124,7 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
   return {
     ok: true,
     config: {
-      cosmos: { endpoint, databaseName, requestTimeoutMs, retryAttempts, retryMaxWaitSeconds },
+      cosmos: { endpoint, databaseName, requestTimeoutMs, retryAttempts, retryMaxWaitSeconds, ...(preferredRegions ? { preferredRegions } : {}) },
       requestDeadlineMs,
       budgetEnforcement,
       usageGroupTotals,
