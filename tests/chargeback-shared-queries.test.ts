@@ -18,11 +18,11 @@ test("the shared query builder leaves the chargeback and fixed-price workbooks b
   const { buildWorkbook } = await import("../analytics/workbooks/build.ts");
   const chargeback = buildChargebackWorkbook(workbookAnswers(), card, ledger, groups);
   const workbook = buildWorkbook(workbookAnswers(), card, ledger);
-  assert.equal(chargeback.contentSha256, "d81cf8de6866465617303b0ed63677a6f385b69005dbde3423512babef8ea61d");
+  assert.equal(chargeback.contentSha256, "dc129b8d8d8b856800b5182fbd78d87b3bd74bff64b18f7b2697e373029dc67c");
   assert.equal(workbook.contentSha256, "9e34609656413f7c47a2d925acecfea6f7b1722042d9f67a587e3a77ab4bcb27");
   assert.deepEqual(Object.fromEntries(Object.entries(chargeback.queries).map(([k, v]) => [k, sha(v as string)])), {
     health: "60634e89dbccfcb4d2185110a7f8bc626ee11ad59607bfd05834880f711cff78",
-    developers: "433275912bb664ad78fd899ce5f3dc90b6eab62458911e7f76f5f23c4d8ca570",
+    developers: "b2aa8418d9973170f11b1f7311217f983353c391720ead5d2b8dbcbf4ac4b5b1",
     usage: "396f39df885dda69c1c6855ae467c951fae27b8b62ba6f87de1945d12fa39cae",
     groups: "c1de3a804f2f4a11aa1f331bc29be4453accc6c2c52fd8eab8a3f3bd70d6add4",
     chargebackIds: "f47b0bd9321d4c59e28dc695762a63652462ab01b2aa77ee4557b5ed4115735e",
@@ -33,4 +33,12 @@ test("the shared query builder leaves the chargeback and fixed-price workbooks b
     diagnostics: "0cf642d6ab0bd02241196dce8d19cb5b32a1730ca9423c78770694d2797587c0",
     unpriced: "d7bba093e0304ff2616f4d1e49a698902f403ac3b826b7b04bfcc530f9256081",
   });
+});
+
+test("the developers view shows each developer's user tags, (none) when a request carried none (owner decision 2026-10-23)", async () => {
+  const { buildChargebackWorkbook } = await import("../analytics/workbooks/chargeback.ts");
+  const developers = buildChargebackWorkbook(workbookAnswers(), card, ledger, groups).queries.developers as string;
+  assert.match(developers, /chargebackId = iff\(isempty\(chargebackId\), "\(none\)", chargebackId\)/);
+  assert.match(developers, /userTagSet = make_set\(chargebackId, 8\),/);
+  assert.match(developers, /\| extend userTag = strcat_array\(array_sort_asc\(userTagSet\), ", "\)\n\| project-away userTagSet/);
 });

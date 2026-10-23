@@ -116,6 +116,7 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 | `POST /api/groups/{groupId}/retire` | Editor | Body `{"confirmGroupId": "<groupId>"}`; needs `If-Match`; one way. The next sync removes every member's access |
 | `GET /api/groups/directory?search=<text>` | Reader | Entra security groups whose display name matches; text 1-100 characters without `"` or `\` |
 | `GET /api/groups/directory/{groupId}` | Reader | One Entra group with its direct member count |
+| `GET /api/groups/directory/{groupId}/members` | Reader | The direct user members (`id`, `displayName`, up to 999, with `truncated`) of an **active onboarded** group; `404 group_not_onboarded` for any other group |
 | `GET /api/groups/cache-suggestion?surfaces=code,chat` | Reader | Suggested cache-read share for the surfaces, with evidence class ([cache-suggestions.ts](../src/contracts/cache-suggestions.ts)) |
 
 - **Validation:** the same contract the sync and reconciler read
@@ -139,6 +140,37 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
   `412 etag_mismatch`, `428 if_match_required`, `422 invalid_group` with `problems`.
 - **Projects API:** `/api/projects` and the V2/V3 project lists do not return group documents, and
   `GET /api/projects/{groupId}` is 404, so no project route can change a group.
+
+### User tags ([admin/src/user-tags.ts](../admin/src/user-tags.ts))
+
+A user tag is the chargeback ID (for example a WBS element) a person's usage is charged to, set per
+person (owner decision 2026-10-23, [ADR-0034](adr/0034-group-centric-onboarding.md) decision 7). Every
+new tag is saved; saved tags are suggested while typing. The sync copies the person's tag into their
+group memberships as `chargebackId`, so requests carry it from the next sync on; a person without a tag
+gets the group's own chargeback ID. Documents live in `adminConfig` (`userTag-<personId>` per person and
+one `userTagCatalog` with the saved tags, at most 2,000).
+
+| Request | Role | Behaviour |
+|---|---|---|
+| `GET /api/user-tags?search=<text>` | Reader | Up to 20 saved tags containing the text, case-insensitive, prefix matches first |
+| `GET /api/user-tags/people[?tag=<tag>][&limit=1-500]` | Reader | Tagged people (optionally one tag), with `truncated` |
+| `GET /api/user-tags/people/{personId}` | Reader | The person's tag and `ETag`; `exists: false` and no `ETag` when none was set |
+| `PUT /api/user-tags/people/{personId}` | Editor | Body `{"tag": "<tag>"}` or `{"tag": null}` to clear; `If-None-Match: *` to create, `If-Match` to change. The change record is written first, then the tag; a new tag is added to the saved list only after the tag is written (`suggestionSaved` says whether it was) |
+
+- **Tag rule:** 1-64 characters, letters, digits and `. _ / -`, starting with a letter or digit (the
+  chargeback ID pattern, [src/contracts/user-tags.ts](../src/contracts/user-tags.ts)).
+- **Change record:** each change is recorded first (operation `userTag.set`, `details.personId`).
+- **Error codes:** `400 invalid_search_text`, `400 invalid_tag_filter`, `400 invalid_limit`,
+  `412 etag_mismatch`, `412 user_tag_exists` (create over an existing tag), `428 if_match_required`,
+  `409 saved_tags_full` (a new tag when 2,000 are saved; nothing is written), `422 invalid_user_tag`, `503 user_tags_not_configured`
+  (no `ADMIN_CONFIG_CONTAINER`).
+- **Picking a person:** `GET /api/groups/directory/{groupId}/members` (Reader) lists a group's direct
+  user members (`id`, `displayName`, `truncated` beyond 999) through Graph `GroupMember.ReadBasic.All`
+  ([List group members](https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0));
+  the console's User tags page uses it, and accepts a pasted object ID when group search is off.
+- **Reports:** the chargeback `chargeback` filter selects a tag, the Developers view has a `userTag`
+  column (the tags a developer's requests carried in the period, `(none)` when a request had none),
+  and Usage CSV carries `chargebackId` per row.
 
 ### Export for Power BI ([admin/src/export.ts](../admin/src/export.ts))
 

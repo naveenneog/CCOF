@@ -47,9 +47,14 @@ policy, the ledger KQL and the workbook, so a one-step rename cannot keep the su
    `design` is accepted and stored but has no Foundry path yet. The resolver returns the list with
    the decision; APIM maps the calling client app ID (`azp`/`appid`, policy lines 42-44) to a
    surface. With no mapping configured, surfaces are not enforced.
-7. **Chargeback ID (ASSUMED, G-A2).** One optional chargeback ID per group (for example a WBS
-   element). It is copied into each membership and into the usage trace, so usage rows carry the
-   ID current at request time (ADR-0025 request-time attribution).
+7. **Chargeback ID as a user tag (owner decision 2026-10-23, G-A2).** The chargeback ID (for example a
+   WBS element) is an individual user tag, set per person when the person is onboarded
+   ([src/contracts/user-tags.ts](../../src/contracts/user-tags.ts), admin `/api/user-tags`). New tags
+   are saved and suggested. The sync copies the person's tag into each of their group memberships as
+   `chargebackId`; a person without a tag gets the group's own optional chargeback ID (ASSUMED default).
+   If the tags cannot be read, the stored ID is kept. The usage trace carries it, so usage rows keep
+   the tag current at request time (ADR-0025 request-time attribution); reports filter by it and show
+   it per developer.
 8. **Cache profile.** Each group stores an expected cache-read share of input tokens, either
    suggested from its enabled surfaces or entered by the admin. It feeds the budget assistant and
    the export; it does not affect enforcement.

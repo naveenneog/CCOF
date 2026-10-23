@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-10-23 — Admin 3.4.0: user tags
+
+- **User tags (owner decision):** the chargeback ID (for example a WBS element) is set per person on the new
+  **User tags** page: pick a member of an onboarded group (Graph `GroupMember.ReadBasic.All`) or enter the object ID;
+  the person's name and current tag are shown before saving; every new tag is saved and suggested while typing.
+  API: `/api/user-tags` and `GET /api/groups/directory/{groupId}/members` ([ADMIN-API.md](ADMIN-API.md)).
+- **Sync:** copies each person's tag into their group memberships as `chargebackId` (the group's own ID for people
+  without a tag); reads tags page by page from `adminConfig`; a failed read keeps stored IDs.
+- **Reports:** the chargeback filter is "User tag" with suggestions; the Developers view and its CSV show each
+  developer's tags; the "Chargeback IDs" view is "User tags"; Usage CSV carries the tag per row.
+- Needs the sync and admin packages of this release; no new role or setting (both use `adminConfig`).
+
 ## 2026-10-23 — Precedence by spend, removal as retirement
 
 - **Precedence (owner decision):** without a project selector, a person in several groups gets the group with the

@@ -86,7 +86,8 @@ export function isActive(m: RawMembership): m is RawMembership & { projectId: st
 
 // The fields copied from `projects` (C-4), in the stored order, plus an
 // onboarded group's attributes (ADR-0034).
-function copiedFields(reg: ClassificationRegistration) {
+// `chargebackId`, when given, replaces the group's own: the member's user tag (src/contracts/user-tags.ts).
+function copiedFields(reg: ClassificationRegistration, chargebackId?: string | null) {
   return {
     projectId: reg.projectId,
     classification: reg.classification,
@@ -99,7 +100,7 @@ function copiedFields(reg: ClassificationRegistration) {
       ? {
         priority: reg.group.priority,
         surfaces: [...reg.group.surfaces],
-        chargebackId: reg.group.chargebackId,
+        chargebackId: chargebackId !== undefined ? chargebackId : reg.group.chargebackId,
         restrictedFamiliesApproved: reg.group.restrictedFamiliesApproved,
         perUserBudget: structuredClone(reg.group.perUserBudget),
       }
@@ -112,19 +113,19 @@ const COPIED_KEYS = [
   "priority", "surfaces", "chargebackId", "restrictedFamiliesApproved", "perUserBudget",
 ];
 
-function sameCopiedFields(prior: RawMembership, reg: ClassificationRegistration): boolean {
+function sameCopiedFields(prior: RawMembership, reg: ClassificationRegistration, chargebackId?: string | null): boolean {
   const stored = Object.fromEntries(COPIED_KEYS.map((k) => [k, prior[k]]));
   return !Object.hasOwn(prior, "modelAllowList") && !Object.hasOwn(prior, "tokenLimits")
-    && canonical(stored) === canonical({ ...copiedFields(reg), status: "active" });
+    && canonical(stored) === canonical({ ...copiedFields(reg, chargebackId), status: "active" });
 }
 
 // The membership for one registration. `prior` is the person's existing
 // active membership of the same project and classification, if any: its
 // joinedAt is kept, and so is its denormalizedAt when nothing copied changed.
-export function buildMembership(reg: ClassificationRegistration, prior: RawMembership | undefined, nowIso: string): ProjectMembership {
-  const unchanged = prior !== undefined && sameCopiedFields(prior, reg);
+export function buildMembership(reg: ClassificationRegistration, prior: RawMembership | undefined, nowIso: string, chargebackId?: string | null): ProjectMembership {
+  const unchanged = prior !== undefined && sameCopiedFields(prior, reg, chargebackId);
   const membership: ProjectMembership = {
-    ...copiedFields(reg),
+    ...copiedFields(reg, chargebackId),
     denormalizedAt: unchanged && parseZonedTimestamp(prior.denormalizedAt) !== null ? (prior.denormalizedAt as string) : nowIso,
     joinedAt: prior !== undefined && parseZonedTimestamp(prior.joinedAt) !== null ? (prior.joinedAt as string) : nowIso,
     status: "active",

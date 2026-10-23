@@ -26,6 +26,9 @@ export interface RunDependencies {
   // The admin console's removal-limit override (removal-limits.ts); null when none is configured.
   // Omitted: the app settings apply.
   readRemovalLimits?(): Promise<unknown | null>;
+  // Person ID to user tag from the admin console (src/contracts/user-tags.ts). Omitted: groups' own
+  // chargeback IDs apply. A failed read keeps the stored chargeback IDs.
+  readUserTags?(): Promise<ReadonlyMap<string, string>>;
   // Snapshot runs only: refuses a snapshot naming a group no valid project registers.
   checkGroups?(registered: ReadonlySet<string>): { reason: string; groupIds: string[] } | null;
 }
@@ -207,6 +210,13 @@ async function execute(config: SyncConfig, deps: RunDependencies, lease: Lease, 
     if (limits.source === "admin") state.emit({ event: "notice", reason: "removal_limits_from_admin", counts });
     else if (limits.reason !== "override_absent" && limits.reason !== "override_disabled") state.emit({ event: "notice", reason: limits.reason ?? "removal_limits_from_settings", counts });
   }
+  let userTags: ReadonlyMap<string, string> | null | undefined;
+  if (deps.readUserTags) {
+    try { userTags = await deps.readUserTags(); } catch {
+      userTags = null;
+      state.emit({ event: "notice", reason: "user_tags_unreadable" });
+    }
+  }
   const planStart = now().getTime();
   const plan = planSync({
     projects,
@@ -215,6 +225,7 @@ async function execute(config: SyncConfig, deps: RunDependencies, lease: Lease, 
     memberTypes: config.memberTypes,
     removalLimits: limits.limits,
     now: now(),
+    ...(userTags !== undefined ? { userTags } : {}),
   });
   state.timings.planMs = now().getTime() - planStart;
   for (const event of plan.events) state.emit(event);

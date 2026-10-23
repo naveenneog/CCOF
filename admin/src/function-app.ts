@@ -26,6 +26,7 @@ import type { Doc } from "./validation.ts";
 import { createUserDirectory } from "./user-directory.ts";
 import { createGroupDirectory } from "./group-directory.ts";
 import { handleGroupRequest } from "./groups.ts";
+import { createCosmosUserTagStore, handleUserTagRequest } from "./user-tags.ts";
 
 let authenticate: Authenticator | null = null;
 let authProblem = "";
@@ -47,6 +48,8 @@ const catalogStore = catalogContainer ? createCatalogStore(catalogContainer) : n
 // The permanent change record and the sync removal limits share the adminConfig container.
 const changeLog = catalogContainer ? createCosmosChangeLog(catalogContainer) : null;
 const limitsStore = catalogContainer ? createLimitsStore(catalogContainer) : null;
+// User tags and their saved list (src/contracts/user-tags.ts) share it too; the sync reads them there.
+const userTagStore = catalogContainer ? createCosmosUserTagStore(catalogContainer) : null;
 let defaultCatalogPromise: Promise<Doc | null> | null = null;
 // A missing or invalid packaged rate card degrades only the cost-definitions view, and is retried
 // on the next request rather than cached as a permanent failure.
@@ -85,6 +88,16 @@ async function groupsHandler(request: HttpRequest, context: InvocationContext): 
   return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
 }
 
+async function userTagsHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  const body = request.method.toUpperCase() === "PUT" ? await request.text() : null;
+  const url = new URL(request.url);
+  const response = await handleUserTagRequest(
+    { method: request.method, path: url.pathname, query: (name) => url.searchParams.get(name), headers: (name) => request.headers.get(name), body },
+    { authenticate, store: userTagStore, changeLog, log: (line) => context.log(line), now: () => new Date(), newId: () => randomUUID() },
+  );
+  return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
+}
+
 // Function-key protected. Reports configuration and Cosmos reachability as codes only.
 async function healthHandler(_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const cosmosState = container ? await probeCosmos(container, (line) => context.log(line)) : "not_configured";
@@ -117,6 +130,11 @@ app.http("projectRetire", { methods: ["POST"], authLevel: "anonymous", route: "a
 app.http("groups", { methods: ["GET", "POST"], authLevel: "anonymous", route: "api/groups", handler: groupsHandler });
 app.http("group", { methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/groups/{segment}", handler: groupsHandler });
 app.http("groupAction", { methods: ["GET", "POST"], authLevel: "anonymous", route: "api/groups/{segment}/{part}", handler: groupsHandler });
+app.http("groupDirectoryMembers", { methods: ["GET"], authLevel: "anonymous", route: "api/groups/directory/{groupId}/members", handler: groupsHandler });
+// User tags (owner decision 2026-10-23): /api/user-tags, /api/user-tags/people, /api/user-tags/people/{personId}.
+app.http("userTags", { methods: ["GET"], authLevel: "anonymous", route: "api/user-tags", handler: userTagsHandler });
+app.http("userTagPeople", { methods: ["GET"], authLevel: "anonymous", route: "api/user-tags/people", handler: userTagsHandler });
+app.http("userTagPerson", { methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/user-tags/people/{personId}", handler: userTagsHandler });
 app.http("adminV2", {
   methods: ["GET", "PUT"], authLevel: "anonymous", route: "api/v2/{feature}",
   handler: async (request, context) => {

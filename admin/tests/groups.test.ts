@@ -77,6 +77,11 @@ class FakeDirectory implements GroupDirectory {
       ? { state: "available" as const, group: { id: GROUP, displayName: "Payments engineering", description: null, securityEnabled: true, memberCount: 42 } }
       : { state: "not_found" as const };
   }
+  async members(id: string) {
+    return id === GROUP
+      ? { state: "available" as const, members: [{ id: READER, displayName: "Reader person" }], truncated: false }
+      : { state: "not_found" as const };
+  }
 }
 
 function setup(directory: GroupDirectory | null = new FakeDirectory()) {
@@ -224,4 +229,22 @@ test("cache suggestion for a set of surfaces names its evidence", async () => {
   assert.equal(res.status, 200);
   assert.deepEqual((res.jsonBody as Doc).suggestion, { percent: 50, from: [{ surface: "chat", basis: "assumed" }] });
   assert.equal((await call("GET", "/api/groups/cache-suggestion", { oid: READER, query: { surfaces: "code,email" } })).status, 400);
+});
+
+test("a group's directory members are listed for any reader, so a person can be picked to tag", async () => {
+  const h = setup();
+  await h.call("POST", "/api/groups", { body: groupBody() });
+  const r = await h.call("GET", `/api/groups/directory/${GROUP}/members`, { oid: READER });
+  assert.deepEqual([r.status, r.jsonBody], [200, { members: [{ id: READER, displayName: "Reader person" }], truncated: false }]);
+  assert.equal((await h.call("GET", `/api/groups/directory/${GROUP.replace("abcdef01", "abcdef02")}/members`)).status, 404);
+  assert.equal((await h.call("POST", `/api/groups/directory/${GROUP}/members`)).status, 405);
+  assert.equal((await setup(null).call("GET", `/api/groups/directory/${GROUP}/members`)).status, 503);
+});
+
+test("members are listed only for an active onboarded group, never for any other directory group", async () => {
+  const h = setup();
+  assert.equal((await h.call("GET", `/api/groups/directory/${GROUP}/members`, { oid: READER })).status, 404, "not onboarded");
+  const created = await h.call("POST", "/api/groups", { body: groupBody() });
+  await h.call("POST", `/api/groups/${GROUP}/retire`, { body: { confirmGroupId: GROUP }, ifMatch: created.headers.etag });
+  assert.equal((await h.call("GET", `/api/groups/directory/${GROUP}/members`, { oid: READER })).status, 404, "retired");
 });

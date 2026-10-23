@@ -28,7 +28,7 @@ test("the workbook lists the chargeback ID per developer", () => {
   const query = (workbook.queries as Record<string, string>).chargebackIds;
   assert.ok(query, "chargebackIds view");
   assert.match(query, /by chargebackId, person/);
-  assert.match(JSON.stringify(workbook.workbook), /Per chargeback ID and developer/);
+  assert.match(JSON.stringify(workbook.workbook), /Per user tag \(chargeback ID\) and developer/);
   assert.doesNotMatch(query, /\{Chargeback:base64\}/, "the workbook has no chargeback parameter");
 });
 

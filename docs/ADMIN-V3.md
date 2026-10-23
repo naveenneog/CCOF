@@ -1,6 +1,6 @@
 # Admin console V3: settings, permissions, upgrade and rollback
 
-Release source: `feat/admin-console-v2`; package version **3.3.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
+Release source: `feat/admin-console-v2`; package version **3.4.0**. Design: [ADMIN-V3-DESIGN.md](ADMIN-V3-DESIGN.md).
 One ZIP serves both consoles. V2 stays at `/api/console` and is unchanged; V3 is at
 `/api/console-v3` and is served only when `ADMIN_V3_ENABLED=true`. This is an
 **admin-app-only** upgrade up to 3.1.0: no gateway, sync or reconciler change, no new Entra app, roles or scopes.
@@ -27,6 +27,19 @@ settings, verification and rollback. Names are memory-only; filters and exports 
   are read by all four), Graph application `Group.ReadBasic.All` and `GroupMember.ReadBasic.All` on the
   admin managed identity with `ADMIN_GROUP_SEARCH_ENABLED=true` for search (without them, paste the
   group's Object ID), and `entra.surfaceClients` in the gateway configuration to enforce surfaces.
+
+**3.4.0** (owner decisions 2026-10-23): user tags and precedence by spend.
+
+- **User tags** page (`#/user-tags`): tag a person (Entra object ID) with a chargeback ID such as a WBS
+  element; a new tag is saved and suggested while typing; the list filters by tag; clearing a tag returns
+  the person to the group's chargeback ID ([ADMIN-API.md](ADMIN-API.md), "User tags").
+- **Chargeback**: the filter is "User tag" with suggestions; the Developers view and its CSV have a
+  User tag column; the former "Chargeback IDs" view is "User tags".
+- **Groups**: help and hints state the precedence rule (higher per-user budget, then lower priority).
+- Needs: the sync package from the same release (it copies tags into memberships, and `perUserBudget`
+  for precedence), the resolver package (precedence), `ADMIN_CONFIG_CONTAINER` on the admin app and
+  `SYNC_LIMITS_CONTAINER` on the sync app (both `adminConfig`; the staged Stage 3/5 set them with the
+  admin app).
 
 **3.2.0:**
 

@@ -30,6 +30,9 @@ export interface PlanInput {
   memberTypes: ReadonlyArray<MemberType>;
   removalLimits: RemovalLimits;
   now: Date;
+  // Person ID (lower case) to user tag (src/contracts/user-tags.ts). Absent: tags are not configured and
+  // groups' own chargeback IDs apply. null: the tags could not be read; stored chargeback IDs are kept.
+  userTags?: ReadonlyMap<string, string> | null;
 }
 
 // One line of `ccof.sync.event.v1`: ids, reason codes and counts only.

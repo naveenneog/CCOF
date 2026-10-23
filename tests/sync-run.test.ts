@@ -9,6 +9,7 @@ import type { RunContext, RunDependencies } from "../src/sync/run.ts";
 import { readGroupMembers } from "../src/sync/graph.ts";
 import type { SyncConfig } from "../src/sync/config.ts";
 import { LEASE_ID } from "../src/sync/lease.ts";
+import { GROUP_A, groupDoc } from "./helpers/group-fixtures.ts";
 import { FakeGraph, GROUP_PRM, GROUP_STD, ManualClock, MemoryEntitlements, MemoryLeases, PERSON_A, PERSON_B, PERSON_C, member, membersUrl, page, projectDoc } from "./helpers/sync-fakes.ts";
 
 const CONFIG: SyncConfig = {
@@ -334,4 +335,24 @@ test("an admin removal-limit override lets a large directory removal through; wi
   await runSync(tight, unreadable.deps, unreadable.context);
   assert.equal(runLine(unreadable.lines).counts.withheldRemovals, 3, "a failed read never raises the limits");
   assert.ok(events(unreadable.lines).some((e) => e.reason === "override_unreadable"));
+});
+test("user tags from the admin console become group members' chargeback IDs; an unreadable tag store keeps them", async () => {
+  const h = harness();
+  h.projects = [groupDoc()];
+  h.graph.on(membersUrl(GROUP_A), page([member(PERSON_A), member(PERSON_B)]), page([member(PERSON_A), member(PERSON_B)]), page([member(PERSON_A), member(PERSON_B)]));
+  h.deps.readUserTags = async () => new Map([[PERSON_A, "WBS-77.1"]]);
+  await runSync(CONFIG, h.deps, h.context);
+  const stored = async () => new Map((await h.entitlements.readAll()).map((e) => [e.doc.id as string, (e.doc.projectMemberships as Record<string, unknown>[])[0]?.chargebackId]));
+  assert.deepEqual([...(await stored()).entries()].sort(), [[PERSON_A, "WBS-77.1"], [PERSON_B, "WBS-1234.01"]]);
+
+  h.clock.advance(60);
+  h.deps.readUserTags = async () => { throw Object.assign(new Error("forbidden"), { code: 403 }); };
+  await runSync(CONFIG, h.deps, h.context);
+  assert.ok(events(h.lines).some((e) => e.reason === "user_tags_unreadable"));
+  assert.equal((await stored()).get(PERSON_A), "WBS-77.1", "an unreadable tag store never resets a tag");
+
+  h.clock.advance(60);
+  h.deps.readUserTags = async () => new Map([[PERSON_B, "CC-900"]]);
+  await runSync(CONFIG, h.deps, h.context);
+  assert.deepEqual([...(await stored()).entries()].sort(), [[PERSON_A, "WBS-1234.01"], [PERSON_B, "CC-900"]]);
 });

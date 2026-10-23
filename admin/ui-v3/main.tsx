@@ -17,6 +17,7 @@ import { Groups } from "./pages/groups.tsx";
 import { GroupOnboard } from "./pages/group-onboard.tsx";
 import { GroupDetail } from "./pages/group-detail.tsx";
 import { Chargeback } from "./pages/chargeback.tsx";
+import { UserTags } from "./pages/user-tags.tsx";
 import { Budgets } from "./pages/budgets.tsx";
 import { Reconciler } from "./pages/reconciler.tsx";
 import { Foundry } from "./pages/foundry.tsx";
@@ -45,6 +46,7 @@ function Page() {
     case "projects": page = second === "new" ? <NewProject /> : second ? <ProjectDetail id={second} tab={third ?? "overview"} /> : <Projects query={route.query} />; break;
     case "groups": page = second === "new" ? <GroupOnboard /> : second ? <GroupDetail id={second} /> : <Groups />; break;
     case "chargeback": page = <Chargeback query={route.query} />; break;
+    case "user-tags": page = <UserTags query={route.query} />; break;
     case "budgets": page = <Budgets />; break;
     case "reconciler": page = <Reconciler />; break;
     case "foundry": page = <Foundry />; break;

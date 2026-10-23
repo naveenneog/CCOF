@@ -142,14 +142,17 @@ model. "Top people" ranks people by known list CCU. That ranking is not complete
 
 "Per chargeback ID and developer" groups usage by `chargebackId`, then person, with the same figures
 as above ([ADR-0034](adr/0034-group-centric-onboarding.md) decision 7). The chargeback ID (for example
-a WBS element) is set on an onboarded group in the admin console and copied into each request's
-`ccof.usage.v1` trace by the gateway, so a row carries the ID that applied when the request was made;
-changing a group's ID later does not rewrite earlier usage. Requests of baseline projects, and of
-groups with no ID, show `(none)`. A person in two groups with different IDs has one row per ID.
-The ledger accepts only IDs matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$`
+a WBS element) is the person's user tag, set in the admin console (**User tags**), or the group's own
+ID for a person without a tag. The sync copies it into the person's memberships and the gateway copies
+it into each request's `ccof.usage.v1` trace, so a row carries the ID that applied when the request was
+made; changing a tag later does not rewrite earlier usage. Requests of baseline projects, and of
+people with neither a tag nor a group ID, show `(none)`. A person whose tag changed in the period has
+one row per ID. The ledger accepts only IDs matching `^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$`
 ([analytics/ledger.kql](../analytics/ledger.kql)); any other value is reported as `(none)`. The admin
 console's chargeback API accepts `chargeback=<id>` as a filter on every view
-(`GET /api/v3/chargeback/{view}?chargeback=...`; view `chargebackIds`).
+(`GET /api/v3/chargeback/{view}?chargeback=...`; view `chargebackIds`). The `developers` view adds
+`userTag`: the tags the developer's requests carried in the period, comma-separated, `(none)` for
+requests without one.
 
 ### Budget versus spend
 

@@ -9,6 +9,7 @@ import { ChartPanel, FAMILIES, TOKEN_CATEGORIES, bucketLabel, trendBuckets } fro
 import { PagerLite } from "./project-detail.tsx";
 import { useDebounced } from "./projects.tsx";
 import { UserIdentity } from "../components/user-identity.tsx";
+import { TagInput } from "../components/tag-input.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,8 +29,9 @@ const common: Column<any>[] = [
 const VIEWS: Record<string, { label: string; columns: Column<any>[] }> = {
   groups: { label: "Groups", columns: [{ key: "groupId", label: "Entra group", render: (r) => <><span>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown name)"}</span><code className="block muted">{r.groupId}</code></> },
     { key: "groupProjects", label: "Projects", render: (r) => (r.groupProjects ?? []).join(", ") }, ...common] },
-  developers: { label: "Developers", columns: [{ key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
-  chargebackIds: { label: "Chargeback IDs", columns: [{ key: "chargebackId", label: "Chargeback ID", render: (r) => r.chargebackId === "(none)" ? <span className="muted">none</span> : <code>{r.chargebackId}</code> },
+  developers: { label: "Developers", columns: [{ key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> },
+    { key: "userTag", label: "User tag", render: (r) => !r.userTag || r.userTag === "(none)" ? <span className="muted">none</span> : <code>{r.userTag}</code> }, ...common] },
+  chargebackIds: { label: "User tags", columns: [{ key: "chargebackId", label: "User tag", render: (r) => r.chargebackId === "(none)" ? <span className="muted">none</span> : <code>{r.chargebackId}</code> },
     { key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
   models: { label: "Models", columns: [{ key: "model", label: "Model", render: (r) => <code>{r.model}</code> }, ...common] },
   families: { label: "Families", columns: [{ key: "modelFamily", label: "Family", render: (r) => <span className="cap">{r.modelFamily}</span> }, ...common] },
@@ -143,9 +145,10 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
         )}</Field>
         <Field label="Classification">{(id) => <input id={id} className="input input-short" value={f.classification} placeholder="STD"
           onChange={(e) => setF({ ...f, classification: e.target.value.trim().toUpperCase() })} autoComplete="off" spellCheck={false} />}</Field>
-        <Field label="Chargeback ID" hint="For example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <input id={id} aria-describedby={d} className="input mono" value={draftText.chargeback} maxLength={64}
-          onChange={(e) => { const v = e.target.value.trim(); setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} autoComplete="off" spellCheck={false} />}</Field>
-        <Field label="Tags" hint="All must match">{(id, d) => <input id={id} aria-describedby={d} className="input" value={f.tags} placeholder="finance, pilot"
+        <Field label="User tag" hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
+          invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
+          onChange={(v) => { setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} />}</Field>
+        <Field label="Project tags" hint="All must match">{(id, d) => <input id={id} aria-describedby={d} className="input" value={f.tags} placeholder="finance, pilot"
           onChange={(e) => setF({ ...f, tags: e.target.value })} autoComplete="off" />}</Field>
         <Field label="Foundry backend">{(id) => (
           <select id={id} className="input" value={f.backend} onChange={(e) => setF({ ...f, backend: e.target.value })}>

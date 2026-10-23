@@ -28,9 +28,13 @@ export interface DirectoryGroup {
 
 export type DirectoryState = "available" | "permission_required" | "unavailable" | "disabled" | "rejected";
 
+export interface DirectoryMember { id: string; displayName: string | null }
+
 export interface GroupDirectory {
   search(text: string, log: (line: string) => void): Promise<{ state: DirectoryState; groups?: DirectoryGroup[] }>;
   get(id: string, log: (line: string) => void): Promise<{ state: DirectoryState | "not_found"; group?: DirectoryGroup }>;
+  // Direct user members, so an admin can pick a person to tag (GroupMember.ReadBasic.All).
+  members(id: string, log: (line: string) => void): Promise<{ state: DirectoryState | "not_found"; members?: DirectoryMember[]; truncated?: boolean }>;
 }
 
 export interface GroupRequest {
@@ -58,7 +62,7 @@ const SEARCH_TEXT = /^(?=.*\S)[^"\\]{1,100}$/;
 
 type Route =
   | { op: "list" } | { op: "create" } | { op: "read"; groupId: string } | { op: "update"; groupId: string }
-  | { op: "retire"; groupId: string } | { op: "search" } | { op: "directoryGroup"; groupId: string } | { op: "cacheSuggestion" };
+  | { op: "retire"; groupId: string } | { op: "search" } | { op: "directoryGroup"; groupId: string } | { op: "directoryMembers"; groupId: string } | { op: "cacheSuggestion" };
 
 const WRITES = new Set(["create", "update", "retire"]);
 
@@ -72,6 +76,7 @@ function route(method: string, path: string): Route | "method_not_allowed" | nul
   if (parts.length === 2 && parts[1] === "directory") return only("GET", { op: "search" });
   if (parts.length === 2 && parts[1] === "cache-suggestion") return only("GET", { op: "cacheSuggestion" });
   if (parts.length === 3 && parts[1] === "directory") return isGuid(parts[2]) ? only("GET", { op: "directoryGroup", groupId: parts[2].toLowerCase() }) : null;
+  if (parts.length === 4 && parts[1] === "directory" && parts[3] === "members") return isGuid(parts[2]) ? only("GET", { op: "directoryMembers", groupId: parts[2].toLowerCase() }) : null;
   const groupId = parts[1];
   if (!isGuid(groupId)) return null;
   if (parts.length === 2) return m === "GET" ? { op: "read", groupId } : m === "PUT" ? { op: "update", groupId } : "method_not_allowed";
@@ -136,8 +141,16 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
       const surfaces = readSurfaces(request.query("surfaces"));
       return json(200, { surfaces, suggestion: suggestCacheReadPercent(surfaces), table: CACHE_SUGGESTIONS });
     }
-    if (matched.op === "search" || matched.op === "directoryGroup") {
+    if (matched.op === "search" || matched.op === "directoryGroup" || matched.op === "directoryMembers") {
       if (!deps.directory) throw new ApiError(503, "group_directory_not_configured");
+      if (matched.op === "directoryMembers") {
+        // Only an active onboarded group's members are listed, never any other directory group's.
+        if (!deps.store) throw new ApiError(503, "project_store_not_configured");
+        const onboarded = await guardStore(deps.store).read(matched.groupId);
+        if (!isGroup(onboarded) || onboarded.doc.status !== "active") throw new ApiError(404, "group_not_onboarded");
+        const found = await deps.directory.members(matched.groupId, deps.log);
+        return directoryResponse(found.state, { members: found.members ?? [], truncated: found.truncated === true });
+      }
       if (matched.op === "directoryGroup") {
         const found = await deps.directory.get(matched.groupId, deps.log);
         return directoryResponse(found.state, { group: found.group });

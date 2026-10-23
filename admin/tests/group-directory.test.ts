@@ -79,3 +79,19 @@ test("disabled unless ADMIN_GROUP_SEARCH_ENABLED=true, and no Graph call is made
   assert.equal((await dir.get(GROUP, noLog)).state, "disabled");
   assert.equal(t.calls.length, 0);
 });
+
+test("members lists the group's direct user members (id and display name), and says when there are more", async () => {
+  const member = "11111111-2222-4333-8444-555555555555";
+  const t = transport({ [`/groups/${GROUP}/members/microsoft.graph.user`]: { status: 200, body: {
+    value: [{ id: member.toUpperCase(), displayName: "Ada Lovelace" }, { id: "not-a-guid", displayName: "x" }, { id: member.replace("1111", "2222"), displayName: null }],
+    "@odata.nextLink": "https://graph.microsoft.com/v1.0/next",
+  } } });
+  const result = await createGroupDirectory(ENABLED, credential, t.fetch).members(GROUP, noLog);
+  assert.deepEqual(result, { state: "available", members: [{ id: member, displayName: "Ada Lovelace" }, { id: member.replace("1111", "2222"), displayName: null }], truncated: true });
+  const url = new URL(t.calls[0].url);
+  assert.equal(url.pathname, `/v1.0/groups/${GROUP}/members/microsoft.graph.user`);
+  assert.equal(url.searchParams.get("$select"), "id,displayName");
+  assert.equal((await createGroupDirectory({}, credential, t.fetch).members(GROUP, noLog)).state, "disabled");
+  assert.equal((await createGroupDirectory(ENABLED, credential, transport({ "/groups": { status: 403, body: {} } }).fetch).members(GROUP, noLog)).state, "permission_required");
+  assert.equal((await createGroupDirectory(ENABLED, credential, transport({ "/groups": { status: 200, body: { value: "x" } } }).fetch).members(GROUP, noLog)).state, "unavailable");
+});

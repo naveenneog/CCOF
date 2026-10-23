@@ -16,6 +16,7 @@ import type { SeedContainer, SeedStore } from "./registry-seed.ts";
 import type { RunDependencies } from "./run.ts";
 import type { EntitlementRecord } from "./types.ts";
 import { REMOVAL_LIMITS_DOCUMENT_ID } from "./removal-limits.ts";
+import { USER_TAG_KIND, readUserTagPages } from "../contracts/user-tags.ts";
 
 function statusOf(err: unknown): number | undefined {
   if (typeof err !== "object" || err === null) return undefined;
@@ -148,6 +149,18 @@ export function createAzureDependencies(config: SyncConfig, credential: TokenCre
         if (statusOf(err) === 404) return null;
         throw err;
       }
+    } } : {}),
+    // User tags share the admin's adminConfig container (src/contracts/user-tags.ts); the sync's
+    // Built-in Data Reader role there allows this query.
+    ...(config.limitsContainer ? { readUserTags: async () => {
+      const iterator = database.container(config.limitsContainer as string).items.query({
+        query: "SELECT c.id, c.kind, c.personId, c.tag FROM c WHERE c.kind = @kind",
+        parameters: [{ name: "@kind", value: USER_TAG_KIND }],
+      }, { maxItemCount: 1000 });
+      return readUserTagPages(async () => {
+        const page = await iterator.fetchNext();
+        return { resources: page.resources ?? [], hasMore: iterator.hasMoreResults() };
+      });
     } } : {}),
     entitlements: createEntitlementWriter(entitlement),
     leases: createLeaseStore(database.container(config.leaseContainer)),

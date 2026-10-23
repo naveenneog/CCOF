@@ -123,7 +123,7 @@ export function createDemoTelemetry(card: Card, groups: DemoGroup[], now = new D
     switch (view) {
       case "totals": return table([{ ...rollup(list, period) }]);
       case "groups": return table(grouped(list, (x) => x.groupId, (k, s) => ({ groupId: k, groupNameSnapshots: [s.groupName], groupProjects: [s.projectId] }), period).sort(byCost), offset, limit);
-      case "developers": return table(grouped(list, (x) => x.personId, (k) => ({ person: k }), period).sort(byCost), offset, limit);
+      case "developers": return table(grouped(list, (x) => x.personId, (k) => ({ person: k, userTag: parseInt(String(k).slice(-1), 16) % 2 ? "WBS-1001.01" : "(none)" }), period).sort(byCost), offset, limit);
       case "models": return table(grouped(list, (x) => x.model, (k) => ({ model: k }), period).sort(byCost), offset, limit);
       case "families": return table(grouped(list, (x) => x.family, (k) => ({ modelFamily: k }), period).sort(byCost), offset, limit);
       case "projects": return table(grouped(list, (x) => x.projectId, (k) => ({ projectLabel: k }), period).sort(byCost), offset, limit);

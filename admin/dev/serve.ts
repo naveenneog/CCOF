@@ -28,6 +28,7 @@ import { QueryCache } from "../src/chargeback.ts";
 import { createDemoTelemetry } from "./demo-data.ts";
 import type { DemoGroup } from "./demo-data.ts";
 import { handleGroupRequest } from "../src/groups.ts";
+import { createMemoryUserTagStore, handleUserTagRequest } from "../src/user-tags.ts";
 import type { GroupDirectory } from "../src/groups.ts";
 
 // Synthetic Entra groups for the demo; the demo never calls Microsoft Graph.
@@ -38,6 +39,11 @@ const DEMO_ENTRA_GROUPS = [
 const demoGroupDirectory: GroupDirectory = {
   async search(text) { return { state: "available", groups: DEMO_ENTRA_GROUPS.filter((g) => g.displayName.toLowerCase().includes(text.toLowerCase())).map(({ memberCount: _m, ...g }) => g) }; },
   async get(id) { const g = DEMO_ENTRA_GROUPS.find((x) => x.id === id); return g ? { state: "available", group: g } : { state: "not_found" }; },
+  async members(id) {
+    return DEMO_ENTRA_GROUPS.some((x) => x.id === id)
+      ? { state: "available", truncated: false, members: [1, 2, 3].map((n) => ({ id: `abcdef01-2345-4678-9abc-def01234567${n}`, displayName: `Demo member ${n}` })) }
+      : { state: "not_found" };
+  },
 };
 
 const PORT = Number(process.env.PORT ?? 7171);
@@ -162,6 +168,7 @@ const catalogStore: CatalogStore = {
 // Demo change record and removal limits (memory only); Azure uses the adminConfig container.
 const changeLog = createMemoryChangeLog();
 const limitsStore = createMemoryLimitsStore();
+const userTagStore = createMemoryUserTagStore();
 const realOperations = createOperations({}, { getToken: async () => { throw new Error("Demo must not acquire real tokens"); } }, console.log);
 
 // ---- Demo-only synthetic telemetry (dev/demo-data.ts); never used in Azure. ----
@@ -280,6 +287,16 @@ const server = createServer(async (req, res) => {
       method: req.method ?? "GET", path: url.pathname, query: (n) => url.searchParams.get(n), body,
       headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; },
     }, { authenticate, store, changeLog, directory: demoGroupDirectory, log: demoLog, now: () => new Date(), newId: randomUUID });
+    return sendJson(r.status, r.jsonBody, r.headers);
+  }
+  if (url.pathname.startsWith("/api/user-tags")) {
+    const chunks: Buffer[] = [];
+    for await (const c of req) chunks.push(c as Buffer);
+    const body = chunks.length ? Buffer.concat(chunks).toString("utf8") : null;
+    const r = await handleUserTagRequest({
+      method: req.method ?? "GET", path: url.pathname, query: (n) => url.searchParams.get(n), body,
+      headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; },
+    }, { authenticate, store: userTagStore, changeLog, log: demoLog, now: () => new Date(), newId: randomUUID });
     return sendJson(r.status, r.jsonBody, r.headers);
   }
   if (url.pathname.startsWith("/api/projects") || url.pathname.startsWith("/api/v2/") || url.pathname.startsWith("/api/v3/")) {

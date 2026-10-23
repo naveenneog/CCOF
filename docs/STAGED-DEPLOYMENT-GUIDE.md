@@ -341,18 +341,19 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 
 Done in the admin console by an editor (role `CCOF.Projects.Write`), after Stage 8. The console is at
 `https://<admin-app>.azurewebsites.net/api/console-v3`. Each step is described in the console's Help
-panel and in [ADMIN-V3.md](ADMIN-V3.md) (3.3.0).
+panel and in [ADMIN-V3.md](ADMIN-V3.md) (3.4.0).
 
 | Step | Screen | What is decided |
 | --- | --- | --- |
 | 1 | **Groups → Onboard a group → Find the group** | The Entra security group (search, or paste its Object ID), its display name and the Foundry backend |
 | 2 | **Budget** | Per-user monthly budget (USD or CCU). **Auto-scale**: every member gets it and the group has no total. **Cap**: members share one monthly total. The screen shows the total for the current direct members |
-| 3 | **Access and models** | Allowed surfaces; chargeback ID (for example a WBS element); priority (when a person is in several groups and names none, the higher per-user budget wins, then the lower priority); model families and rate limits; restricted families (Fable, Mythos) only when approved; expected cache-read share (suggested from the surfaces, with its evidence); the budget assistant |
+| 3 | **Access and models** | Allowed surfaces; the group's default chargeback ID (used for members without a user tag); priority (when a person is in several groups and names none, the higher per-user budget wins, then the lower priority); model families and rate limits; restricted families (Fable, Mythos) only when approved; expected cache-read share (suggested from the surfaces, with its evidence); the budget assistant |
 | 4 | **Review** | The request that is sent. **Onboard group** saves it |
+| 5 | **User tags → Tag a person** | Each member's own chargeback ID (for example a WBS element), by Entra object ID. Saved tags are suggested while typing |
 
-Members get access at the next entitlement sync: when the sync timer is on, or after a delegated
-snapshot as in Stage 7. A group is retired on its detail page; the next sync removes every member's
-access and the Entra group itself is not changed.
+Members get access, and their user tags, at the next entitlement sync: when the sync timer is on, or
+after a delegated snapshot as in Stage 7. A group is retired on its detail page; the next sync removes
+every member's access and the Entra group itself is not changed.
 
 The rules behind these settings are in [ADR-0034](adr/0034-group-centric-onboarding.md). Precedence
 (higher per-user budget, then lower priority), user tags and removal by retirement are owner decisions
@@ -403,8 +404,9 @@ Deployment order: resolver and sync packages first (Stage 7), gateway policy sec
 
 ### 6.3 Chargeback and Power BI
 
-The chargeback workbook and the console's **Chargeback IDs** view list usage per chargeback ID and
-developer ([CHARGEBACK.md](CHARGEBACK.md)). **Groups → Usage CSV** and **Groups CSV** download the
+The chargeback workbook and the console's **User tags** view list usage per user tag (chargeback ID)
+and developer; the **Developers** view shows each developer's tags, and the **User tag** filter (with
+saved-tag suggestions) narrows every view ([CHARGEBACK.md](CHARGEBACK.md)). **Groups → Usage CSV** and **Groups CSV** download the
 data for Power BI or a spreadsheet; the API forms are `GET /api/v3/export/usage` and
 `GET /api/v3/export/groups` ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI"). A direct Power BI
 connection to the API is not yet verified ([UNKNOWNS](UNKNOWNS.md) G-R3).

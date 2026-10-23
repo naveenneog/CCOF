@@ -20,6 +20,7 @@
 import { buildMembership, canonical, isActive, parseExisting, sortByProject, withoutDuplicateActive } from "./membership.ts";
 import type { ParsedExisting, RawMembership } from "./membership.ts";
 import type { ClassificationRegistration } from "./projects.ts";
+import { isUserTag } from "../contracts/user-tags.ts";
 import type { Plan, PlanCounts, PlanInput, PlannedWrite, RemovalLimits, RemovalsWithheld, SyncEvent } from "./plan-types.ts";
 import type { EntitlementRecord, ProjectMembership } from "./types.ts";
 
@@ -165,6 +166,18 @@ interface PersonDraft {
   carried: number;
 }
 
+// A group member's chargeback ID: their user tag, else the group's own (undefined). When the tags could
+// not be read (null), the ID already stored is kept, so an outage never resets tags to the default.
+// buildMembership applies it to group memberships only.
+function memberChargebackId(userTags: PlanInput["userTags"], personId: string, prior: RawMembership | undefined): string | null | undefined {
+  if (userTags === undefined) return undefined;
+  if (userTags === null) {
+    const stored = prior?.chargebackId;
+    return stored === null || isUserTag(stored) ? stored : undefined;
+  }
+  return userTags.get(personId.toLowerCase()) ?? undefined;
+}
+
 function draftPerson(
   personId: string,
   existing: ParsedExisting | null,
@@ -173,6 +186,7 @@ function draftPerson(
   nowIso: string,
   events: SyncEvent[],
   counts: PlanCounts,
+  userTags: PlanInput["userTags"],
 ): PersonDraft {
   const memberships = existing?.effective ?? [];
   const active = memberships.filter(isActive);
@@ -191,7 +205,7 @@ function draftPerson(
     const reg = state.registrations.get(projectId)?.find((r) => r.classification === code);
     if (!reg) continue;
     const prior = active.find((m) => m.projectId === projectId && m.classification === code);
-    planned.push(buildMembership(reg, prior, nowIso));
+    planned.push(buildMembership(reg, prior, nowIso, memberChargebackId(userTags, personId, prior)));
   }
   const kept = new Set(planned.map((m) => m.projectId));
   const dropped = [...new Set(active.map((m) => m.projectId))].filter((p) => !state.frozen.has(p) && !kept.has(p)).sort();
@@ -292,7 +306,7 @@ export function planSync(input: PlanInput): Plan {
 
   const people = [...new Set([...existing.keys(), ...wanted.keys()])].sort();
   const drafts = people.map((personId) =>
-    draftPerson(personId, existing.get(personId) ?? null, wanted.get(personId) ?? new Map(), state, nowIso, events, counts),
+    draftPerson(personId, existing.get(personId) ?? null, wanted.get(personId) ?? new Map(), state, nowIso, events, counts, input.userTags),
   );
   reportDisabled(admission, state, drafts, events);
 

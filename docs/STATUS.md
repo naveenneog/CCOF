@@ -2,7 +2,28 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-TAG — user tags ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-PUB — scrubbed public repository ([ROADMAP](ROADMAP.md)).
+
+### G-TAG — user tags (complete, admin 3.4.0)
+
+- Owner decision 2026-10-23: the chargeback ID is an individual user tag. Per-person tag and saved-tag list in
+  `adminConfig` ([src/contracts/user-tags.ts](../src/contracts/user-tags.ts)); admin API `/api/user-tags`
+  ([admin/src/user-tags.ts](../admin/src/user-tags.ts)); the sync copies a person's tag into their group
+  memberships' `chargebackId` (group's own ID as default; an unreadable tag store keeps stored IDs;
+  [src/sync/plan.ts](../src/sync/plan.ts)); the gateway trace, ledger, workbook and exports carry it unchanged.
+  Developers view gains `userTag`; console: User tags page (pick a group member through Graph, identity and current
+  tag shown, saved tags suggested), chargeback "User tag" filter with suggestions.
+- Tests: root suite green (user tags 8, sync run 18); admin 157/157; offline Kusto checker 0 errors on the
+  developers query (negative control 1). Mutants: 20 caught (admin API 10, sync/contract/report 9, paging 1);
+  one equivalent mutant removed by deleting the redundant guard. Browser (Edge, demo): 15/15 checks in light, dark
+  and 390 px, including a two-editor stale save refused; the only console entry is that intended 412.
+- Live: Graph member listing not verified; the Contoso token now gets a Continuous Access Evaluation challenge
+  (`TokenCreatedWithOutdatedPolicies`) and needs a fresh `az login`.
+- Council round 1: ARCHITECT, CODER, QA, UX BLOCK (unbounded sync query; saved list written before the change record;
+  edit re-read the ETag at save time; object-ID-only entry); SECURITY PASS. Round 2: QA (previous person's data
+  could enable Save), UX (`suggestionSaved: false` not shown), SECURITY (members of any directory group listable)
+  BLOCK. Round 3: all five PASS; ARCHITECT note: the sync reads every tag each run (O(tags)), watch RU before
+  approaching 200,000. Admin 159/159; 24 mutants caught in total.
 
 ### G-PREC and G-REM — precedence by spend, removal as retirement (complete)
 

@@ -106,7 +106,7 @@ ${extraLets}let Ledger = RawLedger
 }
 
 const costColumns = ["input", "output", "cacheRead", "cacheWrite5m", "cacheWrite1h"] as const;
-export function reportRollup(groupBy: string, withGroupNames = false): string {
+export function reportRollup(groupBy: string, withGroupNames = false, extraAggregates = ""): string {
   const money = costColumns.map(c =>
     `${c}CostSum = sum(${c}CostUsd), ${c}CostKnownRequests = countif(isnotnull(${c}CostUsd))`).join(",\n    ");
   const moneyFlags = costColumns.map(c =>
@@ -120,7 +120,7 @@ export function reportRollup(groupBy: string, withGroupNames = false): string {
     listCcu = iff(groupUnverifiedRequests == 0, listCcu, decimal(null)),
     completeness = iff(groupUnverifiedRequests > 0, "historical_group_unverified", completeness),
     groupNamesMayBeTruncated = array_length(groupNameSnapshots) == 32` : "";
-  return rollup(groupBy).replace("knownCostRequests =", `${names}
+  return rollup(groupBy).replace("knownCostRequests =", `${names}${extraAggregates}
     failedRequests = countif(requestFailed),
     duplicateLlmCopies = sum(iff(llmCopies > 1, llmCopies - 1, 0)),
     duplicateTraceCopies = sum(iff(traceCopies > 1, traceCopies - 1, 0)),
@@ -185,7 +185,9 @@ export function chargebackQueries(usage: UsageQueryBase, maxRows: number, groups
     : report("day = bin(timestamp, 1d), modelFamily", "day asc, modelFamily asc");
   const queries: ChargebackQueries = {
     health: base + health(),
-    developers: report("person"),
+    // The user tags (chargeback IDs, owner decision 2026-10-23) each developer's requests carried.
+    developers: noneLabel(base) + bounded(reportRollup("person", false, "userTagSet = make_set(chargebackId, 8),")
+      + "\n| extend userTag = strcat_array(array_sort_asc(userTagSet), \", \")\n| project-away userTagSet" + provenance, maxRows, "knownListUsd desc nulls last", offset),
     usage: report("projectLabel, groupId, person", "knownListUsd desc nulls last", true),
     groups: report("groupId", "knownListUsd desc nulls last", true),
     // Requirement 6 (ADR-0034 decision 7): the chargeback ID each developer's usage carried.

@@ -80,6 +80,17 @@ export const HELP: Record<string, HelpTopic> = {
     permissions: ["CCOF.Projects.Write to change or retire."],
     troubleshooting: [["Someone else changed this", "Reload the page to see their change, then make yours again."]],
   },
+  "user-tags": {
+    title: "User tags",
+    summary: "The chargeback ID (for example a WBS element) each person's usage is charged to, set when the person is onboarded. A new tag is saved and suggested next time anyone types. The next entitlement sync copies the tag into the person's group memberships; from then on every request carries it.",
+    figures: [
+      ["No tag", "The group's own chargeback ID applies. Clearing a tag returns the person to it."],
+      ["Reports", "Chargeback filters by user tag (with suggestions); the Developers view and its CSV show each developer's tags; User tags lists usage per tag and developer; Usage CSV carries it per row."],
+      ["Past usage", "Each request keeps the tag it carried when it was made. Changing a tag does not move earlier usage."],
+    ],
+    permissions: ["CCOF.Projects.Read to view; CCOF.Projects.Write to tag.", "ADMIN_CONFIG_CONTAINER (adminConfig) on the admin app; the sync reads tags from the same container (SYNC_LIMITS_CONTAINER)."],
+    troubleshooting: [["A tag does not appear in chargeback", "Tags reach usage after the next entitlement sync, and only for members of onboarded groups."]],
+  },
   chargeback: {
     title: "Chargeback",
     summary: "The chargeback workbook's figures inside the console, computed server-side from the same ledger, pricing and rate card. The browser never sends a query; filters are validated and bound on the server.",

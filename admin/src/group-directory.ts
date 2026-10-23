@@ -73,6 +73,17 @@ export function createGroupDirectory(
       });
       return result.state === "not_found" ? { state: "unavailable" } : result as { state: DirectoryState; groups?: DirectoryGroup[] };
     },
+    async members(id, log) {
+      if (!enabled) return { state: "disabled" };
+      return guarded(log, async (signal) => {
+        const body: unknown = await (await call(`${GRAPH}/groups/${id}/members/microsoft.graph.user?$select=id,displayName&$top=999`, signal)).json();
+        if (!isObject(body) || !Array.isArray(body.value)) throw new GraphStatus(502);
+        const members = body.value.filter(isObject).filter((m) => isGuid(m.id)).map((m) => ({
+          id: (m.id as string).toLowerCase(), displayName: typeof m.displayName === "string" ? m.displayName.slice(0, 256) : null,
+        }));
+        return { state: "available" as const, members, truncated: typeof body["@odata.nextLink"] === "string" };
+      });
+    },
     async get(id, log) {
       if (!enabled) return { state: "disabled" };
       return guarded(log, async (signal) => {
