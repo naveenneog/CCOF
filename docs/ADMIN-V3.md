@@ -33,6 +33,12 @@ settings, verification and rollback. Names are memory-only; filters and exports 
 - **User tags** page (`#/user-tags`): tag a person (Entra object ID) with a chargeback ID such as a WBS
   element; a new tag is saved and suggested while typing; the list filters by tag; clearing a tag returns
   the person to the group's chargeback ID ([ADMIN-API.md](ADMIN-API.md), "User tags").
+- **Tag field name** (G-LABEL, [ADR-0037](adr/0037-deployment-user-tag-label.md)): editors can save
+  one deployment-wide name such as **WBS ID** on User tags. It names tagging fields, filters and
+  chargeback CSV column headings; the default is **User tag**. Existing saved/suggested values,
+  JSON / Power BI `chargebackId` and `userTag` keys and Groups CSV stay unchanged. Settings
+  use the existing `adminConfig` container, audit and ETag protections; failed reads/writes surface
+  errors instead of silently reverting the name. No new application settings or permissions.
 - **Chargeback**: the filter is "User tag" with suggestions; the Developers view and its CSV have a
   User tag column; the former "Chargeback IDs" view is "User tags".
 - **Groups**: help and hints state the precedence rule (higher month-to-date spend, then lower priority).

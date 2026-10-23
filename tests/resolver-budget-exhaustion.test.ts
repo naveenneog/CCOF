@@ -135,6 +135,38 @@ test("strict: a group within budget is served", async () => {
   assert.equal(result.degraded, false);
 });
 
+test("complete-usage opt-in refuses unknown personal charges but preserves legacy admission when disabled", async () => {
+  for (const completeness of [undefined, "partial", "unknown", null, true]) {
+    const reads = fakeReads({ readBudgetState: async () => ({ ...activeBudgetState, completeness }) });
+    const enforcement = { mode: "budget-state" as const, staleness: POLICY, requireCompleteUsage: true };
+    const result = await resolveRequest(input, reads, { now: RESOLVE_NOW, budgetEnforcement: enforcement });
+    assert.equal(result.refused, true, String(completeness));
+    assert.equal(result.reason, "budget_state_invalid");
+    const legacy = await resolveRequest(input, reads, context());
+    assert.equal(legacy.refused, false);
+  }
+  const result = await resolveRequest(input,
+    fakeReads({ readBudgetState: async () => ({ ...activeBudgetState, completeness: "complete" }) }),
+    { now: RESOLVE_NOW, budgetEnforcement: { mode: "budget-state", staleness: POLICY, requireCompleteUsage: true } });
+  assert.equal(result.refused, false);
+});
+
+test("complete-usage opt-in checks the whole strict group, not only the caller's priced usage", async () => {
+  for (const completeness of [undefined, "partial", "complete"]) {
+    const result = await resolveRequest(input, fakeReads({
+      readEntitlement: async () => strictEntitlement,
+      readBudgetState: async () => ({ ...activeBudgetState, completeness: "complete" }),
+      readAggregateBudgetState: async () => ({ ...aggregateRecord, completeness }),
+    }), { now: RESOLVE_NOW,
+      budgetEnforcement: { mode: "budget-state", staleness: POLICY, requireCompleteUsage: true } });
+    assert.equal(result.refused, completeness !== "complete", String(completeness));
+    if (completeness !== "complete") {
+      assert.ok(result.refused);
+      assert.equal(result.reason, "aggregate_budget_state_invalid");
+    }
+  }
+});
+
 // ---- group budget, notify ----
 
 test("notify: an exhausted group is served, flagged degraded, and the freshness label stays fresh", async () => {

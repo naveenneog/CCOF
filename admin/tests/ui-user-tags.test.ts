@@ -3,8 +3,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadedTagFor, personProblem, suggestPath, tagProblem, tagWrite } from "../ui-v3/lib/user-tags.ts";
+import { toCsv } from "../ui-v3/lib/format.ts";
+import * as tagUi from "../ui-v3/lib/user-tags.ts";
 
 const PERSON = "ABCDEF01-2345-4678-9ABC-DEF012345678";
+
+test("label settings are usable only after a successful valid read, never stale on failure", () => {
+  const data = { label: "WBS ID", exists: true, etag: '"s1"' };
+  assert.equal(tagUi.loadedLabel(data, false, null), "WBS ID");
+  for (const [d, loading, error] of [[data, true, null], [data, false, new Error("offline")], [null, false, null], [{ label: "=cmd" }, false, null]] as const) {
+    assert.equal(tagUi.loadedLabel(d, loading, error), null);
+  }
+});
+
+test("downloaded chargeback CSV uses the label while preserving machine-keyed values and safe cells", () => {
+  const csv = toCsv(["person", "userTag", "chargebackId"], [{ person: "=cmd", userTag: "WBS-1", chargebackId: "WBS-2" }], {}, "person");
+  assert.equal(csv, "\nperson,person (userTag),person (chargebackId)\n'=cmd,WBS-1,WBS-2\n");
+  assert.throws(() => toCsv(["userTag"], [{ userTag: "WBS-1" }], {}, "=cmd"), /invalid/);
+});
 
 test("a tag is checked with the server's rule; empty means 'no tag'", () => {
   for (const ok of ["", "WBS-1.2", "CC/900", "a"]) assert.equal(tagProblem(ok), null, ok);

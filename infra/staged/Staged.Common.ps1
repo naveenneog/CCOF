@@ -49,6 +49,11 @@ function Read-StgConfig {
         }
     }
     if (-not $c.cosmos.databaseName) { $problems.Add('cosmos.databaseName is required') }
+    if ($c.resolver -is [Collections.IDictionary] -and $c.resolver.ContainsKey('requireCompleteUsage') -and $c.resolver.requireCompleteUsage -isnot [bool]) {
+        $problems.Add('resolver.requireCompleteUsage must be a JSON boolean')
+    } elseif ($c.resolver.requireCompleteUsage -eq $true -and $c.resolver.budgetEnforcement -cne 'budget-state') {
+        $problems.Add('resolver.requireCompleteUsage requires budget-state')
+    }
     foreach ($p in @(Get-StgCosmosProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {

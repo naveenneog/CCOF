@@ -2,6 +2,16 @@
 
 ## Group-centric onboarding (ADR-0034)
 
+- [x] G-LIMIT-offline: reproduce budget bypasses, retain the monetary TPM ceiling, add complete-accounting admission,
+  and test family restrictions and higher-spend selection. Strict atomic reservations remain unimplemented (ADR-0038).
+- [ ] G-LIMIT-live: isolated updated gateway run with a USD 10 test ceiling. Direct Foundry smoke/cache usage was
+  USD 0.011476 at list rates; gateway sign-in/consent blocks the requested full run.
+- [x] G-LABEL: admin-defined individual tag label (for example WBS ID), persisted and present in tagging, filters and
+  downloadable chargeback report headers; existing API properties remain compatible.
+- [ ] G-WALK: Playwright walkthrough of the staged guide, sanitized screenshots, prerequisites for Entra apps and
+  stage-specific permissions. Local admin browser checks and Stage 0/Stage 1 preview complete; Portal sign-in and
+  actual Stages 2-8 deployment remain blocked.
+
 | Packet | Status | Acceptance |
 | --- | --- | --- |
 | G0 — Baseline and contract | Complete | ADR-0033 records the baseline model; ADR-0034 records the decision; unknowns logged |

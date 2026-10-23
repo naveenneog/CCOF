@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, qs, useQuery } from "../lib/api.ts";
 import { when } from "../lib/format.ts";
 import { href } from "../lib/router.ts";
-import { loadedTagFor, personProblem, tagProblem, tagWrite } from "../lib/user-tags.ts";
+import { isUserTagLabel, loadedLabel, loadedTagFor, personProblem, tagProblem, tagWrite } from "../lib/user-tags.ts";
 import { Button, CapabilityNotice, DataTable, Empty, ErrorNote, Field, Loading, PageHeader, Section, useToast } from "../components/ui.tsx";
 import { useSession } from "../components/shell.tsx";
 import { UserIdentity } from "../components/user-identity.tsx";
@@ -13,6 +13,12 @@ import { TagInput } from "../components/tag-input.tsx";
 export function UserTags({ query }: { query: URLSearchParams }) {
   const session = useSession();
   const toast = useToast();
+  const settings = useQuery("/api/user-tags/settings");
+  const label = loadedLabel(settings.data, settings.loading, settings.error);
+  const [labelDraft, setLabelDraft] = useState("");
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [labelError, setLabelError] = useState<unknown>(null);
+  useEffect(() => { if (label !== null) setLabelDraft(label); }, [label]);
   const [filter, setFilter] = useState(query.get("tag") ?? "");
   const listed = useQuery(`/api/user-tags/people${qs({ tag: filter && !tagProblem(filter) ? filter : null, limit: 500 })}`);
   const [person, setPerson] = useState(query.get("person") ?? "");
@@ -43,33 +49,52 @@ export function UserTags({ query }: { query: URLSearchParams }) {
 
   const rows = (listed.data?.people ?? []) as any[];
   const unchanged = loaded.ready && tag === loaded.tag;
+  const saveLabel = async () => {
+    if (!label || !isUserTagLabel(labelDraft)) return;
+    setLabelBusy(true); setLabelError(null);
+    try {
+      await api("/api/user-tags/settings", { method: "PUT", body: { label: labelDraft },
+        ...(settings.data.exists ? { ifMatch: settings.etag } : { ifNoneMatch: "*" }) });
+      toast("Field name saved. Tag values and machine-readable report keys are unchanged.");
+      settings.reload();
+    } catch (e) { setLabelError(e); settings.reload(); } finally { setLabelBusy(false); }
+  };
+  if (settings.error) return <ErrorNote error={settings.error} retry={settings.reload} />;
+  if (!label) return settings.loading ? <Loading rows={2} /> : <ErrorNote error={new Error("Invalid user-tag settings. Reload or ask an administrator to repair the stored configuration.")} retry={settings.reload} />;
   return (
     <div className="page">
-      <PageHeader title="User tags" subtitle="The chargeback ID (for example a WBS element) each person's usage is charged to. Saved tags are suggested while you type."
+      <PageHeader title={label} subtitle="The chargeback ID (for example a WBS element) each person's usage is charged to. Saved tags are suggested while you type."
         observedAt={listed.observedAt} onRefresh={listed.reload} busy={listed.loading} />
+      {session.canWrite && <Section title="Tag field name" description="One deployment-wide field name, used when tagging people, filtering usage and downloading chargeback CSVs. Existing tag values and JSON / Power BI keys never change.">
+        <Field label="Field name" hint="1–64 characters; no leading/trailing spaces, control characters or formula prefixes (= + - @)."
+          error={!isUserTagLabel(labelDraft) ? "Enter a safe field name, for example WBS ID." : null}>{(id, d) =>
+          <input id={id} aria-describedby={d} aria-invalid={!isUserTagLabel(labelDraft) || undefined} className="input" value={labelDraft} maxLength={64} onChange={(e) => setLabelDraft(e.target.value)} />}</Field>
+        {labelError ? <ErrorNote error={labelError} /> : null}
+        <div className="form-actions"><Button variant="primary" busy={labelBusy} disabled={labelBusy || !isUserTagLabel(labelDraft) || labelDraft === label} onClick={saveLabel}>Save field name</Button></div>
+      </Section>}
       {session.canWrite && (
         <Section title="Tag a person" description="Pick a member of an onboarded group, or enter the person's Entra object ID. A new tag is saved and suggested next time. Leave the tag empty to clear it; the group's own chargeback ID then applies.">
           <MemberPicker onPick={(id) => { setPerson(id); setError(null); }} />
           <div className="form-grid">
             <Field label="Person (Entra object ID)" error={personError}>{(id, d) => <input id={id} aria-describedby={d} aria-invalid={Boolean(personError) || undefined} className="input mono"
               value={person} onChange={(e) => { setPerson(e.target.value.trim()); setError(null); }} autoComplete="off" spellCheck={false} />}</Field>
-            <Field label="User tag" hint="For example WBS-1234.01" error={tagError}>{(id, d) => <TagInput id={id} describedBy={d} value={tag} onChange={setTag} invalid={Boolean(tagError)} />}</Field>
+            <Field label={label} hint="For example WBS-1234.01" error={tagError}>{(id, d) => <TagInput id={id} describedBy={d} value={tag} onChange={setTag} invalid={Boolean(tagError)} />}</Field>
           </div>
           {person && !personError && (
             <div className="person-status" role="status" aria-live="polite">
               {!loaded.ready && !current.error ? <span className="muted">Loading this person's tag…</span>
                 : current.error ? <ErrorNote error={current.error} retry={current.reload} />
                 : <dl className="facts"><div><dt>Person</dt><dd><UserIdentity objectId={person.toLowerCase()} /></dd></div>
-                    <div><dt>Current tag</dt><dd>{loaded.tag ? <code>{loaded.tag}</code> : <span className="muted">none (the group's chargeback ID applies)</span>}</dd></div></dl>}
+                    <div><dt>Current {label}</dt><dd>{loaded.tag ? <code>{loaded.tag}</code> : <span className="muted">none (the group's chargeback ID applies)</span>}</dd></div></dl>}
             </div>
           )}
           {error ? <ErrorNote error={error} /> : null}
           <div className="form-actions"><Button variant="primary" busy={busy} disabled={!person || Boolean(personError) || Boolean(tagError) || busy || !loaded.ready || unchanged} onClick={save}>Save tag</Button></div>
         </Section>
       )}
-      <Section title="Tagged people" description={<>Filter by a tag. Chargeback filters by the same tag: <a href={href(`/chargeback${qs({ chargeback: filter && !tagProblem(filter) ? filter : null })}`)}>open chargeback</a>.</>}>
+      <Section title="Tagged people" description={<>Filter by {label}. Chargeback filters by the same value: <a href={href(`/chargeback${qs({ chargeback: filter && !tagProblem(filter) ? filter : null })}`)}>open chargeback</a>.</>}>
         <div className="filter-bar">
-          <Field label="Tag" error={tagProblem(filter)}>{(id, d) => <TagInput id={id} describedBy={d} value={filter} onChange={setFilter} invalid={Boolean(tagProblem(filter))} placeholder="All tags" />}</Field>
+          <Field label={label} error={tagProblem(filter)}>{(id, d) => <TagInput id={id} describedBy={d} value={filter} onChange={setFilter} invalid={Boolean(tagProblem(filter))} placeholder={`All ${label} values`} />}</Field>
         </div>
         {listed.error ? <ErrorNote error={listed.error} retry={listed.reload} /> : listed.loading && !listed.data ? <Loading rows={4} /> : (
           <DataTable caption="Tagged people" rows={rows} rowKey={(r) => r.personId}
@@ -77,7 +102,7 @@ export function UserTags({ query }: { query: URLSearchParams }) {
             onRowClick={session.canWrite ? (r) => { setPerson(r.personId); setError(null); document.getElementById("page-title")?.scrollIntoView(); } : undefined}
             columns={[
               { key: "personId", label: "User / object ID", render: (r) => <UserIdentity objectId={r.personId} /> },
-              { key: "tag", label: "User tag", render: (r) => r.tag ? <code>{r.tag}</code> : <span className="muted">cleared</span> },
+              { key: "tag", label, render: (r) => r.tag ? <code>{r.tag}</code> : <span className="muted">cleared</span> },
               { key: "updatedAt", label: "Changed", render: (r) => r.updatedAt ? when(r.updatedAt) : "—" },
               { key: "updatedBy", label: "Changed by", render: (r) => <UserIdentity objectId={r.updatedBy} /> },
             ]} />

@@ -10,6 +10,28 @@ export const USER_TAG_KIND = "userTag";
 export const USER_TAG_CATALOG_ID = "userTagCatalog";
 export const MAX_SAVED_TAGS = 2000;
 export const MAX_SUGGESTIONS = 20;
+export const USER_TAG_SETTINGS_ID = "userTagSettings";
+export const DEFAULT_USER_TAG_LABEL = "User tag";
+
+export const isUserTagLabel = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 1 && value.length <= 64 &&
+  value === value.trim() && !/[\u0000-\u001f\u007f-\u009f]/.test(value) && !/^[=+\-@]/.test(value);
+
+// Display headings only: callers must still look up values with the original machine keys.
+export function userTagHeaders(columns: readonly string[], label: string): string[] {
+  if (!isUserTagLabel(label)) throw new Error("user_tag_label_invalid");
+  const tagged = (key: string) => key === "chargebackId" || key === "userTag";
+  const used = new Set(columns.filter((key) => !tagged(key)).map((key) => key.toLowerCase()));
+  return columns.map((key) => {
+    if (!tagged(key)) return key;
+    let heading = label;
+    if (used.has(heading.toLowerCase())) heading = `${label} (${key})`;
+    const base = heading;
+    for (let n = 2; used.has(heading.toLowerCase()); n++) heading = `${base} ${n}`;
+    used.add(heading.toLowerCase());
+    return heading;
+  });
+}
 
 const GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);

@@ -126,6 +126,12 @@
             try {
                 var body = JObject.Parse((string)context.Variables["ccofCached"])["d"] as JObject;
                 if (body == null || body["decisionVersion"] == null || body["decisionVersion"].Type != JTokenType.Integer || (long)body["decisionVersion"] != 3) { return false; }
+                var mode = body["budgetEnforcement"];
+                var ceiling = body["personCeilingTokensPerMinute"];
+                if (mode == null || mode.Type != JTokenType.String || ceiling == null) { return false; }
+                if ((string)mode == "budget-state") {
+                    if (ceiling.Type != JTokenType.Integer || (long)ceiling < 1 || (long)ceiling > int.MaxValue) { return false; }
+                } else if ((string)mode != "token-limits-only" || ceiling.Type != JTokenType.Null) { return false; }
                 var idPattern = "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}\\z";
                 foreach (var field in new string[] { "projectId", "classification", "backendId" }) {
                     var value = body[field];
@@ -300,6 +306,15 @@
                 }
                 if (response.StatusCode != 200 || (outcome != "success" && outcome != "degraded")) { return unavailable; }
                 if (body["decisionVersion"] == null || body["decisionVersion"].Type != JTokenType.Integer || (long)body["decisionVersion"] != 3) { return unavailable; }
+                var budgetMode = body["budgetEnforcement"];
+                var ceiling = body["personCeilingTokensPerMinute"];
+                if (budgetMode == null || budgetMode.Type != JTokenType.String || ceiling == null) { return unavailable; }
+                if ((string)budgetMode == "budget-state") {
+                    if (ceiling.Type != JTokenType.Integer || (long)ceiling < 0 || (long)ceiling > int.MaxValue) { return unavailable; }
+                    if ((long)ceiling == 0) {
+                        return new JObject(new JProperty("o", "refuse"), new JProperty("r", "refused"), new JProperty("c", "budget_exhausted"), new JProperty("b", budget), new JProperty("rp", refusedProject), new JProperty("rc", refusedClassification)).ToString(Newtonsoft.Json.Formatting.None);
+                    }
+                } else if ((string)budgetMode != "token-limits-only" || ceiling.Type != JTokenType.Null) { return unavailable; }
                 var decision = new JObject();
                 foreach (var field in new string[] { "projectId", "classification", "backendId" }) {
                     var value = body[field];
@@ -354,6 +369,8 @@
                     if ((quota.Type == JTokenType.Null) != (period.Type == JTokenType.Null)) { return unavailable; }
                 }
                 decision["decisionVersion"] = 3;
+                decision["budgetEnforcement"] = (string)budgetMode;
+                decision["personCeilingTokensPerMinute"] = ceiling;
                 decision["classificationGroupId"] = ((string)groupId).ToLowerInvariant();
                 decision["familyPolicy"] = familyPolicy;
                 var approval = body["restrictedFamiliesApproved"];
@@ -470,7 +487,12 @@
         }" />
         <set-variable name="ccofBackendId" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["backendId"])" />
         <set-variable name="ccofFamilyPolicy" value="@(JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"].ToString(Newtonsoft.Json.Formatting.None))" />
-        <set-variable name="ccofPersonTpm" value="@((int?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokensPerMinute"] ?? 0)" />
+        <set-variable name="ccofPersonTpm" value="@{
+            var decision = JObject.Parse((string)context.Variables["ccofDecision"]);
+            var configured = (int?)decision["familyPolicy"]["aggregateLimits"]["person"]["tokensPerMinute"] ?? 0;
+            var ceiling = (int?)decision["personCeilingTokensPerMinute"];
+            return ceiling.HasValue ? (configured > 0 ? Math.Min(configured, ceiling.Value) : ceiling.Value) : configured;
+        }" />
         <set-variable name="ccofPersonQuota" value="@((long?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokenQuota"] ?? 0L)" />
         <set-variable name="ccofPersonPeriod" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokenQuotaPeriod"] ?? "")" />
         <set-variable name="ccofGroupTpm" value="@((int?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["group"]["tokensPerMinute"] ?? 0)" />

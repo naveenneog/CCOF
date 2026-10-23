@@ -34,6 +34,7 @@ const nullLimit = () => ({ tokensPerMinute: null, tokenQuota: null, tokenQuotaPe
 function decision(overrides: Record<string, unknown> = {}): Record<string, any> {
   return {
     decisionVersion: 3, resolverOutcome: "success", projectId: "abcdef01-2345-4678-9abc-def012345678", classification: "group",
+    budgetEnforcement: "token-limits-only", personCeilingTokensPerMinute: null,
     classificationGroupId: "abcdef01-2345-4678-9abc-def012345678", backendId: "foundry-example",
     familyPolicy: {
       aggregateLimits: { person: nullLimit(), group: nullLimit() },

@@ -5,6 +5,22 @@ Entra token, their entitlement through the resolver, the model allow-list of the
 the per-person and per-group token limits. Decision record: [ADR-0017](adr/0017-gateway-policy-entitlement-and-limits.md).
 Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.md).
 
+## Dollar-limit guarantees
+
+`token-limits-only` enforces token quotas, not dollars. In `budget-state` mode APIM also retains the resolver's
+`personCeilingTokensPerMinute` and applies the lower of that ceiling and the configured person TPM. A zero ceiling
+refuses the request; old cached decisions without the mode and ceiling must be refreshed. Group and family token
+quotas still apply independently.
+
+This is **not a strict dollar cap**. Ingestion, reconciliation, caching and in-flight requests can permit overshoot;
+separate entitled groups have separate budgets. `resolver.requireCompleteUsage: true` in the staged configuration
+sets `RESOLVER_REQUIRE_COMPLETE_USAGE=true`: missing or partial personal accounting, or partial accounting in a strict
+group, gives a classified 503 instead of renewing permission based on a known lower bound. The setting defaults false
+for compatibility and requires `budget-state`. It can block usage after streamed requests because the current trace
+does not capture their cache categories. It does not fix ingestion delay or implement atomic reservations.
+
+Contract, tradeoffs and sources: [ADR-0038](adr/0038-budget-admission-acceptance.md).
+
 ## Files
 
 | Path | What it is |

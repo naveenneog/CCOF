@@ -2,7 +2,41 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
+
+### Owner acceptance request (2026-10-23)
+
+- G-LIMIT: test model-family restrictions, overlapping memberships, higher-spend selection, exhaustion, streaming,
+  retries and concurrent requests. Reproduce reviewed monetary-enforcement gaps without billing first. The authorized
+  live consumption ceiling is USD 10 across this request, not USD 10 per scenario; requests need a conservative
+  worst-case cost bound before being sent. Report reconciled usage separately from Marketplace billing.
+- G-LABEL: an administrator can name the individual chargeback tag (for example WBS ID); the name is persisted,
+  appears in tagging and filtering, and labels the column in downloaded chargeback reports. Existing API field
+  names remain compatible.
+- G-WALK: follow the staged guide with Playwright, record actual Portal prerequisites and deployment outcomes,
+  capture sanitized screenshots, and fix unclear or incorrect steps. No writes to the protected checkout or its
+  existing deployments. Missing access is a documented blocked step, never evidence of a successful deployment.
+- Budget review found a dropped resolver monetary ceiling and streamed-cache undercounting. A strict dollar cap
+  requires atomic worst-case reservations, not a token-rate setting; current reconciliation/cache behavior does not
+  provide that guarantee. See G-L1 through G-L4 in [UNKNOWNS](UNKNOWNS.md).
+- Current evidence: [budget acceptance](status/BUDGET-ACCEPTANCE-2026-10-23.md). Direct Foundry smoke and cold/warm
+  streamed cache calls total USD 0.011476 at list rates; USD 10 was not consumed. Full gateway testing is blocked by
+  developer-client sign-in/consent and the need to deploy this checkout separately from the existing shared labs.
+- Corrections: monetary ceiling retained, zero refused, old cached decisions invalidated; complete-accounting opt-in
+  for person and strict-group state. New tests: 67/67, eight mutations caught with baseline count preserved.
+  A nonbillable concurrency experiment admitted all 20 requests against the same USD 9.90 snapshot: still no strict cap.
+- G-LABEL: deployment-wide field name defaults to User tag, is editable as WBS ID, uses audited ETag-protected
+  settings and labels CSV headings without changing machine keys. Focused 36/36, admin 166/166, seven mutations
+  caught. Actual local UI/APIs with in-memory stores: Playwright 21 checks, persisted label, saved-tag assignment,
+  filter and downloaded CSV verified; no outbound requests. Report telemetry in that browser run was a fixture,
+  not live chargeback data. [ADR-0037](adr/0037-deployment-user-tag-label.md).
+- Council: Architect, Coder and Security PASS; QA and UX PASS-WITH-NOTES on live validation. Separate security
+  review PASS (95 focused tests). Local browser follow-up completed afterward; full Azure acceptance remains blocked.
+- Validation: full root suite, strict root/admin typechecks, root/admin builds and packet gate pass. Staged
+  configuration: 451 checks. The guide walkthrough checked four images, 16 anchors and 84 local links; seven
+  PowerShell blocks parsed. Sanitized Portal sign-in and local admin screenshots are linked in the guide.
+- Local implementation commits: G-LIMIT `7df518e`, G-LABEL `711b9f2`. Root Node results: 1,182 passed, six
+  opt-in live tests skipped, zero failed. Those skips are not live deployment or spend acceptance.
 
 ### G-HA — Cosmos DB redundancy and consistency (complete offline)
 
@@ -31,14 +65,16 @@
 
 ### G-FIX — client restore and Graph grant fixes
 
+- Local commit `3d4b16f`; public release 6 `baffea8`, CI passed on Node 22 and 26
+  ([run](https://github.com/naveenneog/CCOF/actions/runs/39990743201)).
 - `Restore-ClientSnapshot` now removes folders the installer created (for example `~/.claude/skills`) when they are
   empty, deepest first; a folder that now holds another file stays; a snapshot without `createdDirectories` (older
   format) still restores. Installer tests 39; mutants caught 2/2 (count equal to the baseline, one failure each).
 - `Grant-SyncGraphPermissions.ps1 -Permissions A,B,C` under `pwsh -File` passed one string and failed with
   `app_role_missing` (found live in Lab A, plan-only). Comma lists are now split, trimmed and de-duplicated; a list
   with no names stops with `no_permissions`. Quickstart step tests 34. The plan-only rerun listed all three
-  permissions. Apply needs an active Privileged Role Administrator role, which the signed-in account does not hold
-  (PIM eligible only).
+  permissions. Initial apply was blocked by inactive PIM; after the owner activated the role, all three assignments
+  were applied and verified. This did not grant Azure CLI access to the gateway's delegated developer scope.
 - Council: UX BLOCK (guide 2.6 described a Stage 1 read-back and rerun scope the code does not have; imperative
   wording); Coder and QA notes (empty permission list, old-format snapshot). All fixed; Architect, Security PASS.
 

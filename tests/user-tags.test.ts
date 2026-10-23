@@ -12,6 +12,22 @@ import type { GroupMember, GroupReadResult } from "../src/sync/graph.ts";
 import { MAX_SAVED_TAGS, mergeSavedTags, readUserTagDocument, readUserTagPages, suggestTags, userTagDocumentId, userTagMap } from "../src/contracts/user-tags.ts";
 import { PERSON_A } from "./helpers/sync-fakes.ts";
 import { GROUP_A, groupDoc } from "./helpers/group-fixtures.ts";
+import * as tagContract from "../src/contracts/user-tags.ts";
+
+test("deployment tag labels are bounded safe display text, not tag values", () => {
+  assert.equal(tagContract.isUserTagLabel("WBS ID"), true);
+  assert.equal(tagContract.isUserTagLabel("Équipe / coût"), true);
+  for (const bad of ["", " ", " WBS", "WBS ", "=SUM(1)", "+x", "-x", "@x", "\t=x", "A\nB", "A\u007fB", "A\u0085B", "A".repeat(65), null]) {
+    assert.equal(tagContract.isUserTagLabel(bad), false, JSON.stringify(bad));
+  }
+});
+
+test("tag display headers remain unique without changing the source column keys", () => {
+  const columns = ["chargebackId", "person", "userTag", "Person (chargebackId)"];
+  assert.deepEqual(tagContract.userTagHeaders(columns, "person"), ["person (chargebackId) 2", "person", "person (userTag)", "Person (chargebackId)"]);
+  assert.deepEqual(columns, ["chargebackId", "person", "userTag", "Person (chargebackId)"]);
+  assert.throws(() => tagContract.userTagHeaders(columns, "=x"), /invalid/);
+});
 
 const NOW = new Date("2026-10-23T12:00:00.000Z");
 const PERSON_B = "00000000-0000-4000-8000-00000000000b";

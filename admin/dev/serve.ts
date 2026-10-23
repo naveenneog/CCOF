@@ -306,7 +306,7 @@ const server = createServer(async (req, res) => {
     const request = { method: req.method ?? "GET", path: url.pathname + url.search, headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; }, body };
     if (url.pathname.startsWith("/api/v3/") && !V3_ENABLED) return sendJson(404, { error: "route_not_found" });
     const r = url.pathname.startsWith("/api/v3/")
-      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, changeLog, limitsStore, defaultCatalog, operations, directory, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
+      ? await handleV3Request(request, { authenticate, projects: store, catalogStore, changeLog, limitsStore, userTagStore, defaultCatalog, operations, directory, env: demoEnv, sources, cache: v3Cache, log: demoLog, now: () => new Date(), newId: randomUUID })
       : url.pathname.startsWith("/api/v2/")
         ? await handleV2Request(request, { authenticate, projects: store, catalogStore, changeLog, defaultCatalog, operations, log: demoLog, now: () => new Date(), newId: randomUUID })
         : await handleAdminRequest(request, { authenticate, store, changeLog, log: demoLog, now: () => new Date(), newId: randomUUID });

@@ -15,6 +15,7 @@ import { isObject } from "./validation.ts";
 import type { Doc } from "./validation.ts";
 import type { V3Dependencies } from "./v3.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
+import { DEFAULT_USER_TAG_LABEL, userTagHeaders } from "../../src/contracts/user-tags.ts";
 
 export const EXPORT_ROWS_MAX = 5000;
 const FORMATS = ["json", "csv"];
@@ -54,10 +55,10 @@ function groupRow(doc: Doc): Doc {
   };
 }
 
-function respond(format: string, columns: string[], rows: Doc[], meta: Doc, extra: Record<string, string> = {}): ApiResponse {
+function respond(format: string, columns: string[], rows: Doc[], meta: Doc, extra: Record<string, string> = {}, label?: string): ApiResponse {
   const headers = { "cache-control": "no-store", ...extra };
   if (format === "csv") {
-    return { status: 200, headers: { ...headers, "content-type": "text/csv; charset=utf-8" }, body: toCsv(columns, rows.map((r) => columns.map((c) => r[c]))) };
+    return { status: 200, headers: { ...headers, "content-type": "text/csv; charset=utf-8" }, body: toCsv(label === undefined ? columns : userTagHeaders(columns, label), rows.map((r) => columns.map((c) => r[c]))) };
   }
   return { status: 200, headers: { ...headers, "content-type": "application/json" }, jsonBody: { ...meta, columns, rows } };
 }
@@ -95,11 +96,17 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
     return { status: 503, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "export_unavailable", capability: result } };
   }
   const data = result.data;
+  let label: string | undefined;
+  if (format === "csv") {
+    if (!deps.userTagStore) throw new ApiError(503, "user_tags_not_configured");
+    try { label = (await deps.userTagStore.readSettings())?.label ?? DEFAULT_USER_TAG_LABEL; }
+    catch { throw new ApiError(500, "user_tag_settings_unavailable"); }
+  }
   const truncated = data.truncated === true;
   return respond(format, data.columns as string[], data.rows as Doc[], {
     dataset: "usage", period: filters.period, truncated, rowLimit: EXPORT_ROWS_MAX, rateCardVersion: data.rateCardVersion,
     basis: "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.",
     filters: { project: filters.project, group: filters.group, developer: filters.developer, model: filters.model, backend: filters.backend,
       family: filters.family, classification: filters.classification, chargeback: filters.chargeback },
-  }, { "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX) });
+  }, { "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX) }, label);
 }

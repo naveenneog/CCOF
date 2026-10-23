@@ -52,6 +52,7 @@ var resolverSettings = {
   RESOLVER_COSMOS_RETRY_MAX_WAIT_SECONDS: string(resolver.cosmosRetryMaxWaitSeconds)
   RESOLVER_REQUEST_DEADLINE_MS: string(resolver.requestDeadlineMs)
   RESOLVER_BUDGET_ENFORCEMENT: resolver.budgetEnforcement
+  RESOLVER_REQUIRE_COMPLETE_USAGE: (resolver.?requireCompleteUsage ?? false) ? 'true' : 'false'
   RESOLVER_BUDGET_STATE_GRACE_SECONDS: string(budgetState.graceSeconds)
   RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS: string(budgetState.hardLimitSeconds)
   // GET /ccof/me/usage: whether a person also sees their scope's total (docs/USAGE.md). Off unless set.

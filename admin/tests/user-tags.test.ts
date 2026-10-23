@@ -6,9 +6,10 @@ import assert from "node:assert/strict";
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
 import { createAuthenticator, readAuthConfig } from "../src/auth.ts";
 import { createMemoryChangeLog } from "../src/change-log.ts";
-import { createMemoryUserTagStore, handleUserTagRequest } from "../src/user-tags.ts";
+import { createCosmosUserTagStore, createMemoryUserTagStore, handleUserTagRequest } from "../src/user-tags.ts";
 import type { UserTagDependencies } from "../src/user-tags.ts";
-import { MAX_SAVED_TAGS, userTagDocumentId } from "../../src/contracts/user-tags.ts";
+import { MAX_SAVED_TAGS, USER_TAG_SETTINGS_ID, userTagDocumentId } from "../../src/contracts/user-tags.ts";
+import type { Container } from "@azure/cosmos";
 
 const TENANT = "00000000-0000-4000-8000-000000000001";
 const AUDIENCE = "api://ccof-admin-test";
@@ -41,6 +42,95 @@ function harness() {
 }
 
 const tagOf = (h: ReturnType<typeof harness>, id = PERSON) => h.store.docs.get(userTagDocumentId(id))?.doc.tag;
+
+test("deployment label defaults only when absent and an editor saves with optimistic concurrency and audit", async () => {
+  const h = harness();
+  const initial = await h.call("GET", "/api/user-tags/settings", { as: READER });
+  assert.equal(initial.status, 200);
+  assert.deepEqual(initial.jsonBody, { label: "User tag", exists: false, etag: null });
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "WBS ID" } })).status, 428);
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { as: READER, body: { label: "WBS ID" }, ifNoneMatch: "*" })).status, 403);
+  const saved = await h.call("PUT", "/api/user-tags/settings", { body: { label: "WBS ID" }, ifNoneMatch: "*" });
+  assert.equal(saved.status, 201);
+  assert.equal(((await h.call("GET", "/api/user-tags/settings")).jsonBody as { label: string }).label, "WBS ID");
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "Cost centre" }, ifNoneMatch: "*" })).status, 412);
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "Cost centre" }, ifMatch: '"stale"' })).status, 412);
+  assert.equal(h.changeLog.records.size, 1, "known stale clients are refused before creating an audit intent or attempting persistence");
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "Cost centre" }, ifMatch: saved.headers.etag })).status, 200);
+  const record = [...h.changeLog.records.values()][0];
+  assert.deepEqual([record.operation, record.outcome, record.changes], ["userTag.settings", "created", [{ path: "label", before: "User tag", after: "WBS ID" }]]);
+  assert.equal(h.store.saved, null, "renaming never changes saved tag values");
+});
+
+test("invalid labels and failed settings reads, writes or audit do not succeed or fall back", async () => {
+  const h = harness();
+  for (const label of ["", " ", "=SUM(1)", "+x", "-x", "@x", "a\nb", "A".repeat(65), 9]) {
+    assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label }, ifNoneMatch: "*" })).status, 422);
+  }
+  for (const body of [{}, { label: "WBS ID", extra: true }, { label: "WBS ID", tag: "x" }, null]) {
+    assert.equal((await h.call("PUT", "/api/user-tags/settings", { body, ifNoneMatch: "*" })).status, 422);
+  }
+  assert.equal(h.changeLog.records.size, 0);
+  h.changeLog.failAppend = true;
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "WBS ID" }, ifNoneMatch: "*" })).status, 503);
+  h.changeLog.failAppend = false;
+  h.store.writeSettings = async () => { throw new Error("offline"); };
+  assert.equal((await h.call("PUT", "/api/user-tags/settings", { body: { label: "WBS ID" }, ifNoneMatch: "*" })).status, 500);
+  assert.equal([...h.changeLog.records.values()].at(-1)?.outcome, "unconfirmed");
+  h.store.readSettings = async () => { throw new Error("offline"); };
+  assert.equal((await h.call("GET", "/api/user-tags/settings")).status, 500);
+});
+
+test("a settings write race is recorded as refused and cannot overwrite the winner", async () => {
+  const h = harness();
+  h.store.writeSettings = async () => null;
+  const response = await h.call("PUT", "/api/user-tags/settings", { body: { label: "WBS ID" }, ifNoneMatch: "*" });
+  assert.equal(response.status, 412);
+  assert.equal([...h.changeLog.records.values()].at(-1)?.outcome, "refused");
+  assert.deepEqual((await h.call("GET", "/api/user-tags/settings")).jsonBody, { label: "User tag", exists: false, etag: null });
+});
+
+test("Cosmos label settings distinguish absence from corruption and provider failures, and persist with ETags", async () => {
+  const id = USER_TAG_SETTINGS_ID;
+  const doc = { id, scopeId: id, kind: id, schemaVersion: 1, label: "WBS ID", updatedAt: "2026-10-23T10:00:00.000Z", updatedBy: EDITOR };
+  let resource: unknown = doc;
+  let code = 0;
+  let etag = '"s1"';
+  const writes: unknown[] = [];
+  const container = {
+    item(itemId: string, partition: string) {
+      assert.deepEqual([itemId, partition], [id, id]);
+      return {
+        async read() { if (code) throw { code }; return { resource, etag }; },
+        async replace(value: unknown, options: unknown) { writes.push([value, options]); if (code) throw { code }; return { etag }; },
+      };
+    },
+    items: { async create(value: unknown) { writes.push(value); if (code) throw { code }; return { etag }; } },
+  } as unknown as Container;
+  const store = createCosmosUserTagStore(container);
+  assert.deepEqual(await store.readSettings(), { label: "WBS ID", etag });
+  for (const bad of [{ ...doc, label: "=cmd" }, { ...doc, schemaVersion: 2 }, { ...doc, kind: "userTag" }, { ...doc, scopeId: "other" }, { ...doc, id: "other" }]) {
+    resource = bad;
+    await assert.rejects(store.readSettings(), /user_tag_settings_invalid/);
+  }
+  resource = doc; etag = "";
+  await assert.rejects(store.readSettings(), /user_tag_settings_invalid/);
+  await assert.rejects(store.writeSettings(doc, null), /user_tag_settings_etag_missing/);
+  etag = '"s1"'; code = 404;
+  assert.equal(await store.readSettings(), null);
+  code = 503;
+  await assert.rejects(store.readSettings());
+  await assert.rejects(store.writeSettings(doc, null));
+  code = 409;
+  assert.equal(await store.writeSettings(doc, null), null);
+  code = 412;
+  assert.equal(await store.writeSettings(doc, '"s0"'), null);
+  code = 0;
+  assert.equal(await store.writeSettings(doc, '"s0"'), '"s1"');
+  assert.deepEqual(writes.at(-1), [doc, { accessCondition: { type: "IfMatch", condition: '"s0"' } }]);
+  assert.equal(await store.writeSettings(doc, null), '"s1"');
+  assert.deepEqual(writes.at(-1), doc);
+});
 
 test("an editor tags a person: created with If-None-Match, saved for suggestions, recorded first", async () => {
   const h = harness();

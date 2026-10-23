@@ -87,12 +87,14 @@ export interface BudgetStateRecord {
   exhausted: boolean;
   realtimeCeilingTokensPerMinute: number;
   validUntil: string;
+  completeness?: "complete" | "partial";
 }
 
 export interface AggregateBudgetStateRecord {
   scopeId: string;
   exhausted: boolean;
   validUntil: string;
+  completeness?: "complete" | "partial";
 }
 
 export interface ResolveDependencies {
@@ -143,13 +145,15 @@ type StateCheck = { ok: true; degradedReason: string | null } | { ok: false; rea
 // exhausted flag must be a boolean: a record without it cannot show that
 // budget remains (C-7).
 function checkBudgetState(
-  record: { validUntil?: unknown; realtimeCeilingTokensPerMinute?: unknown; exhausted?: unknown },
+  record: { validUntil?: unknown; realtimeCeilingTokensPerMinute?: unknown; exhausted?: unknown; completeness?: unknown },
   scope: "person" | "aggregate",
   nowMs: number,
   policy: BudgetStalenessPolicy,
+  requireCompleteUsage = false,
 ): StateCheck {
   const prefix = scope === "aggregate" ? "aggregate_" : "";
   if (typeof record.exhausted !== "boolean") return { ok: false, reason: `${prefix}budget_state_invalid` };
+  if (requireCompleteUsage && record.completeness !== "complete") return { ok: false, reason: `${prefix}budget_state_invalid` };
   if (scope === "person") {
     const ceiling = record.realtimeCeilingTokensPerMinute;
     if (typeof ceiling !== "number" || !Number.isSafeInteger(ceiling) || ceiling < 0 || ceiling > MAX_TOKENS_PER_MINUTE) {
@@ -245,7 +249,7 @@ export async function resolveRequest(
       budgetState: null,
     });
   }
-  return resolveBudgetState(resolved, membership, deps, nowMs, enforcement.staleness, signal);
+  return resolveBudgetState(resolved, membership, deps, nowMs, enforcement.staleness, signal, enforcement.requireCompleteUsage);
 }
 
 // C-8: the descriptor from the backend registry, checked last, so a budget
@@ -298,6 +302,7 @@ async function resolveBudgetState(
   nowMs: number,
   staleness: BudgetStalenessPolicy,
   signal?: AbortSignal,
+  requireCompleteUsage = false,
 ): Promise<ResolveResult> {
   const aggregateStrict = membership.aggregateMode === "strict";
   const scopeId = `${resolved.projectId}:${membership.classification}`;
@@ -320,7 +325,7 @@ async function resolveBudgetState(
   const staleReasons: string[] = [];
   const budget = settledValue(budgetRead);
   if (!budget) return refuse("budget_state_missing", resolved.projectId);
-  const personCheck = checkBudgetState(budget, "person", nowMs, staleness);
+  const personCheck = checkBudgetState(budget, "person", nowMs, staleness, requireCompleteUsage);
   if (!personCheck.ok) return refuse(personCheck.reason, resolved.projectId);
   if (personCheck.degradedReason) staleReasons.push(personCheck.degradedReason);
   if (budget.exhausted) return refuseExhausted("budget_exhausted", membership, staleReasons);
@@ -330,7 +335,7 @@ async function resolveBudgetState(
   if (aggregateStrict) {
     aggregateState = settledValue(aggregateRead);
     if (!aggregateState) return refuse("aggregate_budget_state_missing", resolved.projectId);
-    const aggregateCheck = checkBudgetState(aggregateState, "aggregate", nowMs, staleness);
+    const aggregateCheck = checkBudgetState(aggregateState, "aggregate", nowMs, staleness, requireCompleteUsage);
     if (!aggregateCheck.ok) return refuse(aggregateCheck.reason, resolved.projectId);
     if (aggregateCheck.degradedReason) staleReasons.push(aggregateCheck.degradedReason);
     if (aggregateState.exhausted) return refuseExhausted("aggregate_budget_exhausted", membership, staleReasons);

@@ -108,6 +108,7 @@ Assert-Contract ($stage5Text -match 'usagePolicyXml: usagePolicyXml') 'stage5-co
 Assert-Contract ($apiModule -match "name: 'get-my-usage'" -and $apiModule -match "method: 'GET'" -and $apiModule -match "urlTemplate: '/ccof/me/usage'" -and $apiModule -match "operations/policies@[0-9-]+' = if \(!empty\(usagePolicyXml\)\)") 'The API module must create GET /ccof/me/usage with its operation policy when one is supplied.'
 Assert-Contract ($appText -match "operations/get-my-usage" -and $appText -match "APIM operation get-my-usage is missing or differs" -and $appText -match "operations/get-my-usage/policies/policy" -and $appText -match "the deployed get-my-usage policy is not the rendered usage policy") 'Stage 5 must read the usage operation and its deployed policy back.'
 Assert-Contract ($settingsModule -match "RESOLVER_USAGE_GROUP_TOTALS: \(resolver\.\?usageGroupTotals \?\? false\) \? 'true' : 'false'" -and $example.resolver.usageGroupTotals -eq $false) 'The resolver must get RESOLVER_USAGE_GROUP_TOTALS, off by default; the example shows false.'
+Assert-Contract ($settingsModule -match "RESOLVER_REQUIRE_COMPLETE_USAGE: \(resolver\.\?requireCompleteUsage \?\? false\) \? 'true' : 'false'" -and $example.resolver.ContainsKey('requireCompleteUsage') -and $example.resolver.requireCompleteUsage -eq $false) 'Stage 5 must wire the explicit complete-usage guard, default false, into resolver settings.'
 Assert-Contract ($example.gateway.admission.usage.calls -eq 10 -and $example.gateway.admission.usage.renewalPeriodSeconds -eq 60) 'The example must show the usage operation''s per-person limit.'
 Assert-Contract ($appText -match '\$config\.entra\.surfaceClients = @\(\$Cfg\.gateway\.surfaceClients') 'Stage 5 must copy gateway.surfaceClients into the gateway configuration.'
 Assert-Contract ($example.gateway.ContainsKey('surfaceClients') -and @($example.gateway.surfaceClients).Count -eq 0 -and $example.admin.groupSearchEnabled -eq $false) 'The example configuration must show gateway.surfaceClients (empty) and admin.groupSearchEnabled (false).'
@@ -363,6 +364,19 @@ try {
     $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
     $read = Read-StgConfig $tmp
     Assert-Contract ($read.network.mode -ceq 'verify') 'The example network mode must be verify: the customer builds the network.'
+    foreach ($value in @('true', 1, $null)) {
+        $c.resolver.requireCompleteUsage = $value
+        $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+        $badComplete = $false
+        try { $null = Read-StgConfig $tmp } catch { $badComplete = $_.Exception.Message -match 'resolver.requireCompleteUsage' }
+        Assert-Contract $badComplete 'The complete-usage guard must be a JSON boolean, never coerced or silently disabled.'
+    }
+    $c.resolver.requireCompleteUsage = $true
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $badComplete = $false
+    try { $null = Read-StgConfig $tmp } catch { $badComplete = $_.Exception.Message -match 'requires budget-state' }
+    Assert-Contract $badComplete 'The complete-usage guard must refuse token-limits-only mode before Azure calls.'
+    $c.resolver.requireCompleteUsage = $false
     Assert-Contract ($read.stage1.prefix -ceq 'ccofstg' -and $read.stage1.functionsPublicNetworkAccess -ceq 'Disabled' -and $read.stage1.approveNewPublicApimBootstrap -eq $false) 'Example defaults must stay private and defer APIM.'
     $stage1Parameters = Get-Stage1Parameters $read
     $recordedParameters = @{ properties = @{ parameters = @{} } }

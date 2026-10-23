@@ -1,5 +1,12 @@
 // Pure helpers for user tags in the console (owner decision 2026-10-23). The server applies the same
 // rules (src/contracts/user-tags.ts); checking here only avoids a round trip.
+import { isUserTagLabel } from "../../../src/contracts/user-tags.ts";
+
+export { isUserTagLabel };
+export function loadedLabel(data: unknown, loading: boolean, error: unknown): string | null {
+  if (loading || error || !data || typeof data !== "object" || !("label" in data) || !isUserTagLabel(data.label)) return null;
+  return data.label;
+}
 
 export const USER_TAG = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,63}$/;
 const GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;

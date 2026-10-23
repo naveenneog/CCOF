@@ -1,0 +1,234 @@
+{
+  "scope": "Loopback demo with real UI, user-tag settings/person/suggestion APIs and in-memory stores. Browser developer-report telemetry is a controlled fixture; not Azure or sync/ledger proof.",
+  "checks": [
+    {
+      "name": "Synthetic onboarded group available",
+      "passed": true,
+      "detail": 201
+    },
+    {
+      "name": "Actual UI saves deployment label",
+      "passed": true,
+      "detail": 201
+    },
+    {
+      "name": "Label persists across browser reload via real settings API",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "First individual tag saved through actual UI/API",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Typing loads actual saved-tag suggestions",
+      "passed": true,
+      "detail": [
+        "WBS-1001.01"
+      ]
+    },
+    {
+      "name": "Saved suggestion assigned individually to second user",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Actual stored tag is unchanged for synthetic person",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Actual stored tag is unchanged for synthetic person",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Real demo JSON keeps stable userTag key",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Configured report filter sends stable chargeback parameter",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Actual browser download uses WBS ID display header",
+      "passed": true,
+      "detail": [
+        "person",
+        "WBS ID",
+        "requests",
+        "tokensSpent",
+        "knownListUsd",
+        "listUsd",
+        "unpricedRequests",
+        "completeness"
+      ]
+    },
+    {
+      "name": "Downloaded CSV preserves matching tag values",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sonnet exact allowed-model control is available",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "haiku exact allowed-model control is available",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sonnet reviewed JSON preserves person/group TPM and quotas",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "sonnet reviewed JSON contains only the explicitly allowed model",
+      "passed": true,
+      "detail": [
+        "claude-sonnet-5"
+      ]
+    },
+    {
+      "name": "haiku reviewed JSON preserves person/group TPM and quotas",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "haiku reviewed JSON contains only the explicitly allowed model",
+      "passed": true,
+      "detail": [
+        "claude-haiku-4-5"
+      ]
+    },
+    {
+      "name": "No per-family dollar budgets introduced",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "No browser runtime errors",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "No outbound browser requests",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "screenshots": [
+    "docs/images/deployment-walk/admin-wbs-field-name.png",
+    "docs/images/deployment-walk/admin-wbs-tagged-people.png",
+    "docs/images/deployment-walk/admin-wbs-chargeback-report.png",
+    "docs/images/deployment-walk/admin-wbs-chargeback-filter.png",
+    "docs/images/deployment-walk/admin-family-token-limits-models.png"
+  ],
+  "fixtureQueries": [
+    {
+      "chargeback": "",
+      "limit": "50"
+    },
+    {
+      "chargeback": "WBS-1001.01",
+      "limit": "50"
+    },
+    {
+      "chargeback": "WBS-1001.01",
+      "limit": "500"
+    }
+  ],
+  "pageErrors": [],
+  "nonLocalRequests": [],
+  "suggestionSelection": "Actual datalist option selected by filling its value; native headless popup selection unavailable.",
+  "csv": "docs/images/deployment-walk/admin-wbs-chargeback.csv",
+  "jsonMachineKeys": [
+    "person",
+    "userTag",
+    "requests",
+    "pricedRequests",
+    "partialRequests",
+    "unpricedRequests",
+    "unattributedRequests",
+    "knownCostRequests",
+    "failedRequests",
+    "inputTokens",
+    "outputTokens",
+    "cacheReadTokens",
+    "cacheWrite5mTokens",
+    "cacheWrite1hTokens",
+    "knownListCcu",
+    "listCcu",
+    "knownListUsd",
+    "listUsd",
+    "totalCostUsd",
+    "knownTokenCostUsd",
+    "inputCostUsd",
+    "outputCostUsd",
+    "cacheReadCostUsd",
+    "cacheWrite5mCostUsd",
+    "cacheWrite1hCostUsd",
+    "knownCacheReadSavingsUsd",
+    "observedCacheHitRequestPercent",
+    "tokensSpent",
+    "completeness",
+    "currency",
+    "periodStart",
+    "periodEnd",
+    "basis",
+    "rateCardVersion",
+    "retentionTruncated"
+  ],
+  "familyPolicy": {
+    "aggregateLimits": {
+      "person": {
+        "tokensPerMinute": null,
+        "tokenQuota": null,
+        "tokenQuotaPeriod": null
+      },
+      "group": {
+        "tokensPerMinute": null,
+        "tokenQuota": null,
+        "tokenQuotaPeriod": null
+      }
+    },
+    "families": {
+      "sonnet": {
+        "models": [
+          "claude-sonnet-5"
+        ],
+        "person": {
+          "tokensPerMinute": 2500,
+          "tokenQuota": 200000,
+          "tokenQuotaPeriod": "Monthly"
+        },
+        "group": {
+          "tokensPerMinute": 10000,
+          "tokenQuota": 900000,
+          "tokenQuotaPeriod": "Monthly"
+        }
+      },
+      "haiku": {
+        "models": [
+          "claude-haiku-4-5"
+        ],
+        "person": {
+          "tokensPerMinute": 5000,
+          "tokenQuota": 200000,
+          "tokenQuotaPeriod": "Monthly"
+        },
+        "group": {
+          "tokensPerMinute": 20000,
+          "tokenQuota": 900000,
+          "tokenQuotaPeriod": "Monthly"
+        }
+      }
+    }
+  },
+  "passed": true
+}

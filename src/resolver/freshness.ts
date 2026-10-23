@@ -15,7 +15,7 @@ export interface BudgetStalenessPolicy {
 // docs/PILOT.md C-3: which budget the resolver enforces. token-limits-only
 // reads no budget document; budget-state applies ADR-0008's staleness policy.
 export type BudgetEnforcement =
-  | { mode: "budget-state"; staleness: BudgetStalenessPolicy }
+  | { mode: "budget-state"; staleness: BudgetStalenessPolicy; requireCompleteUsage?: boolean }
   | { mode: "token-limits-only" };
 
 // ISO 8601 date-time with `Z` or a UTC offset. A date-time without a zone is

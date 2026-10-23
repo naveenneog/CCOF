@@ -1,0 +1,11 @@
+# view: developers
+# periodStart: 2026-10-01T00:00:00.000Z
+# periodEnd: 2026-11-01T00:00:00.000Z
+# rateCardVersion: 2026-10-11
+# basis: List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.
+# rows: 1
+# matched: 1
+# truncated: false
+# observedAt: 2026-10-23T17:42:43.300Z
+person,WBS ID,requests,tokensSpent,knownListUsd,listUsd,unpricedRequests,completeness
+Example member A,WBS-1001.01,12,42000,1.25,1.25,0,complete

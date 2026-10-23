@@ -5,6 +5,7 @@
 // only reports (notify).
 
 import type { AggregateBudgetStateDocument, ScopeTally, StateStamp } from "./documents.ts";
+import { completenessOf } from "./documents.ts";
 import type { ScopeRegistration } from "./registry.ts";
 
 export function buildGroupState(
@@ -20,6 +21,7 @@ export function buildGroupState(
     spentCcu: tally.spentCcu.toFixed(),
     budgetCcu: budget === null ? null : budget.toFixed(),
     exhausted: budget !== null && tally.spentCcu.greaterThanOrEqualTo(budget),
+    completeness: completenessOf(tally),
     mode: scope.aggregateMode,
     activeMemberCount,
     computedAt: stamp.computedAt,

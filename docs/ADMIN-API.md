@@ -153,6 +153,8 @@ one `userTagCatalog` with the saved tags, at most 2,000).
 | Request | Role | Behaviour |
 |---|---|---|
 | `GET /api/user-tags?search=<text>` | Reader | Up to 20 saved tags containing the text, case-insensitive, prefix matches first |
+| `GET /api/user-tags/settings` | Reader | Deployment-wide `label`, `exists`, `etag`; absent settings default to `User tag`, while failed/invalid reads return errors |
+| `PUT /api/user-tags/settings` | Editor | Exactly `{"label":"WBS ID"}`. First save: `If-None-Match: *`; later saves: `If-Match`. Audit-first, ETag-guarded write in `adminConfig` |
 | `GET /api/user-tags/people[?tag=<tag>][&limit=1-500]` | Reader | Tagged people (optionally one tag), with `truncated` |
 | `GET /api/user-tags/people/{personId}` | Reader | The person's tag and `ETag`; `exists: false` and no `ETag` when none was set |
 | `PUT /api/user-tags/people/{personId}` | Editor | Body `{"tag": "<tag>"}` or `{"tag": null}` to clear; `If-None-Match: *` to create, `If-Match` to change. The change record is written first, then the tag; a new tag is added to the saved list only after the tag is written (`suggestionSaved` says whether it was) |
@@ -171,6 +173,13 @@ one `userTagCatalog` with the saved tags, at most 2,000).
 - **Reports:** the chargeback `chargeback` filter selects a tag, the Developers view has a `userTag`
   column (the tags a developer's requests carried in the period, `(none)` when a request had none),
   and Usage CSV carries `chargebackId` per row.
+
+- **Field name:** one deployment-wide label (default `User tag`), editable on User tags. Labels are
+  1–64 characters, without leading/trailing whitespace, control characters or leading `= + - @`.
+  Invalid bodies return 422; missing version headers return 428 and stale versions/races return 412.
+  The label changes tagging/filter/report presentation only, never saved/suggested values,
+  `chargebackId` / `userTag` JSON keys or filter parameters
+  ([ADR-0037](adr/0037-deployment-user-tag-label.md)).
 
 ### Export for Power BI ([admin/src/export.ts](../admin/src/export.ts))
 
@@ -191,6 +200,13 @@ an export is never broader than its request. The JSON echoes every applied filte
 
 When the chargeback source is not configured or fails, `export/usage` returns `503 export_unavailable`
 with the capability state, never an empty file.
+
+Usage CSV uses the configured individual-tag label instead of the `chargebackId` display heading.
+Browser chargeback CSV similarly labels `chargebackId` / `userTag`. Values are still read by their
+original keys. Collisions with other headings are resolved by appending the machine key in
+parentheses, then a number if necessary. JSON/Power BI schemas and Groups CSV are unchanged.
+A missing settings document uses `User tag`; unavailable/unreadable/invalid settings refuse the CSV
+download (non-success response), rather than silently using a default. JSON exports remain independent.
 
 Connecting Power BI: the documented Entra path for a custom API is a Power Query custom connector with
 `Aad` authentication ([Handling authentication](https://learn.microsoft.com/en-us/power-query/handling-authentication)).
