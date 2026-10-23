@@ -4,6 +4,23 @@
 
 **Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
 
+### G-LIMIT live acceptance (2026-10-24)
+
+- New staged deployment from the guide, Stages 0–8 verified, lab subscription, resource group `ccof-e2e-20261024-rg`
+  (prefix `e2e1024`, own Foundry account, existing Entra registrations and two existing groups). Portal walkthrough:
+  21 of 21 screens, masked captures in `docs/images/deployment-walk/e2e-2026-10-24/`.
+- Through the gateway: 15 of 15 admission and bypass cases; family limit 429 (Beta Haiku, 20,000 TPM); higher-spend
+  selection (Alpha at equal spend, Beta after Beta spent more; no fallback); USD 10 Alpha budget used up: exhausted at
+  21:24:00 (USD 10.35 recorded), first refusal 21:24:25, final recorded USD 11.25, list-price USD 11.97 (USD 0.72 =
+  streamed cache writes the ledger cannot see); 8 of 8 attempts after exhaustion refused or confined to Beta's budget.
+  Total estimated spend USD 11.98 against the USD 10 authorised (in-flight overshoot of the test itself).
+- Chargeback: `WBS ID` field name, a person's `WBS-1001.01`, suggestion, CSV column and value, in the deployed console.
+- Fixed with tests: ledger GUID typing (group usage was never attributed, `d9b6978`); policy fragments for the 16 KB
+  API policy limit (ADR-0039, `8773205`); Stage 1 null subnet (`3beb2bb`); BOM read, usage-policy comments, Stage 8
+  JSON column (`8773205`); `/usage` rows classified `no-backend-call` in the ledger (`d9b6978`). Mutants: split 3/3 caught; RED shown for
+  every other new test.
+- Open: E2E-01 (backend 429 shown as unpriced in chargeback; owner decision). Report:
+  [BUDGET-ACCEPTANCE-2026-10-23.md](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 ### Owner acceptance request (2026-10-23)
 
 - G-LIMIT: test model-family restrictions, overlapping memberships, higher-spend selection, exhaustion, streaming,

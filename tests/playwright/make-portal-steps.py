@@ -23,7 +23,9 @@ steps = [
  ("03-storage-iam", "3", "Storage account: Access control (IAM) - role assignments", f"/resource{R}/providers/Microsoft.Storage/storageAccounts/{n['apps']['resolver']['storageAccount']}/overview", ["Storage Blob Data Owner"]),
  ("05-function-settings", "5", "Function App: Environment variables (names only)", f"/resource{site('sync')}/environmentVariablesAppSettings", ["COSMOS_ENDPOINT"]),
  ("05-resolver-auth", "5", "Resolver: Authentication - require authentication", f"/resource{site('resolver')}/overview", ["Require authentication"]),
- ("05-apim-apis", "5", "API Management: APIs - Claude Messages", f"/resource{apim}/apim-apis", [cfg["apim"]["apiDisplayName"]]),
+ # The classic APIs blade can stay on "Service is getting ready..." (2026-10-21, 2026-10-24); the preview blade loads.
+ ("05-apim-apis-preview", "5", "API Management: APIs (preview) - Claude Messages", f"/resource{apim}/overview", [cfg["apim"]["apiDisplayName"]]),
+ ("05-apim-policy-fragments", "5", "API Management: Policy fragments - one per policy section (ADR-0039)", f"/resource{apim}/overview", [f"{cfg['apim']['apiId']}-inbound"]),
  ("07-functions-list", "7", "Function App: functions after publishing", f"/resource{site('resolver')}/functionsList", ["resolve"]),
 ]
 if "4" in S:
@@ -36,7 +38,7 @@ if "4" in S:
         steps.append(("04-group-members", "4", f"Entra: group {g['displayName']} - Members", f"/view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Members/groupId/{g['id']}", ["Members"]))
 # These blades have no stable deep link: the walker opens the overview, then the named menu entry.
 # IAM blades open on "Check access"; the role assignments are on another tab.
-MENU = {"01-apim-identity": "Managed identities", "06-foundry-networking": "Networking", "06-apim-network": "Network",
+MENU = {"01-apim-identity": "Managed identities", "05-apim-apis-preview": "APIs (preview)", "05-apim-policy-fragments": "Policy fragments", "06-foundry-networking": "Networking", "06-apim-network": "Network",
         "06-dns-links": "Virtual network links", "05-resolver-auth": "Authentication", "03-foundry-iam": "Access control (IAM)", "03-storage-iam": "Access control (IAM)"}
 CLICK = {"03-foundry-iam": "Role assignments", "03-storage-iam": "Role assignments"}
 # Shared resource groups and subscriptions hold long, virtualized lists: filter to this deployment's rows.

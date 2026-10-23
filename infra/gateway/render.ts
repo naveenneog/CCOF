@@ -65,7 +65,9 @@ const POLICY_SECTIONS = ["inbound", "backend", "outbound", "on-error"] as const;
 // leading <base /> (where it had one) and an <include-fragment>. Putting each fragment's content back
 // in place of its <include-fragment> gives policyXml byte for byte (tests/gateway-policy-fragments.test.ts).
 export function splitPolicyForDeployment(policyXml: string, apiId: string): PolicyDeployment {
-  if (!/^[A-Za-z0-9-]{1,60}$/.test(apiId)) throw new Error(`apiId "${apiId}" cannot name a policy fragment`);
+  // The gateway schema's apiId pattern, shortened so the longest fragment name ("-on-error-" + 12 hex) stays
+  // within APIM's 80-character fragment name limit.
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,57}$/.test(apiId)) throw new Error(`apiId "${apiId}" cannot name a policy fragment (at most 58 characters, letters, digits, _ and -)`);
   let apiPolicyXml = policyXml;
   const fragments: PolicyFragment[] = [];
   for (const section of POLICY_SECTIONS) {

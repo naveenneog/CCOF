@@ -71,3 +71,18 @@ test("a policy whose section tag is missing or repeated is refused, not split", 
   assert.throws(() => splitPolicyForDeployment(rendered.policyXml.replace("<outbound>", "<outbound-x>"), "api"), /exactly one <outbound>/);
   assert.throws(() => splitPolicyForDeployment(rendered.policyXml.replace("</backend>", "</backend><!-- <backend> -->"), "api"), /exactly one <backend>/);
 });
+
+// APIM names a policy fragment with at most 80 characters, `(^[\w]+$)|(^[\w][\w\-]+[\w]$)` (Learn,
+// Microsoft.ApiManagement service/policyFragments); the longest suffix is "-on-error-" + 12 hex = 22, and the
+// gateway schema allows apiId ^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$.
+test("every apiId the schema allows that fits APIM's fragment name limit is split; longer ones are refused", () => {
+  for (const apiId of ["claude_messages", "a".repeat(58)]) {
+    const { fragments } = splitPolicyForDeployment(rendered.policyXml, apiId);
+    for (const f of fragments) {
+      assert.ok(f.id.length <= 80, `${f.id.length}`);
+      assert.match(f.id, /^\w[\w-]+\w$/);
+    }
+  }
+  assert.throws(() => splitPolicyForDeployment(rendered.policyXml, "a".repeat(59)), /cannot name a policy fragment/);
+  assert.throws(() => splitPolicyForDeployment(rendered.policyXml, "-api"), /cannot name a policy fragment/);
+});

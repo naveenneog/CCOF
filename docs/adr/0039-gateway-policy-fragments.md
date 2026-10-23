@@ -46,6 +46,6 @@ lab's older instance still serves its larger policy.
 ## Consequences
 
 - Earlier fragments stay in the API Management instance after a configuration change (one set per rendered
-  policy). Policy fragments are not listed among the limited resources on the service limits page.
+  policy). Policy fragments are not listed among the limited resources on the service limits page. Removal is roadmap item G-FRAG.
 - A reviewer reads the whole policy in `<apiId>.policy.xml`; the Portal's API policy view shows the includes.
 - Stage 5 live on the new instance: fragments and API policy deployed, the stage verified (2026-10-24).
