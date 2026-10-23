@@ -16,6 +16,7 @@ import type { ConfigProblem } from "./config.ts";
 import type { ResolveDependencies, ResolveInput, ResolveResult } from "./decide.ts";
 import { refusalStatus, resolveRequest } from "./decide.ts";
 import type { BudgetEnforcement } from "./freshness.ts";
+import { readMyUsage, UsageReadError } from "./my-usage.ts";
 
 export interface HandlerResponse {
   status: number;
@@ -23,7 +24,7 @@ export interface HandlerResponse {
 }
 
 export type ResolverReadiness =
-  | { ready: true; budgetEnforcement: BudgetEnforcement; requestDeadlineMs: number; reads: ResolveDependencies }
+  | { ready: true; budgetEnforcement: BudgetEnforcement; requestDeadlineMs: number; reads: ResolveDependencies; usageGroupTotals?: boolean }
   | { ready: false; problems: ConfigProblem[] };
 
 export interface ResolverRuntime {
@@ -91,6 +92,7 @@ interface EventIds {
 
 interface ResolverEvent extends EventIds {
   event: "refused" | "degraded" | "unhealthy" | "failed";
+  route?: string;
   reason?: string;
   reasons?: string[];
   detail?: string;
@@ -101,12 +103,13 @@ interface ResolverEvent extends EventIds {
 
 // One JSON line per event; `schema` first so a query can match on the prefix.
 function logEvent(runtime: ResolverRuntime, event: ResolverEvent): void {
-  const { event: name, reason, reasons, detail, httpStatus, problems, errorCode, requestId, personId, subscriptionId, projectId } =
+  const { event: name, route, reason, reasons, detail, httpStatus, problems, errorCode, requestId, personId, subscriptionId, projectId } =
     event;
   runtime.log(
     JSON.stringify({
       schema: EVENT_SCHEMA,
       event: name,
+      route,
       reason,
       reasons,
       detail,
@@ -263,6 +266,44 @@ export async function handleResolveRequest(
     logEvent(runtime, { event: "degraded", reasons: result.degradedReasons, ...ids, projectId: result.projectId });
   }
   return { status: 200, jsonBody: { ...result, resolverOutcome: result.degraded ? "degraded" : "success" } };
+}
+
+// POST /api/me/usage (src/resolver/my-usage.ts): the caller's own budget figures. APIM sends only the
+// person ID it took from the validated token's oid; the same platform gate as /api/resolve means no
+// other caller can choose whose figures are read. A successful answer is not logged (it carries amounts).
+const USAGE_PERSON_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function parseUsageBody(body: unknown): { personId: string; requestId?: string } | null {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+  const record = body as Record<string, unknown>;
+  if (Object.keys(record).some((k) => k !== "personId" && k !== "requestId")) return null;
+  if (typeof record.personId !== "string" || !USAGE_PERSON_ID.test(record.personId)) return null;
+  if (record.requestId !== undefined && (typeof record.requestId !== "string" || !REQUEST_ID.test(record.requestId))) return null;
+  return { personId: record.personId, requestId: record.requestId as string | undefined };
+}
+
+export async function handleMyUsageRequest(request: ResolverRequestContext, runtime: ResolverRuntime): Promise<HandlerResponse> {
+  const gate = openGate(request, runtime);
+  if (!gate.open) return refuseByGuard(gate.failure, runtime);
+  const { reads, requestDeadlineMs, usageGroupTotals } = gate.readiness;
+  const input = parseUsageBody(request.body);
+  if (!input) {
+    logEvent(runtime, { event: "refused", route: "me/usage", reason: "invalid_request", httpStatus: 400 });
+    return { status: 400, jsonBody: { error: "invalid_request" } };
+  }
+  try {
+    const now = runtime.now();
+    const usage = await withinDeadline(
+      (signal) => readMyUsage(input.personId, reads, { now, showGroupTotals: usageGroupTotals === true, signal }),
+      requestDeadlineMs,
+    );
+    return { status: 200, jsonBody: { ...usage } };
+  } catch (err: unknown) {
+    const reason = err === DEADLINE_EXCEEDED ? "resolver_deadline_exceeded"
+      : err instanceof UsageReadError ? err.code : "registry_read_failed";
+    logEvent(runtime, { event: "failed", route: "me/usage", reason, errorCode: errorCodeOf(err), personId: input.personId, requestId: input.requestId });
+    return { status: 503, jsonBody: { ...UNAVAILABLE } };
+  }
 }
 
 // GET /api/health: the resolver reports itself unhealthy (ADR-0008 decision 5)

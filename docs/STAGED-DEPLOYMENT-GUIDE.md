@@ -192,6 +192,8 @@ Settings added for group onboarding:
 | `acceptance` | no `project` | Stage 8 requests without a project selector, and checks in the usage trace that every request was charged to the pilot group. With more than one group entry, `acceptance.expectedGroup` names the expected one (`groupDisplayName` or `groupId`) |
 | `admin.groupSearchEnabled` | `false` | Sets `ADMIN_GROUP_SEARCH_ENABLED` on the admin app (Stage 5). Requires the admin Graph grants in section 6.1; without them the admin API answers `502 group_directory_permission_required`. Ignored when `stage1.includeAdmin` is `false` |
 | `admin.userNamesEnabled` | `false` | Sets `ADMIN_USER_NAMES_ENABLED` on the admin app (Stage 5): people's names beside object IDs (User tags page, Developers view). Requires the admin identity's `User.Read.All` (section 6.1); without it the console shows object IDs only |
+| `resolver.usageGroupTotals` | `false` | Whether `/usage` also shows the person's group (scope) total. Stage 5 writes `RESOLVER_USAGE_GROUP_TOTALS` ([USAGE.md](USAGE.md), "Privacy") |
+| `gateway.admission.usage` | 10 per 60 s | Per-person limit of `GET /ccof/me/usage`, separate from the `/v1/messages` limit |
 | `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
 The state of each stage is written next to the configuration file in `.staged-state/state.json`. One
@@ -285,8 +287,9 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Cloud Shell:** `-Stage 5`, preview then `-Apply`.
 - **Portal:** workbook sections 17 (Function Apps → Environment variables, Authentication), 19 (APIM →
   APIs, Policies, Backends), 20 (Diagnostic settings and workbook).
-- **Worked when:** each app lists its settings, the resolver answers `401` without a token, and the
-  API path and policy hash match.
+- **Worked when:** each app lists its settings, the resolver answers `401` without a token, the
+  API path and policy hash match, and the operation `get-my-usage` (`GET /ccof/me/usage`) exists with its
+  policy hash recorded in `stage5.verify.json`.
 
 ### Stage 6: network
 
@@ -421,6 +424,14 @@ saved-tag suggestions) narrows every view ([CHARGEBACK.md](CHARGEBACK.md)). **Gr
 data for Power BI or a spreadsheet; the API forms are `GET /api/v3/export/usage` and
 `GET /api/v3/export/groups` ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI"). A direct Power BI
 connection to the API is not yet verified ([UNKNOWNS](UNKNOWNS.md) G-R3).
+
+### 6.4 People's own budget: `/usage`
+
+Stage 5 deploys `GET <gateway>/anthropic/ccof/me/usage` and Stage 7 publishes the resolver route behind it.
+A developer then runs `/usage` in Claude Code (installed by `Set-ClaudeCodeGateway.ps1`, [CLIENTS.md](CLIENTS.md))
+and sees only their own spend, budget and remaining this month, as of the reconciler's last run. The
+figures need `reconciler.timerEnabled: true`; whether a person also sees their group's total is
+`resolver.usageGroupTotals`. Details: [USAGE.md](USAGE.md).
 
 ---
 

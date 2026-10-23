@@ -211,6 +211,13 @@ gateway route is intentional: using `CLAUDE_CODE_USE_FOUNDRY=1` could activate t
 Azure credential chain instead of this gateway helper. The helper's result goes
 in both `Authorization: Bearer` and `x-api-key`, as documented by Anthropic.
 
+The script also installs the **`/usage` skill**: `%USERPROFILE%\.claude\ccof-usage.ps1` and
+`%USERPROFILE%\.claude\skills\usage\SKILL.md`. In Claude Code, `/usage` then prints the person's own CCOF budget
+from the gateway, for example `CCOF budget, project PILOT1 / STD: $42.10 of $100.00 used (42%), $57.90 left,
+as of 10:42 UTC.`; `/cost` still shows the session's own estimate. `-UsageStatusLine` also sets a status line
+with the same figure, only when none is set. Both files are in the backup snapshot, so restore removes them.
+Details, freshness and privacy: [USAGE.md](USAGE.md).
+
 **VS Code reads the same Claude Code settings files**, but its extension also has
 a prelaunch sign-in check. Therefore setup also merges the non-secret environment
 into `%APPDATA%\Code\User\settings.json` under `claudeCode.environmentVariables`

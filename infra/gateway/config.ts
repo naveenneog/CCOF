@@ -50,6 +50,7 @@ export interface GatewayConfig {
   admission: {
     perPerson: { calls: number; renewalPeriodSeconds: number };
     resolverMisses: { calls: number; renewalPeriodSeconds: number; maxConcurrent: number };
+    usage?: { calls: number; renewalPeriodSeconds: number };
   };
   resolver: { url: string; tokenAudience: string; timeoutSeconds: number; projectHeaderName: string };
   entitlementCache: {

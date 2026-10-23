@@ -1,0 +1,181 @@
+<!--
+  GET /ccof/me/usage: the caller's own budget figures (docs/USAGE.md), generated from configuration
+  %%CONFIGURATION_ID%% (sha256 %%CONFIG_SHA256%%) and template sha256 %%TEMPLATE_SHA256%%. Operation-scope
+  policy of the operation get-my-usage: it has no <base />, so none of the API-scope (claude-messages)
+  policy runs for this operation. Render with infra/gateway/render.ts; Stage 5 deploys it.
+  The token checks (steps 1 and 2) are byte-for-byte those of claude-messages.template.xml
+  (the gateway usage policy test compares them). The person ID sent to the resolver is the token's
+  oid only; nothing from the request (query, headers, body) is read or forwarded.
+-->
+<policies>
+  <inbound>
+    <!-- 1. Authentication, as for /v1/messages. -->
+    <validate-jwt id="ccof-jwt" header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" output-token-variable-name="ccofJwt">
+      <openid-config url="%%OPENID_CONFIG_URL%%" />
+      <audiences>
+        %%AUDIENCE_ELEMENTS%%
+      </audiences>
+      <issuers>
+        <issuer>%%ISSUER_V1%%</issuer>
+        <issuer>%%ISSUER_V2%%</issuer>
+      </issuers>
+      <required-claims>
+        <claim name="tid" match="all">
+          <value>%%TENANT_ID%%</value>
+        </claim>
+      </required-claims>
+    </validate-jwt>
+
+    <!-- 2. The caller, as for /v1/messages: oid a GUID, the configured scope and client application. -->
+    <set-variable name="ccofOid" value="@{
+        var oid = ((Jwt)context.Variables["ccofJwt"]).Claims.GetValueOrDefault("oid", "").ToLowerInvariant();
+        return System.Text.RegularExpressions.Regex.IsMatch(oid, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$") ? oid : "";
+    }" />
+    <set-variable name="ccofClientAppId" value="@{
+        var jwt = (Jwt)context.Variables["ccofJwt"];
+        return jwt.Claims.GetValueOrDefault("azp", jwt.Claims.GetValueOrDefault("appid", "")).ToLowerInvariant();
+    }" />
+    <set-variable name="ccofRefusal" value="@{
+        if ((string)context.Variables["ccofOid"] == "") { return "token_identity_missing"; }
+        var scopes = ((Jwt)context.Variables["ccofJwt"]).Claims.GetValueOrDefault("scp", "").Trim();
+        if (scopes != "") {
+            if (!(" " + scopes + " ").Contains(" %%DELEGATED_SCOPE%% ")) { return "token_scope_missing"; }
+            var delegatedClients = new string[] { %%DELEGATED_CLIENT_IDS%% };
+            return Array.IndexOf(delegatedClients, (string)context.Variables["ccofClientAppId"]) >= 0 ? "" : "token_client_not_allowed";
+        }
+        var testClients = new string[] { %%APP_ONLY_CLIENT_IDS%% };
+        string[] roles;
+        var hasRole = ((Jwt)context.Variables["ccofJwt"]).Claims.TryGetValue("roles", out roles) && roles != null && Array.IndexOf(roles, "%%APP_ONLY_ROLE%%") >= 0;
+        return %%ALLOW_APP_ONLY%% && Array.IndexOf(testClients, (string)context.Variables["ccofClientAppId"]) >= 0 && hasRole ? "" : "app_token_not_allowed";
+    }" />
+
+    <!-- 3. Admission per person for this operation (%%USAGE_CALLS%% calls per %%USAGE_PERIOD%% s), its own counter. -->
+    <choose>
+      <when condition="@((string)context.Variables["ccofRefusal"] == "")">
+        <rate-limit-by-key id="ccof-usage-person" calls="%%USAGE_CALLS%%" renewal-period="%%USAGE_PERIOD%%" counter-key="@("ccof-usage:" + (string)context.Variables["ccofOid"])" retry-after-variable-name="ccofRetryAfter" />
+      </when>
+    </choose>
+    <choose>
+      <when condition="@((string)context.Variables["ccofRefusal"] != "")">
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-header name="Cache-Control" exists-action="override">
+            <value>no-store</value>
+          </set-header>
+          <set-header name="x-ccof-request-id" exists-action="override">
+            <value>@(context.RequestId.ToString())</value>
+          </set-header>
+          <set-body>@(new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(new JProperty("type", "permission_error"), new JProperty("message", "This token cannot read usage from this gateway. Sign in with the gateway's client and try again. Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None))</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <!-- 4. The resolver, with APIM's managed identity (ADR-0009). Only the oid and the request id are sent. -->
+    <authentication-managed-identity id="ccof-usage-resolver-credential" resource="%%RESOLVER_AUDIENCE%%" output-token-variable-name="ccofResolverToken" ignore-error="true" />
+    <set-header name="Authorization" exists-action="delete" />
+    <choose>
+      <when condition="@(context.Variables.ContainsKey("ccofResolverToken") && !string.IsNullOrEmpty((string)context.Variables["ccofResolverToken"]))">
+        <send-request mode="new" response-variable-name="ccofUsageResponse" timeout="%%RESOLVER_TIMEOUT%%" ignore-error="true">
+          <set-url>%%RESOLVER_USAGE_URL%%</set-url>
+          <set-method>POST</set-method>
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-header name="Authorization" exists-action="override">
+            <value>@("Bearer " + (string)context.Variables["ccofResolverToken"])</value>
+          </set-header>
+          <set-body>@(new JObject(new JProperty("personId", (string)context.Variables["ccofOid"]), new JProperty("requestId", context.RequestId.ToString())).ToString(Newtonsoft.Json.Formatting.None))</set-body>
+        </send-request>
+      </when>
+    </choose>
+    <set-variable name="ccofResolverToken" value="" />
+    <!-- 5. Only a 200 with the expected schema is passed on; anything else is "try again shortly". -->
+    <set-variable name="ccofUsageBody" value="@{
+        var response = context.Variables.ContainsKey("ccofUsageResponse") ? context.Variables["ccofUsageResponse"] as IResponse : null;
+        if (response == null || response.StatusCode != 200) { return ""; }
+        try {
+            var body = response.Body.As<JObject>();
+            return body != null && body["schema"] != null && body["schema"].Type == JTokenType.String && (string)body["schema"] == "ccof.usage.v1" && body["scopes"] is JArray
+                ? body.ToString(Newtonsoft.Json.Formatting.None) : "";
+        } catch {
+            return "";
+        }
+    }" />
+    <choose>
+      <when condition="@((string)context.Variables["ccofUsageBody"] != "")">
+        <return-response>
+          <set-status code="200" reason="OK" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-header name="Cache-Control" exists-action="override">
+            <value>no-store</value>
+          </set-header>
+          <set-header name="x-ccof-request-id" exists-action="override">
+            <value>@(context.RequestId.ToString())</value>
+          </set-header>
+          <set-body>@((string)context.Variables["ccofUsageBody"])</set-body>
+        </return-response>
+      </when>
+      <otherwise>
+        <return-response>
+          <set-status code="503" reason="Service Unavailable" />
+          <set-header name="Retry-After" exists-action="override">
+            <value>%%RETRY_AFTER%%</value>
+          </set-header>
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-header name="Cache-Control" exists-action="override">
+            <value>no-store</value>
+          </set-header>
+          <set-header name="x-ccof-request-id" exists-action="override">
+            <value>@(context.RequestId.ToString())</value>
+          </set-header>
+          <set-body>@(new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(new JProperty("type", "api_error"), new JProperty("message", "Usage figures are temporarily unavailable. Your access to Claude is not affected. Retry in %%RETRY_AFTER%% seconds. Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None))</set-body>
+        </return-response>
+      </otherwise>
+    </choose>
+  </inbound>
+  <backend>
+    <!-- Never reached: inbound always returns. No <base />: nothing is forwarded to a model. -->
+    <return-response>
+      <set-status code="404" reason="Not Found" />
+    </return-response>
+  </backend>
+  <outbound />
+  <on-error>
+    <!-- A token APIM rejects (401) or the per-person limit (429); anything else is 500. No <base />. -->
+    <set-variable name="ccofUsageErrorStatus" value="@{
+        if ((context.LastError.Source ?? "") == "validate-jwt") { return 401; }
+        if ((context.LastError.PolicyId ?? "") == "ccof-usage-person") { return 429; }
+        return 500;
+    }" />
+    <set-variable name="ccofUsageRetryAfter" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ccofRetryAfter", "%%USAGE_PERIOD%%")))" />
+    <return-response>
+      <set-status code="@((int)context.Variables["ccofUsageErrorStatus"])" reason="@((int)context.Variables["ccofUsageErrorStatus"] == 401 ? "Unauthorized" : ((int)context.Variables["ccofUsageErrorStatus"] == 429 ? "Too Many Requests" : "Internal Server Error"))" />
+      <set-header name="Content-Type" exists-action="override">
+        <value>application/json</value>
+      </set-header>
+      <set-header name="Cache-Control" exists-action="override">
+        <value>no-store</value>
+      </set-header>
+      <set-header name="Retry-After" exists-action="@((int)context.Variables["ccofUsageErrorStatus"] == 429 ? "override" : "delete")">
+        <value>@((string)context.Variables["ccofUsageRetryAfter"])</value>
+      </set-header>
+      <set-header name="x-ccof-request-id" exists-action="override">
+        <value>@(context.RequestId.ToString())</value>
+      </set-header>
+      <set-body>@{
+          var status = (int)context.Variables["ccofUsageErrorStatus"];
+          var type = status == 401 ? "authentication_error" : status == 429 ? "rate_limit_error" : "api_error";
+          var message = status == 401 ? "Sign in to the gateway again (ccof-token login), then retry."
+              : status == 429 ? "Usage was asked for too often. Wait for the time in the Retry-After header."
+              : "The gateway hit an unexpected error reading usage. Retry; if this continues, tell your platform team.";
+          return new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(new JProperty("type", type), new JProperty("message", message + " Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None);
+      }</set-body>
+    </return-response>
+  </on-error>
+</policies>

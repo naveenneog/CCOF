@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([string]$ConfigPath, [string]$BackupRoot, [switch]$Confirmed)
+param([string]$ConfigPath, [string]$BackupRoot, [switch]$UsageStatusLine, [switch]$Confirmed)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClaudeCodeGateway.ps1')
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
@@ -11,4 +11,5 @@ $inventory = Get-CcofClientInventory
 Set-CcofClaudeCode -ConfigPath $ConfigPath -BackupRoot $BackupRoot -Inventory $inventory `
     -ClaudeHome (Join-Path $HOME '.claude') -VSCodeSettingsPath (Join-Path $env:APPDATA 'Code\User\settings.json') `
     -NodePath (Get-Command node -ErrorAction Stop).Source `
-    -TokenEntryPath (Join-Path $script:ClientRepoRoot 'client\bin\ccof-token.mjs') -Confirmed
+    -TokenEntryPath (Join-Path $script:ClientRepoRoot 'client\bin\ccof-token.mjs') `
+    -UsageEntryPath (Join-Path $script:ClientRepoRoot 'client\bin\ccof-usage.mjs') -UsageStatusLine:$UsageStatusLine -Confirmed

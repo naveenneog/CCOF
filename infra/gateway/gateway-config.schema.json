@@ -81,6 +81,16 @@
             "renewalPeriodSeconds": { "type": "integer", "minimum": 1, "maximum": 300 },
             "maxConcurrent": { "type": "integer", "minimum": 1, "maximum": 100000 }
           }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["calls", "renewalPeriodSeconds"],
+          "description": "Optional per-person limit of GET /ccof/me/usage (docs/USAGE.md); 10 calls per 60 s when absent.",
+          "properties": {
+            "calls": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "renewalPeriodSeconds": { "type": "integer", "minimum": 1, "maximum": 300 }
+          }
         }
       }
     },

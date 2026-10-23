@@ -26,6 +26,8 @@ param apim object
 param backends array
 @minLength(1)
 param policyXml string
+@description('The GET /ccof/me/usage operation policy (render.ts <apiId>.usage.policy.xml); empty leaves the operation out.')
+param usagePolicyXml string = ''
 
 param resolver object
 param sync object
@@ -97,6 +99,7 @@ module api '../quickstart/modules/apim-api.bicep' = {
     apiDisplayName: apim.apiDisplayName
     backends: [for b in backends: { id: b.id, url: b.url }]
     policyXml: policyXml
+    usagePolicyXml: usagePolicyXml
   }
 }
 

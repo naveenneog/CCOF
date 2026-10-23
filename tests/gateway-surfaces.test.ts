@@ -6,6 +6,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import { attr, descendants, parseApimXml } from "../infra/gateway/apim-xml.ts";
+import type { XmlElement } from "../infra/gateway/apim-xml.ts";
 import type { GatewayConfig } from "../infra/gateway/config.ts";
 import { renderPolicy } from "../infra/gateway/render.ts";
 import { sampleConfig } from "./helpers/gateway-fixtures.ts";
@@ -47,7 +48,7 @@ test("a group request whose surface is not allowed is refused before any token c
   const all = descendants(parseApimXml(renderPolicy(enforcedConfig as GatewayConfig).policyXml));
   const refusal = all.find((e) => e.name === "when" && attr(e, "condition") === '@(!(bool)context.Variables["ccofSurfaceAllowed"])');
   assert.ok(refusal, "a when branch tests ccofSurfaceAllowed");
-  const set = refusal.children.find((c) => c.name === "set-variable" && attr(c, "name") === "ccofRefusal");
+  const set = refusal.children.find((c): c is XmlElement => c.kind === "element" && c.name === "set-variable" && attr(c, "name") === "ccofRefusal");
   assert.equal(set && attr(set, "value"), "surface_not_allowed");
   const firstLimit = all.findIndex((e) => e.name === "llm-token-limit");
   assert.ok(all.indexOf(refusal) < firstLimit, "surface refusal precedes every token counter");
