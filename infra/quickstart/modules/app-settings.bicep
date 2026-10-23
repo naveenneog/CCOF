@@ -54,6 +54,8 @@ var resolverSettings = {
   RESOLVER_BUDGET_ENFORCEMENT: resolver.budgetEnforcement
   RESOLVER_BUDGET_STATE_GRACE_SECONDS: string(budgetState.graceSeconds)
   RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS: string(budgetState.hardLimitSeconds)
+  // GET /ccof/me/usage: whether a person also sees their scope's total (docs/USAGE.md). Off unless set.
+  RESOLVER_USAGE_GROUP_TOTALS: (resolver.?usageGroupTotals ?? false) ? 'true' : 'false'
 }
 
 // D2 writes the two budget-state settings only when budgetEnforcement is budget-state.

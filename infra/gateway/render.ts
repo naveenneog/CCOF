@@ -28,6 +28,8 @@ export const DEFAULT_OUT_DIR = path.join(HERE, "out");
 export interface Templates {
   main: string;
   fragments: Record<string, string>;
+  // The GET /ccof/me/usage operation policy (policy/my-usage.template.xml); loaded from disk when absent.
+  usage?: string;
 }
 
 export interface RenderResult {
@@ -37,7 +39,14 @@ export interface RenderResult {
   policySha256: string;
   configSha256: string;
   templateSha256: string;
+  usagePolicyXml: string;
+  usagePolicySha256: string;
+  usageTemplateSha256: string;
 }
+
+// admission.usage is optional (docs/USAGE.md): a configuration written before the usage operation existed
+// still renders, with this per-person limit for GET /ccof/me/usage.
+export const DEFAULT_USAGE_ADMISSION = { calls: 10, renewalPeriodSeconds: 60 } as const;
 
 // Static backends need a secret named value in the policy; every other
 // backend is routed by data (C-8) through the template's generic branches.
@@ -50,6 +59,7 @@ export function loadTemplates(): Templates {
   return {
     main: read("claude-messages.template.xml"),
     fragments: Object.fromEntries(Object.values(FRAGMENT_FOR).map((name) => [name, read(`${name}.xml`)])),
+    usage: read("my-usage.template.xml"),
   };
 }
 
@@ -133,6 +143,36 @@ function mainValues(config: GatewayConfig, backendBranches: string, digests: { c
   };
 }
 
+// The usage operation's values: the same token checks and resolver identity as the messages policy, the
+// resolver's /api/me/usage route next to /api/resolve, and the operation's own per-person limit.
+function usageValues(config: GatewayConfig, digests: { config: string; template: string }): Record<string, TemplateValue> {
+  const { entra, resolver, entitlementCache: cache } = config;
+  const tenant = entra.tenantId;
+  if (!/\/api\/resolve$/.test(resolver.url)) throw new Error("resolver.url must end with /api/resolve: the usage route is derived from it");
+  const admission = config.admission.usage ?? DEFAULT_USAGE_ADMISSION;
+  return {
+    CONFIGURATION_ID: config.configurationId,
+    CONFIG_SHA256: digests.config,
+    TEMPLATE_SHA256: digests.template,
+    TENANT_ID: tenant,
+    OPENID_CONFIG_URL: `${entra.authorityHost}/${tenant}/v2.0/.well-known/openid-configuration`,
+    ISSUER_V1: `${entra.v1IssuerHost}/${tenant}/`,
+    ISSUER_V2: `${entra.authorityHost}/${tenant}/v2.0`,
+    AUDIENCE_ELEMENTS: { xml: entra.audiences.map((a) => `<audience>${a}</audience>`).join("\n        ") },
+    DELEGATED_SCOPE: entra.delegatedScope,
+    DELEGATED_CLIENT_IDS: csharpStrings(entra.delegatedClientAppIds),
+    ALLOW_APP_ONLY: String(entra.testIdentities.allowAppOnlyTokens),
+    APP_ONLY_CLIENT_IDS: csharpStrings(entra.testIdentities.clientAppIds),
+    APP_ONLY_ROLE: entra.testIdentities.appRole ?? "",
+    USAGE_CALLS: String(admission.calls),
+    USAGE_PERIOD: String(admission.renewalPeriodSeconds),
+    RESOLVER_USAGE_URL: resolver.url.replace(/\/api\/resolve$/, "/api/me/usage"),
+    RESOLVER_AUDIENCE: resolver.tokenAudience,
+    RESOLVER_TIMEOUT: String(resolver.timeoutSeconds),
+    RETRY_AFTER: String(cache.unavailableRetryAfterSeconds),
+  };
+}
+
 // Every value offered to a template must be used by it: a renamed or deleted
 // placeholder must not silently drop a configured setting.
 function fill(text: string, values: Record<string, TemplateValue>, name: string): string {
@@ -152,9 +192,11 @@ export function renderPolicy(input: GatewayConfig, options: { templates?: Templa
   const templates: Templates = {
     main: lf(given.main),
     fragments: Object.fromEntries(Object.entries(given.fragments).map(([name, text]) => [name, lf(text)])),
+    usage: lf(given.usage ?? loadTemplates().usage ?? ""),
   };
+  const usageTemplate = templates.usage as string;
 
-  const literals = [["main", templates.main], ...Object.entries(templates.fragments)].flatMap(([name, text]) => findTemplateLiterals(text, name));
+  const literals = [["main", templates.main], ["usage", usageTemplate], ...Object.entries(templates.fragments)].flatMap(([name, text]) => findTemplateLiterals(text, name));
   if (literals.length > 0) throw new Error(`the template carries a literal environment value:\n - ${literals.join("\n - ")}`);
 
   const digests = {
@@ -169,6 +211,9 @@ export function renderPolicy(input: GatewayConfig, options: { templates?: Templa
     .join("\n");
   const policyXml = fill(templates.main, mainValues(config, branches, digests), "main");
   checkRendered(policyXml, config);
+  const usageTemplateSha256 = sha256(usageTemplate);
+  const usagePolicyXml = fill(usageTemplate, usageValues(config, { config: digests.config, template: usageTemplateSha256 }), "usage");
+  checkRendered(usagePolicyXml, config);
   return {
     configurationId: config.configurationId,
     apiId: config.apim.apiId,
@@ -176,6 +221,9 @@ export function renderPolicy(input: GatewayConfig, options: { templates?: Templa
     policySha256: sha256(policyXml),
     configSha256: digests.config,
     templateSha256: digests.template,
+    usagePolicyXml,
+    usagePolicySha256: sha256(usagePolicyXml),
+    usageTemplateSha256,
   };
 }
 
@@ -189,17 +237,19 @@ function checkRendered(policyXml: string, config: GatewayConfig): void {
   }
 }
 
-export function renderFromFile(configPath: string, outDir: string): { result: RenderResult; policyPath: string; manifestPath: string } {
+export function renderFromFile(configPath: string, outDir: string): { result: RenderResult; policyPath: string; usagePolicyPath: string; manifestPath: string } {
   const loaded = loadGatewayConfig(configPath);
   if (!loaded.ok) throw new Error(`configuration ${configPath} is invalid:\n - ${loaded.problems.join("\n - ")}`);
   const result = renderPolicy(loaded.config);
   mkdirSync(outDir, { recursive: true });
   const policyPath = path.join(outDir, `${result.apiId}.policy.xml`);
+  const usagePolicyPath = path.join(outDir, `${result.apiId}.usage.policy.xml`);
   const manifestPath = path.join(outDir, "render.json");
   writeFileSync(policyPath, result.policyXml, "utf8");
-  const { policyXml: _omitted, ...manifest } = result;
-  writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, policyFile: path.basename(policyPath) }, null, 2)}\n`, "utf8");
-  return { result, policyPath, manifestPath };
+  writeFileSync(usagePolicyPath, result.usagePolicyXml, "utf8");
+  const { policyXml: _omitted, usagePolicyXml: _omittedUsage, ...manifest } = result;
+  writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, policyFile: path.basename(policyPath), usagePolicyFile: path.basename(usagePolicyPath) }, null, 2)}\n`, "utf8");
+  return { result, policyPath, usagePolicyPath, manifestPath };
 }
 
 function main(argv: string[]): number {
@@ -219,9 +269,9 @@ function main(argv: string[]): number {
   try {
     const loaded = loadGatewayConfig(configPath);
     const outDir = args.get("out") ?? path.join(DEFAULT_OUT_DIR, loaded.ok ? loaded.config.configurationId : "invalid");
-    const { result, policyPath, manifestPath } = renderFromFile(configPath, outDir);
-    const { policyXml: _omitted, ...summary } = result;
-    process.stdout.write(`${JSON.stringify({ ...summary, policyPath, manifestPath })}\n`);
+    const { result, policyPath, usagePolicyPath, manifestPath } = renderFromFile(configPath, outDir);
+    const { policyXml: _omitted, usagePolicyXml: _omittedUsage, ...summary } = result;
+    process.stdout.write(`${JSON.stringify({ ...summary, policyPath, usagePolicyPath, manifestPath })}\n`);
     return 0;
   } catch (err: unknown) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);

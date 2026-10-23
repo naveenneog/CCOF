@@ -21,7 +21,7 @@ const anchor = "<inbound>";
 
 describe("template literals", () => {
   test("the committed template files carry no environment value", () => {
-    for (const [name, text] of Object.entries({ main: templates.main, ...templates.fragments })) {
+    for (const [name, text] of Object.entries({ main: templates.main, usage: templates.usage ?? "", ...templates.fragments })) {
       assert.deepEqual(findTemplateLiterals(text, name), [], `${name} carries a literal`);
     }
   });
@@ -62,13 +62,15 @@ describe("template literals", () => {
   });
 
   test("line endings do not change the digests, so Windows and Linux checkouts render the same policy", () => {
-    const crlf = { main: templates.main.replace(/\r?\n/g, "\r\n"), fragments: Object.fromEntries(Object.entries(templates.fragments).map(([k, v]) => [k, v.replace(/\r?\n/g, "\r\n")])) };
-    const lf = { main: templates.main.replace(/\r\n/g, "\n"), fragments: Object.fromEntries(Object.entries(templates.fragments).map(([k, v]) => [k, v.replace(/\r\n/g, "\n")])) };
+    const crlf = { main: templates.main.replace(/\r?\n/g, "\r\n"), usage: (templates.usage ?? "").replace(/\r?\n/g, "\r\n"), fragments: Object.fromEntries(Object.entries(templates.fragments).map(([k, v]) => [k, v.replace(/\r?\n/g, "\r\n")])) };
+    const lf = { main: templates.main.replace(/\r\n/g, "\n"), usage: (templates.usage ?? "").replace(/\r\n/g, "\n"), fragments: Object.fromEntries(Object.entries(templates.fragments).map(([k, v]) => [k, v.replace(/\r\n/g, "\n")])) };
     const a = renderPolicy(config, { templates: crlf });
     const b = renderPolicy(config, { templates: lf });
     assert.equal(a.policySha256, b.policySha256);
     assert.equal(a.templateSha256, b.templateSha256);
+    assert.equal(a.usagePolicySha256, b.usagePolicySha256);
     assert.doesNotMatch(a.policyXml, /\r/);
+    assert.doesNotMatch(a.usagePolicyXml, /\r/);
   });
 
   test("an unknown placeholder refuses", () => {

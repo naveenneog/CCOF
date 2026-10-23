@@ -48,8 +48,9 @@ try {
     $inventory = @{ CliVersion = '2.1.272'; VSCodeVersion = '2.1.289'; DesktopVersion = '2.2553.1.0' }
     $node = (Get-Command node -ErrorAction Stop).Source
     $entry = Join-Path $repo 'client/bin/ccof-token.mjs'
+    $usageEntry = Join-Path $repo 'client/bin/ccof-usage.mjs'
     $codeArgs = @{ ConfigPath = $configPath; ClaudeHome = $claudeHome; VSCodeSettingsPath = $vscodePath
-        BackupRoot = $backupRoot; Inventory = $inventory; NodePath = $node; TokenEntryPath = $entry }
+        BackupRoot = $backupRoot; Inventory = $inventory; NodePath = $node; TokenEntryPath = $entry; UsageEntryPath = $usageEntry }
     $settingsPath = Join-Path $claudeHome 'settings.json'
     $old = '{"theme":"dark","model":"old","env":{"KEEP_ME":"yes","CLAUDE_CODE_USE_FOUNDRY":"1"}}'
     [void][IO.Directory]::CreateDirectory($claudeHome)
@@ -105,6 +106,52 @@ try {
         Assert (-not ($shim -match '\baz\b|get-access-token')) 'Developer shim invokes Azure CLI'
         Assert ($shim -match 'exit /b %errorlevel%') 'Helper exit status not propagated'
     }
+    Test-Case 'the /usage skill and its wrapper are installed: the skill runs the wrapper through powershell -File, with forward slashes' {
+        $skillPath = Join-Path $claudeHome 'skills/usage/SKILL.md'
+        $wrapperPath = Join-Path $claudeHome 'ccof-usage.ps1'
+        Assert (Test-Path -LiteralPath $skillPath) 'Skill not installed'
+        $skill = [IO.File]::ReadAllText($skillPath)
+        Assert ($skill -match '(?s)^---\r?\nname: usage\r?\ndescription: .+\r?\n---\r?\n') 'Skill front matter missing or not named usage'
+        $expected = '!`powershell -NoProfile -ExecutionPolicy Bypass -File "' + $wrapperPath.Replace('\', '/') + '"`'
+        Assert ($skill.Contains($expected)) "Skill does not inject the wrapper's output: expected $expected"
+        Assert ($skill -match 'exactly as written') 'Skill does not tell Claude to show the figures unchanged'
+        $wrapper = [IO.File]::ReadAllText($wrapperPath)
+        Assert ($wrapper.Contains("`$env:CCOF_CONFIG_FILE = '")) 'Wrapper does not pin the config'
+        Assert ($wrapper.Contains('ccof-usage.mjs') -and $wrapper.Contains('exit $LASTEXITCODE')) 'Wrapper does not run ccof-usage or pass its exit code'
+        Assert (-not (Test-Path -LiteralPath (Join-Path $claudeHome 'ccof-usage.cmd'))) 'An unused .cmd shim was written'
+        $settings = Read-ClientJson $settingsPath
+        Assert (-not $settings.Contains('statusLine')) 'Status line set without -UsageStatusLine'
+    }
+    Test-Case 'the generated command runs ccof-usage in PowerShell and in Git Bash, the two shells Claude Code uses on Windows' {
+        $skill = [IO.File]::ReadAllText((Join-Path $claudeHome 'skills/usage/SKILL.md'))
+        $command = [regex]::Match($skill, '!`([^`]+)`').Groups[1].Value
+        Assert ($command) 'No command in the skill'
+        $ps = & pwsh -NoProfile -Command "$command --bogus-argument 2>&1" | Out-String
+        Assert ($ps -match 'Usage: ccof-usage \[--statusline\]') "PowerShell did not reach ccof-usage: $ps"
+        $bash = Join-Path ${env:ProgramFiles} 'Git\bin\bash.exe'
+        Assert (Test-Path -LiteralPath $bash) 'Git Bash not found: the Git Bash path cannot be tested on this machine'
+        $gb = & $bash -c "$command --bogus-argument 2>&1" | Out-String
+        Assert ($gb -match 'Usage: ccof-usage \[--statusline\]') "Git Bash did not reach ccof-usage: $gb"
+    }
+    Test-Case 'a usage path with a backtick, dollar sign or quote is refused before any file is written' {
+        $options = $codeArgs.Clone(); $options.ClaudeHome = Join-Path $work 'odd$home/.claude'
+        Refuses { Set-CcofClaudeCode @options -Confirmed } 'backtick'
+        Assert (-not (Test-Path -LiteralPath (Join-Path $options.ClaudeHome 'skills'))) 'Skill written for an unsafe path'
+    }
+    Test-Case '-UsageStatusLine sets the status line only when none exists' {
+        $home2 = Join-Path $work 'status/.claude'
+        $options = $codeArgs.Clone(); $options.ClaudeHome = $home2; $options.BackupRoot = Join-Path $work 'status-backups'
+        Set-CcofClaudeCode @options -UsageStatusLine -Confirmed | Out-Null
+        $set = Read-ClientJson (Join-Path $home2 'settings.json')
+        $want = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $home2 'ccof-usage.ps1').Replace('\', '/') + '" --statusline'
+        Assert ($set.statusLine.type -ceq 'command' -and $set.statusLine.command -ceq $want) "Status line not set to the usage wrapper: $($set.statusLine.command)"
+        $mine = @{ type = 'command'; command = 'my-own-statusline' }
+        $set.statusLine = $mine; Write-ClientJson (Join-Path $home2 'settings.json') $set
+        $result = Set-CcofClaudeCode @options -UsageStatusLine -Confirmed | ConvertFrom-Json -AsHashtable
+        $kept = Read-ClientJson (Join-Path $home2 'settings.json')
+        Assert ($kept.statusLine.command -ceq 'my-own-statusline') 'An existing status line was replaced'
+        Assert ($result.statusLine -ceq 'kept_existing') 'Keeping the existing status line was not reported'
+    }
     Test-Case 'restore detects later edits rather than overwriting them silently' {
         [IO.File]::AppendAllText($settingsPath, "`n")
         Refuses { Restore-ClientSnapshot -BackupPath (Join-Path $backupRoot $codeResult.changeId) -Kind 'claude-code' -Confirmed } 'changed'
@@ -114,6 +161,8 @@ try {
         Restore-ClientSnapshot -BackupPath (Join-Path $backupRoot $codeResult.changeId) -Kind 'claude-code' -Confirmed -AllowChangedFiles | Out-Null
         Assert ([IO.File]::ReadAllText($settingsPath) -ceq $old) 'Restore did not recover original bytes'
         Assert (-not (Test-Path (Join-Path $claudeHome 'ccof-token.cmd'))) 'New shim not removed'
+        Assert (-not (Test-Path (Join-Path $claudeHome 'ccof-usage.ps1'))) 'New usage wrapper not removed'
+        Assert (-not (Test-Path (Join-Path $claudeHome 'skills/usage/SKILL.md'))) 'New usage skill not removed'
         $vscode = Read-ClientJson $vscodePath
         Assert (-not $vscode.Contains('claudeCode.disableLoginPrompt')) 'Restore retained added key'
     }

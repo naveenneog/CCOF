@@ -21,6 +21,9 @@ param backends array
 @description('The policy rendered by infra/gateway/render.ts, or empty: then the API answers 503 until it is rendered (Core.D2Apim.psm1 InitialPolicy).')
 param policyXml string
 
+@description('The GET /ccof/me/usage operation policy rendered by infra/gateway/render.ts (<apiId>.usage.policy.xml), or empty: then the operation is not created (docs/USAGE.md).')
+param usagePolicyXml string = ''
+
 // scripts/Core.D2Apim.psm1 $script:InitialPolicy: the gateway never serves unchecked.
 var initialPolicy = '<policies><inbound><return-response><set-status code="503" reason="Service Unavailable" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header><set-body>{"type":"error","error":{"type":"api_error","message":"The gateway is not configured yet."}}</set-body></return-response></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
 
@@ -69,6 +72,29 @@ resource policy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
     value: empty(policyXml) ? initialPolicy : policyXml
   }
   dependsOn: [operation, apimBackends]
+}
+
+// The caller's own budget figures. Its operation policy has no <base />, so the API policy above does
+// not run for it (infra/gateway/policy/my-usage.template.xml).
+resource usageOperation 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = if (!empty(usagePolicyXml)) {
+  parent: api
+  name: 'get-my-usage'
+  properties: {
+    displayName: 'Get my usage'
+    method: 'GET'
+    urlTemplate: '/ccof/me/usage'
+    templateParameters: []
+    responses: []
+  }
+}
+
+resource usagePolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = if (!empty(usagePolicyXml)) {
+  parent: usageOperation
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: usagePolicyXml
+  }
 }
 
 output apiResourceId string = api.id

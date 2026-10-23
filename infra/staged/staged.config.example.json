@@ -213,7 +213,8 @@
     "cosmosRequestTimeoutMs": 2000,
     "cosmosRetryAttempts": 2,
     "cosmosRetryMaxWaitSeconds": 2,
-    "requestDeadlineMs": 4000
+    "requestDeadlineMs": 4000,
+    "usageGroupTotals": false
   },
   "sync": {
     "mode": "delegated-snapshot",
@@ -255,6 +256,10 @@
         "calls": 200,
         "renewalPeriodSeconds": 1,
         "maxConcurrent": 100
+      },
+      "usage": {
+        "calls": 10,
+        "renewalPeriodSeconds": 60
       }
     },
     "resolverTimeoutSeconds": 10,

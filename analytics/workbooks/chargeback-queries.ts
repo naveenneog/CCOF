@@ -152,7 +152,7 @@ const noneLabel = (base: string) =>
 
 // The chargeback report queries. `usage` is the result of usageQueryBase for the same settings, rate
 // card and ledger; `maxRows` bounds every row view.
-export function chargebackQueries(usage: UsageQueryBase, maxRows: number, groups: GroupMetadata[], options: ChargebackQueryOptions = {}): ChargebackQueries {
+export function chargebackQueries(usage: Omit<UsageQueryBase, "preamble">, maxRows: number, groups: GroupMetadata[], options: ChargebackQueryOptions = {}): ChargebackQueries {
   const prefix = usage.usageBase;
   if (!prefix.includes("let PricedUsage = LedgerRows")) throw new Error("workbook_source_contract_changed");
   let base = prefix.replace("let Ledger = CcofUsageLedger", "let RawLedger = CcofUsageLedger")

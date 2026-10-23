@@ -22,9 +22,53 @@ function New-CcofCodeEnvironment {
     return $envs
 }
 
+function New-CcofUsageWrapper {
+    <#
+    .SYNOPSIS
+        ~/.claude/ccof-usage.ps1: pins the client configuration and runs ccof-usage with the installed Node.
+        Run as `powershell -NoProfile -ExecutionPolicy Bypass -File "<path with forward slashes>"`, the form Claude
+        Code documents for Windows: it works whether Claude Code runs the command through Git Bash or PowerShell
+        (Claude Code docs, "Customize your status line", Windows configuration). -ExecutionPolicy Bypass applies
+        to that one process and does not override a Group Policy execution policy.
+    #>
+    param([string]$ConfigPath, [string]$NodePath, [string]$UsageEntryPath)
+    foreach ($value in @($ConfigPath, $NodePath, $UsageEntryPath)) {
+        if (-not [IO.Path]::IsPathFullyQualified($value) -or $value -match "[`r`n]") { throw 'Usage paths must be absolute and contain no line breaks.' }
+    }
+    $q = { param([string]$s) "'" + $s.Replace("'", "''") + "'" }
+    return "`$ErrorActionPreference = 'Stop'`r`n`$env:CCOF_CONFIG_FILE = $(& $q $ConfigPath)`r`n& $(& $q $NodePath) $(& $q $UsageEntryPath) @args`r`nexit `$LASTEXITCODE`r`n"
+}
+
+function Get-CcofUsageCommand {
+    param([Parameter(Mandatory)][string]$WrapperPath)
+    return "powershell -NoProfile -ExecutionPolicy Bypass -File `"$($WrapperPath.Replace('\', '/'))`""
+}
+
+function New-CcofUsageSkill {
+    <#
+    .SYNOPSIS
+        ~/.claude/skills/usage/SKILL.md (docs/USAGE.md). A personal skill named usage replaces the built-in
+        /usage in a local terminal session; /cost and /stats still run the built-in (Claude Code docs, "Extend
+        Claude with skills", skills that share a name). The !`command` line runs the wrapper before the skill
+        reaches Claude, so the figures come from the gateway, not from the model.
+    #>
+    param([Parameter(Mandatory)][string]$UsageCommand)
+    $lines = @(
+        '---'
+        'name: usage'
+        'description: Show the CCOF budget for Claude on this gateway - spent, budget and remaining this month in USD, as of the last cost run. Use when asked how much budget is used or left.'
+        '---'
+        "!``$UsageCommand``"
+        ''
+        'Show the lines above to the user exactly as written, as plain text. Do not recalculate, round, convert or estimate any figure, and do not add figures that are not above.'
+        'If a line asks the user to sign in or retry, repeat that instruction. For this session''s own cost estimate, the user can run /cost.'
+    )
+    return ($lines -join "`n") + "`n"
+}
+
 function Set-CcofClaudeCode {
     param([string]$ConfigPath, [string]$ClaudeHome, [string]$VSCodeSettingsPath, [string]$BackupRoot,
-        $Inventory, [string]$NodePath, [string]$TokenEntryPath, [switch]$Confirmed)
+        $Inventory, [string]$NodePath, [string]$TokenEntryPath, [string]$UsageEntryPath, [switch]$UsageStatusLine, [switch]$Confirmed)
     Assert-ClientConfirmation -Confirmed:$Confirmed
     if (-not $Inventory.CliVersion -and -not $Inventory.VSCodeVersion) {
         return (@{ event = 'not_installed'; component = 'claude-code' } | ConvertTo-Json -Compress)
@@ -62,6 +106,22 @@ function Set-CcofClaudeCode {
     $settings.enforceAvailableModels = $true
     $shim = New-ClientTokenShim $ConfigPath $NodePath $TokenEntryPath
     $paths = @($path, $helper)
+    $usageShimPath = Join-Path $ClaudeHome 'ccof-usage.ps1'
+    $skillPath = Join-Path $ClaudeHome 'skills/usage/SKILL.md'
+    $statusLineResult = 'not_requested'
+    if ($UsageEntryPath) {
+        # The command line is run by Git Bash or PowerShell: refuse characters either would expand in it.
+        if ($usageShimPath -match '[`$"]') { throw 'The Claude home path holds a backtick, dollar sign or quote, which the /usage skill command cannot carry; nothing was changed.' }
+        $usageShim = New-CcofUsageWrapper $ConfigPath $NodePath $UsageEntryPath
+        $usageCommand = Get-CcofUsageCommand $usageShimPath
+        $usageSkill = New-CcofUsageSkill $usageCommand
+        $paths += @($usageShimPath, $skillPath)
+        if ($UsageStatusLine) {
+            # Only when the person has no status line of their own; an existing one is never replaced.
+            if ($settings.Contains('statusLine')) { $statusLineResult = 'kept_existing' }
+            else { $settings.statusLine = [ordered]@{ type = 'command'; command = "$usageCommand --statusline" }; $statusLineResult = 'set' }
+        }
+    }
     if ($Inventory.VSCodeVersion) {
         $merged = @($entries | Where-Object {
             -not $envs.ContainsKey([string]$_.name) -and $_.name -notlike 'ANTHROPIC_FOUNDRY_*'
@@ -73,8 +133,9 @@ function Set-CcofClaudeCode {
     }
     $snapshot = New-ClientSnapshot 'claude-code' $paths $BackupRoot
     Write-ClientText $helper $shim
+    if ($UsageEntryPath) { Write-ClientText $usageShimPath $usageShim; Write-ClientText $skillPath $usageSkill }
     Write-ClientJson $path $settings
     if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId } | ConvertTo-Json -Compress)
+    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult } | ConvertTo-Json -Compress)
 }

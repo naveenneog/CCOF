@@ -14,6 +14,7 @@ import { readResolverConfig } from "./config.ts";
 import { createCosmosReads } from "./cosmos-reads.ts";
 import {
   handleHealthRequest,
+  handleMyUsageRequest,
   handleResolveRequest,
   hasPlatformPrincipal,
   isPlatformAuthEnabled,
@@ -31,6 +32,7 @@ const readiness: ResolverReadiness = config.ok
       ready: true,
       budgetEnforcement: config.config.budgetEnforcement,
       requestDeadlineMs: config.config.requestDeadlineMs,
+      usageGroupTotals: config.config.usageGroupTotals,
       reads: createCosmosReads({ ...config.config.cosmos, readDeadlineMs: config.config.requestDeadlineMs }),
     }
   : { ready: false, problems: config.problems };
@@ -60,6 +62,24 @@ async function resolveHandler(request: HttpRequest, context: InvocationContext):
 async function healthHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   return handleHealthRequest(requestContext(request), runtimeFor(context));
 }
+
+async function myUsageHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = undefined; // answered 400 after the authentication guards
+  }
+  return handleMyUsageRequest(requestContext(request, body), runtimeFor(context));
+}
+
+// POST /api/me/usage: the caller's own budget figures, for the gateway's GET /ccof/me/usage.
+app.http("myUsage", {
+  methods: ["POST"],
+  authLevel: "anonymous",
+  route: "me/usage",
+  handler: myUsageHandler,
+});
 
 app.http("resolve", {
   methods: ["POST"],

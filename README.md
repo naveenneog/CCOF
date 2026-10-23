@@ -52,8 +52,8 @@ separate controls. Optional reconciliation is not an inference-path dependency.
    with your own approved tenant, subscriptions, identities, groups and backend deployments.
    Never deploy the synthetic examples unchanged.
 4. Follow the selected guide. Review generated inputs before deployment.
-5. Read [client configuration](docs/CLIENTS.md), [sync](docs/SYNC.md) and
-   [chargeback](docs/CHARGEBACK.md) before accepting the result.
+5. Read [client configuration](docs/CLIENTS.md), [sync](docs/SYNC.md),
+   [chargeback](docs/CHARGEBACK.md) and [a person's own budget (`/usage`)](docs/USAGE.md) before accepting the result.
 
 Deployment creates billable Azure resources and requires explicit directory/resource
 permissions. No public test command deploys resources or sends paid Foundry traffic.

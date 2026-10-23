@@ -1,5 +1,18 @@
 # Change log
 
+## 2026-10-23 — `/usage`: a person's own budget in Claude Code
+
+- **Gateway:** `GET <gateway>/anthropic/ccof/me/usage` (operation `get-my-usage`). Same token checks as
+  `/v1/messages`; the resolver receives only the token's `oid`; its own per-person limit `admission.usage`
+  (optional, 10 per 60 s). `render.ts` also writes `<apiId>.usage.policy.xml`.
+- **Resolver:** `POST /api/me/usage` returns, per active scope, spent, budget and remaining (USD and CCU), percent
+  used, exhausted, period, as-of time and completeness, from the person's own `budgetState`; the scope total only
+  when `RESOLVER_USAGE_GROUP_TOTALS=true` (absent: hidden).
+- **Client:** `ccof-usage` and the Claude Code skill `/usage` (replaces the built-in `/usage` in a terminal session;
+  `/cost` still shows the session estimate); `-UsageStatusLine` adds a status line only when none is set.
+- **Staged:** Stage 5 deploys the operation and reads it back; `resolver.usageGroupTotals`, `gateway.admission.usage`.
+  [USAGE.md](USAGE.md), [ADR-0035](adr/0035-own-usage-through-the-gateway.md).
+
 ## 2026-10-23 — Staged: user names setting, Graph grant steps
 
 - `admin.userNamesEnabled` (default `false`) in the staged configuration; Stage 5 writes `ADMIN_USER_NAMES_ENABLED`.

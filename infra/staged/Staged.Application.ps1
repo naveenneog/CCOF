@@ -33,6 +33,8 @@ function Invoke-Stage5 {
     node (Join-Path $script:Repo 'infra/gateway/render.ts') --config $configPath --out (Join-Path $ctx.GeneratedDir 'gateway') | Out-Host
     if ($LASTEXITCODE) { throw 'render_failed: infra/gateway/render.ts refused the gateway configuration.' }
     $policy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.xml") -Raw
+    # GET /ccof/me/usage (docs/USAGE.md): render.ts writes its operation policy beside the API policy.
+    $usagePolicy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).usage.policy.xml") -Raw
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -49,7 +51,7 @@ function Invoke-Stage5 {
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
-        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policy
+        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policy; usagePolicyXml = $usagePolicy
         resolver = $Cfg.resolver; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
@@ -70,6 +72,13 @@ function Invoke-Stage5 {
     $api = Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)/apis/$($a.apiId)" '2024-05-01'
     Assert-Stg ($api.properties.path -ceq $a.apiPath) 'APIM API path differs'
     $v.api = @{ id = $a.apiId; path = $api.properties.path; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($policy))) -Algorithm SHA256).Hash }
+    $usageOp = Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)/apis/$($a.apiId)/operations/get-my-usage" '2024-05-01'
+    Assert-Stg ($usageOp.properties.method -ceq 'GET' -and $usageOp.properties.urlTemplate -ceq '/ccof/me/usage') 'APIM operation get-my-usage is missing or differs'
+    # The deployed policy, as APIM returns it (normalized XML, so not hash-comparable): it must be this
+    # operation's own policy, with its per-person limit and the resolver's usage route.
+    $usageDeployed = [string](Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)/apis/$($a.apiId)/operations/get-my-usage/policies/policy" '2024-05-01').properties.value
+    Assert-Stg ($usageDeployed.Contains('ccof-usage-person') -and $usageDeployed.Contains('/api/me/usage') -and $usageDeployed -notmatch '<base\s*/>') 'the deployed get-my-usage policy is not the rendered usage policy'
+    $v.usageOperation = @{ method = $usageOp.properties.method; urlTemplate = $usageOp.properties.urlTemplate; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($usagePolicy))) -Algorithm SHA256).Hash; deployedPolicyChecked = $true }
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }

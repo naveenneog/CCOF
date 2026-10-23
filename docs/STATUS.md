@@ -4,6 +4,27 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-USAGE — a person's own budget: `/usage` (complete offline; live blocked)
+
+- Gateway `GET /ccof/me/usage` (operation `get-my-usage`, own policy without `<base />`, token checks byte-equal to
+  the messages policy, only the token's `oid` sent, per-person `admission.usage`), resolver `POST /api/me/usage`
+  (point reads only; group totals behind `RESOLVER_USAGE_GROUP_TOTALS`, absent = hidden), client `ccof-usage` and the
+  Claude Code skill `/usage` with an opt-in status line. Stage 5 deploys and reads the operation back.
+  [USAGE.md](USAGE.md), [ADR-0035](adr/0035-own-usage-through-the-gateway.md).
+- Tests: resolver usage 13 + handler 7; gateway usage 9 (including compiled C# vectors); client 65 (usage 13);
+  installer 37, including the generated command run in real PowerShell and real Git Bash; staged 408; root 1166 pass,
+  0 fail; strict typecheck (`tsconfig.typecheck.json`, run by public CI) 0 errors, after fixing 9 test and type
+  errors left by earlier packets. Mutants 28/28 caught. Negative control, run as a mutation (not a committed test):
+  the unquoted backslash command form makes the real Git Bash test fail with the separator loss Claude Code documents.
+- Council round 1: all five BLOCK (group spend and cap exposed beyond "remaining"; directory display names in the
+  model's context; command not runnable under PowerShell; last month's group figure shown as current; state not
+  matched to classification). Round 2: QA BLOCK on the strict typecheck, others PASS. Round 3: QA PASS-WITH-NOTES.
+  All fixed with tests.
+- Not changed: restore removes `SKILL.md` but leaves an empty `skills\usage` folder.
+- Live: not run. Session `c9943014` was deploying a usage change to both lab resource groups
+  (`lab-stdv2-rg`, `lab-shared-foundry-rg`) from the protected `ccof-public-manual-update` checkout at the same
+  time (state files written 16:49-17:01); deploying from here would have overwritten it.
+
 ### G-NAMES — staged user names setting (complete)
 
 - `admin.userNamesEnabled` → `ADMIN_USER_NAMES_ENABLED` in Stage 5 ([stage5-config.bicep](../infra/staged/stage5-config.bicep));
@@ -26,6 +47,8 @@
   Identifier scan 0 hits; gitleaks only the known false positive; root 1137 pass; staged 398. The scrub's
   `git rm` had refused the re-checked-out images (staged files need `-f`); they were removed before the commit,
   and the script now uses `-f` and stops if any image path is still tracked or present.
+- Release 3 (2026-10-23): `b72e527`, the user names setting and the Graph grant steps (`670c715`). The script
+  removed the images itself; identifier scan 0; gitleaks no findings in the change; staged 400.
 
 ### G-TAG — user tags (complete, admin 3.4.0)
 

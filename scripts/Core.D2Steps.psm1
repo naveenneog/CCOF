@@ -133,6 +133,8 @@ function Get-CoreAppSettings {
     $r.RESOLVER_COSMOS_RETRY_MAX_WAIT_SECONDS = [string]$a.resolver.cosmosRetryMaxWaitSeconds
     $r.RESOLVER_REQUEST_DEADLINE_MS = [string]$a.resolver.requestDeadlineMs
     $r.RESOLVER_BUDGET_ENFORCEMENT = [string]$a.resolver.budgetEnforcement
+    # GET /ccof/me/usage (docs/USAGE.md): the group's remaining budget only when allowed; off by default.
+    $r.RESOLVER_USAGE_GROUP_TOTALS = if ($a.resolver.usageGroupTotals -eq $true) { 'true' } else { 'false' }
     if ($a.resolver.budgetEnforcement -eq 'budget-state') {
         $r.RESOLVER_BUDGET_STATE_GRACE_SECONDS = [string]$av.budgetState.graceSeconds
         $r.RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS = [string]$av.budgetState.hardLimitSeconds

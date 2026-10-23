@@ -53,6 +53,7 @@ test("the setting names are the documented app settings", () => {
     budgetEnforcement: "RESOLVER_BUDGET_ENFORCEMENT",
     budgetStateGraceSeconds: "RESOLVER_BUDGET_STATE_GRACE_SECONDS",
     budgetStateHardLimitSeconds: "RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS",
+    usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
   });
 });
 
@@ -63,6 +64,7 @@ test("a complete budget-state configuration is read exactly as set", () => {
       cosmos,
       requestDeadlineMs: 3000,
       budgetEnforcement: { mode: "budget-state", staleness: { graceSeconds: 600, hardLimitSeconds: 3600 } },
+      usageGroupTotals: false,
     },
   });
 });
@@ -135,7 +137,7 @@ test("budget-state mode requires both durations", () => {
 test("token-limits-only needs no duration and ignores any that is set", () => {
   const expected = {
     ok: true,
-    config: { cosmos, requestDeadlineMs: 3000, budgetEnforcement: { mode: "token-limits-only" } },
+    config: { cosmos, requestDeadlineMs: 3000, budgetEnforcement: { mode: "token-limits-only" }, usageGroupTotals: false },
   };
   assert.deepEqual(readResolverConfig(pilotEnv), expected);
   assert.deepEqual(

@@ -15,6 +15,10 @@ export const RESOLVER_SETTINGS = {
   budgetEnforcement: "RESOLVER_BUDGET_ENFORCEMENT",
   budgetStateGraceSeconds: "RESOLVER_BUDGET_STATE_GRACE_SECONDS",
   budgetStateHardLimitSeconds: "RESOLVER_BUDGET_STATE_HARD_LIMIT_SECONDS",
+  // GET /ccof/me/usage (src/resolver/my-usage.ts): whether a person also sees their scope's total. The one
+  // optional setting: absent means hidden, the private choice, so a resolver deployed before this setting
+  // existed keeps running. A value other than exactly "true" or "false" is reported like any other.
+  usageGroupTotals: "RESOLVER_USAGE_GROUP_TOTALS",
 } as const;
 
 // The Cosmos client's limits are availability settings (ADR-0014 decision 6):
@@ -33,6 +37,7 @@ export interface ResolverConfig {
   // it the resolver answers 503 and stops its reads.
   requestDeadlineMs: number;
   budgetEnforcement: BudgetEnforcement;
+  usageGroupTotals: boolean;
 }
 
 export type ConfigProblemCode =
@@ -43,6 +48,7 @@ export type ConfigProblemCode =
   | "unknown_mode"
   | "not_whole_seconds"
   | "out_of_range"
+  | "not_boolean"
   | "grace_exceeds_hard_limit";
 
 export interface ConfigProblem {
@@ -84,6 +90,9 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
   // The durations matter only to budget-state; without a known mode it is not
   // yet known whether they are required.
   const staleness = mode === "budget-state" ? readStaleness(read, report) : undefined;
+  const groupTotalsRaw = env[RESOLVER_SETTINGS.usageGroupTotals];
+  const usageGroupTotals = groupTotalsRaw === undefined || groupTotalsRaw === "" ? false : groupTotalsRaw === "true" ? true : groupTotalsRaw === "false" ? false : undefined;
+  if (usageGroupTotals === undefined) report(RESOLVER_SETTINGS.usageGroupTotals, "not_boolean");
 
   if (
     problems.length > 0 ||
@@ -93,7 +102,8 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
     retryAttempts === undefined ||
     retryMaxWaitSeconds === undefined ||
     requestDeadlineMs === undefined ||
-    mode === undefined
+    mode === undefined ||
+    usageGroupTotals === undefined
   ) {
     return { ok: false, problems };
   }
@@ -105,6 +115,7 @@ export function readResolverConfig(env: Env): ResolverConfigResult {
       cosmos: { endpoint, databaseName, requestTimeoutMs, retryAttempts, retryMaxWaitSeconds },
       requestDeadlineMs,
       budgetEnforcement,
+      usageGroupTotals,
     },
   };
 }

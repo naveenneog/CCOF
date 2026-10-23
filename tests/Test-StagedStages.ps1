@@ -42,7 +42,7 @@ $boundaries = [ordered]@{
     'infra\staged\stage3-grants.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Authorization/roleAssignments',
         'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')
     'infra\staged\stage5-config.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Web/sites/config', 'Microsoft.ApiManagement/service/apis',
-        'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/loggers',
+        'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/apis/operations/policies', 'Microsoft.ApiManagement/service/loggers',
         'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks')
 }
 $arms = @{}
@@ -100,6 +100,15 @@ Assert-Contract ($appText -match 'groupSearchEnabled = \(\$Cfg\.admin\.groupSear
 # User names on the admin console (User tags page, Developers view): Graph User.Read.All, off by default.
 Assert-Contract ($stage5Text -match "ADMIN_USER_NAMES_ENABLED: \(admin\.\?userNamesEnabled \?\? false\) \? 'true' : 'false'") 'Stage 5 must set ADMIN_USER_NAMES_ENABLED from admin.userNamesEnabled, off by default.'
 Assert-Contract ($appText -match 'userNamesEnabled = \(\$Cfg\.admin\.userNamesEnabled -eq \$true\)' -and $example.admin.userNamesEnabled -eq $false) 'Stage 5 must pass admin.userNamesEnabled; the example shows it as false.'
+# GET /ccof/me/usage (docs/USAGE.md): Stage 5 deploys the operation policy render.ts writes, and the resolver setting.
+$apiModule = Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\apim-api.bicep')
+$settingsModule = Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')
+Assert-Contract ($appText -match '\$usagePolicy = Get-Content -LiteralPath \(Join-Path \$ctx\.GeneratedDir "gateway/\$\(\$Cfg\.apim\.apiId\)\.usage\.policy\.xml"\) -Raw' -and $appText -match 'usagePolicyXml = \$usagePolicy') 'Stage 5 must pass the rendered usage policy to the template.'
+Assert-Contract ($stage5Text -match 'usagePolicyXml: usagePolicyXml') 'stage5-config.bicep must hand usagePolicyXml to the API module.'
+Assert-Contract ($apiModule -match "name: 'get-my-usage'" -and $apiModule -match "method: 'GET'" -and $apiModule -match "urlTemplate: '/ccof/me/usage'" -and $apiModule -match "operations/policies@[0-9-]+' = if \(!empty\(usagePolicyXml\)\)") 'The API module must create GET /ccof/me/usage with its operation policy when one is supplied.'
+Assert-Contract ($appText -match "operations/get-my-usage" -and $appText -match "APIM operation get-my-usage is missing or differs" -and $appText -match "operations/get-my-usage/policies/policy" -and $appText -match "the deployed get-my-usage policy is not the rendered usage policy") 'Stage 5 must read the usage operation and its deployed policy back.'
+Assert-Contract ($settingsModule -match "RESOLVER_USAGE_GROUP_TOTALS: \(resolver\.\?usageGroupTotals \?\? false\) \? 'true' : 'false'" -and $example.resolver.usageGroupTotals -eq $false) 'The resolver must get RESOLVER_USAGE_GROUP_TOTALS, off by default; the example shows false.'
+Assert-Contract ($example.gateway.admission.usage.calls -eq 10 -and $example.gateway.admission.usage.renewalPeriodSeconds -eq 60) 'The example must show the usage operation''s per-person limit.'
 Assert-Contract ($appText -match '\$config\.entra\.surfaceClients = @\(\$Cfg\.gateway\.surfaceClients') 'Stage 5 must copy gateway.surfaceClients into the gateway configuration.'
 Assert-Contract ($example.gateway.ContainsKey('surfaceClients') -and @($example.gateway.surfaceClients).Count -eq 0 -and $example.admin.groupSearchEnabled -eq $false) 'The example configuration must show gateway.surfaceClients (empty) and admin.groupSearchEnabled (false).'
 

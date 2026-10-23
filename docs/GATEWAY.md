@@ -9,7 +9,7 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 
 | Path | What it is |
 |---|---|
-| `infra/gateway/gateway-config.schema.json` | The configuration contract. Every value is required; none has a default |
+| `infra/gateway/gateway-config.schema.json` | The configuration contract. Every value is required and has no default, except the optional `admission.usage` (10 per 60 s when absent, [USAGE.md](USAGE.md)) |
 | `infra/gateway/config/<env>.json` | One environment's values (`sample-pilot.json` for the PoC). No secrets: a backend secret is referenced by the name of an APIM secret named value |
 | `infra/gateway/policy/` | The policy template and the per-credential backend fragments. No environment value may appear in them; the renderer refuses one that does |
 | `infra/gateway/render.ts` | Validates a configuration and renders the policy |
@@ -138,6 +138,13 @@ node infra/gateway/render.ts --config infra/gateway/config/sample-pilot.json
 
 Prints the configuration id, the policy, configuration and template SHA-256 digests and the output path.
 A missing or invalid value is refused with the field named; nothing is written.
+
+It also writes `<apiId>.usage.policy.xml`: the operation policy of `GET /ccof/me/usage`, a person's own
+budget figures, from `policy/my-usage.template.xml` (its digests are `usagePolicySha256` and
+`usageTemplateSha256`). Its token checks are the messages policy's, held equal by a test; it has no
+`<base />`, sends the resolver only the token's `oid`, and has its own per-person limit
+(`admission.usage`, optional, 10 per 60 s). Stage 5 of the staged deployment creates the operation;
+`Deploy-GatewayRevision.ps1` deploys only the API policy. See [USAGE.md](USAGE.md).
 
 ## Deploy a new revision (never current)
 
