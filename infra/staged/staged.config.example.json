@@ -299,7 +299,8 @@
   "admin": {
     "v3Enabled": true,
     "extraAllowedClientIds": [],
-    "groupSearchEnabled": false
+    "groupSearchEnabled": false,
+    "userNamesEnabled": false
   },
   "acceptance": {
     "selectorNote": "Requests carry no project selector: the caller's group with the higher month-to-date spend applies (ADR-0034).",

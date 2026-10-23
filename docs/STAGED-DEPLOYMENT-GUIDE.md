@@ -127,7 +127,7 @@ Stage 1 has created the identities. None is required to finish Stages 0 to 8.
 | --- | --- | --- | --- |
 | Sync | `GroupMember.Read.All` | Read the direct members of onboarded groups | The sync timer is turned on (`sync.mode: application-permission`). Without it, Stage 7 loads members from a delegated snapshot |
 | Sync | `User.Read.All`, `Application.Read.All` | Detect disabled and deleted members | Same |
-| Admin | `User.Read.All` | Show names beside object IDs (`ADMIN_USER_NAMES_ENABLED=true`) | Optional ([ADR-0032](adr/0032-admin-directory-user-labels.md)) |
+| Admin | `User.Read.All` | Show names beside object IDs (`admin.userNamesEnabled`, which sets `ADMIN_USER_NAMES_ENABLED=true`) on the User tags page and Developers view | Optional ([ADR-0032](adr/0032-admin-directory-user-labels.md)) |
 | Admin | `Group.ReadBasic.All`, `GroupMember.ReadBasic.All` | Search Entra groups and show the member count when onboarding (`admin.groupSearchEnabled`) | Optional; without it the admin pastes the group's Object ID ([ADMIN-API.md](ADMIN-API.md)) |
 
 Least-privilege sources: [List group members](https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0)
@@ -191,6 +191,7 @@ Settings added for group onboarding:
 | `client.group` | `CCOF-PILOT01` | The group entry (by `groupDisplayName` or `groupId`) the developer client file is written for, with `client.models`. The client sends the group's object ID as the project selector |
 | `acceptance` | no `project` | Stage 8 requests without a project selector, and checks in the usage trace that every request was charged to the pilot group. With more than one group entry, `acceptance.expectedGroup` names the expected one (`groupDisplayName` or `groupId`) |
 | `admin.groupSearchEnabled` | `false` | Sets `ADMIN_GROUP_SEARCH_ENABLED` on the admin app (Stage 5). Requires the admin Graph grants in section 6.1; without them the admin API answers `502 group_directory_permission_required`. Ignored when `stage1.includeAdmin` is `false` |
+| `admin.userNamesEnabled` | `false` | Sets `ADMIN_USER_NAMES_ENABLED` on the admin app (Stage 5): people's names beside object IDs (User tags page, Developers view). Requires the admin identity's `User.Read.All` (section 6.1); without it the console shows object IDs only |
 | `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
 The state of each stage is written next to the configuration file in `.staged-state/state.json`. One
@@ -378,14 +379,24 @@ $state.stages['1'].outputs.principals['sync']
 ```
 
 ```powershell
-# Admin console: group search and member count (then set admin.groupSearchEnabled to true and rerun Stage 5)
-pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<admin principal id>' -Permissions Group.ReadBasic.All,GroupMember.ReadBasic.All -PlanOnly
-pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<admin principal id>' -Permissions Group.ReadBasic.All,GroupMember.ReadBasic.All
+# Admin console: group search and member counts (onboarding, User tags member picker) and people's names
+# (User tags page, Developers view). Then set admin.groupSearchEnabled and admin.userNamesEnabled to true
+# in the configuration and rerun Stage 5, which writes ADMIN_GROUP_SEARCH_ENABLED and ADMIN_USER_NAMES_ENABLED.
+pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<admin principal id>' -Permissions Group.ReadBasic.All,GroupMember.ReadBasic.All,User.Read.All -PlanOnly
+pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<admin principal id>' -Permissions Group.ReadBasic.All,GroupMember.ReadBasic.All,User.Read.All
 
-# Sync: read group members on a timer
+# Sync: read group members on a timer (then set syncTimerEnabled to true and rerun Stage 5)
 pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<sync principal id>' -PlanOnly
 pwsh -File infra/quickstart/Grant-SyncGraphPermissions.ps1 -SyncPrincipalId '<sync principal id>'
 ```
+
+`-PlanOnly` prints what would be granted and changes nothing. The helper refuses with "REFUSED: the signed-in
+account holds no active Privileged Role Administrator or Global Administrator role" when the role is not active;
+after activating it in PIM, `az login` again so the new token carries the role. Graph application permissions
+reach the app as roles in its managed identity token, which the platform caches for about 24 hours; a new grant
+can take several hours to take effect, and a token refresh cannot be forced
+([Learn: limitation of using managed identities for authorization](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identity-best-practice-recommendations#limitation-of-using-managed-identities-for-authorization)).
+Until then group search answers `502 group_directory_permission_required` and names show as object IDs.
 
 Portal equivalent: workbook section 16. A managed identity has no API-permissions page in the
 Portal, so the Portal path is: activate the role in **Privileged Identity Management → My roles**,

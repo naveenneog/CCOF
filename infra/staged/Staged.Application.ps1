@@ -43,6 +43,7 @@ function Invoke-Stage5 {
     if ($admin.enabled) {
         $admin += @{ uiClientId = $entra.admin.appId; editorIds = @(); readerIds = @(); v3Enabled = ($Cfg.admin.v3Enabled -ne $false); extraAllowedClientIds = @($Cfg.admin.extraAllowedClientIds | Where-Object { $_ -match $script:Guid })
             groupSearchEnabled = ($Cfg.admin.groupSearchEnabled -eq $true)
+            userNamesEnabled = ($Cfg.admin.userNamesEnabled -eq $true)
             clientId = $entra.registrations.developerSignIn.appId; gatewayUrl = $ctx.GatewayUrl; projectHeader = $Cfg.gateway.projectHeaderName }
     }
     $params = @{

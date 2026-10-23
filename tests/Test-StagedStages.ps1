@@ -97,6 +97,9 @@ $appText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Application.ps
 $example = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable
 Assert-Contract ($stage5Text -match "ADMIN_GROUP_SEARCH_ENABLED: \(admin\.\?groupSearchEnabled \?\? false\) \? 'true' : 'false'") 'Stage 5 must set ADMIN_GROUP_SEARCH_ENABLED from admin.groupSearchEnabled, off by default.'
 Assert-Contract ($appText -match 'groupSearchEnabled = \(\$Cfg\.admin\.groupSearchEnabled -eq \$true\)') 'Stage 5 must pass admin.groupSearchEnabled to the template.'
+# User names on the admin console (User tags page, Developers view): Graph User.Read.All, off by default.
+Assert-Contract ($stage5Text -match "ADMIN_USER_NAMES_ENABLED: \(admin\.\?userNamesEnabled \?\? false\) \? 'true' : 'false'") 'Stage 5 must set ADMIN_USER_NAMES_ENABLED from admin.userNamesEnabled, off by default.'
+Assert-Contract ($appText -match 'userNamesEnabled = \(\$Cfg\.admin\.userNamesEnabled -eq \$true\)' -and $example.admin.userNamesEnabled -eq $false) 'Stage 5 must pass admin.userNamesEnabled; the example shows it as false.'
 Assert-Contract ($appText -match '\$config\.entra\.surfaceClients = @\(\$Cfg\.gateway\.surfaceClients') 'Stage 5 must copy gateway.surfaceClients into the gateway configuration.'
 Assert-Contract ($example.gateway.ContainsKey('surfaceClients') -and @($example.gateway.surfaceClients).Count -eq 0 -and $example.admin.groupSearchEnabled -eq $false) 'The example configuration must show gateway.surfaceClients (empty) and admin.groupSearchEnabled (false).'
 

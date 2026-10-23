@@ -4,6 +4,12 @@
 
 **Active packet:** G9 — live verification, partial ([ROADMAP](ROADMAP.md)).
 
+### G-NAMES — staged user names setting (complete)
+
+- `admin.userNamesEnabled` → `ADMIN_USER_NAMES_ENABLED` in Stage 5 ([stage5-config.bicep](../infra/staged/stage5-config.bicep));
+  guide section 6.1 grants `User.Read.All` with the group permissions and cites the ~24-hour managed identity token
+  cache. Staged 400 checks; the mutant (setting not passed) is caught; template builds offline (isolated az profile).
+
 ### G-PUB — public repository (complete)
 
 - `https://github.com/naveenneog/CCOF` (public) holds one commit, `95f0b86`, made from this tree on the orphan
