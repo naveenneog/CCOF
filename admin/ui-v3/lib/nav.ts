@@ -1,0 +1,15 @@
+export const NAV = [
+  { id: "overview", label: "Overview", icon: "overview" },
+  { id: "groups", label: "Groups", icon: "groups" },
+  { id: "projects", label: "Legacy projects", icon: "projects" },
+  { id: "chargeback", label: "Chargeback", icon: "chargeback" },
+  { id: "user-tags", label: "User tags", icon: "user" },
+  { id: "budgets", label: "Budgets", icon: "budgets" },
+  { id: "reconciler", label: "Reconciler", icon: "reconciler" },
+  { id: "foundry", label: "Foundry", icon: "foundry" },
+  { id: "health", label: "Health", icon: "health" },
+  { id: "audit", label: "Audit", icon: "audit" },
+  { id: "removal-limits", label: "Removal limits", icon: "shield" },
+  { id: "cost-definitions", label: "Cost definitions", icon: "cost" },
+  { id: "help", label: "Help", icon: "help" },
+];

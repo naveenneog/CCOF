@@ -45,7 +45,7 @@ export function Projects({ query }: { query: URLSearchParams }) {
 
   return (
     <div className="page">
-      <PageHeader title="Projects" subtitle="Search and filter run on the server; 25 projects a page." observedAt={list.observedAt} onRefresh={list.reload} busy={list.loading}
+      <PageHeader title="Legacy projects" subtitle="Projects from the earlier model. New teams are onboarded under Groups. 25 projects a page." observedAt={list.observedAt} onRefresh={list.reload} busy={list.loading}
         actions={session.canWrite && <a className="btn btn-primary" href={href("/projects/new")}>New project</a>} />
       <div className="filter-bar" role="search" aria-label="Filter projects">
         <Field label="Search">{(id) => <input id={id} className="input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or project ID" autoComplete="off" spellCheck={false} />}</Field>
