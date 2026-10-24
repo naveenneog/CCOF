@@ -13,7 +13,7 @@
   quickstart Bicep and Core D2 parity.
 - Tests: guard 5 (mutants 4/4), settings 2, `/usage` 2, client 1, staged contract (467). Root 1201 pass.
 - Live: USD 14 budget at 80.4%: warning shown at once; final USD 13.84 (-1.1%), against +12.5% recorded / +19.7%
-  list before. Spend USD 2.59.
+  list before. Spend USD 2.59. Council round 2 all PASS. Public release 9: `5b82caa`, CI passes (Node 22, 26).
 ### G-LIMIT live acceptance (2026-10-24)
 
 - New staged deployment from the guide, Stages 0–8 verified, lab subscription, resource group `ccof-e2e-20261024-rg`
