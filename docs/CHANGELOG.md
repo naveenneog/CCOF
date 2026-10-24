@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-10-24 — Budget guard: warning at 80% and bounded overshoot
+
+- Optional `reconciler.budgetGuard` (`warnPercent`, `overshootPercent`, `projectionMinutes`; example 80 / 5 / 5).
+  The reconciler projects the spend the reporting lag hides, warns from the warn percent and slows requests
+  so the budget is not exceeded, and always limits the spend rate ([ADR-0040](adr/0040-budget-guard.md)).
+- `/usage` returns `warning` and `projectedPercent`; the Claude Code `/usage` text and status line show the warning.
+- Live: a USD 14 budget ended at USD 13.84 under the same load that took a USD 10 budget to USD 11.97.
 ## 2026-10-24 — Live budget, family-limit and chargeback acceptance; fixes found live
 
 - **Group usage now reaches budgets and chargeback.** Kusto types a GUID-shaped string in a dynamic value as `guid`;

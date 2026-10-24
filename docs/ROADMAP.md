@@ -38,6 +38,7 @@
 | G-DOC — Staged deployment guide | Complete | [STAGED-DEPLOYMENT-GUIDE.md](STAGED-DEPLOYMENT-GUIDE.md): prerequisites (network, Entra apps and what creating each needs), Portal steps and Cloud Shell helper scripts per stage, using the staged configuration files |
 | G-LIMIT — Live budget and group acceptance | Complete (live) | USD 10 through the gateway, family limit, higher-spend selection, bypass attempts, WBS ID chargeback, guide walkthrough ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)). Open: E2E-01 |
 | G-FRAG — Policy fragment cleanup | Pending | Content-addressed fragments (ADR-0039) from earlier policies stay in API Management. Remove fragments no API policy or revision references, after a deployment verifies |
+| G-GUARD — Budget guard | Complete (live) | Projected spend, rate guard, 80% warning in `/usage` and the status line; USD 14 budget ended 1.1% under ([ADR-0040](adr/0040-budget-guard.md)) |
 
 ## Earlier packets
 

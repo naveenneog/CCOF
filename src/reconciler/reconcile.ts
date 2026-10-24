@@ -11,8 +11,16 @@ import type { AggregateBudgetStateDocument, BudgetStateDocument, ScopeTally, Sta
 import type { BudgetPeriod } from "./period.ts";
 import type { ClassifiedRow } from "./price-rows.ts";
 import { buildGroupState } from "./reconcile-group.ts";
-import { buildPersonState } from "./reconcile-person.ts";
+import { buildPersonState, RATE_WINDOW_MINUTES } from "./reconcile-person.ts";
 import type { Registry, RegistryProblem } from "./registry.ts";
+
+// ADR-0040: all three settings or none (reconciler settings RECONCILER_BUDGET_WARN_PERCENT, RECONCILER_OVERSHOOT_PERCENT,
+// RECONCILER_PROJECTION_MINUTES).
+export interface BudgetGuard {
+  warnPercent: number;
+  overshootPercent: number;
+  projectionMinutes: number;
+}
 
 export interface ReconcileInput {
   registry: Registry;
@@ -22,6 +30,7 @@ export interface ReconcileInput {
   period: BudgetPeriod;
   computedAt: Date;
   validUntil: Date;
+  guard?: BudgetGuard;
 }
 
 export interface ScopeProblem {
@@ -87,6 +96,9 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
   let unattributedCcu: Decimal = new Money(0);
   let maxIngestionDelaySeconds: number | null = null;
   let newest: ClassifiedRow | null = null;
+  // Spend ingested in the last RATE_WINDOW_MINUTES, per person and project: the recent rate (ADR-0040).
+  const recentFromMs = input.computedAt.getTime() - RATE_WINDOW_MINUTES * 60_000;
+  const recentCcu = new Map<string, Decimal>();
 
   for (const row of rows) {
     if (row.ingestionDelaySeconds !== null) {
@@ -109,6 +121,10 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
     if (!registry.scopes.has(scopeId)) counts.unregisteredScopeRequests += 1;
     add(personTallies, `${attribution.personKey}|${attribution.projectId}`, outcome);
     add(groupTallies, scopeId, outcome);
+    if (input.guard && outcome.kind !== "unpriced" && row.ingestedAtMs !== null && row.ingestedAtMs > recentFromMs) {
+      const key = `${attribution.personKey}|${attribution.projectId}`;
+      recentCcu.set(key, (recentCcu.get(key) ?? new Money(0)).plus(outcome.ccu));
+    }
   }
 
   const stamp: StateStamp = {
@@ -135,7 +151,8 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
     .map((member) => {
       const tally = personTallies.get(personKeyOf(member.personId, member.projectId)) ?? emptyTally();
       const scope = registry.scopes.get(member.scopeId) as (typeof scopes)[number];
-      return { doc: buildPersonState(member, scope, tally, worstCase.get(member.scopeId) as Decimal, stamp), tally };
+      const guard = input.guard ? { ...input.guard, recentCcu: recentCcu.get(personKeyOf(member.personId, member.projectId)) ?? new Money(0) } : undefined;
+      return { doc: buildPersonState(member, scope, tally, worstCase.get(member.scopeId) as Decimal, stamp, guard), tally };
     })
     .sort(byKey((p) => p.doc.id));
 

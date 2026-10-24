@@ -23,9 +23,10 @@ export function buildPersonState(
   tally: ScopeTally,
   worstCaseCcuPerToken: Decimal,
   stamp: StateStamp,
+  guard?: PersonGuardInput,
 ): BudgetStateDocument {
   const exhausted = tally.spentCcu.greaterThanOrEqualTo(scope.personBudgetCcu);
-  return {
+  const doc: BudgetStateDocument = {
     id: `${member.personId}:${member.projectId}`,
     personId: member.personId,
     projectId: member.projectId,
@@ -43,6 +44,28 @@ export function buildPersonState(
       ? 0
       : computeCeilingTokensFromCcu(scope.personBudgetCcu.minus(tally.spentCcu), worstCaseCcuPerToken),
   };
+  return guard ? applyBudgetGuard(doc, scope.personBudgetCcu, tally.spentCcu, worstCaseCcuPerToken, guard) : doc;
+}
+
+// ADR-0040. Settings: warn percent, overshoot percent, projection minutes; recentCcu is the spend ingested in the
+// last RATE_WINDOW_MINUTES.
+export const RATE_WINDOW_MINUTES = 5;
+export interface PersonGuardInput {
+  warnPercent: number;
+  overshootPercent: number;
+  projectionMinutes: number;
+  recentCcu: Decimal;
+}
+
+function applyBudgetGuard(doc: BudgetStateDocument, budget: Decimal, spent: Decimal, worst: Decimal, g: PersonGuardInput): BudgetStateDocument {
+  const projected = spent.plus(g.recentCcu.dividedBy(RATE_WINDOW_MINUTES).times(g.projectionMinutes));
+  const warning = projected.greaterThanOrEqualTo(budget.times(g.warnPercent).dividedBy(100));
+  // The spend the lag hides is at most overshootPercent of the budget.
+  let ceiling = Math.min(doc.realtimeCeilingTokensPerMinute,
+    computeCeilingTokensFromCcu(budget.times(g.overshootPercent).dividedBy(100).dividedBy(g.projectionMinutes), worst));
+  // After the warning the allowance shrinks to zero as projected spend reaches the budget.
+  if (warning) ceiling = Math.min(ceiling, computeCeilingTokensFromCcu(budget.minus(projected).dividedBy(g.projectionMinutes), worst));
+  return { ...doc, realtimeCeilingTokensPerMinute: ceiling, projectedCcu: projected.toFixed(), warning };
 }
 
 export interface ReconcilePersonInput {

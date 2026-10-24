@@ -122,6 +122,14 @@ var reconcilerSettings = {
   'AzureWebJobs.reconcileBudgets.Disabled': reconciler.timerEnabled ? 'false' : 'true'
 }
 
+// ADR-0040: the budget guard, written only when reconciler.budgetGuard is set (all three values or none).
+var reconcilerGuard = reconciler.?budgetGuard
+var reconcilerGuardSettings = reconcilerGuard == null ? {} : {
+  RECONCILER_BUDGET_WARN_PERCENT: string(reconcilerGuard.warnPercent)
+  RECONCILER_OVERSHOOT_PERCENT: string(reconcilerGuard.overshootPercent)
+  RECONCILER_PROJECTION_MINUTES: string(reconcilerGuard.projectionMinutes)
+}
+
 resource resolverSite 'Microsoft.Web/sites@2024-04-01' existing = {
   name: names.apps.resolver.functionApp
 }
@@ -149,7 +157,7 @@ resource syncAppSettings 'Microsoft.Web/sites/config@2024-04-01' = {
 resource reconcilerAppSettings 'Microsoft.Web/sites/config@2024-04-01' = {
   parent: reconcilerSite
   name: 'appsettings'
-  properties: reconcilerSettings
+  properties: union(reconcilerSettings, reconcilerGuardSettings)
 }
 
 // infra/poc/resolver-auth.ps1, New-ResolverAuthSettingsBody: v2 issuer, the resolver API audience,

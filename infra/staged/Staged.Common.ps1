@@ -54,6 +54,15 @@ function Read-StgConfig {
     } elseif ($c.resolver.requireCompleteUsage -eq $true -and $c.resolver.budgetEnforcement -cne 'budget-state') {
         $problems.Add('resolver.requireCompleteUsage requires budget-state')
     }
+    # ADR-0040: the reconciler's budget guard, all three whole numbers in the reconciler's ranges, or absent.
+    if ($c.reconciler -is [Collections.IDictionary] -and $c.reconciler.ContainsKey('budgetGuard') -and $null -ne $c.reconciler.budgetGuard) {
+        $g = $c.reconciler.budgetGuard
+        $ranges = [ordered]@{ warnPercent = 1, 99; overshootPercent = 1, 50; projectionMinutes = 1, 60 }
+        $bad = @($ranges.Keys | Where-Object { $v = $g.$_; -not ($v -is [int] -or $v -is [long]) -or $v -lt $ranges[$_][0] -or $v -gt $ranges[$_][1] })
+        if ($g -isnot [Collections.IDictionary] -or $bad.Count -or @($g.Keys | Where-Object { $_ -notin $ranges.Keys }).Count) {
+            $problems.Add('reconciler.budgetGuard needs warnPercent 1-99, overshootPercent 1-50 and projectionMinutes 1-60 as whole numbers (ADR-0040)')
+        }
+    }
     foreach ($p in @(Get-StgCosmosProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {

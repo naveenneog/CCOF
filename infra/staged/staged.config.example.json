@@ -244,7 +244,8 @@
     "ledgerMaxRows": 100000,
     "maxStates": 10000,
     "writeConcurrency": 8,
-    "logAnalyticsEndpoint": "https://api.loganalytics.io"
+    "logAnalyticsEndpoint": "https://api.loganalytics.io",
+    "budgetGuard": { "warnPercent": 80, "overshootPercent": 5, "projectionMinutes": 5 }
   },
   "budgetState": {
     "graceSeconds": 900,

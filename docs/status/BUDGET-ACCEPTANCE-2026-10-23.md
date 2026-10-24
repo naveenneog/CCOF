@@ -101,6 +101,21 @@ IDs for requests before the tag reached the entitlement, the tag after). In `del
 tag reaches requests when a snapshot is applied (Stage 7 rerun at 21:50; the next request's trace carried
 `WBS-1001.01`).
 
+### 6. Budget guard (2026-10-24, 06:30–06:58 UTC)
+
+After the owner asked for throttling at 80% with a warning ([ADR-0040](../adr/0040-budget-guard.md)), the guard
+was deployed (Stages 5 and 7; `reconciler.budgetGuard` 80 / 5 / 5) and Alpha's budget raised to USD 14 through the
+admin API, leaving USD 2.75 against USD 11.25 recorded. The same eight-worker Sonnet load ran again (no streamed
+requests).
+
+- `/usage` from the first run: "Warning: about 80% of this budget is used or in progress; requests are now slowed
+  so the budget is not exceeded"; status line `CCOF $11.25/$14.00 (80%) - warning: about 80% used, slowed`.
+- 43 admitted, 147 `429` (person token limit about 13,000 per minute, `Retry-After` up to 130 s), spend about
+  USD 0.15 per minute.
+- First refusal 06:54:14 (`403` budget used up) at USD 13.84 recorded; final USD 13.84 recorded and at list price
+  (USD 11.2497 + 2.5858). **1.1% under the budget**, against 12.5% recorded / 19.7% list over without the guard.
+
+Spend in this phase: USD 2.59. Total estimated spend of the acceptance runs: USD 14.56.
 ### Open item for an owner decision
 
 A request that Foundry refuses with `429` is counted in the ledger as a forwarded request with

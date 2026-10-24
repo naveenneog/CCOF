@@ -4,6 +4,16 @@
 
 **Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
 
+### G-GUARD — budget guard: projected spend, rate guard, 80% warning (2026-10-24)
+
+- Owner: "throttling the user when he is at 80% of his usage notify him ... 15 percent overshoot is too much".
+  Reconciler projects hidden spend (last 5 minutes x projection minutes), always limits the rate to the overshoot
+  percent of the budget per projection window, warns and slows from the warn percent ([ADR-0040](adr/0040-budget-guard.md)).
+  `/usage` and the status line show the warning. Settings `reconciler.budgetGuard` (example 80 / 5 / 5), Stage 5,
+  quickstart Bicep and Core D2 parity.
+- Tests: guard 5 (mutants 4/4), settings 2, `/usage` 2, client 1, staged contract (467). Root 1201 pass.
+- Live: USD 14 budget at 80.4%: warning shown at once; final USD 13.84 (-1.1%), against +12.5% recorded / +19.7%
+  list before. Spend USD 2.59.
 ### G-LIMIT live acceptance (2026-10-24)
 
 - New staged deployment from the guide, Stages 0–8 verified, lab subscription, resource group `ccof-e2e-20261024-rg`

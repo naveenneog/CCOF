@@ -25,6 +25,9 @@ export interface BudgetStateDocument {
   validUntil: string;
   completeness: Completeness;
   realtimeCeilingTokensPerMinute: number;
+  // Present only with the budget guard (ADR-0040): projected spend and whether it reached the warn percent.
+  projectedCcu?: string;
+  warning?: boolean;
 }
 
 // Container `aggregateBudgetState`, partition key /scopeId.

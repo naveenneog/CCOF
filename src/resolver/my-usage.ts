@@ -42,6 +42,10 @@ export interface UsageScope {
   period: string;
   asOf: string | null;
   completeness: "complete" | "partial" | null;
+  // Present only when the reconciler runs the budget guard (ADR-0040): the warn threshold reached, and projected
+  // spend (recorded plus the recent rate over the reporting lag) as a percent of the budget.
+  warning?: boolean;
+  projectedPercent?: number | null;
   // Present only when the deployment shows group totals; null when allowed but not available this month.
   group?: GroupRemaining | null;
 }
@@ -93,6 +97,9 @@ function personFigures(doc: unknown, personId: string, m: ProjectMembership, per
   const asOf = timestampOf(doc.computedAt);
   const completeness = doc.completeness === "complete" || doc.completeness === "partial" ? doc.completeness : null;
   if (!spent || !budget || !asOf || !completeness || typeof doc.exhausted !== "boolean") return { status: "invalid", ...empty };
+  const guarded = "warning" in doc || "projectedCcu" in doc;
+  const projected = decimalOf(doc.projectedCcu);
+  if (guarded && (typeof doc.warning !== "boolean" || !projected)) return { status: "invalid", ...empty };
   return {
     status: "current",
     spent: amount(spent),
@@ -103,6 +110,7 @@ function personFigures(doc: unknown, personId: string, m: ProjectMembership, per
     period,
     asOf,
     completeness,
+    ...(guarded ? { warning: doc.warning as boolean, projectedPercent: percent(projected as Decimal, budget) } : {}),
   };
 }
 

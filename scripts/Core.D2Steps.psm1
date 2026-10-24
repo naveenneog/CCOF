@@ -161,6 +161,11 @@ function Get-CoreAppSettings {
     $c.RECONCILER_PROJECTS_CONTAINER = 'projects'; $c.RECONCILER_ENTITLEMENT_CONTAINER = 'entitlement'
     $c.RECONCILER_BUDGET_STATE_CONTAINER = 'budgetState'; $c.RECONCILER_AGGREGATE_STATE_CONTAINER = 'aggregateBudgetState'; $c.RECONCILER_LEASE_CONTAINER = 'reconcilerLease'
     $c.'AzureWebJobs.reconcileBudgets.Disabled' = if ($rc.timerEnabled) { 'false' } else { 'true' }
+    # ADR-0040, the same optional budget guard as infra/quickstart/modules/app-settings.bicep.
+    if ($rc.budgetGuard) {
+        $c.RECONCILER_BUDGET_WARN_PERCENT = [string]$rc.budgetGuard.warnPercent; $c.RECONCILER_OVERSHOOT_PERCENT = [string]$rc.budgetGuard.overshootPercent
+        $c.RECONCILER_PROJECTION_MINUTES = [string]$rc.budgetGuard.projectionMinutes
+    }
     return $result
 }
 
