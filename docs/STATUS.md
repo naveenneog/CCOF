@@ -25,6 +25,13 @@
   note added to the onboarding page); Security PASS (no exploitable findings in the diff, admin API authorization,
   CSV export, gateway enforcement or client token storage; no real identifiers in the diff).
 - Source commits: `3de09e8`, `adb7005`, `921a192` and the ledger commit, local `main`.
+- Public release 12: `9a9b4ca` on `naveenneog/CCOF` `main`, applied to `public-main` as the `53bac48..f9bef5d`
+  diff. Six files conflicted where the public copies were scrubbed; each kept the scrubbed text and took only the
+  path rewrites. Scrub check: 6 matches, all the hypothetical `contoso.com` alias published in release 10. None of
+  the raw captures' GUIDs appear in the public tree. gitleaks (directory mode) reports 3 `generic-api-key` matches,
+  all the string `projectApi: "v1-compatible"` (`admin/src/v2.ts`, `admin/src/v3.ts`, `docs/STATUS.md`), already
+  public before this release: false positives. Docs tests 23/23 on the public tree; public CI run `40117492314`
+  success.
 
 ### G-DOCS-R1 — first-time reader follow-up (complete, 2026-10-24)
 

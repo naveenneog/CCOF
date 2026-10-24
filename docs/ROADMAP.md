@@ -44,7 +44,7 @@
 | G-GUARD — Budget guard | Complete (live) | Projected spend, rate guard, 80% warning in `/usage` and the status line; USD 14 budget ended 1.1% under ([ADR-0040](adr/0040-budget-guard.md)) |
 | G-DOCS — Reader documentation | Complete | Role-based short pages, fresh Stages 0-8 lab, 44 pseudonymised screenshots, own-usage and CSV evidence; council, strict typecheck, packet gate and public CI pass (release 10, `2f84715`) |
 | G-DOCS-R1 — First-time reader follow-up | Complete | Main deployment values and single-subscription lab route explained; readable review screenshot, current exhausted-budget output and plain-language live summary; public release 11 (`fcb187c`), CI pass |
-| G-DOCS-R2 — Novice reader fixes | Complete | Novice review items 1-7; docs tests negative-tested; council and packet gate pass; public release 12 |
+| G-DOCS-R2 — Novice reader fixes | Complete | Novice review items 1-7; docs tests negative-tested; council and packet gate pass; public release 12 (`9a9b4ca`), CI pass |
 
 Gate follow-ups (existing): split oversized legacy UI/staged files by responsibility; keep the Power BI authentication
 and backend-429 billing unknowns open until independently verified. G-DOCS does not change those behaviors.
