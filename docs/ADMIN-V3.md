@@ -17,6 +17,10 @@ settings, verification and rollback. Names are memory-only; filters and exports 
 - **Groups** page (`#/groups`): onboarded Entra groups with status, chargeback ID, budget mode,
   surfaces and priority; Usage CSV (this month) and Groups CSV downloads
   ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI").
+- **Legacy projects** (`#/projects`, release 12): the sidebar label of the earlier Projects page. It lists project
+  documents from the earlier model ([ADR-0033](adr/0033-baseline-project-classification-model.md)) for existing
+  installations; new teams are onboarded on the Groups page. The 2026-10-24 console captures predate the label and
+  show "Projects".
 - **Onboard a group** (`#/groups/new`): search Entra security groups (direct member count shown),
   set the per-user budget and auto-scale or a monthly group cap (with an estimate for the current
   members), allowed surfaces, chargeback ID, priority, models and limits (Fable/Mythos only with

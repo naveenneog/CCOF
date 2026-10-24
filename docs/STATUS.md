@@ -2,7 +2,29 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-DOCS-R1 — first-time reader follow-up (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-DOCS-R2 — novice reader fixes (complete; [ROADMAP](ROADMAP.md)).
+
+### G-DOCS-R2 — novice reader fixes (complete, 2026-10-24)
+
+- Acceptance (novice review items 1-7): developer setup starts with getting the code; the stale capture note is
+  gone; Stages 1-8 each show the preview command before `-Apply` and the preview's last line; the console names
+  the earlier-model page **Legacy projects**; Stage 7 has a plain success checklist; the lab route gives a sourced
+  rough daily cost and how to check actual spend; 13 earlier guides are in `docs/archive/` with a README. Item 8
+  (the separate older repository) is out of scope by the owner's decision.
+- Scope: documentation, one console label and tests; no Azure deployment. The 2026-10-24 console captures predate
+  the label; the onboarding page, evidence README and ADMIN-V3 say so.
+- Checks: reader docs 13/13 (5 new; each new detector negative-tested: a removed preview line, a former
+  `docs/` path and a mis-rewritten archive link each fail it); admin 167/167; `npm build` of the console; full
+  `npm test` with a logged-out isolated Azure CLI profile passed; repo-wide relative-link scan 35 broken before and
+  after, all pre-existing (targets never committed). `node .ironclad/gate.mjs --stage packet` PASS (23 passed,
+  2 pre-existing warnings: file-size budget on files this packet does not touch, and the open G-R3 and E2E-01
+  unknowns; 1 skipped).
+- Council: Architect PASS; Coder PASS (runtime paths in tests resolve; cited line numbers unchanged because the
+  archive rewrites replace lines in place); QA PASS-WITH-NOTES (preview and archive tests tightened per section and
+  for inbound paths; cost links now point at the filtered price queries); UX PASS-WITH-NOTES (screenshot label
+  note added to the onboarding page); Security PASS (no exploitable findings in the diff, admin API authorization,
+  CSV export, gateway enforcement or client token storage; no real identifiers in the diff).
+- Source commits: `3de09e8`, `adb7005`, `921a192` and the ledger commit, local `main`.
 
 ### G-DOCS-R1 — first-time reader follow-up (complete, 2026-10-24)
 

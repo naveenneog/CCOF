@@ -2,6 +2,7 @@
 // links and images resolve, no internal packet IDs, short pages, and the "expected output" lines the deploy page
 // quotes are lines the scripts print.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -104,12 +105,13 @@ test("developer setup starts by getting the code and names the folder to run fro
 });
 
 test("every applying stage shows its preview command first", () => {
-  const deploy = read("docs/get-started/03-deploy.md");
+  const deploy = read("docs/get-started/03-deploy.md").replace(/\r\n/g, "\n");
   for (let stage = 1; stage <= 8; stage++) {
-    const apply = deploy.indexOf(`-Stage ${stage} -ConfigPath $cfg -Apply`);
-    const preview = deploy.search(new RegExp(`-Stage ${stage} -ConfigPath \\$cfg\\s*(#[^\\n]*)?\\n`));
-    assert.ok(apply > 0, `stage ${stage} apply command`);
-    assert.ok(preview > 0 && preview < apply, `stage ${stage} preview command before apply`);
+    const section = deploy.split(`## Stage ${stage} `)[1]?.split("\n## ")[0] ?? "";
+    const apply = section.search(new RegExp(`^pwsh -File \\$run -Stage ${stage} -ConfigPath \\$cfg -Apply[ \\t]*$`, "m"));
+    const preview = section.search(new RegExp(`^pwsh -File \\$run -Stage ${stage} -ConfigPath \\$cfg[ \\t]*(#[^\\n]*)?$`, "m"));
+    assert.ok(apply >= 0, `stage ${stage} section has its apply command`);
+    assert.ok(preview >= 0 && preview < apply, `stage ${stage} section has its preview command before apply`);
   }
   assert.match(deploy, /preview only: nothing changed/);
   assert.match(read("infra/staged/Invoke-StagedDeployment.ps1"), /preview only: nothing changed/);
@@ -136,22 +138,27 @@ const archived = ["DEPLOYMENT-GUIDE", "QUICKSTART", "QUICKSTART-PREREQUISITES", 
 
 test("earlier-path guides live in docs/archive, listed by its README, with working links", () => {
   const index = read("docs/archive/README.md");
+  const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  const trackedNames = new Set(tracked.map((f) => path.posix.basename(f)));
   const broken: string[] = [];
   for (const name of archived) {
     assert.ok(!existsSync(path.join(root, `docs/${name}.md`)), `docs/${name}.md moved`);
     assert.ok(existsSync(path.join(root, `docs/archive/${name}.md`)), `docs/archive/${name}.md exists`);
     assert.ok(index.includes(`(${name}.md)`), `archive README lists ${name}`);
     const page = `docs/archive/${name}.md`;
-    // A link the move left unchanged resolves from docs/ but not from docs/archive/. Links whose target was never
-    // committed fail from both places and are not move errors.
+    // Every relative link must resolve from docs/archive/. The only exception is a target whose file name is in no
+    // tracked path: those links were already broken before the move (images and ADR 0012 never committed).
     for (const m of read(page).matchAll(/!?\[[^\]]*\]\(([^)\s]+)\)/g)) {
       if (/^(https?:|mailto:|#)/.test(m[1])) continue;
       const target = decodeURIComponent(m[1].split("#")[0]);
-      const resolvesHere = existsSync(path.resolve(root, "docs/archive", target));
-      const resolvedBefore = existsSync(path.resolve(root, "docs", target));
-      if (!resolvesHere && resolvedBefore) broken.push(`${page} -> ${m[1]}`);
+      if (existsSync(path.resolve(root, "docs/archive", target))) continue;
+      if (trackedNames.has(path.posix.basename(target))) broken.push(`${page} -> ${m[1]}`);
     }
   }
   assert.deepEqual(broken, []);
+  const inbound = new RegExp(`(^|[^\\w/-])docs[\\\\/](${archived.join("|")})\\.md`);
+  const stale = tracked.filter((f) => /\.(md|ts|tsx|mjs|cjs|js|ps1|psm1|py|json|ya?ml|bicep|xml)$/.test(f) && existsSync(path.join(root, f))
+    && inbound.test(readFileSync(path.join(root, f), "utf8")));
+  assert.deepEqual(stale, [], "no file refers to an archived guide by its former docs/ path");
   assert.match(read("docs/INDEX.md"), /\(archive\/README\.md\)/);
 });

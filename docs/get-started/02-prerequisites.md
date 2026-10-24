@@ -12,9 +12,11 @@ charges while deployed; model calls add usage charges.
 **Rough lab cost.** The largest fixed charge is API Management Standard v2: USD 0.96 per hour for one unit, about
 USD 23 per day. Each private endpoint is USD 0.01 per hour; the lab has six, about USD 1.44 per day. The lab is
 therefore about USD 25 per day before usage-based charges (Functions Flex Consumption, serverless Cosmos DB, storage,
-Log Analytics and model tokens). Prices are East US 2 list prices in USD from the
-[Azure Retail Prices API](https://prices.azure.com/api/retail/prices) (retrieved 2026-10-24); agreements and
-regions differ. Actual spend is in the Portal: the resource group → **Cost analysis**. Cost data for EA and MCA
+Log Analytics and model tokens). Prices are USD list prices from the Azure Retail Prices API, retrieved 2026-10-24:
+[API Management Standard v2, East US 2](https://prices.azure.com/api/retail/prices?$filter=serviceName%20eq%20%27API%20Management%27%20and%20armRegionName%20eq%20%27eastus2%27%20and%20skuName%20eq%20%27Standard%20v2%27)
+(meter `Standard v2 Unit`) and
+[Private Link](https://prices.azure.com/api/retail/prices?$filter=productName%20eq%20%27Virtual%20Network%20Private%20Link%27%20and%20armRegionName%20eq%20%27Global%27)
+(meter `Standard Private Endpoint`, a Global price). Agreements and regions differ. Actual spend is in the Portal: the resource group → **Cost analysis**. Cost data for EA and MCA
 subscriptions typically appears within 8–24 hours, and pay-as-you-go can take up to 72 hours
 ([Understand Cost Management data](https://learn.microsoft.com/azure/cost-management-billing/costs/understand-cost-mgt-data)).
 Deleting the resource group stops these charges.

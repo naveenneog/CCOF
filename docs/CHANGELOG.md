@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-24 — Novice reader fixes (release 12)
+
+- Developer setup starts with cloning the repository and names the folder every command runs from.
+- Each deployment stage shows its preview command before the `-Apply` command; Stage 7 has a success checklist.
+- The lab route gives a rough daily cost (about USD 25 per day before usage) with price sources and where to see
+  actual spend.
+- The admin console's earlier-model page is labelled **Legacy projects**.
+- Thirteen earlier guides and run records moved to `docs/archive/`, listed by its README.
+
 ## 2026-10-24 — First-time reader follow-up
 
 - Added an example of the main staged-deployment values and a single-subscription lab path with measured duration,

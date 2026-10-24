@@ -8,6 +8,9 @@ several onboarded groups; each gives a separate budget ([users and groups](../op
 
 The console is at `https://<admin-app>.azurewebsites.net/api/console-v3`. Sign in with your work account.
 
+The screenshots on this page predate release 12. The sidebar entry they show as **Projects** is now **Legacy
+projects**: the same page for the earlier project model. New teams are onboarded through **Groups**.
+
 ## Step 1 — Find the group
 
 **Groups → Onboard a group.** Search by display name (needs the admin Graph permission,
