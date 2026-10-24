@@ -1,0 +1,12 @@
+> /usage
+
+  CCOF budget, group 5804c898-0be5-4dbf-9147-b26fd00ae432: $2.14 of $2.00 used (106%), $0.00 left, as of 11:28 UTC. Budget used up: new requests are refused until next month.
+    Group remaining: $17.86.
+  CCOF budget, group 49faba93-a1b0-4767-9f44-b6fbf06a58e9: $0.00 of $100.00 used (0%), $100.00 left, as of 11:28 UTC.
+    Group: no shared cap.
+  Figures are from the last cost run; requests not yet priced are not included.
+
+status line:  CCOF $2.14/$2.00 (106%) - budget used up, requests refused
+
+Next request through the gateway (HTTP 403):
+  permission_error: Your CCU budget for project 5804c898-0be5-4dbf-9147-b26fd00ae432 is used up for this budget period. Your access is otherwise unchanged; ask your platform team to raise the budget, or wait for the next period. Request id: ee12088c-d3eb-4eef-83ff-75e2027416fd.

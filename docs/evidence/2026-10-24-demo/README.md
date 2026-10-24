@@ -56,15 +56,16 @@ was used up. `/usage` was saved every minute.
 | --- | --- | --- |
 | Normal | USD 0.57 of 2.00 (28%) | `usage-01-normal.png` |
 | Warning (projected 84%) | USD 1.20 of 2.00 (60%), requests slowed | `usage-02-warning.png` |
-| Used up | USD 2.14 of 2.00 (106%), next request `403 permission_error` | `usage-03-refused.png` |
+| Used up | USD 2.14 of 2.00 (106%), next request `403 permission_error` | [`usage-03-refused.png`](usage-03-refused.png), [text output](usage-03-refused.txt) |
 
 Result: 71 requests succeeded, 95 were slowed (`429` with `Retry-After`) and 69 were refused (`403`). Final recorded
 spend USD 2.14 against USD 2.00, 7% over, within the configured `overshootPercent` of 25. The client's own sum of
 response costs was USD 2.13. The run paused for about 50 minutes when the workstation slept; it resumed without
 changes.
 
-The exhausted capture predates the status-line fix: it shows the spend percentage without a refusal suffix.
-The client now adds `- budget used up, requests refused`; the capture is retained as the actual run output.
+The refusal screenshot was refreshed by rendering the saved `/usage` response from this run with the current client formatter.
+The request amounts and HTTP 403 response are from the recorded run; the refreshed status line shows
+`- budget used up, requests refused`.
 
 ## Console and chargeback
 

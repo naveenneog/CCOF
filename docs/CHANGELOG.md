@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-10-24 — First-time reader follow-up
+
+- Added an example of the main staged-deployment values and a single-subscription lab path with measured duration,
+  permissions and ongoing Azure cost note.
+- Replaced the clipped onboarding screenshot in the reader path with the review screen that labels chargeback ID,
+  priority and admitted models.
+- Refreshed the exhausted-budget screenshot from the captured usage response using the current client status-line
+  formatter; the saved text output accompanies the image.
+- Replaced the README's gateway-oriented acceptance details with a short user-facing result and a report link.
+
 ## 2026-10-24 — Reader documentation and demo screenshots
 
 - Short README, documentation index and glossary, five get-started pages and four operate pages. Earlier guides

@@ -60,3 +60,37 @@ test("developer login and snapshot onboarding include the configuration handoff"
   assert.match(members, /all registered group IDs/i);
   assert.match(read("docs/get-started/04-onboard-a-group.md"), /successful sync or snapshot/i);
 });
+
+test("deployment setup shows key configuration values and a lab path", () => {
+  const deploy = read("docs/get-started/03-deploy.md");
+  for (const key of ['"tenantId"', '"subscriptionId"', '"resourceGroup"', '"location"', '"prefix"', '"accountName"']) {
+    assert.ok(deploy.includes(key), `deployment guide shows ${key}`);
+  }
+  assert.match(deploy, /not a complete configuration/i);
+  const prerequisites = read("docs/get-started/02-prerequisites.md");
+  assert.match(prerequisites, /single-subscription lab/i);
+  assert.match(prerequisites, /network\.mode: create/);
+  assert.match(prerequisites, /charges?/i);
+});
+
+test("README live acceptance summary is understandable without gateway jargon", () => {
+  const readme = read("README.md");
+  const section = readme.split("## Live acceptance")[1]?.split("\n## ")[0] ?? "";
+  assert.ok(section, "README has a Live acceptance section");
+  assert.match(section, /group-specific model access/i);
+  assert.match(section, /budget exhaustion/i);
+  assert.match(section, /chargeback report/i);
+  assert.match(section, /detailed report/i);
+  assert.doesNotMatch(section, /bypass|CCU|list-rate|streamed cache/i);
+});
+
+test("budget-exhausted evidence describes the current status-line output", () => {
+  const evidence = read("docs/evidence/2026-10-24-demo/README.md");
+  assert.match(evidence, /refreshed by rendering the saved `\/usage` response.*current client formatter/i);
+  assert.doesNotMatch(evidence, /predates the status-line fix/i);
+  const source = read("docs/evidence/2026-10-24-demo/usage-03-refused.txt");
+  assert.match(source, /status line:\s+CCOF \$2\.14\/\$2\.00 \(106%\) - budget used up, requests refused/);
+  const onboarding = read("docs/get-started/04-onboard-a-group.md");
+  assert.match(onboarding, /console-04-review\.png/);
+  assert.doesNotMatch(onboarding, /console-03-access-models\.png/);
+});
