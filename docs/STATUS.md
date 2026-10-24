@@ -16,8 +16,10 @@
 - Council: Architect PASS (no architecture changes); Coder PASS (focused documentation and recorded output);
   QA PASS (new reader assertions and existing status-line regression); UX PASS (cost/permissions surfaced and
   field labels readable); Security PASS (configured identifier scan clean, no secrets or live calls).
-- Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment or
-  public release in this follow-up.
+- Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment.
+- Public release 11: `fcb187c` on `naveenneog/CCOF` `main`, applied to `public-main` as the `2f84715..53bac48` diff.
+  Scrub-rule, private-literal and GUID scans clean (new GUIDs are pseudonyms, absent from the raw capture); gitleaks
+  clean; docs tests 13/13 on the public tree; public CI run `40110954891` success.
 
 ### G-DOCS — documentation refresh (2026-10-24, complete)
 
