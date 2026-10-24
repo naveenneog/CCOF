@@ -28,6 +28,8 @@ export interface ReconcilerSettings {
   cosmosEndpoint: string;
   cosmosDatabase: string;
   containers: ReconcilerContainers;
+  // ADR-0040, optional: all three guard settings or none.
+  guard?: { warnPercent: number; overshootPercent: number; projectionMinutes: number };
 }
 
 export interface SettingProblem {
@@ -81,7 +83,12 @@ const RANGES = {
   RECONCILER_LEDGER_MAX_ROWS: [1, 500_000],
   RECONCILER_MAX_STATES: [1, 10_000_000],
   RECONCILER_WRITE_CONCURRENCY: [1, 32],
+  RECONCILER_BUDGET_WARN_PERCENT: [1, 99],
+  RECONCILER_OVERSHOOT_PERCENT: [1, 50],
+  RECONCILER_PROJECTION_MINUTES: [1, 60],
 } as const;
+
+export const GUARD_SETTING_NAMES = ["RECONCILER_BUDGET_WARN_PERCENT", "RECONCILER_OVERSHOOT_PERCENT", "RECONCILER_PROJECTION_MINUTES"] as const;
 
 class Reader {
   readonly problems: SettingProblem[] = [];
@@ -178,6 +185,11 @@ export function readReconcilerSettings(settings: Settings): SettingsResult {
   const cosmosEndpoint = endpointRaw === undefined ? undefined : isCosmosEndpoint(endpointRaw) ? endpointRaw : r.fail("COSMOS_ENDPOINT", "invalid");
   const cosmosDatabase = r.matching("COSMOS_DATABASE", COSMOS_NAME);
   const containers = readContainers(r);
+  // The budget guard (ADR-0040) is optional, but never half-configured.
+  const guardGiven = GUARD_SETTING_NAMES.some((name) => settings[name]?.trim());
+  const guard = guardGiven
+    ? { warnPercent: r.integer("RECONCILER_BUDGET_WARN_PERCENT"), overshootPercent: r.integer("RECONCILER_OVERSHOOT_PERCENT"), projectionMinutes: r.integer("RECONCILER_PROJECTION_MINUTES") }
+    : undefined;
 
   // A healthy run renews state before the previous run's state lapses only if
   // the validity outlasts the interval plus the longest ledger read.
@@ -209,6 +221,7 @@ export function readReconcilerSettings(settings: Settings): SettingsResult {
       cosmosEndpoint: cosmosEndpoint as string,
       cosmosDatabase: cosmosDatabase as string,
       containers: containers as ReconcilerContainers,
+      ...(guard ? { guard: guard as NonNullable<ReconcilerSettings["guard"]> } : {}),
     },
   };
 }

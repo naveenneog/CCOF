@@ -4,6 +4,16 @@
 
 **Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
 
+### G-GUARD — budget guard: projected spend, rate guard, 80% warning (2026-10-24)
+
+- Owner: "throttling the user when he is at 80% of his usage notify him ... 15 percent overshoot is too much".
+  Reconciler projects hidden spend (last 5 minutes x projection minutes), always limits the rate to the overshoot
+  percent of the budget per projection window, warns and slows from the warn percent ([ADR-0040](adr/0040-budget-guard.md)).
+  `/usage` and the status line show the warning. Settings `reconciler.budgetGuard` (example 80 / 5 / 5), Stage 5,
+  quickstart Bicep and Core D2 parity.
+- Tests: guard 5 (mutants 4/4), settings 2, `/usage` 2, client 1, staged contract (467). Root 1201 pass.
+- Live: USD 14 budget at 80.4%: warning shown at once; final USD 13.84 (-1.1%), against +12.5% recorded / +19.7%
+  list before. Spend USD 2.59.
 ### G-LIMIT live acceptance (2026-10-24)
 
 - New staged deployment from the guide, Stages 0–8 verified, lab subscription, resource group `lab-e2e-rg`
@@ -19,6 +29,8 @@
   API policy limit (ADR-0039, `8773205`); Stage 1 null subnet (`3beb2bb`); BOM read, usage-policy comments, Stage 8
   JSON column (`8773205`); `/usage` rows classified `no-backend-call` in the ledger (`d9b6978`). Mutants: split 3/3 caught; RED shown for
   every other new test.
+- Council: round 1 Coder BLOCK (fragment ID bounds), fixed; round 2 all PASS. Public release 8: `66ea82c`, public CI
+  passes (Node 22 and 26). The lab stays deployed for inspection.
 - Open: E2E-01 (backend 429 shown as unpriced in chargeback; owner decision). Report:
   [BUDGET-ACCEPTANCE-2026-10-23.md](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 ### Owner acceptance request (2026-10-23)

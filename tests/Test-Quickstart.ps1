@@ -80,6 +80,17 @@ $d1 = [ordered]@{
     }
 }
 $d2Settings = Get-CoreAppSettings -Answers $answers -D1 $d1 -Connections @{ resolver = 'cs'; sync = 'cs' }
+# ADR-0040: the optional budget guard is written by D2 exactly as the Bicep union writes it, and the Core
+# answers schema accepts it with the reconciler's ranges.
+$guarded = $answers | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable
+$guarded.reconciler.budgetGuard = @{ warnPercent = 80; overshootPercent = 5; projectionMinutes = 5 }
+$guardSettings = (Get-CoreAppSettings -Answers $guarded -D1 $d1 -Connections @{ resolver = 'cs'; sync = 'cs' }).reconciler
+Assert-True 'D2 writes the budget guard settings when reconciler.budgetGuard is set' ($guardSettings.RECONCILER_BUDGET_WARN_PERCENT -ceq '80' -and $guardSettings.RECONCILER_OVERSHOOT_PERCENT -ceq '5' -and $guardSettings.RECONCILER_PROJECTION_MINUTES -ceq '5')
+Assert-True 'D2 writes no guard settings without reconciler.budgetGuard' (-not $d2Settings.reconciler.Contains('RECONCILER_BUDGET_WARN_PERCENT'))
+$guardSchema = (Get-Content (Join-Path $root 'config/core.answers.schema.json') -Raw | ConvertFrom-Json -AsHashtable).properties.reconciler.properties.budgetGuard
+$ok = Test-Json -Json '{"warnPercent":80,"overshootPercent":5,"projectionMinutes":5}' -Schema ($guardSchema | ConvertTo-Json -Depth 10) -ErrorAction SilentlyContinue
+$bad = Test-Json -Json '{"warnPercent":100,"overshootPercent":5,"projectionMinutes":5}' -Schema ($guardSchema | ConvertTo-Json -Depth 10) -ErrorAction SilentlyContinue
+Assert-True 'the Core answers schema accepts a budget guard in range and refuses warnPercent 100' ($ok -and -not $bad)
 # The quick-start's own settings, each named in ADR-0024: the switch of the registry seed function
 # (src/sync/registry-seed.ts), which the staged path never registers (it never sets CCOF_SEED_DOCUMENTS).
 $settingAdditions = @{ resolver = @(); sync = @('AzureWebJobs.registrySeed.Disabled'); reconciler = @() }

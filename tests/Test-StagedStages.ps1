@@ -383,6 +383,17 @@ try {
     try { $null = Read-StgConfig $tmp } catch { $badComplete = $_.Exception.Message -match 'requires budget-state' }
     Assert-Contract $badComplete 'The complete-usage guard must refuse token-limits-only mode before Azure calls.'
     $c.resolver.requireCompleteUsage = $false
+    # ADR-0040: reconciler.budgetGuard, all three whole numbers in range, or absent.
+    Assert-Contract ($read.reconciler.budgetGuard.warnPercent -eq 80 -and $read.reconciler.budgetGuard.overshootPercent -eq 5 -and $read.reconciler.budgetGuard.projectionMinutes -eq 5) 'The example must turn the budget guard on: warn 80%, overshoot 5%, projection 5 minutes.'
+    foreach ($bad in @(@{ warnPercent = 80; overshootPercent = 5 }, @{ warnPercent = 100; overshootPercent = 5; projectionMinutes = 5 }, @{ warnPercent = 80; overshootPercent = '5'; projectionMinutes = 5 }, @{ warnPercent = 80; overshootPercent = 5; projectionMinutes = 0 }, @{ warnPercent = 80; overshootPercent = 51; projectionMinutes = 5 })) {
+        $saved = $c.reconciler.budgetGuard; $c.reconciler.budgetGuard = $bad
+        $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+        $badGuard = $false
+        try { $null = Read-StgConfig $tmp } catch { $badGuard = $_.Exception.Message -match 'reconciler.budgetGuard' }
+        Assert-Contract $badGuard "A partial or out-of-range budget guard must be refused before Azure calls ($($bad | ConvertTo-Json -Compress))."
+        $c.reconciler.budgetGuard = $saved
+    }
+    Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'RECONCILER_PROJECTION_MINUTES: string\(reconcilerGuard\.projectionMinutes\)' -and (Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'union\(reconcilerSettings, reconcilerGuardSettings\)') 'Stage 5 must write the budget guard settings to the reconciler.'
     Assert-Contract ($read.stage1.prefix -ceq 'ccofstg' -and $read.stage1.functionsPublicNetworkAccess -ceq 'Disabled' -and $read.stage1.approveNewPublicApimBootstrap -eq $false) 'Example defaults must stay private and defer APIM.'
     $stage1Parameters = Get-Stage1Parameters $read
     $recordedParameters = @{ properties = @{ parameters = @{} } }

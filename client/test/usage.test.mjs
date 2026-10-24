@@ -156,3 +156,21 @@ test('cli: unknown arguments are refused', async () => {
   assert.equal(await runUsageCli(['--project', 'x'], { stdout: () => {}, stderr: (s) => { err += s; } }), 2);
   assert.match(err, /Usage: ccof-usage \[--statusline\]/);
 });
+
+// ADR-0040: the budget guard's warning reaches the person through /usage and the status line.
+test('a budget warning is stated with the projected share and that requests are slowed', () => {
+  const warned = scope({ spent: { ccu: '7600', usd: '76' }, remaining: { ccu: '2400', usd: '24' }, percentUsed: 76, warning: true, projectedPercent: 85 });
+  const [line] = formatUsage(usage([warned]), NOW);
+  assert.match(line, /Warning: about 85% of this budget is used or in progress; requests are now slowed so the budget is not exceeded\./);
+  assert.equal(statusLine(usage([warned])), 'CCOF $76.00/$100.00 (76%) - warning: about 85% used, slowed');
+  const [quiet] = formatUsage(usage([scope({ warning: false, projectedPercent: 42.1 })]), NOW);
+  assert.doesNotMatch(quiet, /Warning/);
+  assert.equal(statusLine(usage([scope({ warning: false, projectedPercent: 42.1 })])), 'CCOF $42.10/$100.00 (42%)');
+});
+test('projected spend at the budget says new requests are refused, not slowed (the gateway refuses at a zero ceiling)', () => {
+  const full = scope({ spent: { ccu: '9840', usd: '98.4' }, remaining: { ccu: '160', usd: '1.6' }, percentUsed: 98.4, warning: true, projectedPercent: 101 });
+  const [line] = formatUsage(usage([full]), NOW);
+  assert.match(line, /Projected spend has reached this budget: new requests are refused until recorded spend catches up or the budget is raised\./);
+  assert.doesNotMatch(line, /slowed/);
+  assert.equal(statusLine(usage([full])), 'CCOF $98.40/$100.00 (98%) - budget reached, requests refused');
+});

@@ -304,6 +304,7 @@ Settings added for group onboarding:
 | `resolver.usageGroupTotals` | `false` | Whether `/usage` also shows the person's group (scope) total. Stage 5 writes `RESOLVER_USAGE_GROUP_TOTALS` ([USAGE.md](USAGE.md), "Privacy") |
 | `resolver.budgetEnforcement` | `token-limits-only` | Example compatibility mode: enforces token/rate limits, **not a dollar budget**. Use `budget-state` only after reviewing the reconciliation/accounting tradeoff below |
 | `resolver.requireCompleteUsage` | `false` | Stage 5 writes `RESOLVER_REQUIRE_COMPLETE_USAGE`. Optional fail-closed accounting check; `true` requires `budgetEnforcement: budget-state`, otherwise configuration is refused |
+| `reconciler.budgetGuard` | `{ "warnPercent": 80, "overshootPercent": 5, "projectionMinutes": 5 }` | Budget guard ([ADR-0040](adr/0040-budget-guard.md), section 6.5): warns the person at `warnPercent` of projected spend and slows requests from there; limits the spend rate so that the spend the reporting lag hides stays near `overshootPercent` of the budget. Takes effect with `resolver.budgetEnforcement: budget-state`. Absent: no guard. Stage 5 writes `RECONCILER_BUDGET_WARN_PERCENT`, `RECONCILER_OVERSHOOT_PERCENT`, `RECONCILER_PROJECTION_MINUTES` |
 | `gateway.admission.usage` | 10 per 60 s | Per-person limit of `GET /ccof/me/usage`, separate from the `/v1/messages` limit |
 | `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) (Staged.Application.ps1). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
@@ -693,11 +694,18 @@ budget, eight concurrent Sonnet requests of 6,000 output tokens, about USD 0.50 
 | List-price spend from the response bodies | USD 11.97; the USD 0.72 difference is the cache writes of six streamed requests, which the ledger does not see |
 
 The overshoot is the spend rate multiplied by about two minutes (Log Analytics ingestion plus one
-reconciler run) plus requests already in flight. A budget owner sets the budget lower by that amount
-when a hard ceiling matters. Every later attempt was refused: another model, streaming, no selector,
-the selector header in other case. The person's other group still admitted requests within its own
-budget, by design ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)).
+reconciler run) plus requests already in flight. Every later attempt was refused: another model, streaming,
+no selector, the selector header in other case. The person's other group still admitted requests within its
+own budget, by design ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)).
 
+**Budget guard** (`reconciler.budgetGuard`, [ADR-0040](adr/0040-budget-guard.md)). The reconciler projects the
+spend that the lag hides from the last five minutes of spend, warns the person at `warnPercent` of projected
+spend (`/usage` and the Claude Code status line), slows requests from there, and always limits the spend rate
+to `overshootPercent` of the budget per `projectionMinutes`. The same load against a USD 14 budget with the
+guard (80 / 5 / 5) ended at USD 13.84 recorded and at list price (1.1% under), against 12.5% (recorded) and
+19.7% (list) over without it. The rate limit grows with the budget: USD 0.14 per minute for USD 14, USD 10
+per minute for USD 1,000. A budget owner who needs faster spending of a small budget raises
+`overshootPercent`.
 ---
 ## 7. Rerun, rollback and cleanup
 

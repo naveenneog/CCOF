@@ -265,7 +265,8 @@
         "ledgerMaxRows": { "type": "integer", "minimum": 1, "maximum": 500000 },
         "maxStates": { "type": "integer", "minimum": 1, "maximum": 1000000 },
         "writeConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 },
-        "logAnalyticsEndpoint": { "$ref": "#/$defs/httpsOrigin", "description": "RECONCILER_LOG_ANALYTICS_ENDPOINT (WP-REC): the Log Analytics query API origin of the workspace's cloud, also the token audience; no path or trailing slash. Public cloud: https://api.loganalytics.io (Learn, Logs query API request format)." }
+        "logAnalyticsEndpoint": { "$ref": "#/$defs/httpsOrigin", "description": "RECONCILER_LOG_ANALYTICS_ENDPOINT (WP-REC): the Log Analytics query API origin of the workspace's cloud, also the token audience; no path or trailing slash. Public cloud: https://api.loganalytics.io (Learn, Logs query API request format)." },
+        "budgetGuard": { "type": "object", "additionalProperties": false, "required": ["warnPercent", "overshootPercent", "projectionMinutes"], "description": "Optional budget guard (ADR-0040): RECONCILER_BUDGET_WARN_PERCENT, RECONCILER_OVERSHOOT_PERCENT, RECONCILER_PROJECTION_MINUTES.", "properties": { "warnPercent": { "type": "integer", "minimum": 1, "maximum": 99 }, "overshootPercent": { "type": "integer", "minimum": 1, "maximum": 50 }, "projectionMinutes": { "type": "integer", "minimum": 1, "maximum": 60 } } }
       }
     },
     "gateway": {

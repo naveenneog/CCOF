@@ -154,3 +154,21 @@ test("the number of scopes read is bounded", async () => {
   assert.equal(calls.budget.length, MAX_USAGE_SCOPES);
   assert.equal(usage.truncated, true);
 });
+
+// ADR-0040: with the budget guard the state carries projected spend and a warning; /usage passes both on.
+test("a guarded state adds warning and projected percent; a state without them is unchanged", async () => {
+  const [warned] = (await run(reads([group(G1)], { [G1]: state(G1, { spentCcu: "7600", projectedCcu: "8500", warning: true }) }))).scopes;
+  assert.equal(warned.warning, true);
+  assert.equal(warned.projectedPercent, 85);
+  assert.equal(warned.percentUsed, 76);
+  const [plain] = (await run(reads([group(G1)], { [G1]: state(G1) }))).scopes;
+  assert.equal("warning" in plain, false);
+  assert.equal("projectedPercent" in plain, false);
+});
+
+test("a malformed warning or projection makes the figure invalid, not silently unwarned", async () => {
+  for (const extra of [{ warning: "yes", projectedCcu: "8500" }, { warning: true, projectedCcu: "-1" }, { warning: true }]) {
+    const [scope] = (await run(reads([group(G1)], { [G1]: state(G1, extra) }))).scopes;
+    assert.equal(scope.status, "invalid", JSON.stringify(extra));
+  }
+});

@@ -70,6 +70,22 @@ Figures are from the last cost run; requests not yet priced are not included.
 
 A group is shown by its group ID (the Entra object ID), never by a directory display name: the output is placed in the model's context, and a display name is directory text that could carry instructions. The admin console shows which group an ID is. With group totals allowed, a second line reads `Group remaining: $7,500.00.` or `Group: no shared cap.`
 
+### Budget warning (ADR-0040)
+
+When the reconciler runs the budget guard (`reconciler.budgetGuard`), each scope also carries
+`"warning": true|false` and `"projectedPercent"`: recorded spend plus the spend of the last five minutes
+projected over the reporting lag, as a percent of the budget. From the warn percent (80 in the example) the
+gateway also slows the person's requests so the budget is not exceeded ([ADR-0040](adr/0040-budget-guard.md)).
+The line then ends, for example:
+
+```text
+... $11.25 of $14.00 used (80%), $2.75 left, as of 06:32 UTC. Warning: about 80% of this budget is used or in progress; requests are now slowed so the budget is not exceeded.
+```
+
+and the status line reads `CCOF $11.25/$14.00 (80%) - warning: about 80% used, slowed`. When projected spend reaches the budget the gateway refuses new requests; the line then says so (`budget reached, requests refused`). A state without the
+guard fields has neither field. Claude Code does not show gateway response headers, so `/usage` and the
+status line are where a person sees the warning.
+
 ## How current the figures are
 
 - As of the reconciler's last run (`asOf`). The staged example runs it every 2 minutes

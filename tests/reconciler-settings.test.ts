@@ -136,3 +136,23 @@ test("problems carry setting names and codes only, never the offending value", (
   assert.equal(result.ok, false);
   assert.equal(JSON.stringify(result).includes(secretish), false);
 });
+
+// ADR-0040: the budget guard is optional, all three settings or none; each is a whole number in range.
+const GUARD = { RECONCILER_BUDGET_WARN_PERCENT: "80", RECONCILER_OVERSHOOT_PERCENT: "5", RECONCILER_PROJECTION_MINUTES: "5" };
+test("without the budget guard settings there is no guard; with all three it is read", () => {
+  const without = readReconcilerSettings(validSettings());
+  assert.equal(without.ok && without.settings.guard, undefined);
+  const withGuard = readReconcilerSettings({ ...validSettings(), ...GUARD });
+  assert.deepEqual(withGuard.ok && withGuard.settings.guard, { warnPercent: 80, overshootPercent: 5, projectionMinutes: 5 });
+});
+
+test("a partial or out-of-range budget guard is refused, naming the setting", () => {
+  const { RECONCILER_OVERSHOOT_PERCENT: _dropped, ...partial } = GUARD;
+  const missing = readReconcilerSettings({ ...validSettings(), ...partial });
+  assert.deepEqual(!missing.ok && missing.problems, [{ setting: "RECONCILER_OVERSHOOT_PERCENT", problem: "missing" }]);
+  for (const [name, value] of [["RECONCILER_BUDGET_WARN_PERCENT", "0"], ["RECONCILER_BUDGET_WARN_PERCENT", "100"], ["RECONCILER_OVERSHOOT_PERCENT", "0"], ["RECONCILER_OVERSHOOT_PERCENT", "51"], ["RECONCILER_PROJECTION_MINUTES", "0"], ["RECONCILER_PROJECTION_MINUTES", "61"], ["RECONCILER_PROJECTION_MINUTES", "5.5"]] as const) {
+    const result = readReconcilerSettings({ ...validSettings(), ...GUARD, [name]: value });
+    assert.equal(result.ok, false, `${name}=${value}`);
+    assert.equal(!result.ok && result.problems[0].setting, name);
+  }
+});

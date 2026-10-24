@@ -53,6 +53,8 @@ function scopeLine(scope, period, now) {
   let line = `${head}: ${formatAmount(scope.spent.usd)} of ${formatAmount(scope.budget.usd)} used${pct ? ` (${pct})` : ''}, `
     + `${formatAmount(scope.remaining.usd)} left, as of ${asOfText(scope.asOf, now)}.`;
   if (scope.exhausted) line += ' Budget used up: new requests are refused until next month.';
+  else if (scope.warning === true && Number(scope.projectedPercent) >= 100) line += ' Projected spend has reached this budget: new requests are refused until recorded spend catches up or the budget is raised.';
+  else if (scope.warning === true) line += ` Warning: about ${percentText(scope.projectedPercent) ?? 'most'} of this budget is used or in progress; requests are now slowed so the budget is not exceeded.`;
   if (scope.completeness === 'partial') line += ' Some requests in this period are not yet priced.';
   return line;
 }
@@ -81,7 +83,10 @@ export function statusLine(usage) {
   if (!current.length) return '';
   const top = current.reduce((a, b) => (Number(b.spent.ccu) > Number(a.spent.ccu) ? b : a));
   const pct = percentText(top.percentUsed);
-  return `CCOF ${formatAmount(top.spent.usd)}/${formatAmount(top.budget.usd)}${pct ? ` (${pct})` : ''}`;
+  const warn = top.warning !== true || top.exhausted ? ''
+    : Number(top.projectedPercent) >= 100 ? ' - budget reached, requests refused'
+    : ` - warning: about ${percentText(top.projectedPercent) ?? 'most'} used, slowed`;
+  return `CCOF ${formatAmount(top.spent.usd)}/${formatAmount(top.budget.usd)}${pct ? ` (${pct})` : ''}${warn}`;
 }
 
 export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeoutMs = 15_000 }) {
