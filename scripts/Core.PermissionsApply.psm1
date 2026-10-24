@@ -238,7 +238,7 @@ function Format-CoreGraphStep7 {
     param($Item, [string]$GraphSpId)
     $body = "{`"principalId`":`"$($Item.principalId)`",`"resourceId`":`"$GraphSpId`",`"appRoleId`":`"$($Item.appRoleId)`"}"
     @(
-        "PENDING $($Item.id): Microsoft Graph application permission $($Item.role) for principal $($Item.principalId) needs a Privileged Role Administrator (docs/DEPLOYMENT-GUIDE.md, Step 7b, after a PIM activation and a new sign-in). In Cloud Shell:"
+        "PENDING $($Item.id): Microsoft Graph application permission $($Item.role) for principal $($Item.principalId) needs a Privileged Role Administrator (docs/archive/DEPLOYMENT-GUIDE.md, Step 7b, after a PIM activation and a new sign-in). In Cloud Shell:"
         "  az rest --method post --url $script:Graph/servicePrincipals/$($Item.principalId)/appRoleAssignments --headers Content-Type=application/json --body '$body'"
         "  Verify (Step 7c): az rest --method get --url $script:Graph/servicePrincipals/$($Item.principalId)/appRoleAssignments"
         '  Then run D3 again; the sync timer stays disabled until the permission is verified.'

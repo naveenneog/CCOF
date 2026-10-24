@@ -1,10 +1,19 @@
 # 5. Developer setup
 
 **Who:** each developer (or the device management team, with the same files) · **Time:** about 5 minutes ·
-**Needs:** Claude Code installed, Node.js 22, membership of an onboarded group, and the client configuration file
-that Stage 7 generated (`client-config.json`), handed over through the approved private channel.
+**Needs:** Claude Code installed, Git, Node.js 22, PowerShell 7, membership of an onboarded group, and the client
+configuration file that Stage 7 generated (`client-config.json`), handed over through the approved private channel.
 
 Full details, macOS and Linux paths, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
+
+## 0. Get the code
+
+```powershell
+cd $HOME; git clone https://github.com/naveenneog/CCOF.git ccof; cd ccof
+```
+
+Every command on this page runs from the `ccof` folder. A machine that already has the folder runs `git pull` in
+it instead.
 
 ## 1. Install the helper and configure Claude Code
 
@@ -51,9 +60,6 @@ When recorded spend reaches the budget, new requests through that group are refu
 budget is raised. Projected-spend refusal can clear earlier if the estimated in-flight spend falls.
 
 ![Expected /usage output when the budget is reached](../evidence/2026-10-24-demo/usage-03-refused.png)
-
-This capture predates the status-line correction; the current client also adds `- budget used up, requests refused`
-to the short status line.
 
 What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current session's own estimate.
 

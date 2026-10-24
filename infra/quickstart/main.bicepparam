@@ -1,4 +1,4 @@
-// Quick-start parameters (ADR-0024, Proposed). EVERY configuration value is here; docs/QUICKSTART.md
+// Quick-start parameters (ADR-0024, Proposed). EVERY configuration value is here; docs/archive/QUICKSTART.md
 // explains each one. The values below are the Validation validation shape (config/answers/Validation-shape-a.json)
 // with placeholder group ids: replace every value marked REPLACE before a live run.
 // Deploy-Quickstart.ps1 reads this file (az bicep build-params), adds the values it computes
@@ -65,7 +65,7 @@ param network = {
   // existing: { privateEndpointSubnetId: '', functionsSubnetId: '', runnerSubnetId: '', privateDnsZoneIds: { cosmos: '', blob: '' } }
 }
 
-// ---- 5. Prerequisites made by the Entra administrator (docs/QUICKSTART.md, phase 1) ----
+// ---- 5. Prerequisites made by the Entra administrator (docs/archive/QUICKSTART.md, phase 1) ----
 var developerGatewayAppId = 'REPLACE-developer-gateway-app-id'
 param registrations = {
   gatewayApi: { appId: developerGatewayAppId, scope: 'access_as_user', accessTokenVersion: 2 }

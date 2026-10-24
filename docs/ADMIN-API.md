@@ -1,7 +1,7 @@
 # Project admin console and API
 
 > **v2 release:** see [Admin v2 capabilities, optional permissions and VDI
-> upgrade/rollback](ADMIN-V2.md). The Phase 1 description below documents the
+> upgrade/rollback](archive/ADMIN-V2.md). The Phase 1 description below documents the
 > original baseline. V2 adds optional Graph lookup, tags, reviewed backend/budget
 > settings, catalog/pricing and read-only operations panels; no permission is
 > granted automatically. Manual group IDs and the existing limits editor remain.
@@ -271,7 +271,7 @@ endpoint. It is **not** a direct Kudu ZIP-deploy request on a Flex app. The gene
 Do not set `WEBSITE_RUN_FROM_PACKAGE` or request remote build for this ready-to-run ZIP.
 [Microsoft reference](https://learn.microsoft.com/azure/azure-functions/deployment-zip-push#deploy-by-using-azure-cli).
 
-If the customer permits a repository clone, the [quick modular stages](ADMIN-QUICK-STAGES.md) create the admin resources first, then configure sign-in, build/publish code and verify data access independently. Storage/network policy remains a dependency, not something this path bypasses.
+If the customer permits a repository clone, the [quick modular stages](archive/ADMIN-QUICK-STAGES.md) create the admin resources first, then configure sign-in, build/publish code and verify data access independently. Storage/network policy remains a dependency, not something this path bypasses.
 
 ## Lab status (2026-10-16)
 

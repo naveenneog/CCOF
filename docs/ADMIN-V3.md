@@ -178,7 +178,7 @@ must match, up to 10) and `classification`.
 ## Upgrade from the VDI
 
 The full manual procedure is [Admin V3.1 VDI upgrade](ADMIN-V3-VDI-UPGRADE.md).
-The shorter V3 migration outline follows [ADMIN-V2.md](ADMIN-V2.md) "VDI build and upgrade":
+The shorter V3 migration outline follows [ADMIN-V2.md](archive/ADMIN-V2.md) "VDI build and upgrade":
 
 1. Build `ccof-admin-v3.1.0.zip` with `admin\Build-AdminPackage.ps1 -OutFile <path>`. Keep the 2.0.x ZIP
    as the rollback package. The ZIP adds `ui-dist-v3/` and `kql/`.

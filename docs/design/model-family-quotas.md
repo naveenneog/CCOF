@@ -344,7 +344,7 @@ STATUS/ROADMAP/UNKNOWNS and integration merges are coordinator-owned.
 | A — gateway admission/quotas | `infra/gateway/policy/**` including family/group-ID telemetry; `tests/gateway-family-quotas.test.ts`; updates needed in existing `tests/gateway-{render,template,apim-xml}.test.ts` |
 | B — resolver | `src/resolver/**`; `tests/resolver-*.test.ts`; `tests/helpers/resolver-fixtures.ts` |
 | C — sync + shared types | `src/contracts/**`; `src/sync/**` **except `src/sync/registry-seed.ts`**; `config/model-families.json`; `tests/sync-*.test.ts` **except `tests/sync-registry-seed.test.ts`**; `tests/helpers/sync-fakes.ts`; `tests/model-families-contract.test.ts` |
-| D — form/seed/docs | `infra/quickstart/**`; **`src/sync/registry-seed.ts` only**; **`tests/sync-registry-seed.test.ts` only**; `tests/Test-Quickstart*.ps1`; `scripts/Onboarding.Schemas.psm1`; `scripts/Onboarding.Projects.psm1`; `tests/Test-OnboardingTokenLimits.ps1`; `tests/Test-OnboardingPilotExamples.ps1`; `docs/examples/*stage3.answers.json`; `docs/QUICKSTART.md` |
+| D — form/seed/docs | `infra/quickstart/**`; **`src/sync/registry-seed.ts` only**; **`tests/sync-registry-seed.test.ts` only**; `tests/Test-Quickstart*.ps1`; `scripts/Onboarding.Schemas.psm1`; `scripts/Onboarding.Projects.psm1`; `tests/Test-OnboardingTokenLimits.ps1`; `tests/Test-OnboardingPilotExamples.ps1`; `docs/examples/*stage3.answers.json`; `docs/archive/QUICKSTART.md` |
 
 The registrySeed exception resolves the otherwise overlapping C/D assignment.
 Workbook peer exclusively owns workbook/KQL/assets and cost/reporting; its latest scope excludes

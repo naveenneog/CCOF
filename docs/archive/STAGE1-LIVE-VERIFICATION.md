@@ -115,4 +115,4 @@ promoted to production.
 - The separate stages 2-8 remain design/documentation, not implemented entry points.
 
 Commands and operator permissions:
-[configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
+[configurable staged deployment](../runbooks/STAGED-DEPLOYMENT-V2.md).

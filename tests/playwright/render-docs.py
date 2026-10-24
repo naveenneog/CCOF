@@ -1,7 +1,7 @@
 """Render repo markdown to HTML next to the source (so relative links resolve) for a Playwright check."""
 import markdown, sys, os, re, json
 repo, outlist = sys.argv[1], sys.argv[2]
-docs = ["docs/runbooks/STAGED-DEPLOYMENT-V2.md", "docs/STAGED-STDV2-RUNS-2026-10-20.md", "docs/STAGED-LIVE-RUN-2026-10-20.md"]
+docs = ["docs/runbooks/STAGED-DEPLOYMENT-V2.md", "docs/archive/STAGED-STDV2-RUNS-2026-10-20.md", "docs/archive/STAGED-LIVE-RUN-2026-10-20.md"]
 made = []
 for d in docs:
     src = os.path.join(repo, d); text = open(src, encoding="utf-8").read()

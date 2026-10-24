@@ -120,7 +120,7 @@ try {
         @($manifest | Where-Object { $_.deploymentName -notlike 'manualtest-*' }).Count -eq 0)
 } finally { Remove-Item -LiteralPath $scratch -Recurse -Force }
 Assert-Manual 'runbook names the five-hour load deadline and UI-only blockers' (
-    (Get-Content (Join-Path $root 'docs\MANUAL-DEPLOYMENT.md') -Raw) -match 'five-hour' -and
-    (Get-Content (Join-Path $root 'docs\MANUAL-DEPLOYMENT.md') -Raw) -match 'Cosmos SQL RBAC')
+    (Get-Content (Join-Path $root 'docs\archive\MANUAL-DEPLOYMENT.md') -Raw) -match 'five-hour' -and
+    (Get-Content (Join-Path $root 'docs\archive\MANUAL-DEPLOYMENT.md') -Raw) -match 'Cosmos SQL RBAC')
 Write-Host "$failures failed"
 if ($failures) { exit 1 }

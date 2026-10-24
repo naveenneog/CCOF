@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Quick-start phase 3, post-deployment (ADR-0024, Proposed; docs/QUICKSTART.md): grants the sync's
+    Quick-start phase 3, post-deployment (ADR-0024, Proposed; docs/archive/QUICKSTART.md): grants the sync's
     managed identity the Microsoft Graph application permissions it needs: GroupMember.Read.All
     (read the direct members of the registered groups) and User.Read.All plus Application.Read.All
     (see disabled and deleted members; docs/SYNC.md, "Deleted and disabled members").
@@ -11,7 +11,7 @@
     Administrator, possibly another person, any time after Deploy-Quickstart.ps1 step 3. It:
     1. reads the sync principal id (-SyncPrincipalId, or the quick-start state file's step 3 outputs);
     2. refuses unless the signed-in account holds an active Privileged Role Administrator or Global
-       Administrator role, and prints the PIM activation steps (docs/DEPLOYMENT-GUIDE.md, Step 7b);
+       Administrator role, and prints the PIM activation steps (docs/archive/DEPLOYMENT-GUIDE.md, Step 7b);
     3. resolves each permission's app role id from the Microsoft Graph service principal by value;
     4. skips an assignment that exists, posts the others with a body file (no quotes in az arguments);
     5. reads the assignments back (Step 7c) and prints the rollback (DELETE) for each.
@@ -113,4 +113,4 @@ foreach ($v in $verified | Where-Object { $_.AssignmentId }) {
     Write-Host "verified $($v.Permission). Rollback: az rest --method delete --url https://graph.microsoft.com/v1.0/servicePrincipals/$SyncPrincipalId/appRoleAssignments/$($v.AssignmentId)"
 }
 if ($missing.Count) { throw "not_verified: $($missing.Permission -join ', ') not found after the grant." }
-Write-Host 'Next: set syncTimerEnabled = true in the parameters file and run Deploy-Quickstart.ps1 -Only 3 (the template alone; the code and the seed stay as they are). Managed identity tokens are cached for up to 24 hours (docs/DEPLOYMENT-GUIDE.md, Step 7).'
+Write-Host 'Next: set syncTimerEnabled = true in the parameters file and run Deploy-Quickstart.ps1 -Only 3 (the template alone; the code and the seed stay as they are). Managed identity tokens are cached for up to 24 hours (docs/archive/DEPLOYMENT-GUIDE.md, Step 7).'

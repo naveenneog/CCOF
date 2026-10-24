@@ -1,7 +1,7 @@
 # Staged deployment live run — 2026-10-20
 
 Stage numbers in this report are the order before 2026-10-21 (network = Stage 2, schema 3, grants 4,
-Entra 5, configuration 6). The [runbook](runbooks/STAGED-DEPLOYMENT-V2.md) now runs the network as Stage 6.
+Entra 5, configuration 6). The [runbook](../runbooks/STAGED-DEPLOYMENT-V2.md) now runs the network as Stage 6.
 
 Result: **all nine stages passed** in a new lab resource group, ending with authenticated
 model calls through the gateway and live data in the Admin V3 console.
@@ -42,51 +42,51 @@ Command-output captures render the live stage logs. Identifiers have their middl
 no token or setting value is shown.
 
 **Stage 0 — read-only checks**
-![Stage 0](images/staged/00-stage0-checks.png)
+![Stage 0](../images/staged/00-stage0-checks.png)
 
 **Stage 1 — preview, then apply and verify**
-![Stage 1 what-if](images/staged/01a-stage1-what-if.png)
-![Stage 1 apply](images/staged/01b-stage1-apply.png)
+![Stage 1 what-if](../images/staged/01a-stage1-what-if.png)
+![Stage 1 apply](../images/staged/01b-stage1-apply.png)
 
 **Stage 2 — network**
-![Stage 2 what-if](images/staged/02a-stage2-what-if.png)
-![Stage 2 read-back](images/staged/02b-stage2-verify.png)
+![Stage 2 what-if](../images/staged/02a-stage2-what-if.png)
+![Stage 2 read-back](../images/staged/02b-stage2-verify.png)
 
 **Stage 3 — Cosmos schema**
-![Stage 3](images/staged/03-stage3-schema.png)
+![Stage 3](../images/staged/03-stage3-schema.png)
 
 **Stage 4 — runtime grants**
-![Stage 4 what-if](images/staged/04a-stage4-what-if.png)
-![Stage 4 read-back](images/staged/04b-stage4-readback.png)
+![Stage 4 what-if](../images/staged/04a-stage4-what-if.png)
+![Stage 4 read-back](../images/staged/04b-stage4-readback.png)
 
 **Stage 5 — Entra**
-![Stage 5](images/staged/05-stage5-entra.png)
+![Stage 5](../images/staged/05-stage5-entra.png)
 
 **Stage 6 — configuration**
-![Stage 6](images/staged/06-stage6-config.png)
+![Stage 6](../images/staged/06-stage6-config.png)
 
 **Stage 7 — code, seed, snapshot, client file**
-![Stage 7](images/staged/07-stage7-code-data.png)
+![Stage 7](../images/staged/07-stage7-code-data.png)
 
 **Stage 8 — acceptance**
-![Stage 8](images/staged/08-stage8-acceptance.png)
+![Stage 8](../images/staged/08-stage8-acceptance.png)
 
 **Admin V3 on the deployed admin app.** The API refused the Azure CLI client until
 `admin.extraAllowedClientIds` listed it, then served chargeback and onboarding data.
-![Admin API](images/staged/09-admin-v3-api.png)
+![Admin API](../images/staged/09-admin-v3-api.png)
 
 The console captures load the deployed console. The capture harness answered only
 `/api/console-v3/config` with demo mode, to skip the interactive Microsoft sign-in, and sent
 every API call to the deployed app with a real signed-in user token. The top bar therefore
 reads "Demo editor"; all data comes from the deployed API.
 
-![Console overview](images/staged/console-light-overview.png)
-![Cost drill-down for STGLAB1](images/staged/console-light-overview-stglab1-drill.png)
-![Chargeback](images/staged/console-light-chargeback.png)
-![Projects](images/staged/console-light-projects.png)
-![Project onboarding downloads](images/staged/console-light-project-onboarding.png)
-![Health](images/staged/console-light-health.png)
-![Overview, dark theme](images/staged/console-dark-overview.png)
+![Console overview](../images/staged/console-light-overview.png)
+![Cost drill-down for STGLAB1](../images/staged/console-light-overview-stglab1-drill.png)
+![Chargeback](../images/staged/console-light-chargeback.png)
+![Projects](../images/staged/console-light-projects.png)
+![Project onboarding downloads](../images/staged/console-light-project-onboarding.png)
+![Health](../images/staged/console-light-health.png)
+![Overview, dark theme](../images/staged/console-dark-overview.png)
 
 Chargeback read $0.000328 known list cost for 4 priced requests (96 tokens), coverage
 complete. The console rounds this to $0.00 (finding 9).
@@ -96,7 +96,7 @@ complete. The console rounds this to $0.00 (finding 9).
 | # | Stage | Observed | Change |
 | --- | --- | --- | --- |
 | 1 | all | The driver exited silently: dot-sourcing `Deploy-Quickstart.ps1 -DotSourceOnly` sets `$DotSourceOnly` in the caller's scope | The driver keeps its own switch before dot-sourcing |
-| 2 | 1 | What-if failed (`DeploymentWhatIfResourceInvalidResponse`) on the APIM diagnostic setting with a conditional `scope: apim!` | APIM and its setting moved to [`apim-service.bicep`](../infra/staged/apim-service.bicep), deployed as a conditional module; the Stage 1 test now checks the module's condition |
+| 2 | 1 | What-if failed (`DeploymentWhatIfResourceInvalidResponse`) on the APIM diagnostic setting with a conditional `scope: apim!` | APIM and its setting moved to [`apim-service.bicep`](../../infra/staged/apim-service.bicep), deployed as a conditional module; the Stage 1 test now checks the module's condition |
 | 3 | 1, 2 | `az functionapp show` returns Flex values under `properties`, so public access read as empty | `Get-StgSite` reads both shapes |
 | 4 | 5 | Creating an app registration failed with `Directory_QuotaExceeded` for the operator | `entra.existing` reuses registrations by app ID with merge-only updates; groups by `groupId`. The existing lab admin console's redirect URI was preserved (read back) |
 | 5 | 5 | Graph rejected a one-item list (`StartArray expected`): PowerShell unrolls single-item function output | List helpers return arrays intact |
@@ -126,4 +126,4 @@ preauthorization on the reused gateway app). Removing them, or the RG, is a sepa
 Private evidence (logs, state, read-back JSON, generated policy and client file) is kept outside
 the repository.
 
-Runbook: [configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
+Runbook: [configurable staged deployment](../runbooks/STAGED-DEPLOYMENT-V2.md).

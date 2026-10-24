@@ -1,6 +1,6 @@
 # Admin console v2: private-VDI upgrade and optional capabilities
 
-> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](../get-started/01-what-it-is.md).
 
 Release source: `feat/admin-console-v2`; package version `2.0.1`.
 This is an **admin-app-only** upgrade. It does not deploy to the customer's

@@ -1,6 +1,6 @@
 // Quick-start for ONE administrator who holds every Azure role (ADR-0024, Proposed): the whole core
 // in one deployment, every value from main.bicepparam. It does not replace the checkpointed stages
-// of ADR-0019; docs/QUICKSTART.md says what stays with them. Run it through Deploy-Quickstart.ps1
+// of ADR-0019; docs/archive/QUICKSTART.md says what stays with them. Run it through Deploy-Quickstart.ps1
 // (step 3), which first renders the gateway policy and builds the workbook (step 2).
 // Reused modules: infra/prereqs (network, Log Analytics, identities, Cosmos account, Flex apps),
 // infra/poc/phase4-telemetry.bicep (WP-TEL), infra/workbook (WP-WB). New modules: ./modules.

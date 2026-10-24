@@ -1,5 +1,5 @@
 // D1 prerequisite: the resource group (docs/PREREQUISITES-WORKBOOK.md, D1-02). Needs Contributor on
-// the subscription (docs/DEPLOYMENT-GUIDE.md, People and roles).
+// the subscription (docs/archive/DEPLOYMENT-GUIDE.md, People and roles).
 // Deploy with: az deployment sub create --subscription <id> --location <region> --template-file ...
 
 targetScope = 'subscription'

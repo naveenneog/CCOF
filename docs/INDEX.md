@@ -45,10 +45,9 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 
 ## Earlier paths
 
-These describe the project-and-classification model or earlier deployment paths. They remain for existing
-installations; new deployments follow **Get started**: [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md),
-[QUICKSTART.md](QUICKSTART.md), [MANUAL-DEPLOYMENT.md](MANUAL-DEPLOYMENT.md), [ONBOARDING.md](ONBOARDING.md),
-[ADMIN-V2.md](ADMIN-V2.md), [ADMIN-QUICK-STAGES.md](ADMIN-QUICK-STAGES.md), [runbooks/](runbooks/README.md).
+Guides for the project-and-classification model, earlier deployment paths and earlier run records are in
+[archive/](archive/README.md). They remain for existing installations; new deployments follow **Get started**.
+The [runbooks/](runbooks/README.md) also describe earlier paths.
 
 ## Project records
 

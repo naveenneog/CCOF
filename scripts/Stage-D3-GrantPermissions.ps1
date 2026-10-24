@@ -17,7 +17,7 @@
     d1_record_mismatch when a value in the stage-D1 record differs from what Azure and Microsoft Graph
     report: the record is a shared file, and its principal ids and scopes become grants (WP-SEC C1).
     The Graph permission is granted only when the caller holds an active Privileged Role Administrator
-    or Global Administrator role; otherwise D3 prints docs/DEPLOYMENT-GUIDE.md Step 7 with the ids and
+    or Global Administrator role; otherwise D3 prints docs/archive/DEPLOYMENT-GUIDE.md Step 7 with the ids and
     records it pending. The sync timer is enabled only after the permission is verified, and only in
     sync.mode application-permission; if D3 cannot enable it and read it back, D3 fails
     (sync_timer_failed) and records no stage-D3.

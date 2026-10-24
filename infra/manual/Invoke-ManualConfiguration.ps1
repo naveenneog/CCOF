@@ -97,7 +97,7 @@ function Get-ManualConfigurationSteps {
 
 if ($DotSourceOnly) { return }
 $ErrorActionPreference = 'Stop'
-if (-not $ParametersPath -or -not $Step) { throw 'manual_usage: -ParametersPath and -Step required; see docs/MANUAL-DEPLOYMENT.md' }
+if (-not $ParametersPath -or -not $Step) { throw 'manual_usage: -ParametersPath and -Step required; see docs/archive/MANUAL-DEPLOYMENT.md' }
 if ($WhatIfOnly -and $Step -ne 3) { throw 'manual_what_if_step: -WhatIfOnly requires -Step 3' }
 $full = Resolve-QsParametersPath $ParametersPath
 $generated = Join-Path (Split-Path $full -Parent) '.env.manual.generated'

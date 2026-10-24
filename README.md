@@ -46,7 +46,7 @@ price at the rate card, not an Azure invoice.
 
 ## Other deployment paths
 
-The single-administrator [quickstart](docs/QUICKSTART.md), [manual deployment](docs/MANUAL-DEPLOYMENT.md) and the
+The single-administrator [quickstart](docs/archive/QUICKSTART.md), [manual deployment](docs/archive/MANUAL-DEPLOYMENT.md) and the
 [Portal workbooks](docs/runbooks/README.md) describe earlier paths, kept for existing installations.
 
 ## Local verification

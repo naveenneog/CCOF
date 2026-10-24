@@ -9,6 +9,16 @@ The 2026-10-24 lab used one Azure subscription and `network.mode: create`; Stage
 integrations. Stages 0–8 took 62 minutes in that run. Times vary. API Management, Cosmos DB and Functions incur
 charges while deployed; model calls add usage charges.
 
+**Rough lab cost.** The largest fixed charge is API Management Standard v2: USD 0.96 per hour for one unit, about
+USD 23 per day. Each private endpoint is USD 0.01 per hour; the lab has six, about USD 1.44 per day. The lab is
+therefore about USD 25 per day before usage-based charges (Functions Flex Consumption, serverless Cosmos DB, storage,
+Log Analytics and model tokens). Prices are East US 2 list prices in USD from the
+[Azure Retail Prices API](https://prices.azure.com/api/retail/prices) (retrieved 2026-10-24); agreements and
+regions differ. Actual spend is in the Portal: the resource group → **Cost analysis**. Cost data for EA and MCA
+subscriptions typically appears within 8–24 hours, and pay-as-you-go can take up to 72 hours
+([Understand Cost Management data](https://learn.microsoft.com/azure/cost-management-billing/costs/understand-cost-mgt-data)).
+Deleting the resource group stops these charges.
+
 The lab path still needs a subscription with quota for the selected Claude models, a new empty resource group,
 platform Contributor and Role Based Access Control Administrator access, and an Entra administrator or owners of
 the three existing app registrations. Existing Entra apps and groups can be reused when approved. Set

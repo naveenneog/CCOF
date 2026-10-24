@@ -91,7 +91,7 @@ If step 3 never succeeded, follow the modules in order from 01.
 
 ## About this workbook
 
-Keep [Quickstart](../QUICKSTART.md) for customers who want automation; this is a
+Keep [Quickstart](../archive/QUICKSTART.md) for customers who want automation; this is a
 different execution path. Do not run the Quickstart deployment dispatcher or the
 all-resources template while following this workbook.
 
@@ -996,7 +996,7 @@ Default is **two registrations**, not one per project/classification.
 
 Apply tenant consent/preauthorization and Conditional Access requirements; combined-app
 token-to-self is not a blanket consent exemption. Legacy separate developer/gateway
-registrations are supported by [prerequisites](../QUICKSTART-PREREQUISITES.md).
+registrations are supported by [prerequisites](../archive/QUICKSTART-PREREQUISITES.md).
 
 After each registration, write its Application (client) ID into the private form
 (Step 13.3) and reload (Step 13.4) before running later CLI blocks that read it.
@@ -1337,7 +1337,7 @@ Network > DNS > Review + create.
 | Field | Value | Source of value |
 |---|---|---|
 | Name | Reviewed hub PE name | Network team |
-| Target sub-resource | `account` | [manual deployment](../MANUAL-DEPLOYMENT.md) |
+| Target sub-resource | `account` | [manual deployment](../archive/MANUAL-DEPLOYMENT.md) |
 | Virtual network / subnet | Approved APIM-reachable private endpoint subnet | form `network.*` PE subnet |
 | Private DNS integration | Offered Foundry zone configuration (Step 07.5); not the Cosmos zone | [network guide](../NETWORK.md) |
 
@@ -1346,7 +1346,7 @@ Network > DNS > Review + create.
 
 *Reference only: Step 07.3 check on the lab private Foundry endpoint: provisioning Succeeded, connection Approved. Lab output of this step's read-only check, not the Portal blade; not current deployment acceptance. Portal blade capture pending.*
 
-**CLI alternative:** from [manual deployment](../MANUAL-DEPLOYMENT.md); one backend per run.
+**CLI alternative:** from [manual deployment](../archive/MANUAL-DEPLOYMENT.md); one backend per run.
 
 ```powershell
 # EDIT: backend id from the form and the reviewed hub PE name.
@@ -1432,7 +1432,7 @@ work from APIM's outbound network.
 **CLI alternative:** for a simple new hub where VNet/PE/zones all live in this RG, the repository's
 DNS module creates/links all three zones and one zone group (NxDomainRedirect fallback). For
 central existing zones **do not deploy that creator**: use `az network private-endpoint
-dns-zone-group create` with the reviewed zone IDs as in [manual deployment](../MANUAL-DEPLOYMENT.md).
+dns-zone-group create` with the reviewed zone IDs as in [manual deployment](../archive/MANUAL-DEPLOYMENT.md).
 
 ```powershell
 # EDIT: actual APIM-integrated hub VNet name (in this RG) and the Foundry PE name.
@@ -2137,7 +2137,7 @@ turn public access back on.
 | Field | Value | Source of value |
 |---|---|---|
 | Name | Approved PE name | Network team |
-| Target sub-resource | `sites` | [manual deployment](../MANUAL-DEPLOYMENT.md) |
+| Target sub-resource | `sites` | [manual deployment](../archive/MANUAL-DEPLOYMENT.md) |
 | Virtual network / subnet | Private endpoint subnet reachable from APIM | form network PE subnet |
 | Private DNS | `privatelink.azurewebsites.net` (Step 12.2) | Network team |
 
@@ -2145,7 +2145,7 @@ turn public access back on.
 ![Step 12.1 - Resolver private endpoint](./images/portal/12-1-resolver-private-endpoint.svg)
 <!-- screenshot pending: capture from a lab tenant, redact IDs -->
 
-**CLI alternative:** the `private-endpoint create` pattern of [manual deployment](../MANUAL-DEPLOYMENT.md),
+**CLI alternative:** the `private-endpoint create` pattern of [manual deployment](../archive/MANUAL-DEPLOYMENT.md),
 targeting the resolver site.
 
 ```powershell
@@ -2257,7 +2257,7 @@ and code publishing has an approved private path.
 ![Step 12.4 - Resolver public access](./images/portal/12-4-resolver-public-access.svg)
 <!-- screenshot pending: capture from a lab tenant, redact IDs -->
 
-**CLI alternative:** an explicit minimal PATCH from [manual deployment](../MANUAL-DEPLOYMENT.md),
+**CLI alternative:** an explicit minimal PATCH from [manual deployment](../archive/MANUAL-DEPLOYMENT.md),
 with no identity replacement.
 
 ```powershell
@@ -4076,7 +4076,7 @@ Repository contracts: `infra/prereqs/network.bicep`, `infra/prereqs/log-analytic
 `scripts/Core.D2Steps.psm1`, `scripts/Core.D2Code.psm1`, staged D3 assignment data,
 `infra/poc/phase4-apim-telemetry.bicep`, `infra/poc/phase4-function-logs.bicep`,
 `infra/poc/foundry-private-dns.bicep`, `infra/poc/resolver-auth.ps1`,
-`src/sync/registry-seed.ts`, [manual deployment](../MANUAL-DEPLOYMENT.md). The exporter imports
+`src/sync/registry-seed.ts`, [manual deployment](../archive/MANUAL-DEPLOYMENT.md). The exporter imports
 shared pure Quickstart helpers with `-DotSourceOnly`; it never executes their dispatcher.
 Every `az` flag in the CLI alternatives was checked against `az <command> --help` (Azure CLI 2.86);
 the CLI blocks are parse-checked offline, not executed against a customer tenant.

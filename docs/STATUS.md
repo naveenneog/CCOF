@@ -425,7 +425,7 @@ No live directory lookup, customer deployment or Graph permission change was per
 
 ## Standard v2 and Foundry, two tenants (S3, complete with open items)
 
-Verified 2026-10-20 in SASET MSFT FDPO and Contoso ([report](STAGED-STDV2-RUNS-2026-10-20.md)).
+Verified 2026-10-20 in SASET MSFT FDPO and Contoso ([report](archive/STAGED-STDV2-RUNS-2026-10-20.md)).
 Open: Portal walkthrough screenshots need a persistent Portal sign-in; Graph application consent
 needs PIM activation in Contoso; Claude in Contoso needs a non-sandbox subscription.
 
@@ -435,7 +435,7 @@ needs PIM activation in Contoso; Claude in Contoso needs a non-sandbox subscript
 **Completed packet:** S2 — staged entry points for stages 2-8 and a live end-to-end run.
 
 Status: verified, 2026-10-20, in the new lab RG `ccof-staged-20261020-rg`
-([report](STAGED-LIVE-RUN-2026-10-20.md)). The Stage 1 RG below was deleted first.
+([report](archive/STAGED-LIVE-RUN-2026-10-20.md)). The Stage 1 RG below was deleted first.
 
 Open items:
 
@@ -479,6 +479,6 @@ See [unknowns](UNKNOWNS.md) and [roadmap](ROADMAP.md).
 - Admin build and all 95 tests pass.
 - New runbook's three PowerShell blocks parse and local documentation links resolve.
 
-Detailed [live report](STAGE1-LIVE-VERIFICATION.md) and
+Detailed [live report](archive/STAGE1-LIVE-VERIFICATION.md) and
 [commands/permissions](runbooks/STAGED-DEPLOYMENT-V2.md).
 This packet's commit is the Git change containing this status file.

@@ -45,7 +45,7 @@ if ($appendix -match "'functionapp','deploy'|az functionapp deploy -g|WEBSITE_RU
 if ($appendix -notmatch "'functionapp','deployment','source','config-zip',.*'--src',") {
     throw 'Admin publish must use the Azure CLI command that detects the Flex package endpoint.'
 }
-$quick = Get-Content (Join-Path $root 'docs/ADMIN-QUICK-STAGES.md') -Raw
+$quick = Get-Content (Join-Path $root 'docs/archive/ADMIN-QUICK-STAGES.md') -Raw
 $quickCount = 0
 foreach ($block in [regex]::Matches($quick, '(?s)```powershell\s*\r?\n(.*?)```')) {
     $errors = $null

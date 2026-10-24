@@ -1,9 +1,9 @@
 # Standard v2 and Foundry staged runs — SASET MSFT FDPO and Contoso, 2026-10-20
 
-Two independent runs of [`Invoke-StagedDeployment.ps1`](../infra/staged/Invoke-StagedDeployment.ps1)
+Two independent runs of [`Invoke-StagedDeployment.ps1`](../../infra/staged/Invoke-StagedDeployment.ps1)
 with a **Standard v2** API Management instance, a **new private Foundry account** created by Stage 1,
 and a separate configuration and state directory each. Stage numbers in this report are the order\nbefore 2026-10-21 (network = Stage 2, schema 3, grants 4, Entra 5, configuration 6); the runbook now\nruns the network as Stage 6. Runbook:
-[configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
+[configurable staged deployment](../runbooks/STAGED-DEPLOYMENT-V2.md).
 
 | | SASET MSFT FDPO | Contoso |
 | --- | --- | --- |
@@ -35,26 +35,26 @@ and a separate configuration and state directory each. Stage numbers in this rep
 Command-output captures of the live logs and read-back JSON. Identifiers are masked in the middle;
 local paths are replaced by `<config-dir>`; no token or setting value is shown.
 
-![SASET Stage 0](images/staged-stdv2/saset-00-stage0.png)
-![SASET Stage 1 preview in a shared RG](images/staged-stdv2/saset-01a-shared-rg-preview.png)
-![SASET Stage 1](images/staged-stdv2/saset-01-stage1.png)
-![Foundry setup findings](images/staged-stdv2/both-01x-foundry-marketplace.png)
-![SASET Stage 2](images/staged-stdv2/saset-02-stage2.png)
-![SASET Stage 4](images/staged-stdv2/saset-04-stage4.png)
-![SASET Stage 8](images/staged-stdv2/saset-08-stage8.png)
-![Contoso Stage 0](images/staged-stdv2/contoso-00-stage0.png)
-![Contoso Stage 1](images/staged-stdv2/contoso-01-stage1.png)
-![Contoso Stage 2](images/staged-stdv2/contoso-02-stage2.png)
-![Contoso Stage 4](images/staged-stdv2/contoso-04-stage4.png)
-![Contoso Stage 5 Entra](images/staged-stdv2/contoso-05-entra.png)
-![Contoso Graph consent attempt](images/staged-stdv2/contoso-05b-graph-consent.png)
-![Contoso Stage 8](images/staged-stdv2/contoso-08-stage8.png)
+![SASET Stage 0](../images/staged-stdv2/saset-00-stage0.png)
+![SASET Stage 1 preview in a shared RG](../images/staged-stdv2/saset-01a-shared-rg-preview.png)
+![SASET Stage 1](../images/staged-stdv2/saset-01-stage1.png)
+![Foundry setup findings](../images/staged-stdv2/both-01x-foundry-marketplace.png)
+![SASET Stage 2](../images/staged-stdv2/saset-02-stage2.png)
+![SASET Stage 4](../images/staged-stdv2/saset-04-stage4.png)
+![SASET Stage 8](../images/staged-stdv2/saset-08-stage8.png)
+![Contoso Stage 0](../images/staged-stdv2/contoso-00-stage0.png)
+![Contoso Stage 1](../images/staged-stdv2/contoso-01-stage1.png)
+![Contoso Stage 2](../images/staged-stdv2/contoso-02-stage2.png)
+![Contoso Stage 4](../images/staged-stdv2/contoso-04-stage4.png)
+![Contoso Stage 5 Entra](../images/staged-stdv2/contoso-05-entra.png)
+![Contoso Graph consent attempt](../images/staged-stdv2/contoso-05b-graph-consent.png)
+![Contoso Stage 8](../images/staged-stdv2/contoso-08-stage8.png)
 
 ## Findings and changes
 
 | # | Observed | Change |
 | --- | --- | --- |
-| 1 | Claude deployments failed with `InvalidModelProviderData`. Preflight passed; the deployment failed. API versions 2025-06-01, 2025-07-01-preview and 2025-09-01 ignore `modelProviderData` | [`foundry-account.bicep`](../infra/staged/foundry-account.bicep) deploys models with `2025-10-01-preview` and `properties.modelProviderData`. `stage1.foundry.modelProviderData` (organizationName, countryCode, industry) is required configuration with no default: it is the Anthropic attestation that accepts the Marketplace offer for the real organization. The lab runs used `Microsoft`, `US`, `technology` |
+| 1 | Claude deployments failed with `InvalidModelProviderData`. Preflight passed; the deployment failed. API versions 2025-06-01, 2025-07-01-preview and 2025-09-01 ignore `modelProviderData` | [`foundry-account.bicep`](../../infra/staged/foundry-account.bicep) deploys models with `2025-10-01-preview` and `properties.modelProviderData`. `stage1.foundry.modelProviderData` (organizationName, countryCode, industry) is required configuration with no default: it is the Anthropic attestation that accepts the Marketplace offer for the real organization. The lab runs used `Microsoft`, `US`, `technology` |
 | 2 | Contoso subscription: "This subscription is internal or sandbox. Only $0.00 products or test products can be purchased." | Subscription limit, not a template defect. `stage1.foundry.modelDeploymentsBlocked` records the reason; Stage 0 warns and Stage 8 records telemetry as not applicable |
 | 3 | Standard v2 alone did not integrate APIM with the VNet | Stage 2 PATCHes APIM to `virtualNetworkType: External` on the APIM subnet (keeping its identity), waits for `Succeeded`, and verifies subnet and identity |
 | 4 | Foundry provisioning and its private path were outside the stages | Stage 1 optionally creates the account and deployments; Stage 2 creates its private endpoint with the cognitiveservices, openai and services.ai zones |
@@ -101,7 +101,7 @@ first read (backup `state.layout1.json`).
 Live negative control (Contoso, separate state copy): `functionsSubnetId` pointed at `snet-apim`.
 Stage 6 reported 5 FAIL rows and stopped with `verify_failed`; the saved state kept `snet-functions`.
 
-Found during this recheck and fixed ([B-16 to B-20](../BUGS-FOUND.md)): the network check recursed
+Found during this recheck and fixed ([B-16 to B-20](../../BUGS-FOUND.md)): the network check recursed
 into its own `Az` function and never reached Azure; it failed on an unrelated same-named DNS zone in
 `ccof-poc-rg`; the schema stage could not be rerun after grants; Stage 7 could not be rerun after a
 successful snapshot. One Contoso Stage 7 attempt stopped at `graph_unauthorized`; Azure CLI and a
@@ -124,7 +124,7 @@ intercepted or bypassed.
 | Portal walkthrough, FDPO/SASET (2026-10-21) | 20 of 20 steps pass (`00-subscription-access` and `06-apim-apis` on a targeted rerun) |
 | Walkthrough negative control | `06-resolver-auth` opened on the Function App overview (without the Authentication menu entry) reports `mismatch`; the Authentication blade reports `pass` |
 
-Walkthrough fixes made during the run (in [tests/playwright](../tests/playwright/README.md)):
+Walkthrough fixes made during the run (in [tests/playwright](../../tests/playwright/README.md)):
 - Sub-blade deep links such as `/managedidentities`, `/networking`, `/virtualNetwork` and `/users`
   opened the resource overview. Those steps now open the overview and select the entry through the
   blade's menu search; IAM steps also select **Role assignments**.
@@ -143,7 +143,7 @@ authentication and returned 401 to the anonymous Stage 8 probe. The guide embeds
 captures with GUIDs, the signed-in account, the directory name and the subscription name masked;
 pages that list people (subscription access, group members) are not published.
 
-Rerun steps: [tests/playwright](../tests/playwright/README.md).
+Rerun steps: [tests/playwright](../../tests/playwright/README.md).
 
 ## Retained resources
 

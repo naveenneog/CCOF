@@ -45,7 +45,8 @@ Set the main deployment values first:
 This is an example of the main choices, not a complete configuration file. Keep the copied template and fill every
 applicable `REPLACE-` value, including backend and group settings. Use `network.mode: create` only for a lab.
 The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
-without `-Apply`, review the preview with its owner, then run with `-Apply`.
+without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with
+`stage N preview only: nothing changed. Rerun with -Apply.`; Stage 0 is read-only and has no `-Apply` step.
 
 ---
 
@@ -69,6 +70,7 @@ Insights, Cosmos DB account, storage, managed identities, four Function Apps, AP
 its Claude deployments. No settings, data or role assignments yet.
 
 ```powershell
+pwsh -File $run -Stage 1 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
 ```
 
@@ -83,6 +85,7 @@ pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
 **Who:** platform engineer · **Time:** about 3 minutes · **Creates:** the `ccof` database and its containers.
 
 ```powershell
+pwsh -File $run -Stage 2 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 ```
 
@@ -96,6 +99,7 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 roles, and Cognitive Services User for API Management on the Foundry account. Not Microsoft Graph permissions.
 
 ```powershell
+pwsh -File $run -Stage 3 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 3 -ConfigPath $cfg -Apply
 ```
 
@@ -110,6 +114,7 @@ pwsh -File $run -Stage 3 -ConfigPath $cfg -Apply
 ([prerequisites](02-prerequisites.md#entra-applications)) and, when the configuration names them, the groups.
 
 ```powershell
+pwsh -File $run -Stage 4 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 4 -ConfigPath $cfg -Apply
 ```
 
@@ -124,6 +129,7 @@ authentication, the gateway API, its policy (as policy fragments), the `/usage` 
 workbook.
 
 ```powershell
+pwsh -File $run -Stage 5 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 ```
 
@@ -140,6 +146,7 @@ pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 private endpoints, DNS zone links, Function App and API Management VNet integration. In `verify` mode it only checks.
 
 ```powershell
+pwsh -File $run -Stage 6 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 ```
 
@@ -156,11 +163,21 @@ the backend and the groups in the configuration, **applies** a membership snapsh
 client file. One Stage 7 at a time per checkout.
 
 ```powershell
+pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 7 -ConfigPath $cfg -Apply
 ```
 
-**Expected:** `… : created` per seeded document, a `ccof.sync.run.v1` line with `"outcome":"succeeded"` and
-`membersAdmitted`, the `Set-ClaudeCodeGateway.ps1` command for developers, and `stage 7 completed and verified in … s`.
+**Expected**, in this order:
+
+- [ ] three `Deploying the … package … (OneDeploy)` lines and a `Built …/admin.zip sha256=…` line;
+- [ ] `Seeding … documents`, then `… : created` for the backend and for each group (groups are stored in the
+      `projects` container);
+- [ ] a `ccof.sync.run.v1` line with `"outcome":"succeeded"`, `"membersAdmitted"` above 0 and `"writeFailures":0`;
+- [ ] `Configure this machine: pwsh -File scripts/client/Set-ClaudeCodeGateway.ps1 …`, the command for developers;
+- [ ] the last line `stage 7 completed and verified in … s`.
+
+A rerun prints `present-equal` instead of `created` for documents that already exist. A document that differs from
+the configuration stops the stage with `seed_documents_differ` and is not overwritten.
 A first run right after Stage 6 can stop with a storage `403`; rerun after about five minutes
 ([troubleshooting](../operate/troubleshooting.md)).
 
@@ -174,6 +191,7 @@ A first run right after Stage 6 can stop with a storage `403`; rerun after about
 checks the admin console and that every request reached the usage ledger, charged to the expected group.
 
 ```powershell
+pwsh -File $run -Stage 8 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 8 -ConfigPath $cfg -Apply
 Get-Content "$HOME/ccof-private/.staged-state/evidence/stage8.verify.json"
 ```

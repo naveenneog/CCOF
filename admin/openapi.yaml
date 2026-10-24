@@ -5,7 +5,7 @@ info:
   description: >
     Manage projects through the admin app managed identity. V2 adds optional capability-gated
     directory lookup, inventory, cost definitions, health and telemetry. No permission grants,
-    network changes or membership writes are performed. See docs/ADMIN-V2.md.
+    network changes or membership writes are performed. See docs/archive/ADMIN-V2.md.
 servers:
   - url: https://{functionAppHost}/api
     variables:

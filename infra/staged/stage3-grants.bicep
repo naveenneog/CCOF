@@ -4,7 +4,7 @@
 //   Reader); the APIM identity on each Foundry account (Cognitive Services User, cross-scope).
 //   Cosmos data plane: the quickstart's custom role definitions and assignments
 //   (infra/quickstart/modules/cosmos-data.bicep; tests/Test-StagedStages.ps1 compares them), plus the
-//   admin project editor of docs/ADMIN-QUICK-STAGES.md 7b and its catalog container.
+//   admin project editor of docs/archive/ADMIN-QUICK-STAGES.md 7b and its catalog container.
 // Operator: Owner, or Contributor plus Role Based Access Control Administrator (Azure RBAC), and the
 // Cosmos sqlRoleDefinitions/write and sqlRoleAssignments/write actions. Names are deterministic, so
 // a rerun converges; removing a principal here does not delete an earlier assignment.
