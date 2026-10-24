@@ -1,5 +1,7 @@
 # Admin app: quick, modular customer deployment
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 Use this only if the customer now permits an approved administrator to clone the repository.
 The no-clone, Portal-first option remains the [Public Access Workbook, Modules 18-24](runbooks/PUBLIC-ACCESS-WORKBOOK.md#admin-hand-configuration).
 This is an optional faster path, not a replacement for that in-progress workbook.

@@ -1,5 +1,7 @@
 # Microsoft Entra prerequisites for the quick-start
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 Complete these before Bicep. Deployment only **reads** app registrations and security groups;
 it never creates an Entra object, grants delegated consent or changes authentication settings.
 The Entra administrator and Azure deployer may be different people.

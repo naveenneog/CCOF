@@ -1,5 +1,7 @@
 # D1 prerequisite resources workbook
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 Stage D1 of the deployment (`docs/PILOT.md` C-9, `docs/DEPLOYMENT-STAGES.md`). The customer's
 infrastructure teams create the resources below, in the Azure portal or with the optional Bicep of
 `infra/prereqs`. Then `scripts/Record-Prerequisites.ps1` reads each resource, checks it against the

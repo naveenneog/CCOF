@@ -2,7 +2,27 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-LIMIT — budget and group acceptance ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-DOCS — reader-facing documentation and pseudonymised demo evidence ([ROADMAP](ROADMAP.md)).
+
+### G-DOCS — documentation refresh (2026-10-24, source complete)
+
+- Acceptance: short role-based pages, prerequisites and stages with expected outputs, live Portal and console
+  captures with consistent hypothetical identifiers, own-usage states and chargeback CSV; links checked offline.
+- Fresh `ccof-demo-rg` deployment: Stages 0-8 verified on their first runs. Product onboarded in the deployed
+  console; 44 screenshots, with names and IDs replaced before capture.
+- Demo guard 80 / 25 / 5: USD 2 person budget ended at USD 2.14 recorded (7% over); 71 succeeded, 95 throttled,
+  69 refused. This is not a strict dollar ceiling. [Evidence](evidence/2026-10-24-demo/README.md).
+- Live capture exposed an exhausted-status-line omission. RED: expected refusal text was absent; GREEN:
+  client 68/68. Root 1206 pass and strict typecheck clean before recovery.
+- Council round 1 found rehashed pseudonyms on repeat capture, unpinned developer login configuration and incorrect
+  snapshot/cache instructions. Regression tests failed first; capture now restores the live DOM even on failure.
+  Login uses the supplied absolute config; snapshot mode lists all registered groups explicitly.
+- Council round 2: ARCHITECT, CODER, QA, UX and SECURITY PASS. Ten docs/capture tests pass; nine mutations caught
+  with all five tests loading in each targeted suite. Client 68/68; strict typecheck and packet gate pass.
+- All 44 images checked with local Windows OCR: no configured real-name or known live-GUID matches. Staged secret
+  scan clean; 656 tracked text files checked against eight known live IDs, with a deliberate leak rejected.
+- Public release 10 is pending; the reviewed source and pseudonymised evidence are ready to commit.
+- The demo lab remains deployed; cleanup is not yet claimed.
 
 ### G-GUARD — budget guard: projected spend, rate guard, 80% warning (2026-10-24)
 

@@ -174,3 +174,8 @@ test('projected spend at the budget says new requests are refused, not slowed (t
   assert.doesNotMatch(line, /slowed/);
   assert.equal(statusLine(usage([full])), 'CCOF $98.40/$100.00 (98%) - budget reached, requests refused');
 });
+test('a used-up budget says so on the status line, with or without a guard warning (live demo 2026-10-24 showed only the percent)', () => {
+  const used = { spent: { ccu: '214', usd: '2.14' }, budget: { ccu: '200', usd: '2' }, remaining: { ccu: '0', usd: '0' }, percentUsed: 107, exhausted: true };
+  assert.equal(statusLine(usage([scope({ ...used, warning: true, projectedPercent: 115.8 })])), 'CCOF $2.14/$2.00 (107%) - budget used up, requests refused');
+  assert.equal(statusLine(usage([scope({ ...used, warning: false })])), 'CCOF $2.14/$2.00 (107%) - budget used up, requests refused');
+});

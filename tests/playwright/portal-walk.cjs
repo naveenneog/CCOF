@@ -3,8 +3,11 @@
 // Each step: { id, title, guideStep, url, expect: [text...] }. Records signed-in / found text / screenshot.
 const { chromium } = require('playwright-core'); const fs = require('fs'); const path = require('path');
 const [profile, tenant, stepsFile, outDir, maskList] = process.argv.slice(2);
-// Optional fifth argument: comma-separated literal strings (subscription or directory names) masked in screenshots.
-const MASK = (maskList || '').split(',').map(x => x.trim()).filter(Boolean);
+// Optional fifth argument: a pseudonym mapping file (*.json, see pseudonymise.cjs): real identifiers become
+// consistent hypothetical ones. Otherwise comma-separated literal strings masked in screenshots.
+const PSEUDO = maskList && maskList.endsWith('.json') ? require('./pseudonymise.cjs') : null;
+const PSEUDO_CFG = PSEUDO ? PSEUDO.loadConfig(maskList) : null;
+const MASK = PSEUDO ? [] : (maskList || '').split(',').map(x => x.trim()).filter(Boolean);
 const steps = JSON.parse(fs.readFileSync(stepsFile, 'utf8'));
 const GUID = /\b([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{8}([0-9a-f]{4})\b/gi;
 async function maskAll(page) {
@@ -69,16 +72,20 @@ async function maskAll(page) {
       // Some blades show a loading state ("Service is getting ready...") for longer: read once more.
       if (!r.found.every(x => x.present)) { await page.waitForTimeout(s.retryWait ?? 30000); text = await read(); r.found = check(text); r.reread = true; }
       r.status = r.found.every(x => x.present) ? 'pass' : 'mismatch';
-      await maskAll(page);
       r.screenshot = path.join(outDir, `${s.id}.png`);
-      await page.screenshot({ path: r.screenshot });
+      if (PSEUDO) {
+        await PSEUDO.capturePseudonymised(page, PSEUDO_CFG, { path: r.screenshot });
+        r.leaks = 0;
+      } else {
+        await maskAll(page);
+        await page.screenshot({ path: r.screenshot });
+      }
       const leak = text.match(GUID); r.guidsMaskedOnPage = leak ? leak.length : 0;
     } catch (e) { r.status = 'error'; r.error = e.message.slice(0, 300); }
     results.push(r); console.log(`${r.status.padEnd(16)} ${s.id} ${s.title}`);
   }
   fs.writeFileSync(path.join(outDir, 'walk-results.json'), JSON.stringify(results, null, 1));
   if (!existing) await page.close();
-  process.exit(0);
+  process.exit(PSEUDO && results.some((r) => r.status !== 'pass') ? 1 : 0);
 })().catch(e => { console.error(e.message); process.exit(1); });
-
 

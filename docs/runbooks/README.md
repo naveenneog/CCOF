@@ -1,5 +1,7 @@
 # Runbooks
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](../get-started/01-what-it-is.md).
+
 Copy-paste runbooks. Each step is a block you paste as-is; values come from one variables block at
 the top.
 

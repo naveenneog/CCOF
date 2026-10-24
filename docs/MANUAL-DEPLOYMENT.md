@@ -1,5 +1,7 @@
 # Manual modular deployment
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 For resource creation through Portal wizards rather than Bicep module deployment,
 use the separate [Azure Portal-first workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md).
 It includes UI configuration, one-app code publishing, per-app runtime-access grants,

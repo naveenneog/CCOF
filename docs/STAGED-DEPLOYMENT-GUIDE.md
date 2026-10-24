@@ -1,5 +1,9 @@
 # Staged deployment guide
 
+> **Short path:** [Get started](get-started/01-what-it-is.md) gives the same stages as steps with the expected output
+> and a screenshot for each. This page is the full reference: every setting, the Portal way of each stage, and the
+> evidence of the live runs.
+
 This guide deploys CCOF (Claude Code on Foundry) in nine stages, 0 to 8, and then onboards Entra
 groups. Each stage has a **Cloud Shell** way (one script command) and a **Portal (UI)** way (the
 equivalent screens), and the same configuration file drives both. Every stage previews first and

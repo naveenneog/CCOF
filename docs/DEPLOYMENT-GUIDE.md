@@ -1,5 +1,7 @@
 # Deploy the claude-code-on-foundry proof of concept
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 This guide walks through deploying the live proof of concept this repository's `docs/STATUS.md`
 documents: a private-network Azure API Management gateway in front of Claude on Microsoft Foundry,
 a Cosmos DB registry, and a resolver Function App, using the exact resources, commands, and

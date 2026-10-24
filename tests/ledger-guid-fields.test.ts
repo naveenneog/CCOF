@@ -1,5 +1,5 @@
 // Kusto's parse_json types a GUID-shaped string as guid (live Log Analytics, 2026-10-24:
-// gettype(parse_json('{"a":"b1c0b485-15f0-4702-b5c1-81bfa40e6189"}').a) == "guid"). A group-centric
+// gettype(parse_json('{"a":"0b65c63f-4d92-4e52-a492-c5455d71cfda"}').a) == "guid"; hypothetical ID). A group-centric
 // onboarding uses the group's object ID as projectId, so a `== "string"` check dropped every group request
 // from the ledger: attributionKnown false, no spend, no budget, no chargeback row (live Stage 8 + reconciler).
 import assert from "node:assert/strict";

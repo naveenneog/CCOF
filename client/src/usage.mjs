@@ -83,7 +83,8 @@ export function statusLine(usage) {
   if (!current.length) return '';
   const top = current.reduce((a, b) => (Number(b.spent.ccu) > Number(a.spent.ccu) ? b : a));
   const pct = percentText(top.percentUsed);
-  const warn = top.warning !== true || top.exhausted ? ''
+  const warn = top.exhausted ? ' - budget used up, requests refused'
+    : top.warning !== true ? ''
     : Number(top.projectedPercent) >= 100 ? ' - budget reached, requests refused'
     : ` - warning: about ${percentText(top.projectedPercent) ?? 'most'} used, slowed`;
   return `CCOF ${formatAmount(top.spent.usd)}/${formatAmount(top.budget.usd)}${pct ? ` (${pct})` : ''}${warn}`;
