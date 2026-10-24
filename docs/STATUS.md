@@ -18,8 +18,12 @@
   field labels readable); Security PASS (configured identifier scan clean, no secrets or live calls).
 - Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment.
 - Public release 11: `fcb187c` on `naveenneog/CCOF` `main`, applied to `public-main` as the `2f84715..53bac48` diff.
-  Scrub-rule, private-literal and GUID scans clean (new GUIDs are pseudonyms, absent from the raw capture); gitleaks
-  clean; docs tests 13/13 on the public tree; public CI run `40110954891` success.
+  Scans of the published tree, 2026-10-24: release 11 adds no scrub-rule match. The scrub check reports 6 matches,
+  all the hypothetical `contoso.com` alias in `docs/evidence/2026-10-24-demo/README.md` (1) and
+  `tests/docs-pseudonymise.test.ts` (5), published in release 10. The private-literal scan matches only the public
+  repository name `naveenneog/CCOF` (clone URL in `docs/get-started/03-deploy.md`, CI links in ROADMAP/STATUS). The
+  three GUIDs in `usage-03-refused.txt` are pseudonyms; none of the raw capture's GUIDs appear in `origin/main`.
+  gitleaks clean; docs tests 13/13 on the public tree; public CI run `40110954891` success.
 
 ### G-DOCS — documentation refresh (2026-10-24, complete)
 
