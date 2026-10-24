@@ -3,6 +3,18 @@
 Tick every line before Stage 0. Each item names who provides it. Details and least-privilege roles:
 [staged guide, section 2](../STAGED-DEPLOYMENT-GUIDE.md#2-prerequisites).
 
+## Single-subscription lab path
+
+The 2026-10-24 lab used one Azure subscription and `network.mode: create`; Stage 6 created its own VNet and
+integrations. Stages 0–8 took 62 minutes in that run. Times vary. API Management, Cosmos DB and Functions incur
+charges while deployed; model calls add usage charges.
+
+The lab path still needs a subscription with quota for the selected Claude models, a new empty resource group,
+platform Contributor and Role Based Access Control Administrator access, and an Entra administrator or owners of
+the three existing app registrations. Existing Entra apps and groups can be reused when approved. Set
+`network.mode` to `create` only for a lab; production deployments use a customer-built network and `verify` mode.
+The [demo evidence](../evidence/2026-10-24-demo/README.md) records which directory objects were reused.
+
 ## People and approvals
 
 - [ ] **Platform engineer** with Contributor on a new, empty resource group (and permission to create it).

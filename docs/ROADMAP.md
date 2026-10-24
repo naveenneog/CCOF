@@ -40,7 +40,8 @@
 | G-LIMIT — Live budget and group acceptance | Complete (live) | USD 10 through the gateway, family limit, higher-spend selection, bypass attempts, WBS ID chargeback, guide walkthrough ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)). Open: E2E-01 |
 | G-FRAG — Policy fragment cleanup | Pending | Content-addressed fragments (ADR-0039) from earlier policies stay in API Management. Remove fragments no API policy or revision references, after a deployment verifies |
 | G-GUARD — Budget guard | Complete (live) | Projected spend, rate guard, 80% warning in `/usage` and the status line; USD 14 budget ended 1.1% under ([ADR-0040](adr/0040-budget-guard.md)) |
-| G-DOCS — Reader documentation | Complete | Role-based short pages, fresh Stages 0-8 lab, 44 pseudonymised screenshots, own-usage and CSV evidence; council, strict typecheck and packet gate pass |
+| G-DOCS — Reader documentation | Complete | Role-based short pages, fresh Stages 0-8 lab, 44 pseudonymised screenshots, own-usage and CSV evidence; council, strict typecheck, packet gate and public CI pass (release 10, `2f84715`) |
+| G-DOCS-R1 — First-time reader follow-up | Complete | Main deployment values and single-subscription lab route explained; readable review screenshot, current exhausted-budget output and plain-language live summary |
 
 Gate follow-ups (existing): split oversized legacy UI/staged files by responsibility; keep the Power BI authentication
 and backend-429 billing unknowns open until independently verified. G-DOCS does not change those behaviors.

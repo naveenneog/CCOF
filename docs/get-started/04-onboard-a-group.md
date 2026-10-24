@@ -30,13 +30,13 @@ it), **priority** (when a person is in several groups and names none: the group 
 then the lower number), and the **models**: the families and exact model IDs, with optional token limits per person
 and per group. Restricted families (Fable, Mythos) only with approval.
 
-![Step 3: surfaces, chargeback ID, priority, models and limits](../evidence/2026-10-24-demo/console-03-access-models.png)
+The next review step shows the requested chargeback ID and priority by name before submission.
 
 ## Step 4 — Review and onboard
 
 The page shows the exact request. **Onboard group** saves it; the change is recorded in the audit log.
 
-![Step 4: the request to be saved](../evidence/2026-10-24-demo/console-04-review.png)
+![Step 4 review: chargeback ID, priority and admitted models shown by name before saving](../evidence/2026-10-24-demo/console-04-review.png)
 
 ## Expected result
 

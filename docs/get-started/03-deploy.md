@@ -16,13 +16,36 @@ npm ci --ignore-scripts --include=dev
 az account set --subscription '<subscription-id>'
 New-Item -ItemType Directory -Force $HOME/ccof-private | Out-Null
 Copy-Item infra/staged/staged.config.example.json $HOME/ccof-private/staged.config.json
-code $HOME/ccof-private/staged.config.json        # replace every REPLACE- value
+code $HOME/ccof-private/staged.config.json
 $cfg = "$HOME/ccof-private/staged.config.json"
 $run = "infra/staged/Invoke-StagedDeployment.ps1"
 ```
 
-The configuration keys are listed in [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each
-stage: run it without `-Apply`, read the preview, have the stage's owner approve, then run it with `-Apply`.
+Set the main deployment values first:
+
+```json
+{
+  "tenantId": "<tenant-guid>",
+  "subscriptionId": "<subscription-guid>",
+  "resourceGroup": "ccof-lab-rg",
+  "location": "eastus2",
+  "stage1": {
+    "prefix": "ccoflab",
+    "foundry": {
+      "create": true,
+      "accountName": "<unique-foundry-name>"
+    }
+  },
+  "network": {
+    "mode": "create"
+  }
+}
+```
+
+This is an example of the main choices, not a complete configuration file. Keep the copied template and fill every
+applicable `REPLACE-` value, including backend and group settings. Use `network.mode: create` only for a lab.
+The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
+without `-Apply`, review the preview with its owner, then run with `-Apply`.
 
 ---
 

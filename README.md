@@ -30,18 +30,16 @@ Then: [users and groups](docs/operate/users-and-groups.md) · [budgets](docs/ope
 [chargeback](docs/operate/chargeback-and-tags.md) · [troubleshooting](docs/operate/troubleshooting.md) ·
 [all documentation](docs/INDEX.md) · [glossary](docs/GLOSSARY.md).
 
-## Proven live
+## Live acceptance
 
-On 2026-10-24 live acceptance runs covered:
+Live checks confirmed group-specific model access, refusal after budget exhaustion, and a person's *WBS ID* in the
+downloaded chargeback report. The USD 10 test recorded USD 11.25 (USD 11.97 at list rates); a later guarded USD 14
+run recorded USD 13.84. The guard reduces overshoot but is not a strict spending cap.
 
-- through the gateway: allowed models `200`, other models `403`, 23 bypass attempts refused or confined to the
-  person's other budget;
-- a USD 10 budget used up and refused; with the budget guard, a USD 14 budget ended at USD 13.84;
-- the admin console's *WBS ID* field and a person's tag in the downloaded chargeback CSV.
-
-A separate fresh demo deployment passed all nine stages and captured the expected outcomes. Its USD 2 budget
-ended at USD 2.14 with the guard set to 25%. Screenshots: [evidence](docs/evidence/2026-10-24-demo/README.md). Test report:
-[budget and group acceptance](docs/status/BUDGET-ACCEPTANCE-2026-10-23.md).
+The detailed report records 23 attempts to get around model and budget rules and their outcomes:
+[budget and group acceptance](docs/status/BUDGET-ACCEPTANCE-2026-10-23.md). A separate lab passed all nine deployment
+stages; its USD 2 demonstration ended at USD 2.14 with a 25% guard setting. Screenshots:
+[demo evidence](docs/evidence/2026-10-24-demo/README.md).
 
 Deployment creates billable Azure resources and needs directory and resource permissions. Reported costs are list
 price at the rate card, not an Azure invoice.

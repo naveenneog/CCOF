@@ -2,7 +2,22 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-DOCS — reader-facing documentation and pseudonymised demo evidence ([ROADMAP](ROADMAP.md)).
+**Active packet:** G-DOCS-R1 — first-time reader follow-up (complete; [ROADMAP](ROADMAP.md)).
+
+### G-DOCS-R1 — first-time reader follow-up (complete, 2026-10-24)
+
+- Acceptance: key deployment values shown; measured single-subscription lab route includes duration, permissions and
+  charges; onboarding guide uses the readable review screen; exhausted-budget output uses the current status-line
+  formatter; README summary uses reader-facing language. Complete.
+- Scope: documentation and evidence only; no Azure deployment or product behavior changes. The screenshot was
+  refreshed from the saved usage response; no paid model request was made.
+- Checks: reader docs and pseudonymisation 13/13; client usage 16/16; `node .ironclad/gate.mjs --stage packet`
+  PASS (23 passed, 2 pre-existing warnings for G-R3 and E2E-01, 1 skipped). Gate's full `npm test` passed.
+- Council: Architect PASS (no architecture changes); Coder PASS (focused documentation and recorded output);
+  QA PASS (new reader assertions and existing status-line regression); UX PASS (cost/permissions surfaced and
+  field labels readable); Security PASS (configured identifier scan clean, no secrets or live calls).
+- Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment or
+  public release in this follow-up.
 
 ### G-DOCS — documentation refresh (2026-10-24, source complete)
 
