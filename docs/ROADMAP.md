@@ -4,13 +4,14 @@
 
 - [x] G-LIMIT-offline: reproduce budget bypasses, retain the monetary TPM ceiling, add complete-accounting admission,
   and test family restrictions and higher-spend selection. Strict atomic reservations remain unimplemented (ADR-0038).
-- [ ] G-LIMIT-live: isolated updated gateway run with a USD 10 test ceiling. Direct Foundry smoke/cache usage was
-  USD 0.011476 at list rates; gateway sign-in/consent blocks the requested full run.
+- [x] G-LIMIT-live: isolated updated gateway acceptance completed; measured spend and overshoot are recorded in
+  [the live report](status/BUDGET-ACCEPTANCE-2026-10-23.md).
 - [x] G-LABEL: admin-defined individual tag label (for example WBS ID), persisted and present in tagging, filters and
   downloadable chargeback report headers; existing API properties remain compatible.
-- [ ] G-WALK: Playwright walkthrough of the staged guide, sanitized screenshots, prerequisites for Entra apps and
-  stage-specific permissions. Local admin browser checks and Stage 0/Stage 1 preview complete; Portal sign-in and
-  actual Stages 2-8 deployment remain blocked.
+- [x] G-WALK: Playwright walkthrough of the staged guide, prerequisites and stage-specific permissions; live
+  Stages 0-8 verified. Reader-facing pseudonymised captures are part of G-DOCS.
+- [x] G-DOCS: short README, documentation index and glossary, get-started and operate pages; fresh deployment,
+  expected-outcome screenshots with hypothetical identifiers, usage states, chargeback CSV and offline doc checks.
 
 | Packet | Status | Acceptance |
 | --- | --- | --- |
@@ -39,6 +40,10 @@
 | G-LIMIT — Live budget and group acceptance | Complete (live) | USD 10 through the gateway, family limit, higher-spend selection, bypass attempts, WBS ID chargeback, guide walkthrough ([report](status/BUDGET-ACCEPTANCE-2026-10-23.md)). Open: E2E-01 |
 | G-FRAG — Policy fragment cleanup | Pending | Content-addressed fragments (ADR-0039) from earlier policies stay in API Management. Remove fragments no API policy or revision references, after a deployment verifies |
 | G-GUARD — Budget guard | Complete (live) | Projected spend, rate guard, 80% warning in `/usage` and the status line; USD 14 budget ended 1.1% under ([ADR-0040](adr/0040-budget-guard.md)) |
+| G-DOCS — Reader documentation | Complete | Role-based short pages, fresh Stages 0-8 lab, 44 pseudonymised screenshots, own-usage and CSV evidence; council, strict typecheck and packet gate pass |
+
+Gate follow-ups (existing): split oversized legacy UI/staged files by responsibility; keep the Power BI authentication
+and backend-429 billing unknowns open until independently verified. G-DOCS does not change those behaviors.
 
 ## Earlier packets
 

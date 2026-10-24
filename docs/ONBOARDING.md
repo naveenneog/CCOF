@@ -1,5 +1,7 @@
 # Onboarding
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 WP-ONB implements the P-2 stage contract. [ADR-0012](adr/0012-explicit-onboarding-decisions-and-private-apply.md) records the private-runner boundary and the owner's explicit-decision requirement.
 
 ## Decisions and confirmation

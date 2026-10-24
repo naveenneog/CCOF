@@ -1,5 +1,7 @@
 # Quick-start: one administrator, one Bicep, one parameters file
 
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+
 The quick-start (ADR-0024, Proposed) deploys the whole core for ONE administrator who holds every
 Azure role: a proof of concept, a demo, a single team. It does not replace the checkpointed stages
 of ADR-0019, which separate teams run (`docs/adr/0024-single-administrator-quick-start.md`).

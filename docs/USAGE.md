@@ -82,7 +82,7 @@ The line then ends, for example:
 ... $11.25 of $14.00 used (80%), $2.75 left, as of 06:32 UTC. Warning: about 80% of this budget is used or in progress; requests are now slowed so the budget is not exceeded.
 ```
 
-and the status line reads `CCOF $11.25/$14.00 (80%) - warning: about 80% used, slowed`. When projected spend reaches the budget the gateway refuses new requests; the line then says so (`budget reached, requests refused`). A state without the
+and the status line reads `CCOF $11.25/$14.00 (80%) - warning: about 80% used, slowed`. When projected spend reaches the budget the gateway refuses new requests; the line then says so (`budget reached, requests refused`). When recorded spend reaches the budget, it reads `budget used up, requests refused`. A state without the
 guard fields has neither field. Claude Code does not show gateway response headers, so `/usage` and the
 status line are where a person sees the warning.
 

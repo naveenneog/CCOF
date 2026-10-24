@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-10-24 — Reader documentation and demo screenshots
+
+- Short README, documentation index and glossary, five get-started pages and four operate pages. Earlier guides
+  remain available with a link to the short path.
+- Fresh deployment evidence: Stages 0-8, Portal prerequisites, console group onboarding, own-usage states and
+  chargeback CSV. Real names and identifiers replaced with consistent hypothetical values.
+- Offline checks cover reader-page links/images, size and quoted script output.
+- Capture tooling refuses configured identifier leaks and restores the original page after each screenshot, so
+  repeated captures retain the same pseudonyms without changing live form values.
+- Developer login uses the supplied client configuration. Snapshot-mode instructions include console-added groups
+  explicitly; model/limit updates wait for sync before gateway cache expiry.
+- Exhausted budgets now retain an explicit refusal notice in the Claude Code status line; the live run exposed
+  the missing notice. Recorded demo spend: USD 2.14 against USD 2 with a 25% guard setting, not a strict cap.
+
 ## 2026-10-24 — Budget guard: warning at 80% and bounded overshoot
 
 - Optional `reconciler.budgetGuard` (`warnPercent`, `overshootPercent`, `projectionMinutes`; example 80 / 5 / 5).
