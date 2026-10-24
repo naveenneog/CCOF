@@ -17,7 +17,7 @@ WP-SHOTS, annotated, with ids and names of people redacted.
 |---|---|
 | The D0 decisions (tier, units, zones, capacity mode, retention, Flex sizing, storage redundancy) | WP-HADEC's Stage 0 export, `kind: ccof.stage0.availability`, named in the answers as `availabilityFile` or inline as `availability` |
 | Names, network, publisher and app registration ids | The answers file, validated against `config/core.answers.schema.json` (sections listed in `x-ccof-stages.D1`) |
-| Policy in the target subscription | Read before you start: where policy forces private access (as in the Lab A proof of concept, `docs/DEPLOYMENT-GUIDE.md`, Troubleshooting), create the network of steps D1-03 to D1-05 |
+| Policy in the target subscription | Read before you start: where policy forces private access (as in the Lab A proof of concept, `docs/archive/DEPLOYMENT-GUIDE.md`, Troubleshooting), create the network of steps D1-03 to D1-05 |
 
 Check the answers before creating anything. This makes no Azure call:
 
@@ -30,7 +30,7 @@ prints the optional Bicep commands, the role preflight first (Role preflight, af
 
 ## Who does what
 
-| Steps | Performed by | Role and scope (`docs/DEPLOYMENT-GUIDE.md`, People and roles) |
+| Steps | Performed by | Role and scope (`docs/archive/DEPLOYMENT-GUIDE.md`, People and roles) |
 |---|---|---|
 | D1-01, D1-02 | Platform deployer | Contributor on the subscription (resource providers, resource group) |
 | D1-03 to D1-15 | Infrastructure team | Contributor on the resource group; Network Contributor on the VNet in network mode `existing` |
@@ -49,7 +49,7 @@ verified. `Record-Prerequisites.ps1 -Action Record` repeats every verification.
   Microsoft.ApiManagement, Microsoft.Web, Microsoft.App, Microsoft.DocumentDB, Microsoft.Network,
   Microsoft.OperationalInsights, Microsoft.Insights, Microsoft.Storage and Microsoft.ManagedIdentity.
   Microsoft.App is needed by Flex Consumption's VNet integration, and Microsoft.Web by APIM v2's
-  (`docs/DEPLOYMENT-GUIDE.md`, Step 1 and Troubleshooting).
+  (`docs/archive/DEPLOYMENT-GUIDE.md`, Step 1 and Troubleshooting).
 - **Command:** `az provider register --namespace <namespace> --subscription <id>`.
 - **Verify:** `az provider show --namespace <namespace> --subscription <id> --query registrationState` reads `Registered`.
 
@@ -118,7 +118,7 @@ verified. `Record-Prerequisites.ps1 -Action Record` repeats every verification.
 - **Portal:** Managed Identities → Create, once for each. Note the Object (principal) ID and the
   Client ID on Overview; D1-19 records them. The sync's identity exists before its app, so a Graph
   application permission can be granted before the app's first token request
-  (`docs/DEPLOYMENT-GUIDE.md`, Step 7).
+  (`docs/archive/DEPLOYMENT-GUIDE.md`, Step 7).
 - **Bicep:** `infra/prereqs/identities.bicep`.
 - **Verify:** both exist in the resource group.
 

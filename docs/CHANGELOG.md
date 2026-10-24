@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-24 — Novice reader fixes (release 12)
+
+- Developer setup starts with cloning the repository and names the folder every command runs from.
+- Each deployment stage shows its preview command before the `-Apply` command; Stage 7 has a success checklist.
+- The lab route gives a rough daily cost (about USD 25 per day before usage) with price sources and where to see
+  actual spend.
+- The admin console's earlier-model page is labelled **Legacy projects**.
+- Thirteen earlier guides and run records moved to `docs/archive/`, listed by its README.
+
 ## 2026-10-24 — First-time reader follow-up
 
 - Added an example of the main staged-deployment values and a single-subscription lab path with measured duration,
@@ -23,6 +32,8 @@
   explicitly; model/limit updates wait for sync before gateway cache expiry.
 - Exhausted budgets now retain an explicit refusal notice in the Claude Code status line; the live run exposed
   the missing notice. Recorded demo spend: USD 2.14 against USD 2 with a 25% guard setting, not a strict cap.
+- Public release 10: `2f84715`, CI passes on Node 22 and 26
+  ([run](https://github.com/naveenneog/CCOF/actions/runs/40096140727)).
 
 ## 2026-10-24 — Budget guard: warning at 80% and bounded overshoot
 
@@ -208,7 +219,7 @@
 
 - Playwright walked the guide's 20 Portal steps on the signed-in Lab B/Lab B and Lab A Portals:
   20/20 and 19/20 pass; the remaining Lab A step is the APIs blade staying on "Service is getting
-  ready..." while ARM lists the API ([report](STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)).
+  ready..." while ARM lists the API ([report](archive/STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)).
 - Walker fixes in `tests/playwright`: blade-menu navigation for sub-blades without a stable deep
   link, IAM **Role assignments** tab and list filters, reuse of the signed-in tab and its Portal
   host, one re-read for slow blades, literal-string masking. Two weak expectations were tightened;
@@ -228,7 +239,7 @@
 - Logged findings B-10 through B-15 in [`BUGS-FOUND.md`](../BUGS-FOUND.md). Offline staged,
   customer-deployment, quickstart and public-manual checks pass. Stage 1, Stage 2 and Stage 8
   acceptance rechecks and the Stage 4 grant recheck pass in both Lab B and Lab A
-  ([report](STAGED-STDV2-RUNS-2026-10-20.md)).
+  ([report](archive/STAGED-STDV2-RUNS-2026-10-20.md)).
 
 ## 2026-10-20 — Standard v2 and private Foundry, Lab B and Lab A
 
@@ -241,7 +252,7 @@
   this run's request IDs.
 - Live: Lab B (shared RG) stages 0-8 with 200 responses; Lab A stages 0-8 with new
   Entra objects, Claude blocked by the sandbox subscription, Graph consent refused without an active
-  admin role ([report](STAGED-STDV2-RUNS-2026-10-20.md)).
+  admin role ([report](archive/STAGED-STDV2-RUNS-2026-10-20.md)).
 
 ## 2026-10-20 — Manual Portal walkthrough and verification gaps
 
@@ -268,7 +279,7 @@
   `BasicV2` allowed; outputs `names` and `apimName` for later stages.
 - Live run in a new lab RG after deleting the Stage 1 RG: all nine stages verified, gateway
   401/200/403 matrix, Admin V3 with live chargeback data
-  ([report](STAGED-LIVE-RUN-2026-10-20.md), 20 screenshots in `docs/images/staged`).
+  ([report](archive/STAGED-LIVE-RUN-2026-10-20.md), 20 screenshots in `docs/images/staged`).
 - Tests: `tests/Test-StagedStages.ps1` (stage boundaries with a negative control, Cosmos
   contract against the quickstart, driver and configuration checks).
 - Runbook rewritten: [configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
@@ -283,7 +294,7 @@
 - Added a scoped work ledger and local Ironclad charter/gate without installing
   hooks or changing CI. The stage contract remains the existing resources-only
   template and recursive offline test.
-- Added the Stage 1 [live report](STAGE1-LIVE-VERIFICATION.md) and
+- Added the Stage 1 [live report](archive/STAGE1-LIVE-VERIFICATION.md) and
   [permission/configuration/runbook](runbooks/STAGED-DEPLOYMENT-V2.md).
 - Full packet gate, root regression/type-check/build and 95 admin tests pass.
   Later-stage entry points, Admin V3 Azure acceptance and scale/accessibility

@@ -16,9 +16,9 @@ How to use it:
 2. Run the blocks in order. Each one ends with an **Expect** line; stop if you see something else.
 3. Cloud Shell drops variables when it times out. After a reconnect, paste **block 0.1** again.
 
-Reference: [QUICKSTART.md](../QUICKSTART.md) (form fields),
-[QUICKSTART-PREREQUISITES.md](../QUICKSTART-PREREQUISITES.md) (Entra apps and groups),
-[NETWORK.md](../NETWORK.md), [SYNC.md](../SYNC.md), [ONBOARDING.md](../ONBOARDING.md).
+Reference: [QUICKSTART.md](../archive/QUICKSTART.md) (form fields),
+[QUICKSTART-PREREQUISITES.md](../archive/QUICKSTART-PREREQUISITES.md) (Entra apps and groups),
+[NETWORK.md](../NETWORK.md), [SYNC.md](../SYNC.md), [ONBOARDING.md](../archive/ONBOARDING.md).
 
 | Step | What | Changes Azure? |
 |---|---|---|
@@ -196,7 +196,7 @@ az ad app list --display-name '<resolver-app-name>' --query "[].{name:displayNam
 Use the **appId** (Application (client) ID), not the object ID. The form's
 `gatewayApi.accessTokenVersion` must equal the app's token version (an empty value means 1). For the
 app settings themselves (redirect URIs, scope, public client flows), see
-[QUICKSTART-PREREQUISITES.md](../QUICKSTART-PREREQUISITES.md).
+[QUICKSTART-PREREQUISITES.md](../archive/QUICKSTART-PREREQUISITES.md).
 
 ### 1.6 Groups (form section 4 `groups`)
 

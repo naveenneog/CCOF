@@ -17,6 +17,10 @@ settings, verification and rollback. Names are memory-only; filters and exports 
 - **Groups** page (`#/groups`): onboarded Entra groups with status, chargeback ID, budget mode,
   surfaces and priority; Usage CSV (this month) and Groups CSV downloads
   ([ADMIN-API.md](ADMIN-API.md), "Export for Power BI").
+- **Legacy projects** (`#/projects`, release 12): the sidebar label of the earlier Projects page. It lists project
+  documents from the earlier model ([ADR-0033](adr/0033-baseline-project-classification-model.md)) for existing
+  installations; new teams are onboarded on the Groups page. The 2026-10-24 console captures predate the label and
+  show "Projects".
 - **Onboard a group** (`#/groups/new`): search Entra security groups (direct member count shown),
   set the per-user budget and auto-scale or a monthly group cap (with an estimate for the current
   members), allowed surfaces, chargeback ID, priority, models and limits (Fable/Mythos only with
@@ -178,7 +182,7 @@ must match, up to 10) and `classification`.
 ## Upgrade from the VDI
 
 The full manual procedure is [Admin V3.1 VDI upgrade](ADMIN-V3-VDI-UPGRADE.md).
-The shorter V3 migration outline follows [ADMIN-V2.md](ADMIN-V2.md) "VDI build and upgrade":
+The shorter V3 migration outline follows [ADMIN-V2.md](archive/ADMIN-V2.md) "VDI build and upgrade":
 
 1. Build `ccof-admin-v3.1.0.zip` with `admin\Build-AdminPackage.ps1 -OutFile <path>`. Keep the 2.0.x ZIP
    as the rollback package. The ZIP adds `ui-dist-v3/` and `kql/`.

@@ -97,8 +97,8 @@ no reconciler timer dependency.
 **Source precedence / evidence:** this overview describes the current integrated design under
 [ADR-0026](adr/0026-combined-developer-gateway-registration.md) and
 [ADR-0028](adr/0028-core-module-reconciliation.md), checked against
-[manual deployment](MANUAL-DEPLOYMENT.md), [clients](CLIENTS.md),
-[Entra prerequisites](QUICKSTART-PREREQUISITES.md), [gateway](GATEWAY.md),
+[manual deployment](archive/MANUAL-DEPLOYMENT.md), [clients](CLIENTS.md),
+[Entra prerequisites](archive/QUICKSTART-PREREQUISITES.md), [gateway](GATEWAY.md),
 [sync](SYNC.md), [chargeback](CHARGEBACK.md) and [network](NETWORK.md), plus
 [`network.bicep`](../infra/prereqs/network.bicep),
 [`function-app.bicep`](../infra/prereqs/function-app.bicep),

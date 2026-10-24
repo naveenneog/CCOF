@@ -79,6 +79,9 @@ The request amounts and HTTP 403 response are from the recorded run; the refresh
 | `console-09-chargeback.png` | Chargeback, Developers tab, with the WBS ID column |
 | `csv-chargeback-developers.png` | The exported CSV, with the WBS ID column |
 
+The console sidebar in these captures shows **Projects**. Release 12 renamed that entry **Legacy projects**; the
+page is otherwise unchanged ([ADMIN-V3.md](../../ADMIN-V3.md)).
+
 The CSV shows the group chargeback IDs (`CC-DS-2002, CC-ENG-1001`) for this person's requests: the WBS tag was saved
 after those requests, and a tag applies from the next sync
 ([chargeback and tags](../../operate/chargeback-and-tags.md)).

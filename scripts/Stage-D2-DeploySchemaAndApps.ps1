@@ -122,7 +122,7 @@ function Invoke-StageD2 {
     $rgScope = "/subscriptions/$sub/resourceGroups/$($answers.target.resourceGroup.name)"
     $rights = & $Send 'GET' "https://management.azure.com$rgScope/providers/Microsoft.Authorization/permissions?api-version=2022-04-01" $null
     $lacking = @($script:RequiredActions | Where-Object { $rights.Status -ne 200 -or -not (Test-CoreActionAllowed -Permissions @($rights.Content.value) -Action $_) })
-    if ($lacking.Count) { return Refuse 'caller_rights_missing' @("REFUSED before any write: the signed-in identity lacks $($lacking -join ', ') on $rgScope. D2 needs Contributor on the resource group (docs/DEPLOYMENT-GUIDE.md, People and roles).") }
+    if ($lacking.Count) { return Refuse 'caller_rights_missing' @("REFUSED before any write: the signed-in identity lacks $($lacking -join ', ') on $rgScope. D2 needs Contributor on the resource group (docs/archive/DEPLOYMENT-GUIDE.md, People and roles).") }
 
     $previous = @{}
     foreach ($step in Get-CoreD2Steps) { $e = Get-CoreRecordedEvidence $record "stage-D2:$($step.id)"; if ($e) { $previous[$step.id] = $e.outputs } }

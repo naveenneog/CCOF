@@ -1,7 +1,7 @@
 // D1 prerequisite: the user-assigned identities of the sync and the reconciler
 // (docs/PREREQUISITES-WORKBOOK.md, D1-07). They exist before their apps, so D3 can grant them and
 // a Graph application permission can precede the sync's first token request
-// (docs/DEPLOYMENT-GUIDE.md, Step 7). The resolver keeps a system-assigned identity, as in the PoC.
+// (docs/archive/DEPLOYMENT-GUIDE.md, Step 7). The resolver keeps a system-assigned identity, as in the PoC.
 
 targetScope = 'resourceGroup'
 

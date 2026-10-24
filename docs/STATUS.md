@@ -2,7 +2,29 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-DOCS-R1 — first-time reader follow-up (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-DOCS-R2 — novice reader fixes (complete; [ROADMAP](ROADMAP.md)).
+
+### G-DOCS-R2 — novice reader fixes (complete, 2026-10-24)
+
+- Acceptance (novice review items 1-7): developer setup starts with getting the code; the stale capture note is
+  gone; Stages 1-8 each show the preview command before `-Apply` and the preview's last line; the console names
+  the earlier-model page **Legacy projects**; Stage 7 has a plain success checklist; the lab route gives a sourced
+  rough daily cost and how to check actual spend; 13 earlier guides are in `docs/archive/` with a README. Item 8
+  (the separate older repository) is out of scope by the owner's decision.
+- Scope: documentation, one console label and tests; no Azure deployment. The 2026-10-24 console captures predate
+  the label; the onboarding page, evidence README and ADMIN-V3 say so.
+- Checks: reader docs 13/13 (5 new; each new detector negative-tested: a removed preview line, a former
+  `docs/` path and a mis-rewritten archive link each fail it); admin 167/167; `npm build` of the console; full
+  `npm test` with a logged-out isolated Azure CLI profile passed; repo-wide relative-link scan 35 broken before and
+  after, all pre-existing (targets never committed). `node .ironclad/gate.mjs --stage packet` PASS (23 passed,
+  2 pre-existing warnings: file-size budget on files this packet does not touch, and the open G-R3 and E2E-01
+  unknowns; 1 skipped).
+- Council: Architect PASS; Coder PASS (runtime paths in tests resolve; cited line numbers unchanged because the
+  archive rewrites replace lines in place); QA PASS-WITH-NOTES (preview and archive tests tightened per section and
+  for inbound paths; cost links now point at the filtered price queries); UX PASS-WITH-NOTES (screenshot label
+  note added to the onboarding page); Security PASS (no exploitable findings in the diff, admin API authorization,
+  CSV export, gateway enforcement or client token storage; no real identifiers in the diff).
+- Source commits: `3de09e8`, `adb7005`, `921a192` and the ledger commit, local `main`.
 
 ### G-DOCS-R1 — first-time reader follow-up (complete, 2026-10-24)
 
@@ -16,10 +38,16 @@
 - Council: Architect PASS (no architecture changes); Coder PASS (focused documentation and recorded output);
   QA PASS (new reader assertions and existing status-line regression); UX PASS (cost/permissions surfaced and
   field labels readable); Security PASS (configured identifier scan clean, no secrets or live calls).
-- Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment or
-  public release in this follow-up.
+- Source commit: `032aeb1` (`docs: clarify first-time setup and evidence`), local `main`; no Azure deployment.
+- Public release 11: `fcb187c` on `naveenneog/CCOF` `main`, applied to `public-main` as the `2f84715..53bac48` diff.
+  Scans of the published tree, 2026-10-24: release 11 adds no scrub-rule match. The scrub check reports 6 matches,
+  all the hypothetical `lab-a.com` alias in `docs/evidence/2026-10-24-demo/README.md` (1) and
+  `tests/docs-pseudonymise.test.ts` (5), published in release 10. The private-literal scan matches only the public
+  repository name `naveenneog/CCOF` (clone URL in `docs/get-started/03-deploy.md`, CI links in ROADMAP/STATUS). The
+  three GUIDs in `usage-03-refused.txt` are pseudonyms; none of the raw capture's GUIDs appear in `origin/main`.
+  gitleaks clean; docs tests 13/13 on the public tree; public CI run `40110954891` success.
 
-### G-DOCS — documentation refresh (2026-10-24, source complete)
+### G-DOCS — documentation refresh (2026-10-24, complete)
 
 - Acceptance: short role-based pages, prerequisites and stages with expected outputs, live Portal and console
   captures with consistent hypothetical identifiers, own-usage states and chargeback CSV; links checked offline.
@@ -34,12 +62,16 @@
   Login uses the supplied absolute config; snapshot mode lists all registered groups explicitly.
 - Council round 2: ARCHITECT, CODER, QA, UX and SECURITY PASS. Ten docs/capture tests pass; nine mutations caught
   with all five tests loading in each targeted suite. Client 68/68; exported suite 1212 pass, six opt-in live tests
-  skipped, zero failed; strict typecheck and packet gate pass.
+  skipped, zero failed; strict typecheck and packet gate pass. Fifteen reader-facing PowerShell blocks parse.
 - All 44 images checked with local Windows OCR: no configured real-name or known live-GUID matches. Staged secret
   scan clean; 656 tracked text files checked against eight known live IDs, with a deliberate leak rejected.
-- Reviewed source: `cae4567`. Public release 10 contains these pages and pseudonymised captures; build results are
-  recorded by [public CI](https://github.com/naveenneog/CCOF/actions/workflows/public-ci.yml).
-- The demo lab remains deployed; cleanup is not yet claimed.
+- Reviewed source: `cae4567`. Public release 10: `2f84715`; CI passes on Node 22 and 26, including every tracked
+  Bicep template ([run](https://github.com/naveenneog/CCOF/actions/runs/40096140727)). Remote tree verified:
+  44 evidence images, zero old live captures.
+- Temporary client home removed and the session-owned capture browser stopped. The demo lab was retained and
+  remains billable; no Azure resources were changed during recovery.
+- Publication retained the hypothetical Lab A aliases in the new reader pages, evidence and capture-test fixture;
+  the older real-tenant label substitution was excluded for those aliases. Other identifier rules still ran.
 
 ### G-GUARD — budget guard: projected spend, rate guard, 80% warning (2026-10-24)
 
@@ -415,7 +447,7 @@ No live directory lookup, customer deployment or Graph permission change was per
 
 ## Standard v2 and Foundry, two tenants (S3, complete with open items)
 
-Verified 2026-10-20 in Lab B and Lab A ([report](STAGED-STDV2-RUNS-2026-10-20.md)).
+Verified 2026-10-20 in Lab B and Lab A ([report](archive/STAGED-STDV2-RUNS-2026-10-20.md)).
 Open: Portal walkthrough screenshots need a persistent Portal sign-in; Graph application consent
 needs PIM activation in Lab A; Claude in Lab A needs a non-sandbox subscription.
 
@@ -425,7 +457,7 @@ needs PIM activation in Lab A; Claude in Lab A needs a non-sandbox subscription.
 **Completed packet:** S2 — staged entry points for stages 2-8 and a live end-to-end run.
 
 Status: verified, 2026-10-20, in the new lab RG `lab-staged-rg`
-([report](STAGED-LIVE-RUN-2026-10-20.md)). The Stage 1 RG below was deleted first.
+([report](archive/STAGED-LIVE-RUN-2026-10-20.md)). The Stage 1 RG below was deleted first.
 
 Open items:
 
@@ -469,6 +501,6 @@ See [unknowns](UNKNOWNS.md) and [roadmap](ROADMAP.md).
 - Admin build and all 95 tests pass.
 - New runbook's three PowerShell blocks parse and local documentation links resolve.
 
-Detailed [live report](STAGE1-LIVE-VERIFICATION.md) and
+Detailed [live report](archive/STAGE1-LIVE-VERIFICATION.md) and
 [commands/permissions](runbooks/STAGED-DEPLOYMENT-V2.md).
 This packet's commit is the Git change containing this status file.

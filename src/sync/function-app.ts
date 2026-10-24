@@ -44,7 +44,7 @@ async function syncTimer(_timer: Timer, context: InvocationContext): Promise<voi
   await runSync(sync.config, createAzureDependencies(sync.config, credential), runContext);
 }
 
-// The quick-start's registry seed (registry-seed.ts; docs/QUICKSTART.md, step 5).
+// The quick-start's registry seed (registry-seed.ts; docs/archive/QUICKSTART.md, step 5).
 async function registrySeedTimer(_timer: Timer, context: InvocationContext): Promise<void> {
   await runRegistrySeed(process.env, {
     openStore: (config, clientId) => createSeedStore(config, new ManagedIdentityCredential({ clientId })),

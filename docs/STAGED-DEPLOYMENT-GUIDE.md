@@ -206,7 +206,7 @@ grant helper is in [section 6.1](#61-graph-grants-group-search-names-and-sync).
 
 Either an existing Foundry account with Claude deployments (listed under `backends`), or Stage 1
 creates one (`stage1.foundry.create: true`), which requires a subscription that can purchase the Claude
-offer from Azure Marketplace. A sandbox subscription cannot ([run report](STAGED-STDV2-RUNS-2026-10-20.md)).
+offer from Azure Marketplace. A sandbox subscription cannot ([run report](archive/STAGED-STDV2-RUNS-2026-10-20.md)).
 
 ### 2.6 Cosmos DB redundancy
 
@@ -391,7 +391,7 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Cloud Shell:** preview, then `-Apply` (common command, `-Stage 1`).
 - **Portal:** workbook sections 04, 05, 07 (optional Foundry), 08 (Cosmos account), 09, 10, 11.
 - **Worked when:** the read-back reports every app with zero settings, keyless storage, no database
-  and zero role assignments ([STAGE1-LIVE-VERIFICATION.md](STAGE1-LIVE-VERIFICATION.md)), and the Cosmos
+  and zero role assignments ([STAGE1-LIVE-VERIFICATION.md](archive/STAGE1-LIVE-VERIFICATION.md)), and the Cosmos
   account's regions, zone redundancy, failover and consistency match the configuration ([section 2.6](#26-cosmos-db-redundancy)).
 
 ### Stage 2: Cosmos schema
@@ -734,7 +734,7 @@ per minute for USD 1,000. A budget owner who needs faster spending of a small bu
 - **Cleanup of a lab:** delete the resource group, and the app registrations and pilot group that
   Stage 4 created (its output prints `created group …`; `stage4.verify.json` lists the IDs). Objects
   named in `entra.existing` or `groups[].groupId`, or found by display name, were reused, not
-  created, and are not deleted. The [run report](STAGED-STDV2-RUNS-2026-10-20.md) lists what a lab
+  created, and are not deleted. The [run report](archive/STAGED-STDV2-RUNS-2026-10-20.md) lists what a lab
   run created.
 
 ---
@@ -752,4 +752,4 @@ per minute for USD 1,000. A budget owner who needs faster spending of a small bu
 | Group model decision | [adr/0034-group-centric-onboarding.md](adr/0034-group-centric-onboarding.md) |
 | Admin console and API | [ADMIN-V3.md](ADMIN-V3.md), [ADMIN-API.md](ADMIN-API.md) |
 | Chargeback | [CHARGEBACK.md](CHARGEBACK.md) |
-| Live run evidence | [STAGED-STDV2-RUNS-2026-10-20.md](STAGED-STDV2-RUNS-2026-10-20.md) |
+| Live run evidence | [STAGED-STDV2-RUNS-2026-10-20.md](archive/STAGED-STDV2-RUNS-2026-10-20.md) |

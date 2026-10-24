@@ -1,5 +1,5 @@
 // The quick-start's registry seed (ADR-0024, the quick-start's Proposed answer to D-7;
-// docs/QUICKSTART.md, step 5). A customer whose Azure Policy denies marketplace VM images has no
+// docs/archive/QUICKSTART.md, step 5). A customer whose Azure Policy denies marketplace VM images has no
 // runner VM inside the VNet, and Cosmos public access is off, so the sync app writes the registry
 // documents itself: Deploy-Quickstart.ps1 puts them, base64 of { seedId, projects, backends } as
 // New-QsSeedDocuments builds them, in the app setting CCOF_SEED_DOCUMENTS and enables this timer.

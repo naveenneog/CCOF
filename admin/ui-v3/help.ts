@@ -16,8 +16,8 @@ export const HELP: Record<string, HelpTopic> = {
     troubleshooting: [["A panel says 'not configured'", "That integration's app setting is missing. Each panel names the setting or role it needs; the rest of the console still works."]],
   },
   projects: {
-    title: "Projects",
-    summary: "Every project in the registry, searched and filtered on the server and paged 25 at a time, so the list stays fast with 10,000 projects.",
+    title: "Legacy projects",
+    summary: "Projects from the earlier project-and-classification model, kept for installations that still use them. New teams are onboarded under Groups. The list is searched and filtered on the server and paged 25 at a time.",
     figures: [
       ["Tags", "Admin tags. Selecting several tags shows projects that carry all of them."],
       ["Backend", "The Foundry backend (APIM backend ID) the project routes to today."],

@@ -38,7 +38,7 @@ export function HelpPage() {
       <Section title="Runbooks" description="In the repository's docs folder.">
         <ul className="prose-list">
           <li><code>docs/ADMIN-V3.md</code>: settings, permissions, deploying and upgrading from the VDI, redirect URI, the V3 flag and rollback to V2.</li>
-          <li><code>docs/ADMIN-V2.md</code>: the V2 console, still available at <a href="/api/console">/api/console</a>.</li>
+          <li><code>docs/archive/ADMIN-V2.md</code>: the V2 console, still available at <a href="/api/console">/api/console</a>.</li>
           <li><code>docs/CHARGEBACK.md</code>: how chargeback is calculated; the workbook and this console share one query builder.</li>
           <li><a href={href("/cost-definitions")}>Cost definitions</a>: the rate card in USD and CCU.</li>
         </ul>

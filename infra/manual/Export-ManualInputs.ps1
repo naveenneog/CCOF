@@ -33,4 +33,4 @@ foreach ($entry in $inputs) {
     }
 }
 $manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $out 'manifest.json') -Encoding utf8NoBOM
-Write-Host "Offline inputs exported to $out. Review manifest.json; deploy each module separately (docs/MANUAL-DEPLOYMENT.md)."
+Write-Host "Offline inputs exported to $out. Review manifest.json; deploy each module separately (docs/archive/MANUAL-DEPLOYMENT.md)."

@@ -89,7 +89,7 @@ function Assert-OnboardingSchema {
     param($Value, $Schema)
     $valid = Test-Json -Json (ConvertTo-Json -InputObject $Value -Depth 64 -Compress) `
         -Schema (ConvertTo-Json -InputObject $Schema -Depth 64 -Compress) -ErrorAction SilentlyContinue
-    if (-not $valid) { Stop-Onboarding 'Answers failed schema validation (unknown field, invalid type, value or range). See Get-OnboardingSchema and docs/ONBOARDING.md.' }
+    if (-not $valid) { Stop-Onboarding 'Answers failed schema validation (unknown field, invalid type, value or range). See Get-OnboardingSchema and docs/archive/ONBOARDING.md.' }
 }
 
 function Add-OnboardingDecision {

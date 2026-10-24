@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Quick-start for one administrator (ADR-0024, Proposed; docs/QUICKSTART.md): numbered, rerunnable
+    Quick-start for one administrator (ADR-0024, Proposed; docs/archive/QUICKSTART.md): numbered, rerunnable
     steps around infra/quickstart/main.bicep. Phase 2 of three: the Entra prerequisites come before
     (an Entra administrator), the Graph application permissions after (Grant-SyncGraphPermissions.ps1,
     a Privileged Role Administrator). This script never creates or changes an Entra object.
@@ -149,7 +149,7 @@ function Test-QsPrerequisites {
     # --device-code); WAM and the browser sign-in use the app's public-client redirect URIs
     # (docs/CLIENTS.md). So it is a warning and the deployment goes on.
     if (-not $dev) { $problems.Add('developer_sign_in_missing: no application with registrations.developerSignIn.appId') }
-    elseif (-not $dev.isFallbackPublicClient) { $warnings.Add('developer_sign_in_not_public: "Allow public client flows" is off on the Developer Sign-in app, so `ccof-token login --device-code` will fail; WAM and browser sign-in are unaffected. An Entra administrator turns it on (docs/QUICKSTART-PREREQUISITES.md).') }
+    elseif (-not $dev.isFallbackPublicClient) { $warnings.Add('developer_sign_in_not_public: "Allow public client flows" is off on the Developer Sign-in app, so `ccof-token login --device-code` will fail; WAM and browser sign-in are unaffected. An Entra administrator turns it on (docs/archive/QUICKSTART-PREREQUISITES.md).') }
     $res = @((Get-QsGraph "applications?`$filter=appId eq '$($r.resolverApi.appId)'").value)[0]
     if (-not $res) { $problems.Add('resolver_api_missing: no application with registrations.resolverApi.appId') }
     else {
@@ -176,7 +176,7 @@ function Test-QsPrerequisites {
     }
     if ($problems.Count) { throw ("prerequisites not met (nothing was changed):`n  - " + ($problems -join "`n  - ")) }
     foreach ($w in $warnings) { Write-Host "WARNING: $w" -ForegroundColor Yellow }
-    Write-Host 'Azure roles: Deploy needs Owner, or Contributor plus Role Based Access Control Administrator, on the resource group and on each backend account (docs/QUICKSTART.md, phase 2); ARM refuses the deployment otherwise (AuthorizationFailed).'
+    Write-Host 'Azure roles: Deploy needs Owner, or Contributor plus Role Based Access Control Administrator, on the resource group and on each backend account (docs/archive/QUICKSTART.md, phase 2); ARM refuses the deployment otherwise (AuthorizationFailed).'
     return @{ apimId = $apimId; apimPrincipalId = $principalId; apimIdentityAppId = $apimAppId; gatewayBaseUrl = $apim.properties.gatewayUrl; gatewayIdentifierUri = @($gw.identifierUris)[0]; classificationGroupDisplayNames=$groupDisplayNames; warnings = @($warnings) }
 }
 

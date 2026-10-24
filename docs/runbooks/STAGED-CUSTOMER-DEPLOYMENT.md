@@ -2,7 +2,7 @@
 
 **2026-10-20 update:** the [configurable staged plan](STAGED-DEPLOYMENT-V2.md)
 separates the later steps by permission boundary. Its Stage 1 uses the same
-`infra/staged` templates and has a [live resource-only proof](../STAGE1-LIVE-VERIFICATION.md).
+`infra/staged` templates and has a [live resource-only proof](../archive/STAGE1-LIVE-VERIFICATION.md).
 The four stage numbers in this retained runbook differ from the new plan.
 Later-stage entry points in that plan are not yet implemented.
 
@@ -15,7 +15,7 @@ access or run all its permission steps as the application deployer.
 **Release source:** v1 is on `feat/project-admin-api`; v2 is on
 `feat/admin-console-v2`. A branch name is not a release approval. Record the
 reviewed commit and package hashes. The [v2 feature/API contract, optional access
-matrix and private-VDI upgrade](../ADMIN-V2.md) are in `docs\ADMIN-V2.md`; the v1 workbook's capability descriptions
+matrix and private-VDI upgrade](../archive/ADMIN-V2.md) are in `docs\archive\ADMIN-V2.md`; the v1 workbook's capability descriptions
 are not a v2 specification. Updating the admin application does not redeploy the
 inference gateway or reset the registry.
 
@@ -246,10 +246,10 @@ normal hostnames and approved user/group IDs. They own these workbook steps:
 |---|---|
 | Core runtime storage/monitoring access | Modules **02–03**: per-app Storage Blob Data Owner and telemetry roles; exact native Cosmos reader/writer/create-only roles and assignments. A management-plane Contributor grant is not Cosmos data-plane access. |
 | Sync Microsoft Graph application permissions | Module **04**, separately privileged approval: `GroupMember.Read.All`, `User.Read.All`, `Application.Read.All` for the application-permission sync path. Do not substitute delegated login or grant tenant write permissions. |
-| Gateway/resolver registration, token audience, permitted clients and resolver trust | Module **06**, **09.1**, **13.2A–13.3A**, and [registration prerequisites](../QUICKSTART-PREREQUISITES.md). APIM's exact managed identity must be retained and permitted. |
+| Gateway/resolver registration, token audience, permitted clients and resolver trust | Module **06**, **09.1**, **13.2A–13.3A**, and [registration prerequisites](../archive/QUICKSTART-PREREQUISITES.md). APIM's exact managed identity must be retained and permitted. |
 | APIM → Foundry model access | Module **09.1**: verify the approved APIM principal's `Cognitive Services User` on the actual Foundry account in each subscription. This does not prove private network access. |
 | Admin application registration and reader/editor authorization | Appended workbook **20**, **22**: new admin registration, `Projects.Manage`, explicit permitted clients and `CCOF.Projects.Read` / `CCOF.Projects.Write`, approved users/groups. Projects data scope includes container metadata and `readChangeFeed` for listing, not just item point reads. Review v2's documented operation-specific additions separately. |
-| Optional v2 integrations | [Admin v2 access matrix](../ADMIN-V2.md): separately scoped Graph/ARM/Logs/Cost Management access for the **admin managed identity**, not the sync/APIM identity or browser user; optional `adminConfig` native role scoped to that container. No implicit grants from stage 1 or code publishing. |
+| Optional v2 integrations | [Admin v2 access matrix](../archive/ADMIN-V2.md): separately scoped Graph/ARM/Logs/Cost Management access for the **admin managed identity**, not the sync/APIM identity or browser user; optional `adminConfig` native role scoped to that container. No implicit grants from stage 1 or code publishing. |
 | Workbook and operational readers | Module **14.6–14.7**: Workbook Reader on the saved resource plus approved workspace query access. This is stage-2 team work even if performed after the workbook resource exists. |
 | Deployment and DNS diagnostics operators | Approved resource/code publishing rights and function-key read only where needed; Reader on the actual network, NIC, central DNS subscription/RG/zone/link resources, even across subscriptions. No Owner/directory-wide write shortcut. |
 
@@ -358,7 +358,7 @@ engine. A wrong partition key or needed index change is a reviewed migration,
 not permission to delete/recreate or overwrite container properties.
 
 For optional v2 cost-definition persistence, see the
-[admin v2 catalog requirements](../ADMIN-V2.md#optional-settings-and-least-scoped-permission-handoff)
+[admin v2 catalog requirements](../archive/ADMIN-V2.md#optional-settings-and-least-scoped-permission-handoff)
 and the actual `infra\admin\admin-v2-catalog.bicep` schema template. The optional
 container is **`adminConfig`**, partition key **`/scopeId`**, not a ninth required
 core container. Leave `ADMIN_CONFIG_CONTAINER` unset if it is not approved.
@@ -690,7 +690,7 @@ browser sign-in, entitlement propagation or model inference.
 
 This is a **code update**, not a resource-only Bicep deployment. Stage-1 service
 creation and initial create-only seed are not rerun for an existing app.
-Use the [admin v2 private-VDI upgrade and compatibility notes](../ADMIN-V2.md)
+Use the [admin v2 private-VDI upgrade and compatibility notes](../archive/ADMIN-V2.md)
 alongside this deployment sequence.
 
 1. On an approved VDI/private deployment host, verify the recorded v1 app,
@@ -732,7 +732,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Admin publish failed; inspect deployment state
    v2's optional `adminTags`. Do not blindly republish v1 after using tags. Export
    the affected state privately; while v2 remains available, use its reviewed
    project settings/ETag-guarded API to clear **only** `adminTags` on those
-   projects as described in [v2 rollback](../ADMIN-V2.md#rollback). No bulk data
+   projects as described in [v2 rollback](../archive/ADMIN-V2.md#rollback). No bulk data
    replacement, usage reset or removal of other project fields is authorized.
    Keep the optional `adminConfig` container/data; v1 ignores it. If tags cannot
    be safely cleared, stop rollback and use the approved incident recovery path.

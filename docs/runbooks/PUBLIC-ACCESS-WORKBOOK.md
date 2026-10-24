@@ -3500,7 +3500,7 @@ missing approved item. A mismatched resource is a stop for review, not permissio
 | 23 | Dedicated admin Cosmos private endpoint, private DNS and in-app point-read verified |
 | 24 | STD/PRM/CYB UI, approved data tests, access restrictions and operations handoff verified |
 
-**Optional faster path, only if cloning is approved:** [admin quick modular stages](../ADMIN-QUICK-STAGES.md). Keep the numbered Portal-first steps below when a clone or template is not permitted. The faster path does not bypass private-storage or Cosmos-network requirements.
+**Optional faster path, only if cloning is approved:** [admin quick modular stages](../archive/ADMIN-QUICK-STAGES.md). Keep the numbered Portal-first steps below when a clone or template is not permitted. The faster path does not bypass private-storage or Cosmos-network requirements.
 
 **Acceptance boundary:** a ready health probe proves a point read from the Function App.
 It does not prove list/create/replace, audit delivery, membership projection or inference.
@@ -5128,5 +5128,5 @@ reviewed commit/package contract.
 
 For v2's optional integration settings, the `adminConfig` schema (`/scopeId`),
 private-VDI publishing and **tag-compatible** v1 rollback, follow
-[ADMIN-V2.md](../ADMIN-V2.md) alongside the staged runbook. Optional capability
+[ADMIN-V2.md](../archive/ADMIN-V2.md) alongside the staged runbook. Optional capability
 permissions are separate access-team work, not automatic grants from stage 1.

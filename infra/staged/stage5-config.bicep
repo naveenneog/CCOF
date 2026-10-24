@@ -133,7 +133,7 @@ resource adminInsights 'Microsoft.Insights/components@2020-02-02' existing = if 
   name: names.apps.?admin.?appInsights ?? 'none'
 }
 
-// Admin app settings (docs/ADMIN-V3.md Settings, docs/ADMIN-QUICK-STAGES.md 4g). One shared
+// Admin app settings (docs/ADMIN-V3.md Settings, docs/archive/ADMIN-QUICK-STAGES.md 4g). One shared
 // workspace: the reconciler logs through its diagnostic setting (site id), the admin audit through its
 // Application Insights component.
 resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnabled) {

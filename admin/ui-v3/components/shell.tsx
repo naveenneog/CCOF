@@ -7,26 +7,11 @@ import { useMediaQuery, usePersistentFlag, useTheme } from "../lib/prefs.ts";
 import type { ThemeChoice } from "../lib/prefs.ts";
 import { signOut, userLabel, authState } from "../lib/auth.ts";
 import { GuidedHelp } from "./guided-help.tsx";
+import { NAV } from "../lib/nav.ts";
 
 export interface Session { canWrite: boolean; features: Record<string, string> }
 export const SessionContext = createContext<Session>({ canWrite: false, features: {} });
 export const useSession = () => useContext(SessionContext);
-
-export const NAV = [
-  { id: "overview", label: "Overview", icon: "overview" },
-  { id: "groups", label: "Groups", icon: "groups" },
-  { id: "projects", label: "Projects", icon: "projects" },
-  { id: "chargeback", label: "Chargeback", icon: "chargeback" },
-  { id: "user-tags", label: "User tags", icon: "user" },
-  { id: "budgets", label: "Budgets", icon: "budgets" },
-  { id: "reconciler", label: "Reconciler", icon: "reconciler" },
-  { id: "foundry", label: "Foundry", icon: "foundry" },
-  { id: "health", label: "Health", icon: "health" },
-  { id: "audit", label: "Audit", icon: "audit" },
-  { id: "removal-limits", label: "Removal limits", icon: "shield" },
-  { id: "cost-definitions", label: "Cost definitions", icon: "cost" },
-  { id: "help", label: "Help", icon: "help" },
-];
 
 export function helpKey(route: Route): string {
   const [first, second] = route.parts;

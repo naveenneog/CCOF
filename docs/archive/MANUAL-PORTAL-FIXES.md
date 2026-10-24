@@ -2,8 +2,8 @@
 
 This is a customer-neutral record of reproducible defects and operational lessons.
 It contains no customer inputs, tenant IDs, access tokens or private issue logs.
-The existing-resource workflow is [the completion workbook](runbooks/PUBLIC-ACCESS-WORKBOOK.md);
-resource creation remains in [the Portal guide](runbooks/AZURE-PORTAL-DEPLOYMENT.md).
+The existing-resource workflow is [the completion workbook](../runbooks/PUBLIC-ACCESS-WORKBOOK.md);
+resource creation remains in [the Portal guide](../runbooks/AZURE-PORTAL-DEPLOYMENT.md).
 
 | Area | Change / disposition |
 |---|---|

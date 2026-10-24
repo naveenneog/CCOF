@@ -1,6 +1,6 @@
 // =====================================================================================================
-// CUSTOMER FORM: quick-start parameters (docs/QUICKSTART.md explains each one).
-// Do not fill this file. Copy it to the git-ignored name and fill the copy (docs/QUICKSTART.md, "Azure
+// CUSTOMER FORM: quick-start parameters (docs/archive/QUICKSTART.md explains each one).
+// Do not fill this file. Copy it to the git-ignored name and fill the copy (docs/archive/QUICKSTART.md, "Azure
 // Cloud Shell"):
 //   cp infra/quickstart/customer-form.bicepparam infra/quickstart/.env.customer.bicepparam
 // Every value that says REPLACE is a customer decision; the filled copy is the deployment's whole

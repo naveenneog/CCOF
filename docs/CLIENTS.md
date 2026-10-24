@@ -110,7 +110,7 @@ Entra consent/Conditional Access is still a tenant prerequisite. The
 describes conditional no-consent behavior, not an exemption from customer policy. Offline
 compatibility is tested; a new combined app has **not** been live-token-tested by this change.
 Before rollout have the administrator verify `ccof-token login` and an authorized gateway call,
-without printing or recording the token. See [Entra prerequisites](QUICKSTART-PREREQUISITES.md).
+without printing or recording the token. See [Entra prerequisites](archive/QUICKSTART-PREREQUISITES.md).
 
 ### Administrator only: register the broker redirect
 

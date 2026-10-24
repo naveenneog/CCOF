@@ -3,7 +3,7 @@
 Two independent runs of `Invoke-StagedDeployment.ps1`
 with a **Standard v2** API Management instance, a **new private Foundry account** created by Stage 1,
 and a separate configuration and state directory each. Stage numbers in this report are the order\nbefore 2026-10-21 (network = Stage 2, schema 3, grants 4, Entra 5, configuration 6); the runbook now\nruns the network as Stage 6. Runbook:
-[configurable staged deployment](runbooks/STAGED-DEPLOYMENT-V2.md).
+[configurable staged deployment](../runbooks/STAGED-DEPLOYMENT-V2.md).
 
 | | Lab B | Lab A |
 | --- | --- | --- |
@@ -101,7 +101,7 @@ first read (backup `state.layout1.json`).
 Live negative control (Lab A, separate state copy): `functionsSubnetId` pointed at `snet-apim`.
 Stage 6 reported 5 FAIL rows and stopped with `verify_failed`; the saved state kept `snet-functions`.
 
-Found during this recheck and fixed ([B-16 to B-20](../BUGS-FOUND.md)): the network check recursed
+Found during this recheck and fixed ([B-16 to B-20](../../BUGS-FOUND.md)): the network check recursed
 into its own `Az` function and never reached Azure; it failed on an unrelated same-named DNS zone in
 `ccof-lab-rg`; the schema stage could not be rerun after grants; Stage 7 could not be rerun after a
 successful snapshot. One Lab A Stage 7 attempt stopped at `graph_unauthorized`; Azure CLI and a
@@ -124,7 +124,7 @@ intercepted or bypassed.
 | Portal walkthrough, Lab B/Lab B (2026-10-21) | 20 of 20 steps pass (`00-subscription-access` and `06-apim-apis` on a targeted rerun) |
 | Walkthrough negative control | `06-resolver-auth` opened on the Function App overview (without the Authentication menu entry) reports `mismatch`; the Authentication blade reports `pass` |
 
-Walkthrough fixes made during the run (in [tests/playwright](../tests/playwright/README.md)):
+Walkthrough fixes made during the run (in [tests/playwright](../../tests/playwright/README.md)):
 - Sub-blade deep links such as `/managedidentities`, `/networking`, `/virtualNetwork` and `/users`
   opened the resource overview. Those steps now open the overview and select the entry through the
   blade's menu search; IAM steps also select **Role assignments**.
@@ -143,7 +143,7 @@ authentication and returned 401 to the anonymous Stage 8 probe. The guide embeds
 captures with GUIDs, the signed-in account, the directory name and the subscription name masked;
 pages that list people (subscription access, group members) are not published.
 
-Rerun steps: [tests/playwright](../tests/playwright/README.md).
+Rerun steps: [tests/playwright](../../tests/playwright/README.md).
 
 ## Retained resources
 

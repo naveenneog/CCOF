@@ -34,7 +34,7 @@
             "mode": { "enum": ["create", "existing"] }
           }
         },
-        "resourceProviders": { "enum": ["register", "verify-only"], "description": "register needs Contributor on the subscription (docs/DEPLOYMENT-GUIDE.md, People and roles)." },
+        "resourceProviders": { "enum": ["register", "verify-only"], "description": "register needs Contributor on the subscription (docs/archive/DEPLOYMENT-GUIDE.md, People and roles)." },
         "tags": { "type": "object", "maxProperties": 15, "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }, "additionalProperties": { "type": "string", "maxLength": 256 } },
         "cloud": {
           "type": "object",

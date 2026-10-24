@@ -200,8 +200,8 @@ Assert-True 'an array of names is kept, duplicates and blanks dropped' ((@(Conve
 Assert-True 'the script splits -Permissions before planning' ($grant -match '\$Permissions = @\(ConvertTo-QsPermissionNames \$Permissions\)[\s\S]*\$plan = @\(Get-QsPlan')
 $emptyError = try { $null = ConvertTo-QsPermissionNames @(', ,'); '' } catch { $_.Exception.Message }
 Assert-True 'a permission list with no names is refused, not an empty plan' ($emptyError -match '^no_permissions:') $emptyError
-$guide = Get-Content (Join-Path $root 'docs' 'QUICKSTART.md') -Raw
-Assert-True 'docs/QUICKSTART.md: after the grant, syncTimerEnabled = true and -Only 3' ($guide -match 'syncTimerEnabled = true[^\r\n]*\r?\n[^\r\n]*Deploy-Quickstart\.ps1 -Only 3')
+$guide = Get-Content (Join-Path $root 'docs' 'archive' 'QUICKSTART.md') -Raw
+Assert-True 'docs/archive/QUICKSTART.md: after the grant, syncTimerEnabled = true and -Only 3' ($guide -match 'syncTimerEnabled = true[^\r\n]*\r?\n[^\r\n]*Deploy-Quickstart\.ps1 -Only 3')
 foreach ($file in 'main.bicepparam', 'customer-form.bicepparam') {
     $text = Get-Content (Join-Path $root 'infra' 'quickstart' $file) -Raw
     $line = @(($text -split "`n") | Where-Object { $_ -match 'syncTimerEnabled|Grant-SyncGraphPermissions|-From 3|-Only 3' })

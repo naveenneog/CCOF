@@ -18,8 +18,8 @@ only and do not need the network. Publishing (Stage 7) and acceptance (Stage 8) 
 because the apps reach their private storage and Cosmos only through the VNet.
 
 Order before 2026-10-21: network was Stage 2, followed by schema 3, grants 4, Entra 5 and
-configuration 6. The [live run report](../STAGED-LIVE-RUN-2026-10-20.md) and the
-[Standard v2 and Foundry run report](../STAGED-STDV2-RUNS-2026-10-20.md) use that numbering; the
+configuration 6. The [live run report](../archive/STAGED-LIVE-RUN-2026-10-20.md) and the
+[Standard v2 and Foundry run report](../archive/STAGED-STDV2-RUNS-2026-10-20.md) use that numbering; the
 driver moves an existing `state.json` to the new numbers on first read (backup
 `state.layout1.json`).
 
@@ -30,7 +30,7 @@ because its sandbox subscription cannot buy the Claude offer.
 The [manual Portal walkthrough](#manual-portal-walkthrough) maps each stage to Portal checks.
 
 The [four-stage runbook](STAGED-CUSTOMER-DEPLOYMENT.md) and the
-[quickstart](../QUICKSTART.md) remain available. This path reuses the quickstart's Bicep modules
+[quickstart](../archive/QUICKSTART.md) remain available. This path reuses the quickstart's Bicep modules
 and PowerShell functions; it does not change them.
 
 ## How a stage runs
@@ -260,7 +260,7 @@ the Playwright walkthrough from the signed-in Portal; GUIDs, the signed-in accou
 name and the subscription name are masked. The five historical images are middle-masked captures
 from the earlier manual guide and show navigation, not a new deployment's result
 ([image manifest](images/portal/screenshots.json)). The
-[Standard v2 and Foundry run report](../STAGED-STDV2-RUNS-2026-10-20.md) holds the read-back
+[Standard v2 and Foundry run report](../archive/STAGED-STDV2-RUNS-2026-10-20.md) holds the read-back
 evidence of the Lab B and Lab A runs and the status of the Playwright Portal
 walkthrough, which visits each step's blade on those runs' real resources.
 
@@ -453,7 +453,7 @@ Publishing needs the verified network from step 6.
 
 **Acceptance still needed for each target:** genuine signed-in Admin V3 screenshots. The Portal
 walkthrough of the steps above ran against both targets on 2026-10-21
-([results](../STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)); Standard v2
+([results](../archive/STAGED-STDV2-RUNS-2026-10-20.md#portal-walkthrough-with-playwright)); Standard v2
 networking, Foundry setup, Azure permissions, Entra registrations, allowed and denied requests and
 correlated telemetry are covered by the stage read-backs and Stage 8. Graph application consent
 remains a separate privileged step (refused in Lab A without an active admin role).
@@ -473,8 +473,8 @@ remains a separate privileged step (refused in Lab A without an active admin rol
 
 ## References
 
-- [Live run report, 2026-10-20](../STAGED-LIVE-RUN-2026-10-20.md) and the
-  [Stage 1 report](../STAGE1-LIVE-VERIFICATION.md).
+- [Live run report, 2026-10-20](../archive/STAGED-LIVE-RUN-2026-10-20.md) and the
+  [Stage 1 report](../archive/STAGE1-LIVE-VERIFICATION.md).
 - [Bicep deployment permissions](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deploy-cli);
   [role assignments in templates](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-template);
   [Cosmos DB data-plane RBAC](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-setup-rbac);

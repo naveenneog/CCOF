@@ -80,7 +80,7 @@ test("expanded final modules retain reporting, optional enforcement and network 
 test("public manuals contain only neutral examples and have resolvable local links", () => {
   for (const relative of [
     "docs/runbooks/PUBLIC-ACCESS-WORKBOOK.md", "docs/runbooks/AZURE-PORTAL-DEPLOYMENT.md",
-    "docs/MANUAL-PORTAL-FIXES.md", "scripts/manual/README.md",
+    "docs/archive/MANUAL-PORTAL-FIXES.md", "scripts/manual/README.md",
   ]) {
     const file = path.join(root, relative);
     const text = readFileSync(file, "utf8");

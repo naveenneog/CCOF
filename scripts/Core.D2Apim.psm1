@@ -18,7 +18,7 @@ Import-Module (Join-Path $PSScriptRoot '../infra/gateway/GatewayDeploy.psm1')
 
 $script:Arm = 'https://management.azure.com'
 $script:ApiVersion = '2024-05-01'
-# The Anthropic Messages operation of the live PoC API (docs/DEPLOYMENT-GUIDE.md, Step 4).
+# The Anthropic Messages operation of the live PoC API (docs/archive/DEPLOYMENT-GUIDE.md, Step 4).
 $script:Operation = @{ id = 'create-message'; displayName = 'Create message'; method = 'POST'; urlTemplate = '/v1/messages' }
 # Revision 1 answers 503 until WP-GW's rendered policy is made current: the gateway never serves unchecked.
 $script:InitialPolicy = '<policies><inbound><return-response><set-status code="503" reason="Service Unavailable" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header><set-body>{"type":"error","error":{"type":"api_error","message":"The gateway is not configured yet."}}</set-body></return-response></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
@@ -68,7 +68,7 @@ function Invoke-CoreD2Apim {
         if ($nv.Status -ne 200 -or $nv.Content.properties.secret -ne $true) { $missing.Add("$($b.id): secret named value $($b.secretNamedValue)") }
     }
     if ($missing.Count) {
-        return New-CoreStepResult 'failed' -ReasonCode 'secret_named_value_missing' -Lines (@('Each second-tenant backend needs its client secret in APIM as a secret named value, created by the backend owner (docs/DEPLOYMENT-GUIDE.md, Step 4; APIM > Named values > Add, type Secret). Missing:') + @($missing | ForEach-Object { "  - $_" }))
+        return New-CoreStepResult 'failed' -ReasonCode 'secret_named_value_missing' -Lines (@('Each second-tenant backend needs its client secret in APIM as a secret named value, created by the backend owner (docs/archive/DEPLOYMENT-GUIDE.md, Step 4; APIM > Named values > Add, type Secret). Missing:') + @($missing | ForEach-Object { "  - $_" }))
     }
     New-CoreStepResult $(if ($writes) { 'applied' } else { 'unchanged' }) -Outputs @{ apiId = $a.apiId; operation = $script:Operation.id; backends = @($Ctx.Answers.backends | ForEach-Object id); createdApi = $created } -Writes $writes
 }

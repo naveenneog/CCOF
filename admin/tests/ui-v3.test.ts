@@ -84,3 +84,15 @@ test("Light and Dark themes keep text at 4.5:1 or better on every surface they u
     for (const [fg, bg] of pairs) assert.ok(contrast(t[fg], t[bg]) >= 4.5, `${sel} ${fg} on ${bg}: ${contrast(t[fg], t[bg]).toFixed(2)}`);
   }
 });
+
+test("the sidebar names the pre-group project list Legacy projects, after Groups", async () => {
+  const { NAV } = await import("../ui-v3/lib/nav.ts");
+  const { HELP } = await import("../ui-v3/help.ts");
+  const labels = NAV.map((n: { label: string }) => n.label);
+  assert.ok(!labels.includes("Projects"), labels.join(", "));
+  assert.ok(labels.indexOf("Groups") >= 0 && labels.indexOf("Groups") < labels.indexOf("Legacy projects"), labels.join(", "));
+  assert.equal(HELP.projects.title, "Legacy projects");
+  assert.match(HELP.projects.summary, /Groups/);
+  const page = await readFile(new URL("../ui-v3/pages/projects.tsx", import.meta.url), "utf8");
+  assert.match(page, /PageHeader title="Legacy projects"/);
+});

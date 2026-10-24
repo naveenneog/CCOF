@@ -1,6 +1,6 @@
 # Quick-start: one administrator, one Bicep, one parameters file
 
-> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](get-started/01-what-it-is.md).
+> **Earlier path:** this page describes an earlier deployment path or the project-and-classification model, kept for existing installations. New deployments follow [Get started](../get-started/01-what-it-is.md).
 
 The quick-start (ADR-0024, Proposed) deploys the whole core for ONE administrator who holds every
 Azure role: a proof of concept, a demo, a single team. It does not replace the checkpointed stages
@@ -51,9 +51,9 @@ This is an observed deployment limitation, not a newly implemented migration fea
 
 | Phase | Who | What |
 | --- | --- | --- |
-| 1. Prerequisites | Entra application or groups administrator, or a member user while the tenant settings allow it (`docs/DEPLOYMENT-GUIDE.md:67`, `:96`) | App registrations and groups; their ids go into `main.bicepparam` |
+| 1. Prerequisites | Entra application or groups administrator, or a member user while the tenant settings allow it (`docs/archive/DEPLOYMENT-GUIDE.md:67`, `:96`) | App registrations and groups; their ids go into `main.bicepparam` |
 | 2. Deployment | Owner, or Contributor plus Role Based Access Control Administrator or User Access Administrator, on the resource group and on each backend Foundry account. No Entra directory role | `Deploy-Quickstart.ps1` |
-| 3. Post-deployment | Privileged Role Administrator (activated through PIM) or Global Administrator (`docs/DEPLOYMENT-GUIDE.md:398-417`) | `Grant-SyncGraphPermissions.ps1` |
+| 3. Post-deployment | Privileged Role Administrator (activated through PIM) or Global Administrator (`docs/archive/DEPLOYMENT-GUIDE.md:398-417`) | `Grant-SyncGraphPermissions.ps1` |
 
 ### Phase 1 (before any Bicep)
 
@@ -62,7 +62,7 @@ By default two registrations are mandatory: one combined Gateway API / Developer
 (`api://<appId>`, token version 2), any tenant consent, and the groups with their owners. Each one,
 with who does it, the steps, a scripted alternative (`scripts/client/Set-DeveloperSignInRedirects.ps1`,
 `Initialize-ResolverApiRegistration` in `infra/poc/resolver-auth.ps1:155`) and the `main.bicepparam` value to
-hand back: `docs/QUICKSTART-PREREQUISITES.md`. Step 1 only reads them through Microsoft Graph and refuses
+hand back: `docs/archive/QUICKSTART-PREREQUISITES.md`. Step 1 only reads them through Microsoft Graph and refuses
 with a named reason (for example `resolver_api_token_version`); it never creates or changes an Entra object.
 Separate Gateway API and Developer Sign-in registrations remain supported. An optional cross-tenant
 backend credential registration is separate from these and does not replace the Resolver API.
