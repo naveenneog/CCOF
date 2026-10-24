@@ -13,6 +13,8 @@
   explicitly; model/limit updates wait for sync before gateway cache expiry.
 - Exhausted budgets now retain an explicit refusal notice in the Claude Code status line; the live run exposed
   the missing notice. Recorded demo spend: USD 2.14 against USD 2 with a 25% guard setting, not a strict cap.
+- Public release 10: `2f84715`, CI passes on Node 22 and 26
+  ([run](https://github.com/naveenneog/CCOF/actions/runs/40096140727)).
 
 ## 2026-10-24 — Budget guard: warning at 80% and bounded overshoot
 

@@ -17,6 +17,7 @@ unknown personal information; the published captures were also inspected visuall
 | --- | --- |
 | Region | `eastus2` |
 | Resource group | `ccof-demo-rg`, prefix `ccofdemo` |
+| Entra | Existing app registrations and security groups reused; Stage 4 checked and updated them, rather than creating new directory objects |
 | Models | Claude Sonnet 5.5 and Haiku 5.5, 80 capacity units each, backend `foundry-eastus2` |
 | Network | `network.mode: create` (lab only): Stage 6 creates the VNet `10.64.0.0/16` with APIM, private-endpoint and Functions subnets, the private endpoints and the VNet integrations |
 | Budget enforcement | `budget-state`, reconciler every minute, budget guard 80 / 25 / 5 (`warnPercent` / `overshootPercent` / `projectionMinutes`) |

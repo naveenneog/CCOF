@@ -4,7 +4,7 @@
 
 **Active packet:** G-DOCS — reader-facing documentation and pseudonymised demo evidence ([ROADMAP](ROADMAP.md)).
 
-### G-DOCS — documentation refresh (2026-10-24, source complete)
+### G-DOCS — documentation refresh (2026-10-24, complete)
 
 - Acceptance: short role-based pages, prerequisites and stages with expected outputs, live Portal and console
   captures with consistent hypothetical identifiers, own-usage states and chargeback CSV; links checked offline.
@@ -18,11 +18,17 @@
   snapshot/cache instructions. Regression tests failed first; capture now restores the live DOM even on failure.
   Login uses the supplied absolute config; snapshot mode lists all registered groups explicitly.
 - Council round 2: ARCHITECT, CODER, QA, UX and SECURITY PASS. Ten docs/capture tests pass; nine mutations caught
-  with all five tests loading in each targeted suite. Client 68/68; strict typecheck and packet gate pass.
+  with all five tests loading in each targeted suite. Client 68/68; exported suite 1212 pass, six opt-in live tests
+  skipped, zero failed; strict typecheck and packet gate pass. Fifteen reader-facing PowerShell blocks parse.
 - All 44 images checked with local Windows OCR: no configured real-name or known live-GUID matches. Staged secret
   scan clean; 656 tracked text files checked against eight known live IDs, with a deliberate leak rejected.
-- Public release 10 is pending; the reviewed source and pseudonymised evidence are ready to commit.
-- The demo lab remains deployed; cleanup is not yet claimed.
+- Reviewed source: `cae4567`. Public release 10: `2f84715`; CI passes on Node 22 and 26, including every tracked
+  Bicep template ([run](https://github.com/naveenneog/CCOF/actions/runs/40096140727)). Remote tree verified:
+  44 evidence images, zero old live captures.
+- Temporary client home removed and the session-owned capture browser stopped. The demo lab was retained and
+  remains billable; no Azure resources were changed during recovery.
+- Publication retained the hypothetical Contoso aliases in the new reader pages, evidence and capture-test fixture;
+  the older real-tenant label substitution was excluded for those aliases. Other identifier rules still ran.
 
 ### G-GUARD — budget guard: projected spend, rate guard, 80% warning (2026-10-24)
 

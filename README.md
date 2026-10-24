@@ -1,7 +1,7 @@
 # Claude Code on Foundry (CCOF)
 
-Give your developers **Claude Code through one Azure gateway with private backends**, managed with the **Entra groups you already
-have**: each group gets its own models, limits and monthly dollar budget, every person sees their own spend in
+CCOF routes **Claude Code through one Azure gateway with private backends**, managed through **existing Entra groups**:
+each group has its own models, limits and monthly dollar budget, every person sees their own spend in
 Claude Code, and every request is charged to a cost code for chargeback.
 
 [![Architecture: Entra sign-in, API Management gateway, Function Apps, Cosmos DB, Foundry, private network](docs/diagrams/ccof-architecture-overview.svg)](docs/get-started/01-what-it-is.md)
@@ -14,7 +14,7 @@ Claude Code, and every request is charged to a cost code for chargeback.
 | **Reconciled dollar budgets** — configurable warning, throttling and refusal; reporting lag can cause overshoot | [How](docs/operate/budgets-and-guard.md) |
 | **`/usage` in Claude Code** — each person's own spend, budget and warnings | [How](docs/get-started/05-developer-setup.md#4-check-your-own-budget-usage) |
 | **Chargeback per person** — your field name (for example *WBS ID*) in filters and CSV exports | [How](docs/operate/chargeback-and-tags.md) |
-| **Private by design** — private endpoints, managed identities, no stored secrets, Entra sign-in only | [Architecture](docs/ARCHITECTURE.md) |
+| **Private backends** — private endpoints, managed identities and Entra sign-in | [Architecture](docs/ARCHITECTURE.md) |
 
 ## Start here
 

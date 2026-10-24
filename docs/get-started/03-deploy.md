@@ -11,9 +11,9 @@ real ones, in the same format. Every setting and the Portal way of each stage: [
 ## Before Stage 0: get the code and write the configuration
 
 ```powershell
-cd $HOME; git clone <repository-url> ccof; cd ccof
+cd $HOME; git clone https://github.com/naveenneog/CCOF.git ccof; cd ccof
 npm ci --ignore-scripts --include=dev
-az account set --subscription <subscription-id>
+az account set --subscription '<subscription-id>'
 New-Item -ItemType Directory -Force $HOME/ccof-private | Out-Null
 Copy-Item infra/staged/staged.config.example.json $HOME/ccof-private/staged.config.json
 code $HOME/ccof-private/staged.config.json        # replace every REPLACE- value
