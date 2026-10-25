@@ -131,7 +131,7 @@ function Invoke-Stage1 {
     param($Cfg, [switch]$Apply)
     $exists = (Invoke-QsAz @('group', 'exists', '--subscription', $Cfg.subscriptionId, '--name', $Cfg.resourceGroup)) -eq 'true'
     if (-not $exists) {
-        if (-not $Apply) { Write-Host "preview: resource group $($Cfg.resourceGroup) does not exist; -Apply creates it in $($Cfg.location) (subscription-scope resourceGroups/write)."; return $null }
+        if (-not $Apply) { Write-Host "preview: resource group $($Cfg.resourceGroup) does not exist; -Apply creates it in $($Cfg.location) (subscription-scope resourceGroups/write). Stage 1 is create-only: once applied, its stage1 values (Cosmos DB regions, API Management, public access, Foundry deployments) cannot be changed in this resource group, so review them now."; return $null }
         $null = Invoke-QsAz @('group', 'create', '--subscription', $Cfg.subscriptionId, '--name', $Cfg.resourceGroup, '--location', $Cfg.location, '--tags', 'workload=claude-code-on-foundry', 'deployment=staged', '--output', 'none')
     }
     $items = @(Invoke-StgAzJson @('resource', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup))
@@ -355,7 +355,13 @@ function Invoke-Stage6 {
         $vnetExists = [bool]@($matches | Where-Object { $_.id -ieq $vnetId }).Count
     }
     $state = Read-StgState $Cfg
-    $action = Get-StgNetworkAction -Mode $Cfg.network.mode -VnetExists $vnetExists -StageStateExists ([bool]$state.stages['6'])
+    $ownDeployment = $false
+    if ($vnetExists -and -not $state.stages['6']) {
+        $deployments = @(Invoke-StgAzJson @('deployment', 'group', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup))
+        $ownDeployment = Test-StgOwnNetworkDeployment -Deployments $deployments -VnetId $vnetId -Network $Cfg.network -SharedResourceGroup ([bool]$Cfg.sharedResourceGroup)
+        if ($ownDeployment) { Write-Host 'Stage 6: the VNet comes from this resource group''s succeeded stage6-network deployment; deploying it again.' }
+    }
+    $action = Get-StgNetworkAction -Mode $Cfg.network.mode -VnetExists $vnetExists -StageStateExists ([bool]$state.stages['6']) -OwnDeploymentSucceeded $ownDeployment
     if ($action -eq 'reuse') {
         $saved = Get-StgStage $Cfg 6
         $out = [ordered]@{}

@@ -2,7 +2,31 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-AZCLI — Azure CLI developer sign-in (complete; [ROADMAP](ROADMAP.md), [ADR-0041](adr/0041-azure-cli-developer-sign-in.md)).
+**Active packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
+
+### G-NOVICE — first-time reader deployment (complete, 2026-10-25)
+
+- Acceptance: a reader following only the README and get-started pages reaches Stage 8 and a working developer
+  setup with `signInMethod: azure-cli`; each failure met is captured, and is either refused at Stage 0 with the fix
+  named or explained where it is met; developers have one sign-in step for both methods.
+- Live: attempt 1 (`ccof-nov-rg`) stopped at Stage 3 and was deleted (Stage 1 is create-only; Foundry account
+  purged to free 20 + 20 DataZone units). Attempt 2 (`ccof-nov2-rg`) passed Stages 0-8; Stage 8 anonymous `401`,
+  Haiku `200`, Opus `403`. Developer setup from page 5 in a scratch profile: `claude -p` answered, `/usage` showed
+  USD 0 of 100. The interactive sign-in window was replaced by a copy of an already signed-in profile.
+- Code fixes (each failing first): Stage 0 refuses no API Management and a private Foundry account without a private
+  endpoint; Stage 1 create-only messages; Stage 6 read-back skips Foundry zones it did not create and redeploys its
+  own network after a failed read-back; changed-config errors name every affected stage; ARM errors lead with
+  resource, code and innermost message; setup prints `signInMethod` and `signIn`.
+- Council: round 1 Architect BLOCK (Stage 6 recovery trusted any succeeded `stage6-network` deployment); Coder and
+  QA PASS-WITH-NOTES (same guard, duplicate AZ-05 row); UX PASS-WITH-NOTES (Desktop sign-in wording, capture omitted
+  the model notice); Security PASS (hardening note on the same guard). Fixed with failing tests first: the guard now
+  requires create mode, this VNet's `vnetId` output, unchanged `network.create` and a non-shared resource group
+  (verified on the live deployment), [ADR-0042](adr/0042-stage0-refusals-and-stage6-recovery.md). Round 2: Architect
+  PASS, UX PASS-WITH-NOTES (Desktop links, fixed).
+- Open: CC-01 (Claude Code model-catalog notice), next packet G-CCMODEL. Decision record:
+  [ADR-0042](adr/0042-stage0-refusals-and-stage6-recovery.md).
+
+**Previous packet:** G-AZCLI — Azure CLI developer sign-in (complete; [ADR-0041](adr/0041-azure-cli-developer-sign-in.md)).
 
 ### G-AZCLI — Azure CLI developer sign-in (complete, 2026-10-25)
 

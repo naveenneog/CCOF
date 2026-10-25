@@ -1,0 +1,10 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
+  Modify   ccof-nov-rg/providers/Microsoft.Web/sites/ccofnov-tbugsc2pykxhs-sync
+  Modify   ccof-nov-rg/providers/Microsoft.Web/sites/ccofnov-tbugsc2pykxhs-sync/providers/Microsoft.Insights/diagnosticSettings/ccof-function-logs
+guarded preview: 21 existing resources; no unrelated Modify or Delete.
+Exception: /home/alex/ccof/infra/quickstart/Deploy-Quickstart.ps1:81
+Line |
+  81 |          throw "az $($Arguments[0..1] -join ' ') failed: $err"
+     |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | az deployment group failed: ERROR:
+     | {"status":"Failed","error":{"code":"DeploymentFailed","target":"/subscriptions/ca73539b-d4ce-4fbe-ac06-321c19cbc7d0/resourceGroups/ccof-nov-rg/providers/Microsoft.Resources/deployments/stage1-services","message":"At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details.","details":[{"code":"BadRequest","target":"/subscriptions/ca73539b-d4ce-4fbe-ac06-321c19cbc7d0/resourceGroups/ccof-nov-rg/providers/Microsoft.DocumentDB/databaseAccounts/ccofnov-tbugsc2pykxhs-cosmos","message":"{\r\n  \"code\": \"BadRequest\",\r\n  \"message\": \"DatabaseAccount ccofnov-tbugsc2pykxhs-cosmos is in a failed provisioning state because the previous attempt to create it was not successful. Please delete the previous instance before attempting to recreate this account.\\r\\nActivityId: 6f7e13c0-deb0-4bc0-bc7c-6d87395d22cd, Microsoft.Azure.Documents.Common/2.14.0\"\r\n}"}]}}

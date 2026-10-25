@@ -1,0 +1,7 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
+== stage 1 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-nov-rg; state /home/alex/ccof-private/.staged-state
+Exception: /home/alex/ccof/infra/staged/Staged.Common.ps1:257
+Line |
+ 257 |  … rentHash) { throw "stage_config_changed: inputs for stage $Number cha …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | stage_config_changed: inputs for stage 1 changed after it was verified; preview and apply stage 1 again.

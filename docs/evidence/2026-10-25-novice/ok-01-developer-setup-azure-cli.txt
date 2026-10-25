@@ -1,0 +1,10 @@
+PS C:\Users\alex.morgan\ccof> pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -UsageStatusLine -Confirmed
+{"statusLine":"set","component":"claude-code","usageSkill":true,"signIn":"\"C:\\Users\\alex.morgan\\.claude\\ccof-token.cmd\" login","event":"configured","signInMethod":"azure-cli","changeId":"20261025T084337567Z-8c8feafffaf844908fd043d23fba2313"}
+PS C:\Users\alex.morgan\ccof> & "$env:USERPROFILE\.claude\ccof-token.cmd" status
+alex.morgan@contoso.com
+PS C:\Users\alex.morgan\ccof> claude -p "Reply with exactly: NOVICE OK" --model claude-haiku-5-5
+"claude-haiku-5-5" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior. [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}
+NOVICE OK
+PS C:\Users\alex.morgan\ccof> /usage   (in Claude Code)
+CCOF budget, group 0b65c63f-4d92-4e52-a492-c5455d71cfda: $0.00 of $100.00 used (0%), $100.00 left, as of 08:44 UTC.
+Figures are from the last cost run; requests not yet priced are not included.

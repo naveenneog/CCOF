@@ -1,0 +1,7 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 3 -ConfigPath $cfg -Apply
+== stage 3 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-nov-rg; state /home/alex/ccof-private/.staged-state
+Exception: /home/alex/ccof/infra/staged/Staged.Common.ps1:447
+Line |
+ 447 |  …      else { throw 'apim_missing: Stage 1 deferred APIM and config api …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | apim_missing: Stage 1 deferred APIM and config apim.existing is empty.

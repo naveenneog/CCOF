@@ -87,6 +87,9 @@ function Set-CcofClaudeDesktop {
     Write-ClientJson $profilePath $profile
     Write-ClientJson $metaPath $meta
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-desktop'; changeId = $snapshot.Manifest.changeId
-        credentialKind = $profile.inferenceCredentialKind } | ConvertTo-Json -Compress)
+    $result = [ordered]@{ event = 'configured'; component = 'claude-desktop'; changeId = $snapshot.Manifest.changeId
+        credentialKind = $profile.inferenceCredentialKind; signInMethod = $(if ($config.signInMethod -ceq 'azure-cli') { 'azure-cli' } else { 'msal' }) }
+    # external-idp: Claude Desktop runs the Entra sign-in itself; otherwise the developer signs in once through the helper.
+    if ($profile.inferenceCredentialKind -ceq 'helper-script') { $result.signIn = "`"$helperPath`" login" }
+    return ($result | ConvertTo-Json -Compress)
 }

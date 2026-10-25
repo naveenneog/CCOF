@@ -144,5 +144,6 @@ function Set-CcofClaudeCode {
     Write-ClientJson $path $settings
     if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult } | ConvertTo-Json -Compress)
+    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult
+        signInMethod = $(if ($azureCli) { 'azure-cli' } else { 'msal' }); signIn = "`"$helper`" login" } | ConvertTo-Json -Compress)
 }

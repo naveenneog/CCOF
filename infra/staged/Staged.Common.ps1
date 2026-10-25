@@ -82,6 +82,12 @@ function Read-StgConfig {
     foreach ($k in 'gatewayAppId', 'resolverAppId', 'adminAppId') { if ($existingApps[$k] -and $existingApps[$k] -notmatch $script:Guid) { $problems.Add("entra.existing.$k must be a GUID") } }
     foreach ($n in @($entraNames | Where-Object { $_ })) { if ($n -notmatch '^[A-Za-z0-9 ._-]{1,120}$') { $problems.Add("Entra display name '$n' may hold only letters, digits, space . _ -") } }
     $fd = $c.stage1.foundry
+    if ($fd -and $fd.create -and $fd.publicNetworkAccess -ceq 'Disabled' -and $c.network.mode -in 'create', 'existing') {
+        $own = @($c.backends | Where-Object { $_.accountName -ieq $fd.accountName -and $_.resourceGroup -ieq $c.resourceGroup })
+        if (@($own | Where-Object { -not $_.privateEndpoint }).Count) {
+            $problems.Add("stage1.foundry.publicNetworkAccess is Disabled, so the gateway reaches $($fd.accountName) only through a private endpoint: set privateEndpoint to true on its backends entry")
+        }
+    }
     if ($fd -and $fd.create) {
         if ($fd.accountName -cnotmatch '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$') { $problems.Add('stage1.foundry.accountName must be 3-64 lowercase letters, digits or -') }
         if (-not @($fd.deployments).Count -and -not $fd.modelDeploymentsBlocked) { $problems.Add('stage1.foundry.deployments needs at least one model deployment (or modelDeploymentsBlocked with the reason)') }
@@ -105,6 +111,11 @@ function Read-StgConfig {
         $problems.Add('a newly created admin registration requires at least one entra.adminEditors assignment; assignment-required is enabled')
     }
     if ($c.sharedResourceGroup -and $c.sharedResourceGroup -isnot [bool]) { $problems.Add('sharedResourceGroup must be true or false') }
+    # Stage 1 is create-only and Stage 3 needs a gateway: decide it before Stage 1 rather than meet apim_missing at Stage 3.
+    $apimExisting = $c.apim.existing
+    if (-not $c.stage1.approveNewPublicApimBootstrap -and -not ($apimExisting -and $apimExisting.name -and $apimExisting.subscriptionId -and $apimExisting.resourceGroup)) {
+        $problems.Add('no API Management: set stage1.approveNewPublicApimBootstrap to true (Stage 1 creates a new one) or name an existing one in apim.existing { name, subscriptionId, resourceGroup }; Stage 1 is create-only, so decide before it runs')
+    }
     if ($problems.Count) { throw "invalid staged configuration:`n  - $($problems -join "`n  - ")" }
     $c.__path = $full
     return $c
@@ -195,13 +206,27 @@ function Get-StgStageDependencies {
         default { throw "invalid stage number $Number" }
     }
 }
+function Test-StgOwnNetworkDeployment {
+    <# True when this resource group's succeeded create-mode stage6-network deployment produced this VNet from the
+       same network.create settings as the current configuration, so redeploying it changes nothing. #>
+    param($Deployments, [string]$VnetId, $Network, [bool]$SharedResourceGroup = $false)
+    if ($SharedResourceGroup -or $Network.mode -cne 'create') { return $false }
+    $wanted = ConvertTo-StgCanonical $Network.create | ConvertTo-Json -Depth 50 -Compress
+    return [bool]@($Deployments | Where-Object {
+        $recorded = $_.properties.parameters.network.value
+        $_.name -ceq 'stage6-network' -and $_.properties.provisioningState -ceq 'Succeeded' -and
+        $recorded.mode -ceq 'create' -and
+        (ConvertTo-StgCanonical $recorded.create | ConvertTo-Json -Depth 50 -Compress) -ceq $wanted -and
+        $_.properties.outputs.vnetId.value -and $_.properties.outputs.vnetId.value -ieq $VnetId }).Count
+}
 function Get-StgNetworkAction {
-    param([string]$Mode, [bool]$VnetExists, [bool]$StageStateExists)
+    param([string]$Mode, [bool]$VnetExists, [bool]$StageStateExists, [bool]$OwnDeploymentSucceeded = $false)
     if ($Mode -eq 'create' -and $VnetExists) {
-        if (-not $StageStateExists) {
-            throw 'network_create_existing_vnet: create mode owns an authoritative subnet list. The VNet exists without matching Stage 6 state; stop and recover with network.mode verify (customer-built) or existing, with explicit resource IDs.'
-        }
-        return 'reuse'
+        if ($StageStateExists) { return 'reuse' }
+        # A read-back failure after this resource group's own stage6-network deployment succeeded: the same template
+        # and subnet list again, so redeploying is safe and is the recovery.
+        if ($OwnDeploymentSucceeded) { return 'deploy' }
+        throw 'network_create_existing_vnet: create mode owns an authoritative subnet list. The VNet exists without matching Stage 6 state; stop and recover with network.mode verify (customer-built) or existing, with explicit resource IDs.'
     }
     return 'deploy'
 }
@@ -211,7 +236,7 @@ function Get-StgNetworkDnsTargets {
     if ($vnetId -notmatch '^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+$') {
         throw 'network_vnet_output: cannot determine a valid VNet ID from the Stage 6 outputs.'
     }
-    $foundryZones = @($Outputs.foundryPrivateDnsZoneIds | Where-Object { $_ })
+    $foundryZones = if ($HasFoundry) { @($Outputs.foundryPrivateDnsZoneIds | Where-Object { $_ }) } else { @() }
     if ($HasFoundry -and -not $foundryZones.Count) {
         if ($Cfg.network.mode -eq 'create') {
             $foundryZoneNames = @('privatelink.cognitiveservices.azure.com', 'privatelink.openai.azure.com', 'privatelink.services.ai.azure.com')
@@ -254,7 +279,15 @@ function Get-StgStage { param($Cfg, [int]$Number)
     $s = $state.stages["$Number"]
     if (-not $s) { throw "stage_order: stage $Number has not completed in $script:StateDir; run it with -Apply first." }
     $currentHash = Get-StgStageInput $Cfg $Number
-    if ($s.configHash -and $s.configHash -cne $currentHash) { throw "stage_config_changed: inputs for stage $Number changed after it was verified; preview and apply stage $Number again." }
+    if ($s.configHash -and $s.configHash -cne $currentHash) {
+        # Stage 1 never redeploys once verified (Invoke-Stage1), so a preview cannot clear this for Stage 1.
+        if ($Number -eq 1) { throw "stage_config_changed: stage1 values changed after Stage 1 was verified. Stage 1 is create-only: restore the values it ran with, or deploy to a new resource group (new prefix) with its own state folder." }
+        # One setting can be an input of several stages (backends: 3, 5 and 6): name every verified stage it changed.
+        $changed = @($state.stages.Keys | ForEach-Object { [int]$_ } | Where-Object { $_ -ge 2 } | Sort-Object | Where-Object {
+            $state.stages["$_"].configHash -and $state.stages["$_"].configHash -cne (Get-StgStageInput $Cfg $_) })
+        if ($changed.Count -gt 1) { throw "stage_config_changed: inputs changed after verification for stages $($changed -join ', '); preview and apply them again in that order." }
+        throw "stage_config_changed: inputs for stage $Number changed after it was verified; preview and apply stage $Number again."
+    }
     $currentDependencies = Get-StgDependencyHashes $state $Number
     if ($null -ne $s.dependencyHashes) {
         foreach ($dependency in $currentDependencies.Keys) {

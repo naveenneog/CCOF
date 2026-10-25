@@ -1,5 +1,18 @@
 # Change log
 
+## 2026-10-25 — First-time reader deployment
+
+- Stage 0 refuses a configuration that creates no API Management and names none, and a new private Foundry account
+  whose backend has no private endpoint. Both previously failed only after the create-only Stage 1.
+- The Stage 1 preview and its changed-configuration error say that Stage 1 values are final in a resource group.
+- Stage 6 no longer reads Foundry DNS zones it did not create, and can be rerun after a failed read-back in
+  `network.mode: create`.
+- A changed-configuration error names every stage to rerun, in order. Azure deployment errors start with the failing
+  resource, its error code and the underlying message.
+- Developer setup prints the sign-in method and the one sign-in command; the developer page has a single sign-in step.
+- Prerequisites: a quota command that shows the model names and how quota maps to the configuration. Deploy page: the
+  create-only lab values and the settings for dollar budgets. Troubleshooting: the errors met in the run.
+
 ## 2026-10-25 — Azure CLI developer sign-in
 
 - New client setting `signInMethod: azure-cli`. Setup writes `ccof-token.cmd`, which signs the developer in with

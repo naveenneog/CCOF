@@ -84,6 +84,9 @@ try {
         Assert ($settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS -ceq '300000') 'Helper TTL incorrect'
         Assert ($settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -ceq '1') 'Traffic decision missing'
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'Silent token command missing'
+        # One sign-in command for every method: the helper setup just wrote, with `login`.
+        Assert ($codeResult.signInMethod -ceq 'msal') "Sign-in method not reported: $($codeResult.signInMethod)"
+        Assert ($codeResult.signIn -ceq ('"' + (Join-Path $claudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($codeResult.signIn)"
         $snapshot = Join-Path $backupRoot $codeResult.changeId
         $manifest = Read-ClientJson (Join-Path $snapshot 'snapshot.json')
         $record = $manifest.files | Where-Object { [string]::Equals($_.path, $settingsPath, 'Ordinal') }
@@ -222,6 +225,7 @@ try {
         Assert ($profile.inferenceGatewayBaseUrl -ceq $config.gatewayUrl) 'Desktop URL is wrong'
         Assert ($profile.inferenceGatewayAuthScheme -ceq 'bearer') 'Desktop must send bearer tokens'
         Assert ($profile.inferenceCredentialHelperArgs[0] -ceq 'token') 'Desktop helper is not silent'
+        Assert ($desktopResult.signIn -ceq ('"' + (Join-Path (Split-Path $desktopRoot -Parent) 'ccof-token.cmd') + '" login')) "Desktop sign-in command not reported: $($desktopResult.signIn)"
         Assert ($profile.inferenceCredentialHelperTtlSec -lt $config.minimumTokenLifetimeSeconds) 'Desktop TTL too long'
         $meta = Read-ClientJson (Join-Path $desktopRoot '_meta.json')
         Assert ($meta.appliedId -ceq $config.desktop.profileId) 'New profile not selected'
@@ -652,7 +656,9 @@ exit /b 0
     Test-Case 'Claude Code in azure-cli mode writes the Azure CLI helper, a cache below the Azure CLI refresh floor, and pins the helper for /usage' {
         $options = $codeArgs.Clone(); $options.ConfigPath = $azConfigPath; $options.ClaudeHome = Join-Path $work 'az-mode/.claude'
         $options.VSCodeSettingsPath = Join-Path $work 'az-mode/code/settings.json'
-        Use-MockAzOnPath { Set-CcofClaudeCode @options -Confirmed | Out-Null }
+        $result = Use-MockAzOnPath { Set-CcofClaudeCode @options -Confirmed } | ConvertFrom-Json -AsHashtable
+        Assert ($result.signInMethod -ceq 'azure-cli') "Sign-in method not reported: $($result.signInMethod)"
+        Assert ($result.signIn -ceq ('"' + (Join-Path $options.ClaudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($result.signIn)"
         $shim = [IO.File]::ReadAllText((Join-Path $options.ClaudeHome 'ccof-token.cmd'))
         Assert ($shim -match '"%AZ%" account get-access-token' -and $shim.Contains("set `"AZ=$mockAz`"") -and $shim -notmatch '\bnode\b') "Claude Code helper is not the Azure CLI helper pinned to the installed az.cmd: $(($shim -split "`r`n") -match '^set .AZ=')"
         Assert ($shim.Contains('set "AZURE_CONFIG_DIR=' + (Join-Path (Split-Path $azConfigPath -Parent) 'az') + '"')) 'Profile folder is not beside the configuration'
@@ -668,6 +674,8 @@ exit /b 0
         $options.LibraryPath = Join-Path $work 'az-mode/Claude-3p/configLibrary'
         $result = Use-MockAzOnPath { Set-CcofClaudeDesktop @options -Confirmed } | ConvertFrom-Json -AsHashtable
         Assert ($result.credentialKind -ceq 'helper-script') 'Desktop did not use the helper'
+        Assert ($result.signInMethod -ceq 'azure-cli') "Desktop sign-in method not reported: $($result.signInMethod)"
+        Assert ($result.signIn -ceq ('"' + (Join-Path (Split-Path $options.LibraryPath -Parent) 'ccof-token.cmd') + '" login')) "Desktop sign-in command not reported: $($result.signIn)"
         $profile = Read-ClientJson (Join-Path $options.LibraryPath "$($config.desktop.profileId).json")
         Assert ($profile.inferenceProvider -ceq 'gateway' -and $profile.inferenceGatewayAuthScheme -ceq 'bearer') 'Not a gateway bearer profile'
         Assert ($profile.inferenceCredentialHelperTtlSec -le 240) 'Desktop helper cache too long'

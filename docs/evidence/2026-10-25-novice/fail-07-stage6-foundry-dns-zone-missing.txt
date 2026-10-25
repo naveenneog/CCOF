@@ -1,0 +1,14 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
+deployed stage6-network (PT8M56.3476194S)
+ccofnv2-o2473y3l7n6lu-admin integrated with snet-functions
+ccofnv2-o2473y3l7n6lu-reconciler integrated with snet-functions
+ccofnv2-o2473y3l7n6lu-resolver integrated with snet-functions
+ccofnv2-o2473y3l7n6lu-sync integrated with snet-functions
+ccofnv2-o2473y3l7n6lu-apim: outbound VNet integration requested; waiting (Standard v2 updates take up to 45 minutes).
+Exception: /home/alex/ccof/infra/quickstart/Deploy-Quickstart.ps1:120
+Line |
+ 120 |  … $summary) { throw "az $($Arguments[0..1] -join ' ') failed: $summary` …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | az rest --method failed: ParentResourceNotFound: Failed to perform 'read' on resource(s) of type
+     | 'privateDnsZones/virtualNetworkLinks', because the parent resource
+     | '/subscriptions/ca73539b-d4ce-4fbe-ac06-321c19cbc7d0/resourceGroups/ccof-nov2-rg/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com' could not be found. Full error: ERROR: Not Found({"error":{"code":"ParentResourceNotFound","message":"Failed to perform 'read' on resource(s) of type 'privateDnsZones/virtualNetworkLinks', because the parent resource '/subscriptions/ca73539b-d4ce-4fbe-ac06-321c19cbc7d0/resourceGroups/ccof-nov2-rg/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com' could not be found."}})
