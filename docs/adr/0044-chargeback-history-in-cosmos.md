@@ -136,9 +136,13 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
   only when `admin.extraAllowedClientIds` changes. Stage 5's recorded outputs (gateway URL, settings list, workbook
   flag) do not change, so Stage 7 is not forced by the dependency check and is run for the code. A Stage 7 rerun
   seeds create-only: group documents edited in the admin console since the first seed now differ from the
-  configuration, and Stage 7 keeps them and prints a warning naming the fields instead of stopping with
-  `seed_documents_differ` (`Invoke-StgSeed` passes the group ids as `-KeepDiffering`); other differing documents
-  still stop it. Stage 5 replaces each app's whole settings set, so it now writes
+  configuration. Council round 3 (2026-10-26) reverted round 2's default of keeping them: Stage 7 stops with
+  `seed_documents_differ`, naming each group and the differing fields, unless the configuration sets
+  `stage7.keepDifferingGroups: true`; then it keeps them, ends with `kept N console-edited group(s): …` and records
+  them in `evidence/stage7.verify.json` (`seed.kept`). Why: keeping silently hid a configuration that no longer
+  describes the deployment, and a warning in a long log is easy to miss; an opt-in in the configuration is
+  reviewable and part of the Stage 7 hash. `groups[]` seeds a group once; afterwards the admin console owns it.
+  Other differing documents always stop Stage 7. Stage 5 replaces each app's whole settings set, so it now writes
   `AzureWebJobs.snapshotApply.Disabled: true` itself (ADR-0024); before, a Stage 5 rerun dropped the switch that
   Stage 7 had left and the Stage 1 recheck failed. A Stage 5 rerun with a changed rendered policy leaves the
   previous policy fragments in API Management (ADR-0039); removing them is a documented manual step

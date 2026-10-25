@@ -372,7 +372,7 @@ Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $stage7Body.IndexOf('if (-not 
 $stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
 $qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
 $groupsText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Groups.ps1')
-Assert-Contract ($groupsText -match 'Invoke-QsSeedThroughFunction -Ctx \$Ctx -Documents \$docs -KeepDiffering @\(\$GroupDocuments \| ForEach-Object \{ "projects/\$\(\$_\.id\)" \}\)') 'A Stage 7 rerun must keep group documents edited in the admin console (KeepDiffering), not fail on them.'
+Assert-Contract ($groupsText -match 'Invoke-QsSeedThroughFunction -Ctx \$Ctx -Documents \$docs -KeepDiffering @\(\$GroupDocuments \| ForEach-Object \{ "projects/\$\(\$_\.id\)" \}\)') 'Stage 7 must ask the seed step to report group documents edited in the admin console (KeepDiffering); Invoke-StgSeed decides (Test-Stage7GroupDrift.ps1).'
 Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'
 Assert-Contract ($stage5Body -match 'Get-StgGroupWorkbookRows' -and $qsParamsBody -match 'Select-StgBaselineGroups \$Cfg\.groups') 'Stage 5 must add group workbook rows; only baseline entries may reach the quickstart parameters.'
 # Council G-SEED fixes: backend reference, Entra group still present before the seed, Stage 8 selected group.

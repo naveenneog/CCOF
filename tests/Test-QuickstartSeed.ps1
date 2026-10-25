@@ -283,12 +283,15 @@ $message = try { $null = Invoke-QsSeed $ctx; '' } catch { $_.Exception.Message }
 Assert-True 'a present document that differs fails with seed_documents_differ, by container, id and field' ($message -match '^seed_documents_differ' -and $message.Contains("$($differs[0].container)/$($differs[0].id)") -and $message -match 'classifications, displayName') $message
 Assert-True 'after differs the settings are reset' (Test-CleanedUp)
 
-# Staged Stage 7 rerun (council round 2, NR25): group documents are edited in the admin console after the first seed,
-# so a differing document named in -KeepDiffering is left as it is and reported, not a failure; any other still fails.
+# Staged Stage 7 (council round 3, R3-2): a differing document named in -KeepDiffering is left as it is and returned in
+# kept with its fields, so the caller decides whether to stop or continue; any other differing document still fails.
 $kept = "$($differs[0].container)/$($differs[0].id)"
 $ctx = New-FunctionSeedContext @({ @(New-SeedLine 'differs' $differs) })
 $out = $null; $message = ''; try { $out = Invoke-QsSeedThroughFunction -Ctx $ctx -Documents $docs -KeepDiffering @($kept) 6>&1 | Tee-Object -Variable printed | Where-Object { $_ -is [Collections.IDictionary] } } catch { $message = $_.Exception.Message }
-Assert-True 'a differing document named in -KeepDiffering is kept and reported, and the step passes' (-not $message -and @($out.documents | Where-Object { $_ -ceq "${kept}: present-differs (kept)" }).Count -eq 1 -and (($printed | Out-String) -match [regex]::Escape($kept) -and ($printed | Out-String) -match 'classifications, displayName')) "$message $($out.documents -join ' | ')"
+Assert-True 'a differing document named in -KeepDiffering is returned in kept with its fields, and the step passes' (-not $message -and @($out.documents | Where-Object { $_ -ceq "${kept}: present-differs (kept)" }).Count -eq 1 -and @($out.kept).Count -eq 1 -and $out.kept[0].document -ceq $kept -and (@($out.kept[0].fields) -join ',') -ceq 'classifications,displayName') "$message $($out.documents -join ' | ')"
+Assert-True 'the seed step leaves the kept-document message to its caller' (-not (($printed | Out-String) -match 'left as it is')) ($printed | Out-String)
+$out = Invoke-QsSeedThroughFunction -Ctx (New-FunctionSeedContext @({ @(New-SeedLine 'succeeded' (New-SeedDocumentResults 'created')) })) -Documents $docs 6>$null
+Assert-True 'a seed with nothing kept returns an empty kept list' ($null -ne $out -and $out.Contains('kept') -and @($out.kept).Count -eq 0)
 $two = New-SeedDocumentResults 'present-equal'
 $two[0].outcome = 'present-differs'; $two[0].fields = @('displayName'); $two[1].outcome = 'present-differs'; $two[1].fields = @('status')
 $ctx = New-FunctionSeedContext @({ @(New-SeedLine 'differs' $two) })
