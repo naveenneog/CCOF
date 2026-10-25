@@ -53,7 +53,6 @@ function Invoke-Stage5 {
     if ($Apply) { $null = Write-StgEvidence 'stage5.retention.json' ([ordered]@{ days = $retentionDays; heldFrom = $heldFrom }) }
     $ctx.P.logRetentionHeldFrom = $heldFrom
     $history = Get-StgChargebackHistory $Cfg
-    if ($history) { $history.logRetentionHeldFrom = [string]$heldFrom }
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -84,6 +83,7 @@ function Invoke-Stage5 {
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
         auditArchive = $(if ($audit) { $audit } else { @{} })
         chargebackHistory = $history ?? @{}
+        logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }

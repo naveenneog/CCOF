@@ -64,6 +64,13 @@ function Get-StgLogRetentionDays {
     return 30
 }
 
+function Get-StgLogRetentionSettings {
+    # The stage5-config.bicep logRetention parameter: the admin app's ADMIN_LOG_RETENTION_DAYS and, when Stage 5 raised
+    # the retention, ADMIN_LOG_RETENTION_HELD_FROM. Written on every Stage 5 run, with chargeback history on or off.
+    param($Cfg, [string]$HeldFrom)
+    return [ordered]@{ days = (Get-StgLogRetentionDays $Cfg); heldFrom = $HeldFrom }
+}
+
 function Get-StgAuditArchiveName {
     # Stage 1 storage names are <prefix><uniqueString><app suffix> (main.bicep): the archive uses suffix aud.
     param($Names)

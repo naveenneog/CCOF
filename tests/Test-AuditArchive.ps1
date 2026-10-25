@@ -241,9 +241,9 @@ New-Item -ItemType Directory -Force -Path (Split-Path $recorded) | Out-Null
 Assert-Contract ((Get-StgRecordedRetentionHeldFrom $recorded) -ceq '2026-09-10T00:00:00.000Z' -and $null -eq (Get-StgRecordedRetentionHeldFrom ($recorded + '.absent'))) 'The previous instant comes from the file the last Stage 5 apply wrote.'
 Remove-Item -LiteralPath $recorded
 $stage5Bicep = Get-Content -Raw (Join-Path $root 'infra\staged\stage5-config.bicep')
-Assert-Contract ($stage5Bicep -match "ADMIN_LOG_RETENTION_HELD_FROM: chargebackHistory\.logRetentionHeldFrom") 'Stage 5 must write ADMIN_LOG_RETENTION_HELD_FROM when an instant is recorded.'
+Assert-Contract ($stage5Bicep -match "ADMIN_LOG_RETENTION_HELD_FROM: logRetention\.heldFrom") 'Stage 5 must write ADMIN_LOG_RETENTION_HELD_FROM when an instant is recorded.'
 $deployPart = $stage5.Substring(0, $stage5.IndexOf('Invoke-StgBicep'))
-Assert-Contract ($deployPart -match 'Get-StgRetentionHeldFrom' -and $deployPart -match 'logRetentionHeldFrom' -and $deployPart -match 'stage5\.retention\.json' -and $applyPart -match 'logRetention = ') 'Invoke-Stage5 must compute the instant before it deploys the settings, record it before any change, pass it to the admin settings and the workbook, and show it in its verify record.'
+Assert-Contract ($deployPart -match 'Get-StgRetentionHeldFrom' -and $deployPart -match 'logRetentionHeldFrom' -and $deployPart -match 'logRetention = Get-StgLogRetentionSettings' -and $deployPart -match 'stage5\.retention\.json' -and $applyPart -match 'logRetention = ') 'Invoke-Stage5 must compute the instant before it deploys the settings, record it before any change, pass it to the admin settings and the workbook, and show it in its verify record.'
 $common = (Get-Command Get-StgQuickstartParameters).ScriptBlock.ToString()
 Assert-Contract ($common -match 'logRetentionDays = \(Get-StgLogRetentionDays \$Cfg\)') 'The workbook must use the effective retention (audit.workspaceRetentionDays, else stage1.retentionInDays).'
 $qs = Get-Content -Raw (Join-Path $root 'infra\quickstart\Deploy-Quickstart.ps1')

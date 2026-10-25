@@ -66,7 +66,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    for both (a slow Cosmos holds the next budget run) and a separate timer function (a second schedule and
    identity to deploy for the same rows the run already read).
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
-   neither; absent: off), and `RECONCILER_HISTORY_TTL_DAYS` (`ttlDays`, only when set; decision 9). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
+   neither; absent: off), and `RECONCILER_HISTORY_TTL_DAYS` (`ttlDays`, only when set; decision 9). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off); Stage 5 writes `ADMIN_LOG_RETENTION_DAYS` with history on or off (ADR-0043).
    Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver.
    An absent section, or `{ "enabled": false }` with no other key, leaves every stage hash unchanged; any other
    present value (including `enabled: false` beside other keys) is part of the Stage 2, 3 and 5 hashes.
@@ -150,7 +150,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 ## Rollback
 
 Set `audit.chargebackHistory.enabled` to false (or remove the section) and rerun Stages 2, 3 and 5. Stage 5
-removes the `RECONCILER_HISTORY_*`, `ADMIN_CHARGEBACK_HISTORY_CONTAINER` and `ADMIN_LOG_RETENTION_DAYS` settings
+removes the `RECONCILER_HISTORY_*` and `ADMIN_CHARGEBACK_HISTORY_CONTAINER` settings
 (the settings resource replaces the whole set), so the reconciler stops writing and the export reads Log Analytics
 only. The stage deployments are incremental and never delete, so these remain until removed by hand:
 

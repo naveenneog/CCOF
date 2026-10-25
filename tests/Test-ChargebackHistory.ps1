@@ -58,7 +58,15 @@ Assert-Contract ($settingsText -match "RECONCILER_HISTORY_CONTAINER: 'chargeback
 Assert-Contract ($settingsText -match "reconcilerHistorySettings = \(chargebackHistory\.\?enabled \?\? false\) \?") 'The reconciler history settings must be written only when enabled.'
 # ADR-0044 decision 9: the reconciler gives each document a time to live ending ttlDays after its month, so it needs ttlDays.
 Assert-Contract ($settingsText -match "chargebackHistory\.\?ttlDays == null \? \{\} : \{ RECONCILER_HISTORY_TTL_DAYS: string\(chargebackHistory\.ttlDays\) \}") 'Stage 5 must write RECONCILER_HISTORY_TTL_DAYS when ttlDays is set, and nothing when it is null.'
-Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'ADMIN_LOG_RETENTION_DAYS: string\(chargebackHistory\.logRetentionDays\)' -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history settings and pass history to the settings module.'
+Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history setting and pass history to the settings module.'
+# The admin chargeback reports use the effective retention and the held-from instant with history on or off: only the
+# container setting depends on audit.chargebackHistory.enabled.
+$historyVar = [regex]::Match($stage5Text, '(?ms)^var adminHistorySettings = .*?^(var|resource)').Value
+$retentionVar = [regex]::Match($stage5Text, '(?ms)^var adminRetentionSettings = .*?^(var|resource)').Value
+Assert-Contract ($historyVar -and $historyVar -notmatch 'ADMIN_LOG_RETENTION') 'The admin retention settings must not be inside the history-only settings.'
+Assert-Contract ($retentionVar -match 'ADMIN_LOG_RETENTION_DAYS: string\(logRetention\.days\)' -and $retentionVar -match 'ADMIN_LOG_RETENTION_HELD_FROM: logRetention\.heldFrom' -and $retentionVar -notmatch 'chargebackHistory') 'Stage 5 must write ADMIN_LOG_RETENTION_DAYS (and the held-from instant when recorded) from logRetention, whatever audit.chargebackHistory says.'
+Assert-Contract ($stage5Text -match '\}, adminRetentionSettings, adminHistorySettings\)') 'The admin settings must include the retention settings on every Stage 5 run.'
+Assert-Contract ($appText -match 'logRetention = Get-StgLogRetentionSettings -Cfg \$Cfg -HeldFrom \$heldFrom') 'Stage 5 must pass the retention settings to the admin app on every run.'
 Assert-Contract ($appText -match '\$history = Get-StgChargebackHistory \$Cfg' -and $appText -match 'chargebackHistory = \$history \?\? @\{\}') 'Stage 5 must pass the validated history configuration.'
 
 # Driver: validation, the normalised value each stage receives, and the stage hashes.
@@ -122,6 +130,11 @@ foreach ($case in @(
     Assert-Contract ((& $retentionProblems (New-RetentionCfg $case.stage1 $case.workspace $e)) -match "more than the $e days") "ttlDays $e ($($case.name)) must be refused: not more than the workspace keeps."
     Assert-Contract ((& $retentionProblems (New-RetentionCfg $case.stage1 $case.workspace ($e + 1))).Count -eq 0) "ttlDays $($e + 1) ($($case.name)) must be accepted."
 }
+# History off with a raised retention: the admin app still receives the effective retention and the held-from instant.
+$historyOff = New-Cfg @{ enabled = $false }; $historyOff.audit.workspaceRetentionDays = 400
+$offRetention = Get-StgLogRetentionSettings -Cfg $historyOff -HeldFrom '2026-09-10T00:00:00.000Z'
+Assert-Contract ($null -eq (Get-StgChargebackHistory $historyOff) -and $offRetention.days -eq 400 -and $offRetention.heldFrom -ceq '2026-09-10T00:00:00.000Z') 'History off with a raised retention must still give the admin app the retention days and the held-from instant.'
+Assert-Contract ((Get-StgLogRetentionSettings -Cfg (New-Cfg $null) -HeldFrom $null).days -eq 30 -and (Get-StgLogRetentionSettings -Cfg (New-Cfg $null) -HeldFrom $null).heldFrom -ceq '') 'Without audit settings the admin app receives stage1.retentionInDays and no held-from instant.'
 
 # enabled false with no other key is off and hashes as if absent; any other present value is a hash input.
 $withoutAudit = New-Cfg $null
