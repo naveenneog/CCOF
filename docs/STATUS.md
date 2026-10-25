@@ -18,6 +18,7 @@
 
 **Previous packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
 
+- Public release 14: `5604486` on `naveenneog/CCOF` `main`, the `e5e7d8d..f368d2d` diff applied with no conflicts. Scrub check: 10 matches, all hypothetical `contoso` examples (3 new on the configuration page, kept as written). No real lab identifier in the public tree; gitleaks: the 3 known `projectApi` false positives; docs tests 25/25; public CI run `40195975284` success.
 ### G-NOVICE — first-time reader deployment (complete, 2026-10-25)
 
 - Acceptance: a reader following only the README and get-started pages reaches Stage 8 and a working developer
