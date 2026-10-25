@@ -68,6 +68,7 @@ function Get-StgCosmosProblems {
     elseif ($c.Contains('maxStalenessPrefix') -or $c.Contains('maxIntervalInSeconds')) {
         'stage1.cosmosConsistency: maxStalenessPrefix and maxIntervalInSeconds apply only to BoundedStaleness'
     }
+    Get-StgChargebackHistoryProblems $Cfg
 }
 
 # Compares az cosmosdb show output with the configuration. Region names there are display names ("East US 2");
@@ -106,4 +107,37 @@ function Get-StgCosmosDnsProblems {
     foreach ($name in @($account) + @($Regions | ForEach-Object { "$account-$($_.ToLowerInvariant())" })) {
         if ($have -notcontains "$name.privatelink.documents.azure.com") { "Cosmos private endpoint has no DNS name '$name' in privatelink.documents.azure.com" }
     }
+}
+
+# Chargeback history (ADR-0044): audit.chargebackHistory { enabled, closeAfterDays, ttlDays }. Absent or enabled false:
+# off, and no stage input changes. closeAfterDays 1-7 matches RECONCILER_HISTORY_CLOSE_AFTER_DAYS; ttlDays is null (no
+# expiry) or more days than the workspace keeps the ledger (stage1.retentionInDays), at most 100 years.
+function Get-StgChargebackHistoryProblems {
+    param($Cfg)
+    $audit = $Cfg.audit
+    if ($audit -isnot [Collections.IDictionary] -or -not $audit.Contains('chargebackHistory') -or $null -eq $audit.chargebackHistory) { return }
+    $h = $audit.chargebackHistory
+    $whole = { param($v) $v -is [int] -or $v -is [long] }
+    $retention = if ($Cfg.stage1.retentionInDays) { [int]$Cfg.stage1.retentionInDays } else { 30 }
+    $usage = "audit.chargebackHistory needs enabled (true or false), closeAfterDays (1-7) and ttlDays (null, or $($retention + 1)-36500 whole days) (ADR-0044)"
+    if ($h -isnot [Collections.IDictionary] -or $h.enabled -isnot [bool] -or @($h.Keys | Where-Object { $_ -cnotin 'enabled', 'closeAfterDays', 'ttlDays' }).Count) { return $usage }
+    if (-not $h.enabled) { return }
+    if (-not (& $whole $h.closeAfterDays) -or $h.closeAfterDays -lt 1 -or $h.closeAfterDays -gt 7) { return $usage }
+    if (-not $h.Contains('ttlDays') -or ($null -ne $h.ttlDays -and (-not (& $whole $h.ttlDays) -or $h.ttlDays -le $retention -or $h.ttlDays -gt 36500))) { return $usage }
+}
+
+# What Stages 2, 3 and 5 receive: $null when history is off.
+function Get-StgChargebackHistory {
+    param($Cfg)
+    $h = if ($Cfg.audit -is [Collections.IDictionary]) { $Cfg.audit.chargebackHistory } else { $null }
+    if ($h -isnot [Collections.IDictionary] -or $h.enabled -ne $true) { return $null }
+    $retention = if ($Cfg.stage1.retentionInDays) { [int]$Cfg.stage1.retentionInDays } else { 30 }
+    return @{ enabled = $true; closeAfterDays = [int]$h.closeAfterDays; ttlDays = $h.ttlDays; logRetentionDays = $retention }
+}
+
+# Stage 2 read-back: the container's defaultTtl is ttlDays in seconds, or absent when ttlDays is null.
+function Test-StgChargebackTtl {
+    param($Cfg, $DefaultTtl)
+    $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
+    return $(if ($null -eq $ttl) { $null -eq $DefaultTtl } else { $DefaultTtl -eq [long]$ttl * 86400 })
 }

@@ -189,6 +189,8 @@ function Get-StgStageInput {
         default { throw "invalid stage number $Number" }
     }
     if ($Number -eq 5 -and ($audit = Get-StgAuditStageInput $Cfg)) { $input.audit = $audit }
+    # ADR-0044: only when configured, so a configuration without it keeps its earlier hashes.
+    if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
     $canonical = ConvertTo-StgCanonical $input | ConvertTo-Json -Depth 100 -Compress
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
 }

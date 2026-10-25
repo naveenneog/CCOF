@@ -23,9 +23,13 @@ export const LEDGER_COLUMNS = [
   "cacheWrite5mTokens",
   "cacheWrite1hTokens",
   "cacheReadTokens",
+  // The request-time chargeback ID; read for chargeback history only (ADR-0044).
+  "chargebackId",
 ] as const;
 
 export type LedgerColumn = (typeof LEDGER_COLUMNS)[number];
+// A ledger answer without these columns (an older ledger function) still parses; the value is undefined.
+const OPTIONAL_COLUMNS: ReadonlySet<LedgerColumn> = new Set(["chargebackId"]);
 export type LedgerRow = Readonly<Record<LedgerColumn, unknown>>;
 
 // The query API's JSON body, and the age in seconds of an answer it served from its response cache (the
@@ -95,6 +99,7 @@ export function parseLedgerResponse(body: unknown, maxRows: number): LedgerRow[]
   const index = new Map<LedgerColumn, number>();
   for (const column of LEDGER_COLUMNS) {
     const position = names.indexOf(column);
+    if (position < 0 && OPTIONAL_COLUMNS.has(column)) continue;
     if (position < 0) throw new LedgerReadError("ledger_response_invalid", `column:${column}`);
     index.set(column, position);
   }
@@ -104,7 +109,10 @@ export function parseLedgerResponse(body: unknown, maxRows: number): LedgerRow[]
   return table.rows.map((row) => {
     if (!Array.isArray(row) || row.length !== names.length) throw new LedgerReadError("ledger_response_invalid", "row");
     const record = {} as Record<LedgerColumn, unknown>;
-    for (const column of LEDGER_COLUMNS) record[column] = row[index.get(column) as number];
+    for (const column of LEDGER_COLUMNS) {
+      const position = index.get(column);
+      record[column] = position === undefined ? undefined : row[position];
+    }
     return record;
   });
 }

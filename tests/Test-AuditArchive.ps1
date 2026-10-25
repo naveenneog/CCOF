@@ -62,8 +62,9 @@ try {
     Assert-Contract ($null -eq (Get-StgAuditArchive $read)) 'An absent audit section must leave the archive off.'
     $c = New-ValidConfig; $c.audit.archive.enabled = $false
     Assert-Contract ($null -eq (Get-StgAuditArchive (Read-Config $c))) 'audit.archive.enabled false must leave the archive off.'
-    # Another feature's key under audit (ADR-0044 owns audit.chargebackHistory) is not refused here.
-    $c = New-ValidConfig; $c.audit.chargebackHistory = @{ enabled = $true }
+    # Another feature's key under audit (ADR-0044 owns audit.chargebackHistory and validates it) is not refused
+    # by the archive validation.
+    $c = New-ValidConfig; $c.audit.chargebackHistory = @{ enabled = $true; closeAfterDays = 2; ttlDays = $null }
     $null = Read-Config $c; $passed++
 
     Test-Refused { param($c) $c.audit.archive.enabled = 'true' } 'audit\.archive\.enabled' 'enabled must be a JSON boolean.'
@@ -106,8 +107,11 @@ $base = @{ tenantId = 't'; subscriptionId = 's'; resourceGroup = 'rg'; stage1 = 
 $hashOff = Get-StgStageInput $base 5
 # The same configuration's Stage 5 hash before ADR-0043 (e076ae1): installs without audit.* keep their Stage 5 record.
 Assert-Contract ($hashOff -ceq '2bc716561bbb3953e72e476d27a6ea91f710d37ec9f8aa444aefb32a1f9d8482') "A configuration without audit.* must keep its pre-archive Stage 5 hash (got $hashOff)."
-$withOther = $base.Clone(); $withOther.audit = @{ chargebackHistory = @{ enabled = $true } }
-Assert-Contract ((Get-StgStageInput $withOther 5) -ceq $hashOff) 'Another feature''s audit key must not change the Stage 5 hash of an archive-less configuration.'
+$withOther = $base.Clone(); $withOther.audit = @{ chargebackHistory = @{ enabled = $true; closeAfterDays = 2; ttlDays = $null } }
+# The archive's own hash input ignores another feature's audit key; that key's effect on Stage 5 is its own ADR's
+# decision (ADR-0044 deliberately adds audit.chargebackHistory to the Stage 2, 3 and 5 inputs).
+Assert-Contract ($null -eq (Get-StgAuditStageInput $withOther)) 'The archive hash input must ignore another feature''s audit key.'
+Assert-Contract ((Get-StgStageInput $withOther 5) -cne $hashOff) 'Configuring audit.chargebackHistory must change the Stage 5 hash (ADR-0044), so Stage 5 runs again.'
 $withArchive = $base.Clone(); $withArchive.audit = @{ archive = @{ enabled = $true; retentionDays = 2555 } }
 $hashOn = Get-StgStageInput $withArchive 5
 Assert-Contract ($hashOn -cne $hashOff) 'audit.archive must be a Stage 5 configuration hash input.'

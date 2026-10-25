@@ -1,0 +1,109 @@
+#Requires -Version 7.0
+<#
+.SYNOPSIS
+    Offline contract tests for chargeback history in Cosmos DB (ADR-0044): the Stage 2 container, the Stage 3
+    grants, the Stage 5 settings, the driver's validation of audit.chargebackHistory and the stage hashes. No Azure call.
+#>
+[CmdletBinding()]
+param([string]$BicepPath)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+if (-not $BicepPath) {
+    $command = Get-Command bicep -ErrorAction SilentlyContinue
+    if ($command) { $BicepPath = $command.Source }
+    elseif (Test-Path (Join-Path $HOME '.azure\bin\bicep.exe')) { $BicepPath = Join-Path $HOME '.azure\bin\bicep.exe' }
+    else { throw 'Offline Bicep CLI required. Supply -BicepPath; this test does not install tools or call Azure.' }
+}
+$passed = 0
+function Assert-Contract([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message }; $script:passed++ }
+function Build-Arm([string]$Relative) {
+    $out = & $BicepPath build (Join-Path $root $Relative) --stdout 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Bicep compilation failed: $Relative" }
+    return ($out -join "`n") | ConvertFrom-Json -AsHashtable -Depth 100
+}
+$reader = '00000000-0000-0000-0000-000000000001'
+
+# Stage 2: the container exists only when enabled, partitioned on /month, indexing only the queried fields, with the
+# configured time to live; the quickstart's container list (compared with Stage 2's) is unchanged.
+$schemaText = Get-Content -Raw (Join-Path $root 'infra\staged\stage2-schema.bicep')
+$schema = Build-Arm 'infra\staged\stage2-schema.bicep'
+Assert-Contract ($schema.parameters.ContainsKey('chargebackHistory') -and $schema.parameters.chargebackHistory.defaultValue.Count -eq 0) 'Stage 2 must default to no chargeback history.'
+Assert-Contract ($schemaText -match "var historyContainers = historyEnabled \? \[\{ name: 'chargebackDaily', partitionKey: '/month' \}\] : \[\]") 'Stage 2 must add chargebackDaily (/month) only when history is enabled.'
+Assert-Contract ($schemaText -match 'concat\(cosmosContainers, adminContainers, historyContainers\)') 'Stage 2 must create the history container with the others.'
+Assert-Contract (-not (($schema.variables.cosmosContainers | ConvertTo-Json -Compress) -match 'chargebackDaily')) 'chargebackDaily must stay out of the quickstart-compared container list.'
+Assert-Contract ($schemaText -match "defaultTtl: historyTtlDays \* 86400" -and $schemaText -match 'historyTtlDays == null \? \{\}') 'Stage 2 must set defaultTtl from ttlDays, and none when ttlDays is null.'
+foreach ($path in '/day/?', '/chargebackId/?', '/projectId/?', '/classification/?', '/personId/?', '/model/?') {
+    Assert-Contract ($schemaText.Contains("{ path: '$path' }")) "Stage 2 must index $path on chargebackDaily."
+}
+Assert-Contract ($schemaText -match "excludedPaths: \[\{ path: '/\*' \}\]") 'Stage 2 must exclude every other path from the chargebackDaily index.'
+
+# Stage 3: reconciler writer + reader and admin reader on chargebackDaily, only when enabled; no delete.
+$grants = Build-Arm 'infra\staged\stage3-grants.bicep'
+$history = @($grants.variables.cosmosAssignments | Where-Object container -CEQ 'chargebackDaily')
+$byId = @{}; foreach ($a in $history) { $byId[$a.id] = $a }
+Assert-Contract ($history.Count -eq 3 -and @($history | Where-Object when -CNE 'chargebackHistory').Count -eq 0) 'Stage 3 must hold exactly three chargebackDaily grants, all conditional on chargeback history.'
+Assert-Contract ($byId['reconciler-history-writer'].principal -ceq 'reconciler' -and $byId['reconciler-history-writer'].role -ceq 'custom:reconcilerStateWriter') 'The reconciler must write chargebackDaily with its state-writer role.'
+Assert-Contract ($byId['reconciler-history-reader'].principal -ceq 'reconciler' -and $byId['reconciler-history-reader'].role -ceq $reader) 'The reconciler must query chargebackDaily with the built-in Data Reader.'
+Assert-Contract ($byId['admin-history-reader'].principal -ceq 'admin' -and $byId['admin-history-reader'].role -ceq $reader) 'The admin app must only read chargebackDaily.'
+$writer = @($grants.variables.cosmosRoleDefinitions | Where-Object key -CEQ 'reconcilerStateWriter')[0]
+Assert-Contract (-not ($writer.dataActions -match '/delete$')) 'The reconciler writer role must not delete.'
+Assert-Contract ($grants.parameters.chargebackHistoryEnabled.defaultValue -eq $false -and $grants.variables.activeAssignments -match "equals\(lambdaVariables\('a'\)\.when, 'chargebackHistory'\), parameters\('chargebackHistoryEnabled'\)") 'Stage 3 must apply the history grants only when enabled.'
+Assert-Contract (@($grants.variables.cosmosAssignments | Where-Object { $_.principal -ceq 'admin' -and $_.container -cnotin 'projects', 'adminConfig' -and $_.role -cne $reader }).Count -eq 0) 'The admin app may only read containers other than projects and adminConfig.'
+
+# Stage 5: reconciler and admin settings only when enabled.
+$settingsText = Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')
+$stage5Text = Get-Content -Raw (Join-Path $root 'infra\staged\stage5-config.bicep')
+$appText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Application.ps1')
+Assert-Contract ($settingsText -match "RECONCILER_HISTORY_CONTAINER: 'chargebackDaily'" -and $settingsText -match 'RECONCILER_HISTORY_CLOSE_AFTER_DAYS: string\(chargebackHistory\.closeAfterDays\)' -and $settingsText -match 'union\(reconcilerSettings, reconcilerGuardSettings, reconcilerHistorySettings\)') 'Stage 5 must write the reconciler history settings.'
+Assert-Contract ($settingsText -match "reconcilerHistorySettings = \(chargebackHistory\.\?enabled \?\? false\) \?") 'The reconciler history settings must be written only when enabled.'
+Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'ADMIN_LOG_RETENTION_DAYS: string\(chargebackHistory\.logRetentionDays\)' -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history settings and pass history to the settings module.'
+Assert-Contract ($appText -match 'chargebackHistory = \(Get-StgChargebackHistory \$Cfg\)') 'Stage 5 must pass the validated history configuration.'
+
+# Driver: validation, the normalised value each stage receives, and the stage hashes.
+. (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
+$base = @{ location = 'eastus2'; stage1 = @{ retentionInDays = 30 }; cosmos = @{ capacityMode = 'serverless' } }
+function New-Cfg($History) {
+    $c = $base | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable
+    if ($null -ne $History) { $c.audit = @{ chargebackHistory = $History } }
+    return $c
+}
+$problemsOf = { param($History) @(Get-StgCosmosProblems (New-Cfg $History) | Where-Object { $_ -match 'audit\.chargebackHistory' }) }
+Assert-Contract ((& $problemsOf $null).Count -eq 0 -and $null -eq (Get-StgChargebackHistory (New-Cfg $null))) 'An absent audit.chargebackHistory is valid and means off.'
+Assert-Contract ((& $problemsOf @{ enabled = $false }).Count -eq 0 -and $null -eq (Get-StgChargebackHistory (New-Cfg @{ enabled = $false }))) 'enabled false needs no other key and means off.'
+$good = @{ enabled = $true; closeAfterDays = 2; ttlDays = $null }
+Assert-Contract ((& $problemsOf $good).Count -eq 0) 'enabled, closeAfterDays 2 and ttlDays null is valid.'
+$normal = Get-StgChargebackHistory (New-Cfg $good)
+Assert-Contract ($normal.enabled -eq $true -and $normal.closeAfterDays -eq 2 -and $null -eq $normal.ttlDays -and $normal.logRetentionDays -eq 30) 'Stages receive enabled, closeAfterDays, ttlDays and the workspace retention.'
+Assert-Contract ((Get-StgChargebackHistory (New-Cfg @{ enabled = $true; closeAfterDays = 3; ttlDays = 2557 })).ttlDays -eq 2557) 'ttlDays is passed through.'
+foreach ($bad in @(
+        @{ enabled = 'true'; closeAfterDays = 2; ttlDays = $null },
+        @{ enabled = $true; ttlDays = $null },
+        @{ enabled = $true; closeAfterDays = 0; ttlDays = $null },
+        @{ enabled = $true; closeAfterDays = 8; ttlDays = $null },
+        @{ enabled = $true; closeAfterDays = '2'; ttlDays = $null },
+        @{ enabled = $true; closeAfterDays = 2; ttlDays = 30 },
+        @{ enabled = $true; closeAfterDays = 2; ttlDays = 36501 },
+        @{ enabled = $true; closeAfterDays = 2; ttlDays = $null; keepForever = $true },
+        'yes')) {
+    Assert-Contract ((& $problemsOf $bad).Count -eq 1) "audit.chargebackHistory must be refused: $($bad | ConvertTo-Json -Compress)"
+}
+$withoutAudit = New-Cfg $null
+$withHistory = New-Cfg $good
+foreach ($stage in 0..8) {
+    $changed = (Get-StgStageInput $withoutAudit $stage) -cne (Get-StgStageInput $withHistory $stage)
+    Assert-Contract ($changed -eq ($stage -in 2, 3, 5)) "audit.chargebackHistory must change the configuration hash of Stages 2, 3 and 5 only (stage $stage)."
+}
+$withOtherAudit = New-Cfg $null; $withOtherAudit.audit = @{ other = 1 }
+Assert-Contract ((Get-StgStageInput $withoutAudit 2) -ceq (Get-StgStageInput $withOtherAudit 2)) 'Other audit keys must not change the Stage 2 hash.'
+
+# Stage 2 read-back of the time to live.
+Assert-Contract ((Test-StgChargebackTtl (New-Cfg $good) $null) -and -not (Test-StgChargebackTtl (New-Cfg $good) 86400)) 'ttlDays null must read back as no defaultTtl.'
+$ttlCfg = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
+Assert-Contract ((Test-StgChargebackTtl $ttlCfg 34560000) -and -not (Test-StgChargebackTtl $ttlCfg $null) -and -not (Test-StgChargebackTtl $ttlCfg 86400)) 'ttlDays must read back as ttlDays x 86400 seconds.'
+Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Resources.ps1')) -match "Assert-Stg \(Test-StgChargebackTtl \`$Cfg \`$m\[0\]\.resource\.defaultTtl\)") 'Stage 2 must verify the chargebackDaily time to live.'
+
+# The example turns history on.
+$example = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable
+Assert-Contract ($example.audit.chargebackHistory.enabled -eq $true -and $example.audit.chargebackHistory.closeAfterDays -eq 2 -and $example.audit.chargebackHistory.ContainsKey('ttlDays')) 'The example must enable chargeback history with closeAfterDays 2 and show ttlDays.'
+
+Write-Host "Chargeback history contract: $passed assertions passed."

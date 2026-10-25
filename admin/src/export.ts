@@ -16,6 +16,8 @@ import type { Doc } from "./validation.ts";
 import type { V3Dependencies } from "./v3.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
 import { DEFAULT_USER_TAG_LABEL, userTagHeaders } from "../../src/contracts/user-tags.ts";
+import { historyBoundary, historyRows, mergeUsageRows, readHistoryDocs, readHistorySettings, splitRange } from "./history.ts";
+import type { HistoryStore, Range } from "./history.ts";
 
 export const EXPORT_ROWS_MAX = 5000;
 const FORMATS = ["json", "csv"];
@@ -38,6 +40,18 @@ function csvCell(value: unknown): string {
 
 export function toCsv(columns: string[], rows: unknown[][]): string {
   return [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+
+// ADR-0044: with ADMIN_CHARGEBACK_HISTORY_CONTAINER, the part of the range before the Log Analytics window is read from
+// chargeback history; without it, the whole range stays on Log Analytics.
+function historySplit(period: Range, backend: string, deps: V3Dependencies): { history: Range | null; logs: Range | null } {
+  const settings = readHistorySettings(deps.env);
+  if (settings === null) return { history: null, logs: period };
+  if (settings === "invalid") throw new ApiError(503, "chargeback_history_settings_invalid");
+  const split = splitRange(period, historyBoundary(deps.now(), settings.retentionDays));
+  if (split.history && backend) throw new ApiError(400, "backend_filter_not_in_history");
+  if (split.history && !deps.chargebackHistory) throw new ApiError(503, "chargeback_history_not_configured");
+  return split;
 }
 
 function groupRow(doc: Doc): Doc {
@@ -81,15 +95,26 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   if ([...rest.keys()].some((k) => !allowed.includes(k))) throw new ApiError(400, "unknown_parameter");
   const cfg = readChargebackSettings(deps.env);
   const filters = { ...readChargebackFilters(rest, deps.now(), cfg.ok ? cfg.value.maxQueryDays : 62), offset: 0, limit: EXPORT_ROWS_MAX };
+  const split = historySplit(filters.period, filters.backend, deps);
   const result = await helpers.capability(deps, cfg, "chargeback", async () => {
     const card = await helpers.currentRateCard(deps);
     if (!card || !cfg.ok || !deps.sources || !deps.operations.query) throw new ProviderError(503, "rate_card_unavailable");
     const prepared = prepareRateCard(card.rateCard);
-    const query = buildChargebackQuery("chargebackUsage", filters, cfg.value, deps.sources, prepared, await helpers.groupMetadata(deps, filters.project));
-    const table = await deps.operations.query(cfg.value.workspaceId, query, `${filters.period.from}/${filters.period.to}`, { kind: "chargeback", view: "chargebackUsage", filters: filters as unknown as Doc });
-    const shaped = shapeRows(tableRows(table));
-    const hidden = ["reportRows", "displayedLimit", "truncated", "pageOffset", "reportRowNumber", "rateCardSha256", "ledgerSha256"];
-    return { columns: table.columns.map((c) => c.name).filter((c) => !hidden.includes(c)), rows: shaped.rows, truncated: shaped.truncated, rateCardVersion: prepared.version };
+    const groups = await helpers.groupMetadata(deps, filters.project);
+    let logs: { columns: string[]; rows: Doc[]; truncated: boolean } | null = null;
+    if (split.logs) {
+      const logFilters = split.history ? { ...filters, period: { mode: "custom" as const, ...split.logs } } : filters;
+      const query = buildChargebackQuery("chargebackUsage", logFilters, cfg.value, deps.sources, prepared, groups);
+      const table = await deps.operations.query(cfg.value.workspaceId, query, `${logFilters.period.from}/${logFilters.period.to}`, { kind: "chargeback", view: "chargebackUsage", filters: logFilters as unknown as Doc });
+      const shaped = shapeRows(tableRows(table));
+      const hidden = ["reportRows", "displayedLimit", "truncated", "pageOffset", "reportRowNumber", "rateCardSha256", "ledgerSha256"];
+      logs = { columns: table.columns.map((c) => c.name).filter((c) => !hidden.includes(c)), rows: shaped.rows, truncated: shaped.truncated };
+    }
+    if (!split.history) return { ...(logs as NonNullable<typeof logs>), rateCardVersion: prepared.version };
+    const docs = await readHistoryDocs(deps.chargebackHistory as HistoryStore, split.history);
+    const merged = mergeUsageRows(logs?.rows ?? [], logs?.columns ?? null, historyRows(docs, filters, groups, filters.period));
+    const sources = [{ source: "chargebackHistory", ...split.history }, ...(split.logs ? [{ source: "logAnalytics", ...split.logs }] : [])];
+    return { columns: merged.columns, rows: merged.rows.slice(0, EXPORT_ROWS_MAX), truncated: (logs?.truncated ?? false) || merged.rows.length > EXPORT_ROWS_MAX, rateCardVersion: prepared.version, sources };
   });
   // Only an available or partial (truncated) capability carries data.
   if (!isObject(result.data)) {
@@ -105,6 +130,7 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   const truncated = data.truncated === true;
   return respond(format, data.columns as string[], data.rows as Doc[], {
     dataset: "usage", period: filters.period, truncated, rowLimit: EXPORT_ROWS_MAX, rateCardVersion: data.rateCardVersion,
+    ...(data.sources ? { sources: data.sources } : {}),
     basis: "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.",
     filters: { project: filters.project, group: filters.group, developer: filters.developer, model: filters.model, backend: filters.backend,
       family: filters.family, classification: filters.classification, chargeback: filters.chargeback },

@@ -67,3 +67,7 @@ retention change from option 1.
   deletion until it expires.
 - Lifecycle deletion does not act on blobs in a container with an immutability policy; with immutability on, expired
   blobs are deleted by an operator.
+
+## Integration with ADR-0044 (2026-10-25)
+
+The archive's Stage 5 hash input (`Get-StgAuditStageInput`) covers only `audit.archive` and `audit.workspaceRetentionDays`. `audit.chargebackHistory` is part of the Stage 2, 3 and 5 inputs by ADR-0044, so configuring it does change the Stage 5 hash; a configuration without any `audit` key keeps its earlier hashes ([Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).

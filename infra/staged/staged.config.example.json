@@ -321,6 +321,11 @@
       "retentionDays": 2555,
       "immutabilityDays": null,
       "storageSku": "Standard_LRS"
+    },
+    "chargebackHistory": {
+      "enabled": true,
+      "closeAfterDays": 2,
+      "ttlDays": null
     }
   },
   "acceptance": {

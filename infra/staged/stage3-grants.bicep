@@ -31,6 +31,9 @@ param apimResourceId string = ''
 @description('Foundry backends: id, subscriptionId, resourceGroup, accountName, assignCognitiveServicesUser.')
 param backends array = []
 
+@description('audit.chargebackHistory.enabled (ADR-0044): grants on the chargebackDaily container that Stage 2 created.')
+param chargebackHistoryEnabled bool = false
+
 var blobOwner = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 var metricsPublisher = '3913510d-42f4-4e42-8a64-420c390055eb'
 var logReader = '73c42c96-874c-492b-b04d-ab87d138a893'
@@ -157,8 +160,12 @@ var cosmosAssignments = [
   { id: 'admin-projects-editor', principal: 'admin', role: 'custom:adminProjectEditor', container: 'projects', when: '' }
   { id: 'admin-config-editor', principal: 'admin', role: 'custom:adminProjectEditor', container: 'adminConfig', when: '' }
   { id: 'sync-limits-reader', principal: 'sync', role: '00000000-0000-0000-0000-000000000001', container: 'adminConfig', when: '' }
+  // Chargeback history (ADR-0044): the reconciler writes and queries its stored summaries; the admin app reads.
+  { id: 'reconciler-history-writer', principal: 'reconciler', role: 'custom:reconcilerStateWriter', container: 'chargebackDaily', when: 'chargebackHistory' }
+  { id: 'reconciler-history-reader', principal: 'reconciler', role: '00000000-0000-0000-0000-000000000001', container: 'chargebackDaily', when: 'chargebackHistory' }
+  { id: 'admin-history-reader', principal: 'admin', role: '00000000-0000-0000-0000-000000000001', container: 'chargebackDaily', when: 'chargebackHistory' }
 ]
-var activeAssignments = filter(cosmosAssignments, a => (empty(a.when) || a.when == syncMode) && !empty(principals[?a.principal] ?? '') && (a.container != 'adminConfig' || !empty(principals.?admin ?? '')))
+var activeAssignments = filter(cosmosAssignments, a => (empty(a.when) || a.when == syncMode || (a.when == 'chargebackHistory' && chargebackHistoryEnabled)) && !empty(principals[?a.principal] ?? '') && (a.container != 'adminConfig' || !empty(principals.?admin ?? '')))
 
 resource roleDefinitions 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-11-15' = [for d in cosmosRoleDefinitions: {
   parent: account

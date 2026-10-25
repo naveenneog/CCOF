@@ -156,3 +156,24 @@ test("a partial or out-of-range budget guard is refused, naming the setting", ()
     assert.equal(!result.ok && result.problems[0].setting, name);
   }
 });
+// ADR-0044: chargeback history is optional, the container and the closing delay together or neither.
+const HISTORY = { RECONCILER_HISTORY_CONTAINER: "chargebackDaily", RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "2" };
+test("without the history settings there is no history; with both it is read", () => {
+  const without = readReconcilerSettings(validSettings());
+  assert.ok(without.ok && without.settings.history === undefined);
+  const withHistory = readReconcilerSettings(validSettings(HISTORY));
+  assert.ok(withHistory.ok);
+  if (withHistory.ok) assert.deepEqual(withHistory.settings.history, { container: "chargebackDaily", closeAfterDays: 2 });
+});
+
+test("history settings are refused half-set, out of range, or naming another reconciler container", () => {
+  const problems = (overrides: Record<string, string>) => {
+    const result = readReconcilerSettings(validSettings(overrides));
+    return result.ok ? [] : result.problems;
+  };
+  assert.deepEqual(problems({ RECONCILER_HISTORY_CONTAINER: "chargebackDaily" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "missing" }]);
+  assert.deepEqual(problems({ RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "2" }), [{ setting: "RECONCILER_HISTORY_CONTAINER", problem: "missing" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "0" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "8" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CONTAINER: "budgetState" }), [{ setting: "RECONCILER_HISTORY_CONTAINER", problem: "same_as_other_container" }]);
+});

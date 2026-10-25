@@ -91,8 +91,9 @@ foreach ($a in $quick.variables.cosmosAssignments | Where-Object principal -NE '
 # Every client the admin API accepts (ADMIN_ALLOWED_CLIENT_IDS) is preauthorized by Stage 4 and read back.
 $entraText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Entra.ps1')
 Assert-Contract ($entraText -match '\$adminClients = @\(\$adm\.appId\) \+ @\(\$Cfg\.admin\.extraAllowedClientIds' -and $entraText -match 'Merge-StgPreauthorized \$adm \$adminClients' -and $entraText -match 'foreach \(\$cid in \$adminClients\)') 'Stage 4 must preauthorize and verify admin.extraAllowedClientIds.'
-$adminScopes = @($grants.variables.cosmosAssignments | Where-Object principal -EQ 'admin' | ForEach-Object { $_.container })
-Assert-Contract ((($adminScopes | Sort-Object) -join ',') -ceq 'adminConfig,projects') 'Admin Cosmos access must be limited to projects and adminConfig.'
+# Admin write access stays on projects and adminConfig; its read of chargebackDaily (ADR-0044) is checked in Test-ChargebackHistory.ps1.
+$adminScopes = @($grants.variables.cosmosAssignments | Where-Object { $_.principal -eq 'admin' -and $_.role -cne '00000000-0000-0000-0000-000000000001' } | ForEach-Object { $_.container })
+Assert-Contract ((($adminScopes | Sort-Object) -join ',') -ceq 'adminConfig,projects') 'Admin Cosmos write access must be limited to projects and adminConfig.'
 # The sync reads the admin console's removal-limit override: read-only, adminConfig only, and only with the admin app.
 $syncConfig = @($grants.variables.cosmosAssignments | Where-Object { $_.principal -ceq 'sync' -and $_.container -ceq 'adminConfig' })
 Assert-Contract ($syncConfig.Count -eq 1 -and $syncConfig[0].role -ceq '00000000-0000-0000-0000-000000000001') 'Sync access to adminConfig must be the built-in Data Reader only.'
@@ -478,7 +479,7 @@ try {
         Assert-Contract $badGuard "A partial or out-of-range budget guard must be refused before Azure calls ($($bad | ConvertTo-Json -Compress))."
         $c.reconciler.budgetGuard = $saved
     }
-    Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'RECONCILER_PROJECTION_MINUTES: string\(reconcilerGuard\.projectionMinutes\)' -and (Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'union\(reconcilerSettings, reconcilerGuardSettings\)') 'Stage 5 must write the budget guard settings to the reconciler.'
+    Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'RECONCILER_PROJECTION_MINUTES: string\(reconcilerGuard\.projectionMinutes\)' -and (Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'union\(reconcilerSettings, reconcilerGuardSettings[,)]') 'Stage 5 must write the budget guard settings to the reconciler.'
     Assert-Contract ($read.stage1.prefix -ceq 'ccofstg' -and $read.stage1.functionsPublicNetworkAccess -ceq 'Disabled' -and $read.stage1.approveNewPublicApimBootstrap -eq $false) 'Example defaults must stay private and defer APIM.'
     $stage1Parameters = Get-Stage1Parameters $read
     $recordedParameters = @{ properties = @{ parameters = @{} } }
