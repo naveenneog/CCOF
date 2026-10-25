@@ -25,6 +25,16 @@
   PASS, UX PASS-WITH-NOTES (Desktop links, fixed).
 - Open: CC-01 (Claude Code model-catalog notice), next packet G-CCMODEL. Decision record:
   [ADR-0042](adr/0042-stage0-refusals-and-stage6-recovery.md).
+- Source commits: `71c8940` (G-AZCLI), `b6525d4` (G-NOVICE), local `main`.
+- Public release 13: `6efe4c9` on `naveenneog/CCOF` `main`, applied to `public-main` as the `28a0bad..b6525d4`
+  diff with no conflicts. The public scrub's image-folder rule matched any link whose last path segment was
+  `staged`, which would have unlinked references to `infra/staged` scripts; it now matches the image folders by
+  two segments. Scrub check: 7 matches, all the hypothetical `contoso.com` alias (the two files from release 10 and
+  the new developer capture). The real-GUID scan flagged 8 GUIDs in the public tree: 5 public IDs (the Azure CLI
+  client, Microsoft Graph, and the built-in roles Storage Blob Data Owner, Monitoring Metrics Publisher and Log
+  Analytics Reader) and 3 pseudonyms; none of the raw captures' real GUIDs are present. gitleaks: the 3 known
+  `projectApi: "v1-compatible"` false positives. Docs tests 24/24 on the public tree; public CI run `40179997447`
+  success.
 
 **Previous packet:** G-AZCLI — Azure CLI developer sign-in (complete; [ADR-0041](adr/0041-azure-cli-developer-sign-in.md)).
 
