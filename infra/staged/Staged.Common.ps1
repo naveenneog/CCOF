@@ -207,8 +207,6 @@ function Get-StgStageDependencies {
         8 { @(1,4,5,7) }
         default { throw "invalid stage number $Number" }
     }
-    # ADR-0044: only when configured, so a configuration without it keeps its earlier hashes.
-    if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
 }
 function Get-StgAllowedFunctionsSubnets {
     <# Subnets the Function Apps may be integrated with at Stage 1 read-back. With a Stage 6 record: its subnet.
