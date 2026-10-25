@@ -132,3 +132,102 @@ function New-ClientTokenShim {
     $entry = $TokenEntryPath.Replace('%', '%%')
     return "@echo off`r`nsetlocal DisableDelayedExpansion`r`nset `"CCOF_CONFIG_FILE=$config`"`r`n`"$node`" `"$entry`" %*`r`nexit /b %errorlevel%`r`n"
 }
+
+function Get-ClientAzureCliProfilePath {
+    <# The helper's own Azure CLI profile, beside the client configuration: shared by Claude Code and Desktop, never the developer's default az login. #>
+    param([Parameter(Mandatory)][string]$ConfigPath)
+    return Join-Path (Split-Path $ConfigPath -Parent) 'az'
+}
+
+function Resolve-ClientAzureCliPath {
+    <# Full path of the installed az.cmd, pinned into the helper so cmd.exe never searches the folder a helper is started from. #>
+    $az = Get-Command az.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $az) { throw 'azure_cli_missing: signInMethod azure-cli needs the Azure CLI. Install it (https://aka.ms/installazurecliwindows), open a new terminal, and run the setup again.' }
+    return $az.Source
+}
+
+function Resolve-ClientTokenHelperPath {
+    <# The generated ccof-token.cmd: the Claude Code one, else the Desktop one (both share one Azure CLI profile); $null when neither exists. #>
+    param([string]$UserProfile = $env:USERPROFILE, [string]$LocalAppData = $env:LOCALAPPDATA)
+    foreach ($candidate in @((Join-Path $UserProfile '.claude\ccof-token.cmd'), (Join-Path $LocalAppData 'Claude-3p\ccof-token.cmd'))) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return $null
+}
+
+function New-ClientAzureCliTokenShim {
+    <#
+    .SYNOPSIS
+        ccof-token.cmd for signInMethod azure-cli (ADR-0041). `token` (or no argument) prints only the gateway
+        access token from `az account get-access-token`; when that fails it runs one interactive `az login`
+        for the gateway scope and tries once more. `silent-token` never signs in (for /usage and its status
+        line). `login`, `status` and `logout` manage the sign-in. Every call runs in its own AZURE_CONFIG_DIR
+        and through the az.cmd found at setup, by full path. Azure CLI output other than the token goes to stderr.
+        Exit codes: 0 token, 2 usage, 3 Azure CLI missing, 4 not signed in or sign-in failed.
+        az.cmd hands its arguments to cmd.exe, so the tenant and scope are restricted to characters cmd.exe
+        does not interpret.
+    #>
+    param([Parameter(Mandatory)][string]$TenantId, [Parameter(Mandatory)][string]$Scope, [Parameter(Mandatory)][string]$AzureConfigDir,
+        [Parameter(Mandatory)][string]$AzureCliPath)
+    if ($TenantId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { throw 'The tenant must be a directory (tenant) ID GUID.' }
+    if ($Scope -cnotmatch '^[A-Za-z0-9:/._-]+$') { throw 'The scope may contain only letters, digits and : / . _ - for the Azure CLI helper.' }
+    if (-not [IO.Path]::IsPathFullyQualified($AzureConfigDir) -or $AzureConfigDir -match '["\r\n]') { throw 'The Azure CLI profile folder must be absolute and contain no quotes or line breaks.' }
+    if (-not [IO.Path]::IsPathFullyQualified($AzureCliPath) -or $AzureCliPath -match '["\r\n]') { throw 'The Azure CLI path must be absolute and contain no quotes or line breaks.' }
+    $profileDir = $AzureConfigDir.Replace('%', '%%')
+    $azPath = $AzureCliPath.Replace('%', '%%')
+    $lines = @(
+        '@echo off'
+        'setlocal DisableDelayedExpansion'
+        'set "NoDefaultCurrentDirectoryInExePath=1"'
+        "set `"AZ=$azPath`""
+        "set `"TENANT=$TenantId`""
+        "set `"SCOPE=$Scope`""
+        "set `"AZURE_CONFIG_DIR=$profileDir`""
+        'set "AZURE_CORE_LOGIN_EXPERIENCE_V2=off"'
+        'if not exist "%AZ%" goto noaz'
+        'set "CCOF_COMMAND=%~1"'
+        'if not defined CCOF_COMMAND set "CCOF_COMMAND=token"'
+        'if /i "%CCOF_COMMAND%"=="token" goto token'
+        'if /i "%CCOF_COMMAND%"=="silent-token" goto silenttoken'
+        'if /i "%CCOF_COMMAND%"=="login" goto login'
+        'if /i "%CCOF_COMMAND%"=="status" goto status'
+        'if /i "%CCOF_COMMAND%"=="logout" goto logout'
+        '>&2 echo Usage: ccof-token.cmd [token^|silent-token^|login^|status^|logout]'
+        'exit /b 2'
+        ':token'
+        'call :gettoken 2>nul && exit /b 0'
+        '>&2 echo Not signed in to the Claude gateway. Opening the Microsoft Entra sign-in.'
+        'call :signin || exit /b 4'
+        'call :gettoken && exit /b 0'
+        '>&2 echo No gateway token after sign-in. Run "%~f0" status and contact the platform team.'
+        'exit /b 4'
+        ':silenttoken'
+        'call :gettoken && exit /b 0'
+        '>&2 echo Not signed in to the Claude gateway. Run: "%~f0" login'
+        'exit /b 4'
+        ':login'
+        'call :signin || exit /b 4'
+        '>&2 echo Signed in. Claude Code and Claude Desktop now use this sign-in.'
+        'exit /b 0'
+        ':status'
+        'call "%AZ%" account show --query user.name --output tsv --only-show-errors'
+        'if errorlevel 1 goto notsignedin'
+        'exit /b 0'
+        ':notsignedin'
+        '>&2 echo Not signed in. Run: "%~f0" login'
+        'exit /b 4'
+        ':logout'
+        'call "%AZ%" logout --only-show-errors 1>&2'
+        'exit /b 0'
+        ':gettoken'
+        'call "%AZ%" account get-access-token --tenant "%TENANT%" --scope "%SCOPE%" --query accessToken --output tsv --only-show-errors'
+        'exit /b'
+        ':signin'
+        'call "%AZ%" login --tenant "%TENANT%" --scope "%SCOPE%" --allow-no-subscriptions --output none --only-show-errors <nul 1>&2'
+        'exit /b'
+        ':noaz'
+        '>&2 echo The Azure CLI is not installed at "%AZ%". Install it from https://aka.ms/installazurecliwindows and run the client setup again.'
+        'exit /b 3'
+    )
+    return ($lines -join "`r`n") + "`r`n"
+}

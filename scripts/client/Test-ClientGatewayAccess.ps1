@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([string]$ConfigPath, [switch]$Confirmed)
+param([string]$ConfigPath, [string]$TokenHelperPath, [switch]$Confirmed)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClientGateway.Common.ps1')
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
@@ -8,18 +8,25 @@ $ErrorActionPreference = 'Stop'
 Assert-ClientConfirmation -Confirmed:$Confirmed
 if (-not $ConfigPath) { $ConfigPath = Get-ClientDefaultConfigPath }
 $config = Read-ClientConfiguration $ConfigPath
+if ($config.signInMethod -ceq 'azure-cli' -and -not $TokenHelperPath) { $TokenHelperPath = Resolve-ClientTokenHelperPath }
+if ($config.signInMethod -ceq 'azure-cli' -and -not ($TokenHelperPath -and (Test-Path -LiteralPath $TokenHelperPath -PathType Leaf))) {
+    @{ event = 'verification_failed'; stage = 'silent-token'; reason = 'token_helper_missing' } | ConvertTo-Json -Compress
+    exit 1
+}
 $inventory = Get-CcofClientInventory
 $node = (Get-Command node -ErrorAction Stop).Source
-$entry = Join-Path $script:ClientRepoRoot 'client\bin\ccof-token.mjs'
+# ADR-0041: in azure-cli mode the token comes from the generated Azure CLI helper that Claude Code runs.
+$tokenCommand = if ($config.signInMethod -ceq 'azure-cli') { @{ FilePath = $TokenHelperPath; Arguments = @('silent-token') } }
+                else { @{ FilePath = $node; Arguments = @((Join-Path $script:ClientRepoRoot 'client\bin\ccof-token.mjs'), 'token') } }
 $work = Join-Path $script:ClientRepoRoot ('client\.test-work\live-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($work)
 $token = $null
 try {
-    $silent = Invoke-CcofChild -FilePath $node -Arguments @($entry, 'token') -WorkingDirectory $work `
+    $silent = Invoke-CcofChild @tokenCommand -WorkingDirectory $work `
         -TimeoutSeconds ([Math]::Min(600, $config.tokenTimeoutSeconds * 3)) `
         -Environment @{ CCOF_CONFIG_FILE = $ConfigPath }
-    if ($silent.ExitCode -ne 0 -or $silent.Stdout.Trim() -notmatch '^\S+$' -or $silent.Stderr) {
-        @{ event = 'verification_failed'; stage = 'silent-token'; reason = 'run_ccof_token_login' } | ConvertTo-Json -Compress
+    if ($silent.ExitCode -ne 0 -or $silent.Stdout.Trim() -notmatch '^\S+$' -or ($silent.Stderr -and $config.signInMethod -cne 'azure-cli')) {
+        @{ event = 'verification_failed'; stage = 'silent-token'; reason = $(if ($config.signInMethod -ceq 'azure-cli') { 'run_ccof_token_cmd_login' } else { 'run_ccof_token_login' }) } | ConvertTo-Json -Compress
         exit 1
     }
     $token = $silent.Stdout.Trim()

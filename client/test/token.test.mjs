@@ -227,3 +227,29 @@ test('unexpected MSAL or cache errors never echo secrets or personal data', asyn
   assert.match(stderr, /ccof-token login/);
   assert.ok(!/synthetic-credential|personal-name/.test(stderr));
 });
+
+test('in azure-cli mode the Node helper points to the Azure CLI helper instead of signing in (ADR-0041)', async () => {
+  const { mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'ccof-azcli-'));
+  const file = path.join(dir, 'config.json');
+  const example = JSON.parse(await readFile(new URL('../config.example.json', import.meta.url), 'utf8'));
+  await writeFile(file, JSON.stringify({ ...example, tenantId: config.tenantId, clientId: '33333333-3333-4333-8333-333333333333',
+    scope: config.scope, desktop: { ...example.desktop, profileId: '44444444-4444-4444-8444-444444444444' }, signInMethod: 'azure-cli' }));
+  const saved = process.env.CCOF_CONFIG_FILE;
+  process.env.CCOF_CONFIG_FILE = file;
+  try {
+    for (const command of ['login', 'token']) {
+      let stdout = '', stderr = '';
+      const exit = await runCli([command], { stdout: (v) => { stdout += v; }, stderr: (v) => { stderr += v; } });
+      assert.equal(exit, 1, command);
+      assert.equal(stdout, '');
+      assert.match(stderr, /^azure_cli_sign_in: .*\.claude\\ccof-token\.cmd" login/);
+      assert.match(stderr, /Claude-3p\\ccof-token\.cmd" login/, 'a Desktop-only developer has no .claude helper');
+    }
+  } finally {
+    if (saved === undefined) delete process.env.CCOF_CONFIG_FILE; else process.env.CCOF_CONFIG_FILE = saved;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

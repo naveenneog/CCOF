@@ -105,3 +105,16 @@ test('optional project profiles accept an explicit selector or explicit clearing
     assert.throws(() => validateConfig({ ...settings, project: value }), /configuration/i);
   }
 });
+
+test('signInMethod is optional: msal or azure-cli; azure-cli needs a scope with no cmd.exe metacharacters (ADR-0041)', () => {
+  assert.equal(validateConfig(settings).signInMethod, undefined);
+  assert.equal(validateConfig({ ...settings, signInMethod: 'msal' }).signInMethod, 'msal');
+  assert.equal(validateConfig({ ...settings, signInMethod: 'azure-cli' }).signInMethod, 'azure-cli');
+  for (const signInMethod of ['az', 'AZURE-CLI', '', null, 1]) {
+    assert.throws(() => validateConfig({ ...settings, signInMethod }), /signInMethod/, String(signInMethod));
+  }
+  for (const scope of ['api://33333333-3333-4333-8333-333333333333/access_as_user&calc', 'https://gw.example.test/a%PATH%/access_as_user',
+    'api://33333333-3333-4333-8333-333333333333/access_as_user^x']) {
+    assert.throws(() => validateConfig({ ...settings, scope, signInMethod: 'azure-cli' }), /scope/, scope);
+  }
+});

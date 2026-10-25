@@ -1,7 +1,8 @@
 # 5. Developer setup
 
 **Who:** each developer (or the device management team, with the same files) · **Time:** about 5 minutes ·
-**Needs:** Claude Code installed, Git, Node.js 22, PowerShell 7, membership of an onboarded group, and the client
+**Needs:** Claude Code installed, Git, Node.js 22, PowerShell 7, the Azure CLI when the configuration uses the
+Azure CLI sign-in, membership of an onboarded group, and the client
 configuration file that Stage 7 generated (`client-config.json`), handed over through the approved private channel.
 
 Full details, macOS and Linux paths, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
@@ -34,12 +35,28 @@ then points Claude Code at the gateway (`ANTHROPIC_BASE_URL`) and the token help
 
 ## 2. Sign in once
 
+Open `client-config.json`. If it contains `"signInMethod": "azure-cli"`, use the Azure CLI sign-in below;
+otherwise use the default sign-in.
+
+**Default sign-in:**
+
 ```powershell
 & .\client\bin\ccof-token.cmd login
 ```
 
 Run this in the same shell so the helper uses `CCOF_CONFIG_FILE`, the absolute configuration path set above.
 Windows uses the signed-in account (WAM); otherwise a browser window opens. No token is ever printed.
+
+**Azure CLI sign-in** (needs the Azure CLI: `az version` prints a version):
+
+```powershell
+& "$env:USERPROFILE\.claude\ccof-token.cmd" login
+```
+
+A Microsoft sign-in window opens. **Expected:** `Signed in. Claude Code and Claude Desktop now use this
+sign-in.` The helper uses its own Azure CLI profile, so an existing `az login` for other work is not changed.
+`ccof-token.cmd status` shows the signed-in account; `ccof-token.cmd logout` signs out. Details and the
+Claude Desktop setup: [CLIENTS.md, section 3a](../CLIENTS.md#3a-azure-cli-sign-in-signinmethod-azure-cli).
 
 ## 3. Use Claude Code
 
@@ -67,7 +84,11 @@ What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current
 
 | You see | Meaning |
 | --- | --- |
-| `401` | Sign in again: `ccof-token login` |
+| `401` | Sign in again: `ccof-token login` (Azure CLI sign-in: `ccof-token.cmd login`, as in step 2) |
+| `azure_cli_sign_in` | The configuration uses the Azure CLI sign-in; run `& "$env:USERPROFILE\.claude\ccof-token.cmd" login` |
+| `azure_cli_missing` | Setup or `/usage` did not find the Azure CLI. Install it ([aka.ms/installazurecliwindows](https://aka.ms/installazurecliwindows)), open a new terminal, run step 1 again |
+| `sign_in_required … AADSTSnnnnn` | Microsoft Entra refused the Azure CLI sign-in, for example `AADSTS53003` (Conditional Access). Give the code to the admin |
+| `403 … surface_not_allowed` | The gateway enforces surfaces and the Azure CLI is not mapped; ask the admin ([guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in)) |
 | `403 … not entitled` | Not (yet) a member of an onboarded group; ask the admin |
 | `403 … model family is not available` | Choose an allowed model (`/model`) |
 | `403 … budget … used up` | Budget reached; ask the budget owner |

@@ -24,11 +24,14 @@ amber dashed components are optional, not universally deployed.
 
 ### Working flows
 
-1. **Developer authentication.** CLI and VS Code can use an explicitly approved Azure CLI
-   delegated-client route (manual session token, or a small CLI-backed helper), or the
-   original `ccof-token` helper with secure MSAL storage/broker. Azure CLI uses its own
+1. **Developer authentication.** Claude Code, VS Code and Claude Desktop get the gateway token from
+   one of two generated helpers, chosen by the client configuration's `signInMethod`
+   ([ADR-0041](adr/0041-azure-cli-developer-sign-in.md)): `msal` (default) runs the
+   `ccof-token` helper with secure MSAL storage/broker; `azure-cli` runs a `ccof-token.cmd` that
+   signs in once with an interactive `az login` in its own Azure CLI profile. A manual Azure CLI
+   session token remains available for testing. Azure CLI uses its own
    OAuth client ID and requires **both** API-scope preauthorization and APIM's allowed-client
-   entry; it does not become the gateway audience or a resolver caller. Entra policy still
+   entry (`entra.allowAzureCliClient`); it does not become the gateway audience or a resolver caller. Entra policy still
    applies. Manual token sessions do not refresh inside an already-running client.
    Desktop remains a separately configured, schema-checked supported profile.
    The default combined single-tenant

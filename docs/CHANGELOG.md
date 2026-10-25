@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-25 — Azure CLI developer sign-in
+
+- New client setting `signInMethod: azure-cli`. Setup writes `ccof-token.cmd`, which signs the developer in with
+  `az login` (interactive Entra sign-in) in a profile of its own, separate from the developer's own Azure CLI login.
+- Claude Code `settings.json` uses that helper as `apiKeyHelper`; Claude Desktop gets a `helper-script` inference
+  profile with the same helper; `/usage` reads its token from it without ever opening a sign-in.
+- Stage 4 reads back that the gateway app pre-authorizes the Azure CLI; Stage 5 admits it at the gateway; Stage 7
+  writes `signInMethod` only when Stage 4 allowed it.
+
 ## 2026-10-24 — Novice reader fixes (release 12)
 
 - Developer setup starts with cloning the repository and names the folder every command runs from.

@@ -48,6 +48,10 @@ The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configura
 without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with
 `stage N preview only: nothing changed. Rerun with -Apply.`; Stage 0 is read-only and has no `-Apply` step.
 
+**Developer sign-in method.** By default developers sign in with the `ccof-token` helper. For an interactive Azure
+CLI sign-in instead, set `entra.allowAzureCliClient` to `true` and `client.signInMethod` to `azure-cli` before
+Stage 4 ([guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in)).
+
 ---
 
 ## Stage 0 — Preflight (read-only)

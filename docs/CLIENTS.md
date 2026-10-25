@@ -1,9 +1,18 @@
 # Claude clients through the enterprise gateway
 
 The default setup uses **Entra single sign-on**, not an Anthropic subscription or an API key.
-An ordinary Azure CLI login is not automatically accepted: the separately approved
+Two sign-in methods are available, set by `signInMethod` in the client configuration
+([ADR-0041](adr/0041-azure-cli-developer-sign-in.md)):
+
+| `signInMethod` | Token source | Needs |
+| --- | --- | --- |
+| `msal` (default) | `ccof-token` Node helper: WAM or browser sign-in, MSAL encrypted cache | Node.js 22 |
+| `azure-cli` | Generated `ccof-token.cmd`: one interactive `az login` in its own Azure CLI profile, then `az account get-access-token` | Azure CLI on PATH; the deployment set `entra.allowAzureCliClient` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)) |
+
+An ordinary Azure CLI login on its own is not accepted: the gateway app must preauthorize the Azure CLI and APIM
+must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. The
 [manual Azure CLI route](runbooks/PUBLIC-ACCESS-WORKBOOK.md#13-hand-configurable-developer-sign-in-and-gateway-testing)
-requires both gateway scope authorization and an APIM allowed-client entry.
+remains available for testing.
 The standalone `client/` Node package contains
 `ccof-token`. Its dependencies are separate from the gateway's server dependencies.
 The PowerShell workstation scripts target Windows; the token helper also supports
@@ -67,7 +76,8 @@ depend on the terminal environment.
 |---|---|
 | `schemaVersion` | `1`; unknown top-level or nested keys are refused |
 | `tenantId` | Gateway tenant GUID, never `common` or `organizations` |
-| `clientId` | Combined developer/gateway app GUID by default (ADR-0026), or legacy separate developer app; never the Azure CLI client ID |
+| `clientId` | Combined developer/gateway app GUID by default (ADR-0026), or legacy separate developer app; never the Azure CLI client ID, also in `azure-cli` mode |
+| `signInMethod` | Optional. `msal` (default) or `azure-cli` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)). In `azure-cli` mode `scope` may contain only letters, digits and `: / . _ -` |
 | `scope` | One delegated gateway API scope, such as `api://<gatewayAppId>/access_as_user`; GUID self-resource spelling is also supported when the resource is this client |
 | `gatewayUrl` | HTTPS API **base**, without `/v1` or `/v1/messages`, credentials, query or fragment |
 | `helperTtlSeconds` | Cached-helper lifetime used by both Claude clients |
@@ -185,6 +195,125 @@ refresh tokens. The selected account metadata is also encrypted. Cache locations
 are namespaced by tenant, client, scope, gateway and configuration path beneath the configuration
 directory. Metadata transactions and MSAL's token cache use cross-process locks.
 Missing/unlocked secure storage fails closed; plaintext fallback is disabled.
+
+## 3a. Azure CLI sign-in (`signInMethod: azure-cli`)
+
+This method applies when the client configuration contains `"signInMethod": "azure-cli"`. The staged deployment
+writes it when `client.signInMethod` is `azure-cli` and Stage 4 allowed the Azure CLI
+([STAGED-DEPLOYMENT-GUIDE.md](STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in)). Design and limits:
+[ADR-0041](adr/0041-azure-cli-developer-sign-in.md).
+
+**Needs:** the Azure CLI installed (`az version`), PowerShell 7 and Node.js 22 (setup validates the configuration
+and `/usage` runs on Node). Setup stops with `azure_cli_missing` and writes nothing when `az.cmd` is not on PATH.
+
+**Setup** uses the same two commands as the default method, sections 4 and 5:
+
+```powershell
+pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed
+pwsh -NoProfile -File .\scripts\client\Set-ClaudeDesktopGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed
+```
+
+Each writes a `ccof-token.cmd` generated from the configuration's tenant and scope
+([ClientGateway.Common.ps1](../scripts/client/ClientGateway.Common.ps1), `New-ClientAzureCliTokenShim`):
+`%USERPROFILE%\.claude\ccof-token.cmd` for Claude Code and `%LOCALAPPDATA%\Claude-3p\ccof-token.cmd` for Claude
+Desktop. Both use one Azure CLI profile folder beside the configuration, for example
+`%LOCALAPPDATA%\ClaudeGateway\az`. The developer's own `az login` (in `%USERPROFILE%\.azure`) is neither read nor
+changed. The helper calls the `az.cmd` that setup found, by its full path (for example
+`C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd`), so an `az.cmd` in a project folder is never run.
+After the Azure CLI is reinstalled to another folder, run setup again.
+
+**Sign in once:**
+
+```powershell
+& "$env:USERPROFILE\.claude\ccof-token.cmd" login
+```
+
+This runs `az login --tenant <tenantId> --scope <scope> --allow-no-subscriptions`. On Windows the Azure CLI signs
+in through the Web Account Manager (WAM) or the browser
+([Azure CLI interactive sign-in](https://learn.microsoft.com/cli/azure/authenticate-azure-cli-interactively)).
+The account needs no Azure subscription. Other commands:
+
+| Command | Effect |
+| --- | --- |
+| `ccof-token.cmd login` | Interactive sign-in; prints a confirmation on stderr, nothing on stdout |
+| `ccof-token.cmd status` | Prints the signed-in user name, or "Not signed in" and exit code 4 |
+| `ccof-token.cmd logout` | Signs out of the helper's Azure CLI profile only |
+| `ccof-token.cmd token` (or no argument) | Prints only the gateway access token. With no sign-in it runs `login` once, then retries |
+| `ccof-token.cmd silent-token` | Prints only the gateway access token; never opens a sign-in. Used by `/usage` and its status line |
+
+Exit codes: 0 token printed, 2 unknown command, 3 Azure CLI not found at the recorded path, 4 not signed in or
+sign-in failed. Azure CLI errors, including Microsoft Entra codes such as `AADSTS53003` (blocked by Conditional
+Access), go to stderr.
+
+`token` is the command Claude Code and Desktop run; do not run it in a transcript. In this mode the Node helper
+`client\bin\ccof-token.cmd` refuses every command with `azure_cli_sign_in` and names both generated helpers.
+On a machine with only Claude Desktop set up, the helper is `%LOCALAPPDATA%\Claude-3p\ccof-token.cmd`; either
+helper signs in for both applications.
+
+`/usage` messages in this mode:
+
+| Message code | Meaning |
+| --- | --- |
+| `sign_in_required` | No sign-in, or the Azure CLI refused the token; run the named helper with `login`. A Microsoft Entra code (`AADSTSnnnnn`) is shown when the Azure CLI reported one |
+| `azure_cli_missing` | The Azure CLI is no longer at the path recorded by setup; reinstall it and run setup again |
+| `sign_in_timeout` | The helper gave no token within 60 seconds |
+
+**Claude Code `settings.json`** (`%USERPROFILE%\.claude\settings.json`), the keys setup writes or changes in this
+mode; all other keys are as in section 4:
+
+```json
+{
+  "apiKeyHelper": "\"C:\\Users\\alex.morgan\\.claude\\ccof-token.cmd\" token",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://sample-pilot-apim.azure-api.net/anthropic",
+    "CLAUDE_CODE_API_KEY_HELPER_TTL_MS": "240000",
+    "CCOF_CONFIG_FILE": "C:\\Users\\alex.morgan\\AppData\\Local\\ClaudeGateway\\config.json"
+  }
+}
+```
+
+`CLAUDE_CODE_API_KEY_HELPER_TTL_MS` is at most 240000 (4 minutes). The Azure CLI returns a cached token until less
+than 5 minutes of its lifetime remain (MSAL Python
+[`application.py`](https://github.com/AzureAD/microsoft-authentication-library-for-python/blob/dev/msal/application.py),
+`expires_in < 5*60`), so a 4-minute cache never holds a token past its expiry. The `/usage` wrapper
+`ccof-usage.ps1` sets `CCOF_TOKEN_HELPER` to the same helper.
+
+**Claude Desktop profile** (`%LOCALAPPDATA%\Claude-3p\configLibrary\<profileId>.json`). In this mode setup always
+writes a helper-script profile, also on builds that support `external-idp`:
+
+```json
+{
+  "inferenceProvider": "gateway",
+  "inferenceGatewayBaseUrl": "https://sample-pilot-apim.azure-api.net/anthropic",
+  "inferenceGatewayAuthScheme": "bearer",
+  "inferenceCredentialKind": "helper-script",
+  "inferenceCredentialHelper": "C:\\Users\\alex.morgan\\AppData\\Local\\Claude-3p\\ccof-token.cmd",
+  "inferenceCredentialHelperArgs": ["token"],
+  "inferenceCredentialHelperTtlSec": 240,
+  "inferenceCredentialHelperTimeoutSec": 180,
+  "inferenceCredentialHelperSilentRefreshEnabled": true,
+  "inferenceModels": [{ "name": "claude-sonnet-5" }, { "name": "claude-haiku-4-5" }]
+}
+```
+
+The timeout is `loginTimeoutSeconds + 2 × tokenTimeoutSeconds` (180 seconds with the example values), long enough
+for one sign-in. Whether Desktop shows an interactive sign-in started from its helper is not verified
+([UNKNOWNS.md](UNKNOWNS.md) AZ-03). Run `ccof-token.cmd login` once before opening Desktop.
+In Desktop, **Developer → Configure Third-Party Inference** shows the profile as **Gateway**, **Bearer**,
+**Helper script**, the helper path above and argument `token`.
+
+**Verify** with the same script as the default method:
+
+```powershell
+pwsh -NoProfile -File .\scripts\client\Test-ClientGatewayAccess.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed
+```
+
+In this mode it takes the token from `%USERPROFILE%\.claude\ccof-token.cmd`, else from
+`%LOCALAPPDATA%\Claude-3p\ccof-token.cmd` (override with `-TokenHelperPath`). No helper at either path reports
+`"reason":"token_helper_missing"`; a missing sign-in reports `"reason":"run_ccof_token_cmd_login"`.
+
+Conditional Access policies that target all cloud apps, or the gateway app as a resource, also apply to the Azure
+CLI sign-in ([Conditional Access: target resources](https://learn.microsoft.com/entra/identity/conditional-access/concept-conditional-access-cloud-apps)).
 
 ## 4. Configure Claude Code and VS Code
 

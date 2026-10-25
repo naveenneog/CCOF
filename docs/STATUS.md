@@ -2,7 +2,40 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-DOCS-R2 — novice reader fixes (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-AZCLI — Azure CLI developer sign-in (complete; [ROADMAP](ROADMAP.md), [ADR-0041](adr/0041-azure-cli-developer-sign-in.md)).
+
+### G-AZCLI — Azure CLI developer sign-in (complete, 2026-10-25)
+
+Acceptance:
+- Given `signInMethod: azure-cli`, Claude Code setup writes `ccof-token.cmd` that runs `az login` once when no
+  cached token exists, in the profile `<config folder>\az`, and prints only the token; `settings.json` points
+  `apiKeyHelper` at it with a cache time of at most 240 s.
+- Claude Desktop setup writes a `helper-script` profile using the same helper, even when `external-idp` is
+  supported.
+- `/usage` gets its token from that helper.
+- Unsafe tenant, scope or folder values are refused before any file is written.
+- Stage 7 writes `signInMethod` only when Stage 4 allowed the Azure CLI; Stage 4 reads back the preauthorization.
+- Live: the helper's token is accepted by the gateway (HTTP 200) and its claims match AZ-01.
+
+Result:
+- Checks: client Node 77/77; client PowerShell 46/46 (a planted `az.cmd` in the working folder or first on `PATH`
+  never runs; a signed-out `silent-token` makes one token call and no sign-in); staged checks 478; full `npm test`
+  with a logged-out isolated Azure CLI profile; `node .ironclad/gate.mjs --stage packet` PASS (22 passed, 3
+  warnings: uncommitted size before this commit, file-size budget on files this packet does not touch, open G-R3 and
+  E2E-01). Mutation checks on the helper generator and the Stage 7 ordering were caught.
+- Test contract change: `tests/Test-AdminHandWorkbook.ps1` pinned the whole original workbook by hash, while
+  `tests/manual-guide.test.ts` requires its nine hand-copy client source blocks to equal `client/`. The first client
+  change since 2026-10-16 made the two contradict. The hash now covers the original text with those nine blocks
+  replaced by a placeholder; the digest is identical at `28a0bad` and after this change. A prose edit and a source
+  drift each still fail.
+- Live, demo lab 2026-10-25 (Azure CLI 2.91.0): token claims as AZ-01; `/usage` returned the developer's groups;
+  `POST /v1/messages` HTTP 200; `claude -p` with the generated `settings.json` answered `OK`, including from a
+  folder holding a planted `az.cmd`, which did not run.
+- Council round 1: Security HIGH (helper ran `az.cmd` by bare name, so a planted `az.cmd` in the project folder
+  could run); Coder High (the status line could open a browser sign-in on every refresh); UX BLOCK (`/usage` turned
+  every helper failure into "sign in first"); two Medium (Desktop-only helper path, late Stage 7 check). Each fixed
+  with a failing test first. Round 2: Architect PASS-WITH-NOTES (the 240 s cap relies on the Azure CLI 2.91.0
+  refresh floor, recorded in AZ-02); Coder PASS; QA PASS; UX PASS; Security PASS.
 
 ### G-DOCS-R2 — novice reader fixes (complete, 2026-10-24)
 

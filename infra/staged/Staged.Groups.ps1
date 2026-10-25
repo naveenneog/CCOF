@@ -119,11 +119,35 @@ function Invoke-StgClient {
     param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] $Cfg, [Collections.IDictionary]$EntraGroups)
     $sel = $Cfg.client
     if ($sel -isnot [Collections.IDictionary] -or -not $sel.Contains('group')) { return Invoke-QsClient $Ctx }
-    if (@($sel.Keys | Where-Object { $_ -cnotin 'group', 'models' }).Count) { throw 'client_selection_invalid: client.group takes only models beside it.' }
+    if (@($sel.Keys | Where-Object { $_ -cnotin 'group', 'models', 'signInMethod' }).Count) { throw 'client_selection_invalid: client.group takes only models and signInMethod beside it.' }
     $entry = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) -and ($_.groupDisplayName -ceq $sel.group -or ($_.groupId -and ([string]$_.groupId) -ieq [string]$sel.group)) })
     if ($entry.Count -ne 1) { throw 'client_selection_invalid: client.group must name exactly one group entry by groupDisplayName or groupId.' }
     $doc = @(New-StgGroupDocuments -Groups $entry -EntraGroups $EntraGroups)[0]
     $restricted = @($doc.familyPolicy.families.Keys | Where-Object { $_ -in 'fable', 'mythos' })
     if ($restricted.Count -and -not $doc.restrictedFamiliesApproved) { throw 'client_selection_invalid: Fable and Mythos need restrictedFamiliesApproved on the group.' }
     return New-QsClientFiles -Ctx $Ctx -ProjectId $doc.id -FamilyPolicy $doc.familyPolicy -BackendId $doc.backendId -Aliases $sel.models
+}
+
+# ADR-0041: client.signInMethod 'azure-cli' makes the client helper sign in through the Azure CLI. Allowed only
+# when Stage 4 preauthorized the Azure CLI on the gateway app; otherwise every token request needs consent.
+# Stage 7 runs this before its preview and before any deployment step, so a wrong value stops nothing half-done.
+function Assert-StgClientSignInMethod {
+    param([Parameter(Mandatory)] $Cfg, [bool]$AzureCliAllowed)
+    $sel = $Cfg.client
+    if ($sel -isnot [Collections.IDictionary] -or -not $sel.Contains('signInMethod')) { return }
+    if ($sel.signInMethod -cnotin 'msal', 'azure-cli') { throw "client_sign_in_invalid: client.signInMethod must be 'msal' or 'azure-cli'." }
+    if ($sel.signInMethod -ceq 'azure-cli' -and -not $AzureCliAllowed) { throw 'client_sign_in_invalid: client.signInMethod azure-cli needs entra.allowAzureCliClient true in Stage 4.' }
+}
+
+function Set-StgClientSignInMethod {
+    param([Parameter(Mandatory)] $Client, [Parameter(Mandatory)] $Cfg, [bool]$AzureCliAllowed)
+    Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed $AzureCliAllowed
+    $sel = $Cfg.client
+    if ($sel -isnot [Collections.IDictionary] -or -not $sel.Contains('signInMethod')) { return }
+    $method = $sel.signInMethod
+    foreach ($file in @($Client.clientConfig, $Client.onboardingJson)) {
+        $doc = Get-Content -Raw -LiteralPath $file | ConvertFrom-Json -AsHashtable
+        $doc.signInMethod = $method
+        $doc | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $file -Encoding utf8NoBOM
+    }
 }

@@ -2273,6 +2273,12 @@ const usage = 'Usage: ccof-token login [--device-code] | token | status | logout
 
 async function defaultService(stderr) {
   const { config, configPath } = await loadConfig();
+  if (config.signInMethod === 'azure-cli') {
+    // ADR-0041: Claude Code and Desktop run the Azure CLI helper; an MSAL sign-in here would never be used.
+    throw new ClientError('azure_cli_sign_in',
+      'This configuration signs in through the Azure CLI. Run "%USERPROFILE%\\.claude\\ccof-token.cmd" login '
+      + '(Claude Code), or "%LOCALAPPDATA%\\Claude-3p\\ccof-token.cmd" login when only Claude Desktop is set up.');
+  }
   const { createRuntime } = await import('./msal-runtime.mjs');
   const runtime = await createRuntime(config, configPath, { report: (code) => stderr(`${code}\n`) });
   return createTokenService(config, runtime);
@@ -2332,7 +2338,7 @@ function invalid(field) {
 }
 
 export function validateConfig(value) {
-  if (!object(value) || Object.keys(value).some((key) => !keys.includes(key) && key !== 'project')) invalid('keys');
+  if (!object(value) || Object.keys(value).some((key) => !keys.includes(key) && !['project', 'signInMethod'].includes(key))) invalid('keys');
   for (const key of keys) if (!Object.hasOwn(value, key)) invalid(key);
   if (value.schemaVersion !== 1) invalid('schemaVersion');
   if (!guid.test(value.tenantId ?? '') || !guid.test(value.clientId ?? '')) invalid('tenantId/clientId');
@@ -2379,6 +2385,11 @@ export function validateConfig(value) {
           (typeof project.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(project.id))) ||
         typeof project.selectorHeader !== 'string' || !/^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(project.selectorHeader) ||
         reserved.includes(project.selectorHeader.toLowerCase())) invalid('project');
+  }
+  if (Object.hasOwn(value, 'signInMethod')) {
+    if (!['msal', 'azure-cli'].includes(value.signInMethod)) invalid('signInMethod');
+    // ADR-0041: the Azure CLI helper passes the scope to az.cmd through cmd.exe, so only plain URI characters.
+    if (value.signInMethod === 'azure-cli' && !/^[A-Za-z0-9:/._-]+$/.test(value.scope)) invalid('scope');
   }
   return { ...value, gatewayUrl: gateway.toString().replace(/\/+$/, '') };
 }

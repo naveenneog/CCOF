@@ -289,7 +289,43 @@ try {
         Assert-Contract $refusedClient "client.group case $case must be refused."
     }
 } finally { Set-Item function:New-QsClientFiles $realClientFiles }
+# Azure CLI developer sign-in (ADR-0041): Stage 4 reads back the gateway's preauthorized clients; Stage 7 writes
+# client.signInMethod into the client files only when Stage 4 allowed the Azure CLI.
+Assert-Contract ($entraText -match 'foreach \(\$cid in \$clients\)' -and $entraText -match 'gateway app does not preauthorize client') 'Stage 4 must read back every gateway client it preauthorizes, the Azure CLI included.'
+$signInDir = Join-Path ([IO.Path]::GetTempPath()) "staged-signin-$([guid]::NewGuid().ToString('N'))"
+try {
+    [void][IO.Directory]::CreateDirectory($signInDir)
+    $files = @{ clientConfig = (Join-Path $signInDir 'client-config.json'); onboardingJson = (Join-Path $signInDir 'onboarding.json') }
+    $reset = { foreach ($f in $files.Values) { '{"schemaVersion":1,"tenantId":"t"}' | Set-Content -LiteralPath $f -Encoding utf8NoBOM } }
+    & $reset
+    Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ group = 'g' } } -AzureCliAllowed $true
+    Assert-Contract (-not (Get-Content -Raw $files.clientConfig).Contains('signInMethod')) 'Without client.signInMethod the client files stay unchanged.'
+    Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ group = 'g'; signInMethod = 'azure-cli' } } -AzureCliAllowed $true
+    foreach ($f in $files.Values) { Assert-Contract ((Get-Content -Raw $f | ConvertFrom-Json).signInMethod -ceq 'azure-cli') "client.signInMethod azure-cli must reach $(Split-Path $f -Leaf)." }
+    foreach ($case in @(@{ method = 'azure-cli'; allowed = $false; why = 'Stage 4 did not allow the Azure CLI' }, @{ method = 'az'; allowed = $true; why = 'an unknown method' })) {
+        & $reset
+        $refused = $false
+        try { Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ signInMethod = $case.method } } -AzureCliAllowed $case.allowed } catch { $refused = $_.Exception.Message -match 'client_sign_in_invalid' }
+        Assert-Contract ($refused -and -not (Get-Content -Raw $files.clientConfig).Contains('signInMethod')) "client.signInMethod must be refused, files unchanged, when $($case.why)."
+    }
+} finally { Remove-Item -LiteralPath $signInDir -Recurse -Force -ErrorAction SilentlyContinue }
+$groupWithMethod = @{ client = @{ group = $exampleCfg.client.group; signInMethod = 'azure-cli' }; groups = $exampleCfg.groups }
+$realClientFiles = ${function:New-QsClientFiles}
+try {
+    Set-Item function:New-QsClientFiles { @{ ok = $true } }
+    $accepted = $true; try { $null = Invoke-StgClient -Ctx @{} -Cfg $groupWithMethod -EntraGroups $entraGroups } catch { $accepted = $false }
+    Assert-Contract $accepted 'client.group accepts signInMethod beside it.'
+} finally { Set-Item function:New-QsClientFiles $realClientFiles }
 $stage7Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage7')[0].Body.Extent.Text
+Assert-Contract ($stage7Body -match 'Set-StgClientSignInMethod -Client \$client -Cfg \$Cfg -AzureCliAllowed') 'Stage 7 must apply client.signInMethod to the client files.'
+foreach ($case in @(@{ method = 'azure-cli'; allowed = $false }, @{ method = 'az'; allowed = $true })) {
+    $refused = $false
+    try { Assert-StgClientSignInMethod -Cfg @{ client = @{ signInMethod = $case.method } } -AzureCliAllowed $case.allowed } catch { $refused = $_.Exception.Message -match 'client_sign_in_invalid' }
+    Assert-Contract $refused "Assert-StgClientSignInMethod must refuse signInMethod '$($case.method)' (Azure CLI allowed: $($case.allowed))."
+}
+Assert-StgClientSignInMethod -Cfg @{ client = @{ signInMethod = 'azure-cli' } } -AzureCliAllowed $true
+$checkAt = $stage7Body.IndexOf('Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed')
+Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $stage7Body.IndexOf('if (-not $Apply)')) 'Stage 7 must check client.signInMethod before its preview and before any deployment step.'
 $stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
 $qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
 Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'

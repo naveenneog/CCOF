@@ -302,6 +302,7 @@ Settings added for group onboarding:
 | --- | --- | --- |
 | `groups[]` with `"kind": "group"` | example pilot | An Entra group onboarded as its own entity: `groupDisplayName` (Stage 4 creates or reuses it) or `groupId`, `members`, `displayName`, `backendId`, `priority`, `chargebackId` (or `null`), `budget` (`autoScale` with `groupCap: null`, or `cap` with a cap), `restrictedFamiliesApproved`, `familyPolicy`, `surfaces`, `cacheProfile`. No `projectId` or `classification`. Stage 7 seeds it as a group document; the sync app's `registrySeed` function checks it against the group contract ([group-registration.ts](../src/contracts/group-registration.ts)) and writes nothing if it fails. Entries with `projectId` and `classification` keep the earlier project model |
 | `client.group` | `CCOF-PILOT01` | The group entry (by `groupDisplayName` or `groupId`) the developer client file is written for, with `client.models`. The client sends the group's object ID as the project selector |
+| `client.signInMethod` | `msal` | `msal` or `azure-cli`. Stage 7 writes it into `client-config.json` and `onboarding.json`; `azure-cli` needs `entra.allowAzureCliClient: true` in Stage 4, otherwise Stage 7 stops with `client_sign_in_invalid`. Used with `client.group` ([section 6.6](#66-azure-cli-developer-sign-in)) |
 | `acceptance` | no `project` | Stage 8 requests without a project selector, and checks in the usage trace that every request was charged to the pilot group. With more than one group entry, `acceptance.expectedGroup` names the expected one (`groupDisplayName` or `groupId`) |
 | `admin.groupSearchEnabled` | `false` | Sets `ADMIN_GROUP_SEARCH_ENABLED` on the admin app (Stage 5). Requires the admin Graph grants in section 6.1; without them the admin API answers `502 group_directory_permission_required`. Ignored when `stage1.includeAdmin` is `false` |
 | `admin.userNamesEnabled` | `false` | Sets `ADMIN_USER_NAMES_ENABLED` on the admin app (Stage 5): people's names beside object IDs (User tags page, Developers view). Requires the admin identity's `User.Read.All` (section 6.1); without it the console shows object IDs only |
@@ -710,6 +711,30 @@ guard (80 / 5 / 5) ended at USD 13.84 recorded and at list price (1.1% under), a
 19.7% (list) over without it. The rate limit grows with the budget: USD 0.14 per minute for USD 14, USD 10
 per minute for USD 1,000. A budget owner who needs faster spending of a small budget raises
 `overshootPercent`.
+
+### 6.6 Azure CLI developer sign-in
+
+Developers can sign in with an interactive `az login` instead of the `ccof-token` Node helper
+([ADR-0041](adr/0041-azure-cli-developer-sign-in.md), [CLIENTS.md section 3a](CLIENTS.md#3a-azure-cli-sign-in-signinmethod-azure-cli)).
+Configuration:
+
+```json
+"entra": { "allowAzureCliClient": true },
+"client": { "group": "CCOF-PILOT01", "signInMethod": "azure-cli", "models": { } }
+```
+
+| Stage | Effect |
+| --- | --- |
+| 4 | Preauthorizes the Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) for `access_as_user` on the CCOF Gateway app, then reads the app back and stops if any expected client is not preauthorized ([Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1)) |
+| 5 | Adds the Azure CLI to `entra.delegatedClientAppIds`, so APIM admits tokens whose `azp` is the Azure CLI on `/v1/messages` and `/ccof/me/usage` ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)) |
+| 7 | Writes `"signInMethod": "azure-cli"` into `client-config.json` and `onboarding.json` ([Staged.Groups.ps1](../infra/staged/Staged.Groups.ps1), `Set-StgClientSignInMethod`) |
+
+A tenant that already ran Stage 4 without the Azure CLI reruns Stage 4, Stage 5 and Stage 7 after setting both keys.
+With `gateway.surfaceClients` configured, add `{ "clientAppId": "04b07795-8ddb-461a-bbee-02f9e1bf7b46", "surface": "code" }`;
+otherwise Azure CLI tokens are refused `403 surface_not_allowed`. One client ID serves Claude Code and Claude
+Desktop, so the gateway cannot tell those two surfaces apart for Azure CLI tokens.
+Any user in the tenant can obtain an Azure CLI token for the gateway scope; access still depends on membership of an
+onboarded group, as for the default method.
 ---
 ## 7. Rerun, rollback and cleanup
 

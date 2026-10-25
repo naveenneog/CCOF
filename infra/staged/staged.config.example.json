@@ -206,6 +206,7 @@
   ],
   "client": {
     "group": "CCOF-PILOT01",
+    "signInMethod": "msal",
     "models": {
       "default": "claude-sonnet-5",
       "sonnet": "claude-sonnet-5",
