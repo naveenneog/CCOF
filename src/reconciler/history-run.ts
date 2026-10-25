@@ -1,14 +1,15 @@
-// The chargeback history step of a reconciler run (ADR-0044): after the budget states, the documents of the current
-// month from the rows the run already read, plus, early in a month, the previous month's open days from one extra
-// ledger query; then only the documents the plan selects are written. A failure here is reported on the run line
-// and never fails the budget run.
+// The chargeback history step of a reconciler run (ADR-0044): after the budget states are written and the budget
+// lease is released, under its own lease and within a time and write budget, the documents of the current month from
+// the rows the run already read, plus, early in a month, the previous month's open days from one extra ledger query;
+// then only the documents the plan selects are written. A failure here is reported on the run line and never fails
+// or delays the budget run.
 
 import type { RateCard } from "../cost/rate-card.ts";
 import type { ContractSchedule } from "../cost/contract-schedule.ts";
-import { buildDailyDocuments, planHistoryWrites, storedSummaryOf } from "./history.ts";
-import type { ChargebackDailyDocument, HistoryPlan, HistoryRow, StoredSummary } from "./history.ts";
-import { LeaseLostError } from "./lease.ts";
-import type { Lease } from "./lease.ts";
+import { HISTORY_MAX_WRITES_PER_RUN, buildDailyDocuments, planHistoryWrites, storedSummaryOf } from "./history.ts";
+import type { ChargebackDailyDocument, HistoryRow, StoredSummary } from "./history.ts";
+import { HISTORY_LEASE_ID, LeaseLostError, acquireLease } from "./lease.ts";
+import type { Lease, LeaseStore } from "./lease.ts";
 import { LedgerReadError, buildLedgerQuery, parseLedgerResponse } from "./ledger.ts";
 import type { LedgerAnswer } from "./ledger.ts";
 import { budgetPeriodAt } from "./period.ts";
@@ -125,17 +126,25 @@ async function readTail(input: HistoryStepInput, tail: BudgetPeriod): Promise<Hi
   return parseLedgerResponse(answer.body, input.ledgerMaxRows).map((row) => ({ row, classified: classifyRow(row, tail, input.rateCard, input.schedule) }));
 }
 
-async function writeAll(docs: ChargebackDailyDocument[], store: HistoryStore, lease: Lease, concurrency: number): Promise<number> {
+// Set when the time budget is spent: no read or write starts after it.
+interface Stop {
+  stopped: boolean;
+}
+
+const checkStop = (stop: Stop): void => {
+  if (stop.stopped) throw new HistoryFailure("history_time_budget");
+};
+
+async function writeAll(docs: ChargebackDailyDocument[], store: HistoryStore, lease: Lease, concurrency: number, counts: HistoryCounts, stop: Stop): Promise<void> {
   let next = 0;
-  let written = 0;
   let failure: unknown;
   const worker = async (): Promise<void> => {
-    while (failure === undefined && next < docs.length) {
+    while (failure === undefined && !stop.stopped && next < docs.length) {
       const doc = docs[next++];
       try {
         await lease.ensure();
         await store.write(doc);
-        written += 1;
+        counts.historyWritten += 1;
       } catch (error) {
         failure ??= error;
       }
@@ -146,7 +155,7 @@ async function writeAll(docs: ChargebackDailyDocument[], store: HistoryStore, le
     const reason = failure instanceof LeaseLostError ? "lease_lost" : failure instanceof HistoryConflictError ? "history_conflict" : "history_write_failed";
     throw new HistoryFailure(reason, failure);
   }
-  return written;
+  checkStop(stop);
 }
 
 function errorCode(error: unknown): string | null {
@@ -156,36 +165,89 @@ function errorCode(error: unknown): string | null {
   return code !== null && /^[A-Za-z0-9_.-]{1,40}$/.test(code) ? code : null;
 }
 
-export async function runHistoryStep(input: HistoryStepInput): Promise<HistoryLine> {
-  const counts = { historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyClosedRefused: 0, historyShrinkRefused: 0 };
+type HistoryCounts = Record<
+  "historyDocuments" | "historyWritten" | "historyUnchanged" | "historyNotDue" | "historyClosedSkipped" | "historyClosedRefused" | "historyShrinkRefused" | "historyBudgetDeferred",
+  number
+>;
+
+const emptyCounts = (): HistoryCounts => ({
+  historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyClosedRefused: 0, historyShrinkRefused: 0, historyBudgetDeferred: 0,
+});
+
+export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCounts = emptyCounts(), stop: Stop = { stopped: false }): Promise<HistoryLine> {
   try {
     const store = input.store;
     if (store === undefined) throw new HistoryFailure("history_store_missing");
     const tail = previousMonthTail(input.period, input.now, input.closeAfterDays);
     const rows = tail === null ? input.rows : [...input.rows, ...(await step("history_ledger_read_failed", () => readTail(input, tail)))];
     const coveredDays = new Set([...daysOf(input.period.start, input.now), ...(tail === null ? [] : daysOf(tail.start, new Date(tail.end.getTime() - 1)))]);
-    const options = { now: input.now, closeAfterDays: input.closeAfterDays, rateCardVersion: input.rateCard.version, contractScheduleVersion: input.schedule.version, coveredDays };
+    const options = { now: input.now, closeAfterDays: input.closeAfterDays, rateCardVersion: input.rateCard.version, contractScheduleVersion: input.schedule.version, coveredDays, maxWrites: HISTORY_MAX_WRITES_PER_RUN };
     const docs = buildDailyDocuments(rows, options);
-    const months = [...new Set([...coveredDays].map((day) => day.slice(0, 7)))].sort();
-    const plans: HistoryPlan[] = [];
-    for (const month of months) {
-      const stored = await step("history_read_failed", () => store.readSummaries(month));
-      plans.push(planHistoryWrites(docs.filter((d) => d.month === month), stored, options));
+    const stored = new Map<string, StoredSummary>();
+    for (const month of [...new Set([...coveredDays].map((day) => day.slice(0, 7)))].sort()) {
+      checkStop(stop);
+      for (const entry of await step("history_read_failed", () => store.readSummaries(month))) stored.set(...entry);
     }
+    const plan = planHistoryWrites(docs, stored, options);
     counts.historyDocuments = docs.length;
-    for (const plan of plans) {
-      counts.historyUnchanged += plan.unchanged;
-      counts.historyNotDue += plan.notDue;
-      counts.historyClosedSkipped += plan.closedSkipped;
-      counts.historyClosedRefused += plan.closedRefused;
-      counts.historyShrinkRefused += plan.shrinkRefused;
-    }
+    counts.historyUnchanged = plan.unchanged;
+    counts.historyNotDue = plan.notDue;
+    counts.historyClosedSkipped = plan.closedSkipped;
+    counts.historyClosedRefused = plan.closedRefused;
+    counts.historyShrinkRefused = plan.shrinkRefused;
+    counts.historyBudgetDeferred = plan.budgetDeferred;
     // Lowering writes first, all of them, then the rest (HistoryPlan.loweringCount).
-    counts.historyWritten = await writeAll(plans.flatMap((p) => p.writes.slice(0, p.loweringCount)), store, input.lease, input.writeConcurrency);
-    counts.historyWritten += await writeAll(plans.flatMap((p) => p.writes.slice(p.loweringCount)), store, input.lease, input.writeConcurrency);
+    await writeAll(plan.writes.slice(0, plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
+    await writeAll(plan.writes.slice(plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
     return { historyOutcome: "written", historyReason: null, ...counts };
   } catch (error) {
     const failure = error instanceof HistoryFailure ? error : new HistoryFailure(error instanceof LedgerReadError ? error.reason : "history_failed", error);
     return { historyOutcome: "failed", historyReason: failure.reason, historyErrorCode: errorCode(failure.cause), ...counts };
+  }
+}
+
+export interface HistoryRunInput extends Omit<HistoryStepInput, "lease"> {
+  leases: LeaseStore;
+  leaseSeconds: number;
+  holder: string;
+  clock: () => Date;
+  // After this, the run line is returned, no read or write starts, and the lease is released when the call in
+  // flight ends.
+  timeBudgetMs: number;
+}
+
+// Called after the budget lease is released: history takes its own lease, so a slow or failing history never holds
+// the budget run, and two instances never write history at once.
+export async function runHistory(input: HistoryRunInput): Promise<HistoryLine> {
+  const counts = emptyCounts();
+  const stop: Stop = { stopped: false };
+  const work = (async (): Promise<HistoryLine> => {
+    let acquired: Awaited<ReturnType<typeof acquireLease>>;
+    try {
+      acquired = await acquireLease(input.leases, { id: HISTORY_LEASE_ID, holder: input.holder, leaseSeconds: input.leaseSeconds, now: input.clock });
+    } catch (error) {
+      return { historyOutcome: "failed", historyReason: "history_lease_unavailable", historyErrorCode: errorCode(error), ...counts };
+    }
+    if (!acquired.acquired) return { historyOutcome: "skipped", historyReason: "history_lease_held", ...counts };
+    try {
+      checkStop(stop);
+      return await runHistoryStep({ ...input, lease: acquired.lease }, counts, stop);
+    } catch {
+      return { historyOutcome: "failed", historyReason: "history_time_budget", ...counts };
+    } finally {
+      await acquired.lease.release().catch(() => false);
+    }
+  })();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<HistoryLine>((resolve) => {
+    timer = setTimeout(() => {
+      stop.stopped = true;
+      resolve({ historyOutcome: "failed", historyReason: "history_time_budget", ...counts });
+    }, input.timeBudgetMs);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }

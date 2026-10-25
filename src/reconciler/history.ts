@@ -13,6 +13,9 @@ import type { ClassifiedRow } from "./price-rows.ts";
 export const HISTORY_SCHEMA = "ccof.chargeback.daily.v1";
 // An open day's document is rewritten at most this often (AUD-C1); closing writes are not deferred.
 export const OPEN_REWRITE_MINUTES = 60;
+// At most this many documents are written per run, whole days, oldest first (ADR-0044 decision 7); the rest wait for
+// the next run. A first day larger than this is still written whole.
+export const HISTORY_MAX_WRITES_PER_RUN = 1000;
 
 const DAY_MS = 86_400_000;
 const UTC_INSTANT = /^(\d{4}-\d{2})-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
@@ -85,6 +88,7 @@ export interface BuildOptions {
 // documents can be compared with what the run computed.
 export interface PlanOptions extends BuildOptions {
   coveredDays: ReadonlySet<string>;
+  maxWrites?: number;
 }
 
 export interface HistoryPlan {
@@ -98,6 +102,8 @@ export interface HistoryPlan {
   // New, changed or zeroed documents of a day that already has a closed document: never written.
   closedRefused: number;
   shrinkRefused: number;
+  // Writes left for a later run by the per-run write budget.
+  budgetDeferred: number;
 }
 
 const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
@@ -227,13 +233,16 @@ const sum = (values: Iterable<{ requests: number }>): number => [...values].redu
 // close); every new, changed or zeroed document of it is refused (closedRefused), so a key that moves after the close
 // can never be counted twice.
 export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, options: PlanOptions): HistoryPlan {
-  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0 };
-  const raising: ChargebackDailyDocument[] = [];
+  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0, budgetDeferred: 0 };
+  const byDay = new Map<string, { lowering: ChargebackDailyDocument[]; raising: ChargebackDailyDocument[] }>();
   const days = new Map<string, { docs: ChargebackDailyDocument[]; stored: Array<[string, StoredSummary]> }>();
   const dayOf = (day: string) => days.get(day) ?? days.set(day, { docs: [], stored: [] }).get(day)!;
   for (const doc of docs) dayOf(doc.day).docs.push(doc);
   for (const entry of stored) if (options.coveredDays.has(entry[1].key.day)) dayOf(entry[1].key.day).stored.push(entry);
   for (const [day, group] of days) {
+    const lowering: ChargebackDailyDocument[] = [];
+    const raising: ChargebackDailyDocument[] = [];
+    byDay.set(day, { lowering, raising });
     const computed = new Set(group.docs.map((d) => d.id));
     const zeroed = group.stored.filter(([id, s]) => !computed.has(id) && !s.closed).map(([, s]) => toDocument(emptyTally(s.key), options));
     const all = [...group.docs, ...zeroed];
@@ -263,11 +272,24 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
       const current = stored.get(doc.id);
       if (current?.contentHash === doc.contentHash) plan.unchanged += 1;
       else if (!due) plan.notDue += 1;
-      else if (current !== undefined && doc.requests < current.requests) plan.writes.push(doc);
+      else if (current !== undefined && doc.requests < current.requests) lowering.push(doc);
       else raising.push(doc);
     }
   }
+  const selected: Array<{ lowering: ChargebackDailyDocument[]; raising: ChargebackDailyDocument[] }> = [];
+  let count = 0;
+  for (const day of [...byDay.keys()].sort()) {
+    const writes = byDay.get(day)!;
+    const n = writes.lowering.length + writes.raising.length;
+    if (n === 0) continue;
+    if (plan.budgetDeferred > 0 || (count > 0 && count + n > (options.maxWrites ?? Infinity))) plan.budgetDeferred += n;
+    else {
+      selected.push(writes);
+      count += n;
+    }
+  }
+  plan.writes = selected.flatMap((w) => w.lowering);
   plan.loweringCount = plan.writes.length;
-  plan.writes.push(...raising);
+  plan.writes.push(...selected.flatMap((w) => w.raising));
   return plan;
 }

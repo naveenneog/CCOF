@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  HISTORY_MAX_WRITES_PER_RUN,
   OPEN_REWRITE_MINUTES,
   buildDailyDocuments,
   historyDocumentId,
@@ -204,5 +205,17 @@ test("a close interrupted part-way is finished by the next run: documents still 
 test("a stored document of a day the run did not read is left alone", () => {
   const [old] = build([row({ timestamp: "2026-09-30T12:00:00.0000000Z" })], "2026-10-01T00:00:00Z");
   const result = planHistoryWrites([], new Map([[old.id, storedSummaryOf(old)]]), { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-11"]) });
-  assert.deepEqual(result, { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0 });
+  assert.deepEqual(result, { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0, budgetDeferred: 0 });
+});
+test("a run writes at most maxWrites documents, whole days, oldest first; a first day larger than that is written whole", () => {
+  const docs = build([
+    row({ timestamp: "2026-10-11T09:00:00.0000000Z" }), row({ timestamp: "2026-10-11T09:00:00.0000000Z", personId: PERSON_B }),
+    row({ timestamp: "2026-10-10T09:00:00.0000000Z" }), row({ timestamp: "2026-10-09T09:00:00.0000000Z" }),
+  ]);
+  const options = { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-09", "2026-10-10", "2026-10-11"]) };
+  const limited = planHistoryWrites(docs, new Map(), { ...options, maxWrites: 3 });
+  assert.deepEqual([limited.writes.map((d) => d.day).sort(), limited.budgetDeferred], [["2026-10-09", "2026-10-10"], 2]);
+  const oneDay = planHistoryWrites(docs.filter((d) => d.day === "2026-10-11"), new Map(), { ...options, maxWrites: 1 });
+  assert.deepEqual([oneDay.writes.length, oneDay.budgetDeferred], [2, 0]);
+  assert.equal(HISTORY_MAX_WRITES_PER_RUN, 1000);
 });

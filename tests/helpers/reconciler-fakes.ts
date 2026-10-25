@@ -94,14 +94,18 @@ export class MemoryHistory implements HistoryStore {
   failWrite: unknown;
   // Fail only the writes this selects (an interrupted run).
   failWhen?: (doc: ChargebackDailyDocument) => boolean;
+  // Awaited before every read and write: a slow or hung Cosmos.
+  before?: () => Promise<void>;
 
   async readSummaries(month: string) {
+    await this.before?.();
     this.reads.push(month);
     const docs = [...this.docs.values()].filter((d) => d.month === month);
     return new Map(docs.map((d) => [d.id, storedSummaryOf(d)]));
   }
 
   async write(doc: ChargebackDailyDocument) {
+    await this.before?.();
     if (this.failWrite !== undefined) throw this.failWrite;
     if (this.failWhen?.(doc)) throw new Error("interrupted");
     this.writes.push(structuredClone(doc));

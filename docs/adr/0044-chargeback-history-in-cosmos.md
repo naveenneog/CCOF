@@ -33,7 +33,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    `closed`). Valid ids are kept even on unattributed rows, as the report keeps them; such rows are counted as
    unattributed. Rows whose five token counts are all known and zero are left out, as the report leaves them out.
 3. **Writes** (pure planning in `src/reconciler/history.ts`, run in `src/reconciler/history-run.ts`), after the
-   budget states, every run:
+   budget states and the release of the budget lease (decision 7), every run:
    - compute the documents of every day of the current month from the rows already read; during the first
      `closeAfterDays` + 1 days of a month, also read and compute the previous month's last `closeAfterDays` + 1
      days with one extra ledger query;
@@ -54,6 +54,16 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
      cached in the host for 60 minutes; every write is a create or an If-Match replace on the cached etag, so an
      instance with a stale cache gets a conflict instead of overwriting another instance's write (AUD-C10).
    A history failure never fails the budget run: the run line carries `historyOutcome` and its counts.
+7. **History never holds up budgets** (council review 2026-10-25). The budget states are written and the budget
+   lease (`ccof-budget-reconciler`) is released before history starts. History then takes its own lease,
+   `ccof-chargeback-history`, in the same lease container (held by another run: `historyOutcome: skipped`,
+   `historyReason: history_lease_held`), and runs within a time budget, half the run interval and at least 15
+   seconds: when it is spent the run line is written with `historyReason: history_time_budget`, no further read or
+   write starts, and the history lease is released when the call in flight ends. A run writes at most 1,000
+   documents (`HISTORY_MAX_WRITES_PER_RUN`), whole days, oldest first; the rest wait for the next run
+   (`historyBudgetDeferred`). A first day larger than that is written whole. Considered and rejected: one lease
+   for both (a slow Cosmos holds the next budget run) and a separate timer function (a second schedule and
+   identity to deploy for the same rows the run already read).
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
    neither; absent: off). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
    Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver.

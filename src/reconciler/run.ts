@@ -14,7 +14,7 @@ import type { LedgerAnswer } from "./ledger.ts";
 import { budgetPeriodAt } from "./period.ts";
 import type { BudgetPeriod } from "./period.ts";
 import type { HistoryRow } from "./history.ts";
-import { runHistoryStep } from "./history-run.ts";
+import { runHistory } from "./history-run.ts";
 import type { HistoryLine, HistoryStore } from "./history-run.ts";
 import { classifyRow } from "./price-rows.ts";
 import { reconcile } from "./reconcile.ts";
@@ -41,6 +41,8 @@ export interface RunContext {
   now: () => Date;
   newRunId: () => string;
   log: (line: string) => void;
+  // Chargeback history's time budget (ADR-0044); default: half the run interval, at least 15 seconds.
+  historyTimeBudgetMs?: number;
 }
 
 export interface RunAssets {
@@ -216,7 +218,6 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
     } finally {
       timings.writeMs = context.now().getTime() - writeStart;
     }
-    if (settings.history) history = await runHistoryStep(historyInput(settings, settings.history.closeAfterDays, assets, deps, planned, period, lease, context.now()));
     summary = { runId, outcome: "written", reason: null };
   } catch (error) {
     const failure = error instanceof Failure ? error : new Failure("run_failed", error);
@@ -224,14 +225,17 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
   } finally {
     await lease.release().catch(() => false);
   }
+  // After the budget lease is released (ADR-0044 decision 7): history never holds up or fails the budget run.
+  if (settings.history && planned && summary.outcome === "written") history = await runHistory(historyInput(settings, settings.history.closeAfterDays, assets, deps, planned, period, runId, context));
   return finish({ ...summary, ...(planned ? describe(planned) : {}), statesWritten: written, ...history });
 }
 
-function historyInput(settings: ReconcilerSettings, closeAfterDays: number, assets: RunAssets, deps: RunDependencies, planned: Planned, period: BudgetPeriod, lease: Lease, now: Date) {
+function historyInput(settings: ReconcilerSettings, closeAfterDays: number, assets: RunAssets, deps: RunDependencies, planned: Planned, period: BudgetPeriod, runId: string, context: RunContext) {
+  const timeBudgetMs = context.historyTimeBudgetMs ?? Math.max(15_000, settings.intervalMinutes * 30_000);
   return {
-    closeAfterDays, rows: planned.historyRows, period, now, rateCard: assets.rateCard, schedule: assets.schedule, ledgerKql: assets.ledgerKql,
+    closeAfterDays, rows: planned.historyRows, period, now: context.now(), leases: deps.leases, leaseSeconds: settings.leaseSeconds, holder: runId, clock: context.now, timeBudgetMs, rateCard: assets.rateCard, schedule: assets.schedule, ledgerKql: assets.ledgerKql,
     gatewayResourceId: settings.gatewayResourceId, ledgerMaxRows: settings.ledgerMaxRows, writeConcurrency: settings.writeConcurrency,
-    store: deps.history, lease, queryLedger: (query: string, timespan: string) => deps.queryLedger(query, timespan),
+    store: deps.history, queryLedger: (query: string, timespan: string) => deps.queryLedger(query, timespan),
   };
 }
 

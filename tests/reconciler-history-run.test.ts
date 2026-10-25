@@ -36,9 +36,9 @@ function pilot(options: FakeAzureOptions): FakeAzure {
   });
 }
 
-async function run(azure: FakeAzure, at: string, overrides: Record<string, string> = HISTORY) {
+async function run(azure: FakeAzure, at: string, overrides: Record<string, string> = HISTORY, extra: { historyTimeBudgetMs?: number } = {}) {
   const lines: Array<Record<string, unknown>> = [];
-  const summary = await runReconciler(settings(overrides), assets, azure.deps(), { now: new ManualClock(at).now, newRunId: () => "run-1", log: (l) => lines.push(JSON.parse(l)) });
+  const summary = await runReconciler(settings(overrides), assets, azure.deps(), { now: new ManualClock(at).now, newRunId: () => "run-1", log: (l) => lines.push(JSON.parse(l)), ...extra });
   return { summary, runLine: lines.find((l) => l.schema === "ccof.reconciler.run.v1") as Record<string, unknown> };
 }
 
@@ -196,3 +196,59 @@ for (const [name, failWhen, left] of [
     assert.equal(total(), 1);
   });
 }
+// ---- history never holds up budgets (ADR-0044 decision 7) ----
+const BUDGET_LEASE = "ccof-budget-reconciler";
+const HISTORY_LEASE = "ccof-chargeback-history";
+
+test("history runs after the budget states are written and the budget lease is released, under its own lease", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  const seen: Array<[number, boolean | undefined, boolean | undefined]> = [];
+  history.before = async () => {
+    seen.push([azure.budgetStates.length, azure.leases.docs.get(BUDGET_LEASE)?.doc.released, azure.leases.docs.get(HISTORY_LEASE)?.doc.released]);
+  };
+  const { runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.equal(runLine.historyOutcome, "written");
+  assert.ok(seen.length > 0);
+  assert.deepEqual(seen[0], [1, true, false], "budget state written, budget lease released, history lease held");
+  assert.equal(azure.leases.docs.get(HISTORY_LEASE)?.doc.released, true);
+});
+
+test("a hung history is stopped at its time budget: the run returns, budget states written and both leases released", async () => {
+  const history = new MemoryHistory();
+  history.before = () => new Promise(() => {});
+  const azure = pilot({ history });
+  const started = Date.now();
+  const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z", HISTORY, { historyTimeBudgetMs: 50 });
+  assert.ok(Date.now() - started < 5000);
+  assert.deepEqual([summary.outcome, azure.budgetStates.length, azure.leases.docs.get(BUDGET_LEASE)?.doc.released], ["written", 1, true]);
+  assert.deepEqual([runLine.historyOutcome, runLine.historyReason], ["failed", "history_time_budget"]);
+});
+
+test("a slow history stops writing at its time budget and releases its lease when the write in flight ends", async () => {
+  const history = new MemoryHistory();
+  let calls = 0;
+  history.before = () => (++calls > 1 ? new Promise((resolve) => setTimeout(resolve, 100)) : Promise.resolve());
+  const azure = pilot({ history });
+  const { runLine } = await run(azure, "2026-10-11T13:00:00Z", { ...HISTORY, RECONCILER_WRITE_CONCURRENCY: "1" }, { historyTimeBudgetMs: 50 });
+  assert.equal(runLine.historyReason, "history_time_budget");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual([history.writes.length, azure.leases.docs.get(HISTORY_LEASE)?.doc.released], [1, true], "no write starts after the budget; the lease is released");
+});
+
+test("a failing history leaves the budget states written and the budget lease released", async () => {
+  const history = new MemoryHistory();
+  history.before = async () => { throw new Error("cosmos down"); };
+  const azure = pilot({ history });
+  const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([summary.outcome, azure.budgetStates.length, azure.leases.docs.get(BUDGET_LEASE)?.doc.released], ["written", 1, true]);
+  assert.deepEqual([runLine.historyOutcome, runLine.historyReason, azure.leases.docs.get(HISTORY_LEASE)?.doc.released], ["failed", "history_read_failed", true]);
+});
+
+test("while another run holds the history lease, history is skipped and the budget run is not", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  azure.leases.docs.set(HISTORY_LEASE, { doc: { id: HISTORY_LEASE, holder: "other", acquiredAt: "", renewedAt: "", leaseExpiresAt: "2026-10-11T14:00:00.000Z", released: false }, etag: "e" });
+  const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([summary.outcome, azure.budgetStates.length, runLine.historyOutcome, runLine.historyReason, history.reads.length], ["written", 1, "skipped", "history_lease_held", 0]);
+});
