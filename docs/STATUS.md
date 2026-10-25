@@ -18,6 +18,13 @@
   idle timeout, recovery after lost `$HOME`, and this error.
 - Checks: `tests/Test-StagedStages.ps1` 499 checks pass (a mutation that dropped the `''` case was caught); docs tests
   27/27; packet gate PASS (23 passed, 2 warned, 0 failed, includes `npm test`), all in a logged-out Azure CLI profile.
+- Source commit: `9091ad5` (`fix(staged): accept the configured Functions subnet at Stage 1 after lost state`), local `main`.
+- Public release 15: `07900bc` on `naveenneog/CCOF` `main`, the `f368d2d..9091ad5` diff (G-CONFIG-GUIDE-2 and G-RESUME)
+  applied with no conflicts. The planned base `e5e7d8d` conflicted in 7 files because release 14 already holds
+  `e5e7d8d..f368d2d`; `f368d2d..06a8489` is only STATUS, so `f368d2d` is the base. Scrub check: 16 matches, all
+  hypothetical `contoso` examples (5 new on `configuration-resources.md`, 1 in the release 14 STATUS line, kept as
+  written). No real lab identifier in the public tree; gitleaks: the 3 known `projectApi` false positives; docs tests
+  27/27; public CI run `40209444154` success.
 
 **Previous packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
 
