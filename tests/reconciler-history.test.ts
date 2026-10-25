@@ -181,5 +181,5 @@ test("closing a day closes a document whose rows moved away, with zero totals", 
 test("a stored document of a day the run did not read is left alone", () => {
   const [old] = build([row({ timestamp: "2026-09-30T12:00:00.0000000Z" })], "2026-10-01T00:00:00Z");
   const result = planHistoryWrites([], new Map([[old.id, storedSummaryOf(old)]]), { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-11"]) });
-  assert.equal(result.writes.length, 0);
+  assert.deepEqual(result, { writes: [], unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 });
 });
