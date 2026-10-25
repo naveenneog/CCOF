@@ -12,9 +12,9 @@
 - Checks: a test in `tests/docs-reader-pages.test.ts` computes the `REPLACE-` key paths from the template and adds
   the decision keys; it failed first because the page did not exist, passes with it, and failed again when one key
   (`groups[].familyPolicy`) was removed from the page. Claims were read from `Read-StgConfig`, the Cosmos, Groups
-  and Resources scripts and the Stage 5 Bicep. Docs tests, `npm test` and the packet gate in a logged-out Azure CLI
-  profile: see the commit.
-- Source commit: local `main`, the commit that adds this entry (`docs: add configuration reference page`).
+  and Resources scripts and the Stage 5 Bicep. Docs tests pass.
+- Source commit: `d1c4eeb` (`docs: add configuration reference page for the staged configuration file`), local `main`.
+- Checks run: `npm test` 80/80 and the packet gate PASS (23 passed, 2 warned, 0 failed), both in a logged-out Azure CLI profile.
 
 **Previous packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
 
