@@ -131,6 +131,18 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
   one day before that. A changed `ttlDays` applies to documents written after the change: a closed month is never
   written again, so it keeps the expiry it was written with; to delete older history sooner, delete it by hand
   (AUD-C7).
+- Turning history on in a running deployment (council round 2, 2026-10-26) needs Stages 2, 3 and 5 (container,
+  grants, settings) and Stage 7, because the reconciler and admin code that write and read history are new; Stage 4
+  only when `admin.extraAllowedClientIds` changes. Stage 5's recorded outputs (gateway URL, settings list, workbook
+  flag) do not change, so Stage 7 is not forced by the dependency check and is run for the code. A Stage 7 rerun
+  seeds create-only: group documents edited in the admin console since the first seed now differ from the
+  configuration, and Stage 7 keeps them and prints a warning naming the fields instead of stopping with
+  `seed_documents_differ` (`Invoke-StgSeed` passes the group ids as `-KeepDiffering`); other differing documents
+  still stop it. Stage 5 replaces each app's whole settings set, so it now writes
+  `AzureWebJobs.snapshotApply.Disabled: true` itself (ADR-0024); before, a Stage 5 rerun dropped the switch that
+  Stage 7 had left and the Stage 1 recheck failed. A Stage 5 rerun with a changed rendered policy leaves the
+  previous policy fragments in API Management (ADR-0039); removing them is a documented manual step
+  ([troubleshooting](../operate/troubleshooting.md#old-policy-fragments)), not automated here.
 - The committed example (`infra/staged/staged.config.example.json`) shows `audit.chargebackHistory` with
   `enabled: false`, because its `reconciler.timerEnabled` is false (timers stay off until a deployment is verified)
   and enabled history without the timer is refused. Turn both on together.

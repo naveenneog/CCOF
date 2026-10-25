@@ -110,7 +110,9 @@ function Invoke-StgSeed {
         catch { throw "seed_document_invalid: the projects document $($project.id) fails onboarding Stage 3's schema: $($_.Exception.Message)" }
     }
     $docs.projects = @($docs.projects) + @($GroupDocuments)
-    return Invoke-QsSeedThroughFunction -Ctx $Ctx -Documents $docs
+    # A rerun (for example to publish new code) must not fail on groups edited in the admin console since the first
+    # seed: the console owns them after it. They are left as they are and named in a warning.
+    return Invoke-QsSeedThroughFunction -Ctx $Ctx -Documents $docs -KeepDiffering @($GroupDocuments | ForEach-Object { "projects/$($_.id)" })
 }
 
 # Stage 7 client file. client.group names one group entry (groupDisplayName or groupId); the selector

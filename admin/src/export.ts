@@ -143,5 +143,9 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
     basis: "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.",
     filters: { project: filters.project, group: filters.group, developer: filters.developer, model: filters.model, backend: filters.backend,
       family: filters.family, classification: filters.classification, chargeback: filters.chargeback },
-  }, { "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX) }, label);
+  }, {
+    "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX),
+    // The CSV has no sources: covered history days not yet closed, comma-separated (empty: none).
+    ...(coverage ? { "x-ccof-history-open-days": coverage.open.join(",") } : {}),
+  }, label);
 }

@@ -371,6 +371,8 @@ $checkAt = $stage7Body.IndexOf('Assert-StgClientSignInMethod -Cfg $Cfg -AzureCli
 Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $stage7Body.IndexOf('if (-not $Apply)')) 'Stage 7 must check client.signInMethod before its preview and before any deployment step.'
 $stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
 $qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
+$groupsText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Groups.ps1')
+Assert-Contract ($groupsText -match 'Invoke-QsSeedThroughFunction -Ctx \$Ctx -Documents \$docs -KeepDiffering @\(\$GroupDocuments \| ForEach-Object \{ "projects/\$\(\$_\.id\)" \}\)') 'A Stage 7 rerun must keep group documents edited in the admin console (KeepDiffering), not fail on them.'
 Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'
 Assert-Contract ($stage5Body -match 'Get-StgGroupWorkbookRows' -and $qsParamsBody -match 'Select-StgBaselineGroups \$Cfg\.groups') 'Stage 5 must add group workbook rows; only baseline entries may reach the quickstart parameters.'
 # Council G-SEED fixes: backend reference, Entra group still present before the seed, Stage 8 selected group.
@@ -693,5 +695,7 @@ Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inboun
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
+# Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
+Assert-Contract ($resText -match "if \(\`$expectedSettings -cnotcontains 'AzureWebJobs\.snapshotApply\.Disabled'\)") 'The Stage 1 recheck must add the snapshot switch only when the Stage 5 record lacks it.'
 
 "Staged stages: $passed checks passed (4 stage boundaries, negative control, Cosmos contract, network-last order and layout migration, network verify mode, driver and configuration). No Azure calls."

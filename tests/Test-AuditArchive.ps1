@@ -249,4 +249,9 @@ Assert-Contract ($common -match 'logRetentionDays = \(Get-StgLogRetentionDays \$
 $qs = Get-Content -Raw (Join-Path $root 'infra\quickstart\Deploy-Quickstart.ps1')
 Assert-Contract ($qs -match 'retentionHeldFrom') 'The workbook answers must carry retentionHeldFrom when Stage 5 recorded one.'
 
+# Stage 7 and 8 depend on Stage 5's outputs, not its verify record (Get-StgOutputHash). Those outputs do not depend on
+# the archive, the workspace retention or chargeback history, so turning them on does not make Stages 7 and 8 rerun.
+Assert-Contract ($stage5 -match 'return @\{ gatewayUrl = \$out\.gatewayUrl; settingsWritten = \$out\.settingsWritten; workbookDeployed = \$out\.workbookDeployed; apimIdentityAppId = \$apimSp\.appId; verify = \$v \}') 'Stage 5 must return only the gateway URL, settings list, workbook flag and APIM identity besides its verify record.'
+Assert-Contract ($stage5Bicep -match "output settingsWritten array = concat\(\['resolver', 'sync', 'reconciler', 'resolver-auth'\], adminEnabled \? \['admin'\] : \[\]\)") 'The settings list Stage 5 records must depend only on whether the admin app exists.'
+
 "Audit archive: $passed checks passed (validation, names, hash, template, read-back, Stage 5 wiring). No Azure calls."

@@ -212,7 +212,8 @@ function Test-Stage1 {
         if ($a.key -ceq 'sync' -and $code) {
             $snapshotToggle = @($settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
             Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
-            $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled'
+            # Stage 5 writes it since council round 2 (app-settings.bicep); an older Stage 5 record lacks it.
+            if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
             $expectedSettings = @($expectedSettings | Sort-Object)
         }
         Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "$($a.service.name) application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"

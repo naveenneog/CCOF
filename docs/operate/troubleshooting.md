@@ -79,3 +79,23 @@ when the Azure error had one.
 | `historyShrinkRefused` above 0 | A day's recomputed total is lower than the stored one (a partial read, or rows the workspace has deleted); not written, the day stays open | None if it clears; a day that stays open is listed in `openDays` |
 | `historyBudgetDeferred` above 0 | Writes over the 1,000 per run limit, left for the next run; those days are not yet covered | None; it falls to 0 |
 | `historyCoverageWritten` | Months whose coverage record this run updated | Information only |
+
+## Old policy fragments
+
+Stage 5 deploys the gateway policy as policy fragments whose names end with a hash of their content
+([ADR-0039](../adr/0039-gateway-policy-fragments.md)). When a Stage 5 run renders a changed policy, the fragments of
+the previous policy stay in API Management; nothing uses them, and Stage 5 does not delete them ([roadmap](../ROADMAP.md)).
+To remove them, after Stage 5 has verified, with Azure CLI and API Management Contributor:
+
+```powershell
+$apim = az apim show -g <resource group> -n <API Management name> --query id -o tsv
+$v = 'api-version=2024-05-01'
+az rest --method get --url "$apim/policyFragments?$v" --query "value[].name" -o tsv
+# For each fragment named <apiId>-<section>-<12 hex characters> that the current policy does not include:
+az rest --method post --url "$apim/policyFragments/<name>/listReferences?$v" --query "length(value)"
+az rest --method delete --url "$apim/policyFragments/<name>?$v"   # only when listReferences returned 0
+```
+
+The current policy's fragment names are in `.staged-state/generated/gateway/<apiId>.policy.deployment.json` under
+`fragments` (each `id`). A fragment that an API revision still includes is listed by `listReferences`; keep it
+([list references](https://learn.microsoft.com/en-us/rest/api/apimanagement/policy-fragment/list-references)).

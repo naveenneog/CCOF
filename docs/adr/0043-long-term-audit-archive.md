@@ -95,6 +95,10 @@ history the admin app has neither `ADMIN_LOG_RETENTION_DAYS` nor `ADMIN_LOG_RETE
 flag uses the 90-day default (unchanged by this decision). The workbook now uses the effective retention
 (`Get-StgLogRetentionDays`) instead of `stage1.retentionInDays`.
 
+Turning the archive on in a running deployment needs Stage 5 only: no new code runs, and Stage 5's recorded
+outputs do not change, so Stages 7 and 8 are not asked to rerun (`Get-StgOutputHash` excludes the verify record;
+[Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).
+
 ## Integration with ADR-0044 (2026-10-25)
 
 The archive's Stage 5 hash input (`Get-StgAuditStageInput`) covers only `audit.archive` and `audit.workspaceRetentionDays`. `audit.chargebackHistory` is part of the Stage 2, 3 and 5 inputs by ADR-0044, so configuring it does change the Stage 5 hash; a configuration without any `audit` key, or with only `{ "enabled": false }` sections, keeps its earlier hashes ([Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).

@@ -329,3 +329,56 @@ test("a time to live longer than Cosmos DB holds is capped, and the coverage rec
   await run(pilot({ history }), "2026-10-11T13:00:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24855" });
   assert.deepEqual([history.writes[0].ttl, history.coverage.get("2026-10")?.expiresAt], [2_147_483_647, new Date(Date.parse("2026-10-11T13:00:00Z") + 2_147_483_647_000).toISOString()]);
 });
+
+// ---- every run-line field and reason the documentation names (council round 2, N1) ----
+test("a key that appears for a closed day is refused and counted as historyClosedRefused", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history, ledger: ledgerBody([charged("2026-10-05T12:00:00.0000000Z")]) });
+  await run(azure, "2026-10-08T01:00:00Z");
+  await run(azure, "2026-10-08T01:01:00Z");
+  assert.equal([...history.docs.values()].find((d) => d.day === "2026-10-05")?.closed, true);
+  azure.options.ledger = ledgerBody([charged("2026-10-05T12:00:00.0000000Z"), { ...charged("2026-10-05T13:00:00.0000000Z"), chargebackId: "WBS-200" }]);
+  const { runLine } = await run(azure, "2026-10-08T02:30:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyClosedRefused, runLine.historyClosedSkipped], ["written", 1, 1]);
+});
+
+test("an open day whose total would fall is not written and is counted as historyShrinkRefused", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history, ledger: ledgerBody([charged("2026-10-11T10:00:00.0000000Z"), charged("2026-10-11T11:00:00.0000000Z")]) });
+  await run(azure, "2026-10-11T12:00:00Z");
+  azure.options.ledger = ledgerBody([charged("2026-10-11T10:00:00.0000000Z")]);
+  const { runLine } = await run(azure, "2026-10-11T13:30:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyShrinkRefused, [...history.docs.values()][0].requests], ["written", 1, 2]);
+});
+
+test("writes beyond the per-run limit wait for the next run and are counted as historyBudgetDeferred", async () => {
+  const history = new MemoryHistory();
+  const many = Array.from({ length: 1000 }, (_, i) => ({ ...charged("2026-10-10T12:00:00.0000000Z"), chargebackId: `WBS-${i}` }));
+  const azure = pilot({ history, ledger: ledgerBody([...many, charged("2026-10-11T12:00:00.0000000Z")]) });
+  const { runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyWritten, runLine.historyBudgetDeferred], ["written", 1000, 1]);
+  assert.equal(history.coverage.get("2026-10")?.days["2026-10-11"], undefined, "a deferred day is not covered yet");
+});
+
+test("a history lease that cannot be written fails history with history_lease_unavailable and its code", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  const create = azure.leases.create.bind(azure.leases);
+  azure.leases.create = async (doc: Parameters<typeof create>[0]) => {
+    if (doc.id === HISTORY_LEASE) throw Object.assign(new Error("unavailable"), { code: 503 });
+    return create(doc);
+  };
+  const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([summary.outcome, runLine.historyOutcome, runLine.historyReason, runLine.historyErrorCode], ["written", "failed", "history_lease_unavailable", "503"]);
+});
+
+test("a failed read of the previous month's open days fails history with history_ledger_read_failed", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  azure.options.ledger = async () => {
+    if ((azure.queries.at(-1)?.timespan ?? "").startsWith("2026-10-")) throw Object.assign(new Error("timeout"), { code: 504 });
+    return ledgerBody([charged("2026-11-01T01:00:00.0000000Z")]);
+  };
+  const { summary, runLine } = await run(azure, "2026-11-01T02:00:00Z");
+  assert.deepEqual([summary.outcome, runLine.historyOutcome, runLine.historyReason], ["written", "failed", "history_ledger_read_failed"]);
+});

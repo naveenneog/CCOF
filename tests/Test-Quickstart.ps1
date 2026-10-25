@@ -93,7 +93,9 @@ $bad = Test-Json -Json '{"warnPercent":100,"overshootPercent":5,"projectionMinut
 Assert-True 'the Core answers schema accepts a budget guard in range and refuses warnPercent 100' ($ok -and -not $bad)
 # The quick-start's own settings, each named in ADR-0024: the switch of the registry seed function
 # (src/sync/registry-seed.ts), which the staged path never registers (it never sets CCOF_SEED_DOCUMENTS).
-$settingAdditions = @{ resolver = @(); sync = @('AzureWebJobs.registrySeed.Disabled'); reconciler = @() }
+# The snapshot apply function's switch too (src/sync/function-app.ts): Stage 7 leaves it true, and a later Stage 5,
+# which replaces the whole settings set, must keep it.
+$settingAdditions = @{ resolver = @(); sync = @('AzureWebJobs.registrySeed.Disabled', 'AzureWebJobs.snapshotApply.Disabled'); reconciler = @() }
 $adrText = Get-Content (Join-Path $root 'docs/adr/0024-single-administrator-quick-start.md') -Raw
 foreach ($app in @('resolver', 'sync', 'reconciler')) {
     $bicep = if ($compiled) { Find-Variable $compiled "${app}Settings" } else { $null }
@@ -110,6 +112,7 @@ foreach ($app in @('resolver', 'sync', 'reconciler')) {
     if ($app -eq 'sync') {
         Assert-True 'the registry seed function is disabled by default (AzureWebJobs.registrySeed.Disabled = true)' ($bicep['AzureWebJobs.registrySeed.Disabled'] -ceq 'true') "value '$($bicep['AzureWebJobs.registrySeed.Disabled'])'"
         Assert-True 'the seed documents are no deployment setting (step 5 sets CCOF_SEED_DOCUMENTS for the seed only)' (-not $bicep.Contains('CCOF_SEED_DOCUMENTS'))
+        Assert-True 'the snapshot apply function stays disabled after a settings deployment (AzureWebJobs.snapshotApply.Disabled = true)' ($bicep['AzureWebJobs.snapshotApply.Disabled'] -ceq 'true') "value '$($bicep['AzureWebJobs.snapshotApply.Disabled'])'"
     }
 }
 

@@ -47,8 +47,12 @@ already runs:
    [staged guide's role table](../STAGED-DEPLOYMENT-GUIDE.md): Storage Account Contributor on the resource group and
    Monitoring Contributor on the API Management service; with `audit.workspaceRetentionDays`, Log Analytics
    Contributor on the workspace.
-4. Stage 7 and then Stage 8 refuse with `stage_dependency_changed` because Stage 5 was rerun: preview and apply
-   Stage 7, then Stage 8.
+4. Nothing else is needed: the archive needs no new code, and Stage 5's recorded outputs (gateway URL, settings
+   list, workbook) do not change, so Stage 7 and Stage 8 are not asked to rerun. If a later Stage 7 or Stage 8 run
+   refuses with `stage_dependency_changed` (another Stage 5 change, such as the admin app), preview and apply
+   Stage 7, then Stage 8 ([Get-StgStage](../../infra/staged/Staged.Common.ps1)). A Stage 5 run whose rendered
+   gateway policy changed leaves the previous policy fragments in API Management; see
+   [old policy fragments](troubleshooting.md#old-policy-fragments).
 
 Stage 1 is not rerun.
 

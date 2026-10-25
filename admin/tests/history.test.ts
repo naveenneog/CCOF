@@ -186,7 +186,8 @@ test("filters history cannot apply, a partial-day history range and a missing st
   const missing = await call("export/usage?period=previous&format=json");
   assert.deepEqual([missing.status, (missing.jsonBody as Doc).error], [503, "chargeback_history_not_configured"]);
   const invalid = setup({ ...HISTORY_ENV, ADMIN_LOG_RETENTION_DAYS: "x" });
-  assert.equal((await invalid.call("export/usage?period=previous&format=json")).status, 503);
+  const refused = await invalid.call("export/usage?period=previous&format=json");
+  assert.deepEqual([refused.status, (refused.jsonBody as Doc).error], [503, "chargeback_history_settings_invalid"]);
 });
 
 test("a history range with a day history never covered is refused naming the days; covered days still open are listed", async () => {
@@ -205,6 +206,13 @@ test("a history range with a day history never covered is refused naming the day
   const open = setup(HISTORY_ENV, undefined, { "2026-09": { ...SEPTEMBER, "2026-09-30": "open" } });
   const json = await open.call("export/usage?period=previous&format=json");
   assert.deepEqual((json.jsonBody as { sources: Doc[] }).sources[0].openDays, ["2026-09-30"]);
+  // The CSV has no sources: its open days are in a response header, empty when there are none.
+  const csv = await open.call("export/usage?period=previous&format=csv");
+  assert.deepEqual([csv.status, csv.headers?.["x-ccof-history-open-days"]], [200, "2026-09-30"]);
+  const closed = await setup().call("export/usage?period=previous&format=csv");
+  assert.equal(closed.headers?.["x-ccof-history-open-days"], "");
+  const logsOnly = await setup().call("export/usage?period=month&format=csv");
+  assert.equal(logsOnly.headers?.["x-ccof-history-open-days"], undefined, "no history part: no header");
 });
 
 test("a history range with a day whose documents expired, or expire within a day, is refused naming the days", async () => {

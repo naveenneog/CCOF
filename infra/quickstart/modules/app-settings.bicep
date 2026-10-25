@@ -96,6 +96,9 @@ var syncSettings = {
   // The registry seed function (src/sync/registry-seed.ts) stays off; step 5 of Deploy-Quickstart.ps1
   // sets it to false with the seed documents, and back to true when it is done (ADR-0024).
   'AzureWebJobs.registrySeed.Disabled': 'true'
+  // The snapshot apply function (src/sync/snapshot-function.ts) stays off too: Invoke-SnapshotApplyThroughFunction.ps1
+  // sets it to false for its run and back to true. This resource replaces the whole set, so a rerun keeps it off.
+  'AzureWebJobs.snapshotApply.Disabled': 'true'
 }
 
 var reconcilerSettings = {
