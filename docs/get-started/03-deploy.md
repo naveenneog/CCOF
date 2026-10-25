@@ -66,7 +66,7 @@ These settings are not create-only, but the template's values differ from what t
 | `reconciler.timerEnabled` | `false` | `true`: the reconciler prices usage on its schedule |
 | `groups[].budget.perUser` | `25000` `CCU` | For example `100` `USD` |
 
-Every key, with where its value comes from and a lab example: [configuration reference](configuration.md). The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
+Every key, with create-new and reuse-existing JSON, the allowed values and a complete sample: [configuration reference](configuration.md). The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
 without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with
 `stage N preview only: nothing changed. Rerun with -Apply.`; Stage 0 is read-only and has no `-Apply` step.
 

@@ -2,7 +2,25 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-CONFIG-GUIDE — configuration reference page (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
+
+### G-CONFIG-GUIDE-2 — configuration reference reworked (complete, 2026-10-25)
+
+- Owner feedback: the page named only some keys and showed one `entra.existing` ID. Acceptance: for each reuse-or-create
+  choice (Entra applications, groups, Foundry and backends, network, API Management, Cosmos DB) both forms as JSON with
+  the lines the stage prints; every leaf key of the template in a table with required, template value, allowed values
+  and reader; one complete sample that `Read-StgConfig` accepts.
+- Pages: `configuration.md` (choices, commands, sample), `configuration-identity.md`, `configuration-resources.md` and
+  three `configuration-reference*.md` tables, each under the 15 KB reader-page limit.
+- Tests (`tests/docs-reader-pages.test.ts`): the template's leaf paths, arrays collapsed, must all be named on the
+  pages (failed first: the split pages did not exist); every JSON block parses; the sample block runs through
+  `Read-StgConfig` in `pwsh`. Negative: removing `gateway.keyVersion` failed the leaf test, a non-GUID `tenantId` in the
+  sample failed the sample test; both restored.
+- Facts read from `Resolve-StgApp`, `Invoke-Stage4`, Stage 0, `Read-StgConfig`, `main.bicep`, `stage6-network.bicep`,
+  `network.bicep`. Not code-verified: the Application Administrator role for reused applications (Learn), the meanings of
+  the gateway, resolver and reconciler tuning keys beyond their units.
+
+**Previous packet:** G-CONFIG-GUIDE — configuration reference page (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-CONFIG-GUIDE — configuration reference page (complete, 2026-10-25)
 
