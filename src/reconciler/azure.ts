@@ -11,7 +11,7 @@ import type { LeaseDocument, LeaseStore, LeaseWrite } from "./lease.ts";
 import { createLedgerQuery, logAnalyticsScope } from "./log-analytics.ts";
 import type { FetchLike } from "./log-analytics.ts";
 import type { ChargebackDailyDocument, StoredSummary } from "./history.ts";
-import { createCachedHistoryStore } from "./history-run.ts";
+import { HistoryConflictError, createCachedHistoryStore } from "./history-run.ts";
 import type { HistoryStore } from "./history-run.ts";
 import type { RunDependencies } from "./run.ts";
 import type { ReconcilerSettings } from "./settings.ts";
@@ -63,17 +63,32 @@ async function readAll(container: Container): Promise<unknown[]> {
 const fetchAdapter: FetchLike = (url, init) => fetch(url, init);
 
 // The chargeback history container (ADR-0044), partitioned on /month: summaries come from one single-partition
-// query of only the fields the plan needs.
+// query of only the fields the plan needs; a write creates (409: someone else did) or replaces If-Match (412).
 export function createHistoryStore(container: Container, now: () => Date): HistoryStore {
+  const fields = "c.id, c.day, c.chargebackId, c.projectId, c.classification, c.personId, c.model, c.contentHash, c.closed, c.requests, c.computedAt, c._etag";
+  type Row = { id: string; day: string; chargebackId: string; projectId: string; classification: string; personId: string; model: string; contentHash: string; closed: boolean; requests: number; computedAt: string; _etag: string };
   return createCachedHistoryStore(
     {
       async querySummaries(month) {
-        const query = { query: "SELECT c.id, c.contentHash, c.closed, c.requests, c.computedAt FROM c WHERE c.month = @month", parameters: [{ name: "@month", value: month }] };
-        const { resources } = await container.items.query<StoredSummary & { id: string }>(query, { partitionKey: month }).fetchAll();
-        return resources;
+        const query = { query: `SELECT ${fields} FROM c WHERE c.month = @month`, parameters: [{ name: "@month", value: month }] };
+        const { resources } = await container.items.query<Row>(query, { partitionKey: month }).fetchAll();
+        return resources.map((r): StoredSummary & { id: string } => ({
+          id: r.id,
+          key: { day: r.day, chargebackId: r.chargebackId, projectId: r.projectId, classification: r.classification, personId: r.personId, model: r.model },
+          contentHash: r.contentHash, closed: r.closed, requests: r.requests, computedAt: r.computedAt, etag: r._etag,
+        }));
       },
-      async upsert(doc: ChargebackDailyDocument) {
-        await container.items.upsert(doc);
+      async write(doc: ChargebackDailyDocument, etag: string | undefined) {
+        try {
+          const response = etag === undefined
+            ? await container.items.create(doc)
+            : await container.item(doc.id, doc.month).replace(doc, { accessCondition: { type: "IfMatch", condition: etag } });
+          return etagOf(response as { etag?: string; resource?: { _etag?: string } });
+        } catch (err) {
+          const status = statusOf(err);
+          if (status === 409 || status === 412) throw new HistoryConflictError();
+          throw err;
+        }
       },
     },
     now,

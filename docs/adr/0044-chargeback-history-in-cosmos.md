@@ -30,19 +30,23 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    SHA-256 of those six values. Fields: request counts (priced, partial, unpriced, unattributed), token sums and
    known-request counts per category, `listCcu` (list price, as the report) and `contractCcu` (the budget basis),
    rate card and contract schedule versions, `closed`, `computedAt` and `contentHash` (SHA-256 of every total and
-   `closed`). Rows without a valid attribution are kept with empty ids and counted as unattributed.
+   `closed`). Valid ids are kept even on unattributed rows, as the report keeps them; such rows are counted as
+   unattributed. Rows whose five token counts are all known and zero are left out, as the report leaves them out.
 3. **Writes** (pure planning in `src/reconciler/history.ts`, run in `src/reconciler/history-run.ts`), after the
    budget states, every run:
    - compute the documents of every day of the current month from the rows already read; during the first
      `closeAfterDays` + 1 days of a month, also read and compute the previous month's last `closeAfterDays` + 1
      days with one extra ledger query;
-   - a day closes once `closeAfterDays` whole days have passed after it; its document is written once with
-     `closed: true`;
-   - skip a document whose stored copy is closed (closed-day guard), whose stored request count is higher
-     (never lower a total), whose content hash is unchanged, or which is open and was written less than 60
-     minutes ago (cost bound, AUD-C1);
-   - stored hashes come from one single-partition query per month, cached in the host for 60 minutes and
-     updated after each write.
+   - plan each day as a whole, because a row can move to another document of its day when its trace arrives
+     later (AUD-C9): a stored document the run no longer computes is written with zero totals, and a day whose
+     total request count would fall is refused (never lower a total);
+   - a day closes once `closeAfterDays` whole days have passed after it; its documents are written once with
+     `closed: true`, and a closed document is never written again;
+   - skip a document whose content hash is unchanged; defer an open day's changes until its last write is 60
+     minutes old, all of the day together (cost bound, AUD-C1);
+   - stored summaries (key, hash, closed, requests, time, etag) come from one single-partition query per month,
+     cached in the host for 60 minutes; every write is a create or an If-Match replace on the cached etag, so an
+     instance with a stale cache gets a conflict instead of overwriting another instance's write (AUD-C10).
    A history failure never fails the budget run: the run line carries `historyOutcome` and its counts.
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
    neither; absent: off). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.

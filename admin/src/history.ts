@@ -131,7 +131,8 @@ export function historyRows(docs: readonly HistoryDoc[], filters: HistoryFilters
     entry.ccu = entry.ccu.plus(doc.listCcu);
     entry.versions.add(doc.rateCardVersion);
   }
-  return [...rows.values()].map(({ row, known, ccu, versions }) => {
+  // A key whose requests all moved to another key (src/reconciler/history.ts zeroes it) has no row, as in the report.
+  return [...rows.values()].filter(({ row }) => Number(row.requests) > 0).map(({ row, known, ccu, versions }) => {
     const knownCost = Number(row.pricedRequests) + Number(row.partialRequests) > 0 ? ccu.toFixed() : null;
     const completeness = completenessOf(row);
     const list = completeness === "complete" && Number(row.requests) > 0 ? knownCost : null;

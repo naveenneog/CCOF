@@ -96,6 +96,12 @@ foreach ($stage in 0..8) {
 $withOtherAudit = New-Cfg $null; $withOtherAudit.audit = @{ other = 1 }
 Assert-Contract ((Get-StgStageInput $withoutAudit 2) -ceq (Get-StgStageInput $withOtherAudit 2)) 'Other audit keys must not change the Stage 2 hash.'
 
+# Stage 2 read-back of the time to live.
+Assert-Contract ((Test-StgChargebackTtl (New-Cfg $good) $null) -and -not (Test-StgChargebackTtl (New-Cfg $good) 86400)) 'ttlDays null must read back as no defaultTtl.'
+$ttlCfg = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
+Assert-Contract ((Test-StgChargebackTtl $ttlCfg 34560000) -and -not (Test-StgChargebackTtl $ttlCfg $null) -and -not (Test-StgChargebackTtl $ttlCfg 86400)) 'ttlDays must read back as ttlDays x 86400 seconds.'
+Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Resources.ps1')) -match "Assert-Stg \(Test-StgChargebackTtl \`$Cfg \`$m\[0\]\.resource\.defaultTtl\)") 'Stage 2 must verify the chargebackDaily time to live.'
+
 # The example turns history on.
 $example = Get-Content -Raw (Join-Path $root 'infra\staged\staged.config.example.json') | ConvertFrom-Json -AsHashtable
 Assert-Contract ($example.audit.chargebackHistory.enabled -eq $true -and $example.audit.chargebackHistory.closeAfterDays -eq 2 -and $example.audit.chargebackHistory.ContainsKey('ttlDays')) 'The example must enable chargeback history with closeAfterDays 2 and show ttlDays.'

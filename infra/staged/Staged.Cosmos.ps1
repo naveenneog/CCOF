@@ -134,3 +134,10 @@ function Get-StgChargebackHistory {
     $retention = if ($Cfg.stage1.retentionInDays) { [int]$Cfg.stage1.retentionInDays } else { 30 }
     return @{ enabled = $true; closeAfterDays = [int]$h.closeAfterDays; ttlDays = $h.ttlDays; logRetentionDays = $retention }
 }
+
+# Stage 2 read-back: the container's defaultTtl is ttlDays in seconds, or absent when ttlDays is null.
+function Test-StgChargebackTtl {
+    param($Cfg, $DefaultTtl)
+    $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
+    return $(if ($null -eq $ttl) { $null -eq $DefaultTtl } else { $DefaultTtl -eq [long]$ttl * 86400 })
+}

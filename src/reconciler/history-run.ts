@@ -21,14 +21,25 @@ export interface HistoryStore {
   write(doc: ChargebackDailyDocument): Promise<void>;
 }
 
-// The Cosmos operations behind the store (azure.ts): one single-partition query and an upsert.
-export interface HistoryContainer {
-  querySummaries(month: string): Promise<Array<StoredSummary & { id: string }>>;
-  upsert(doc: ChargebackDailyDocument): Promise<void>;
+// Another writer changed the document since the summaries were read (Cosmos 409 on create, 412 on If-Match).
+export class HistoryConflictError extends Error {
+  constructor() {
+    super("history_conflict");
+    this.name = "HistoryConflictError";
+  }
 }
 
-// Summaries are read once per month and host instance every SUMMARY_CACHE_MINUTES (AUD-C1), and updated after each
-// successful write. Another instance's writes are seen at the next refresh; the plan's guards hold either way.
+// The Cosmos operations behind the store (azure.ts): one single-partition query, and a create (no etag) or an
+// If-Match replace (etag) that returns the new etag and throws HistoryConflictError on a conflict.
+export interface HistoryContainer {
+  querySummaries(month: string): Promise<Array<StoredSummary & { id: string }>>;
+  write(doc: ChargebackDailyDocument, etag: string | undefined): Promise<string>;
+}
+
+// Summaries are read once per month and host instance every SUMMARY_CACHE_MINUTES (AUD-C1) and updated after each
+// write. Writes are conditional on the cached etag, so an instance whose cache is behind another instance's writes
+// cannot overwrite them (a closed day stays closed): it gets a conflict, drops the month's cache and re-reads it on
+// the next run.
 export const SUMMARY_CACHE_MINUTES = 60;
 
 export function createCachedHistoryStore(container: HistoryContainer, now: () => Date): HistoryStore {
@@ -43,8 +54,14 @@ export function createCachedHistoryStore(container: HistoryContainer, now: () =>
       return summaries;
     },
     async write(doc) {
-      await container.upsert(doc);
-      cache.get(doc.month)?.summaries.set(doc.id, storedSummaryOf(doc));
+      const summaries = cache.get(doc.month)?.summaries;
+      try {
+        const etag = await container.write(doc, summaries?.get(doc.id)?.etag);
+        summaries?.set(doc.id, { ...storedSummaryOf(doc), etag });
+      } catch (error) {
+        if (error instanceof HistoryConflictError) cache.delete(doc.month);
+        throw error;
+      }
     },
   };
 }
@@ -95,6 +112,13 @@ export function previousMonthTail(period: BudgetPeriod, now: Date, closeAfterDay
   return { label: previous.label, start: new Date(period.start.getTime() - span), end: period.start };
 }
 
+// The UTC days from the day of `from` to the day of `through`, both included.
+function daysOf(from: Date, through: Date): string[] {
+  const days: string[] = [];
+  for (let at = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()); at <= through.getTime(); at += DAY_MS) days.push(new Date(at).toISOString().slice(0, 10));
+  return days;
+}
+
 async function readTail(input: HistoryStepInput, tail: BudgetPeriod): Promise<HistoryRow[]> {
   const query = buildLedgerQuery(input.ledgerKql, tail, input.gatewayResourceId);
   const answer = await input.queryLedger(query, `${tail.start.toISOString()}/${tail.end.toISOString()}`);
@@ -118,7 +142,10 @@ async function writeAll(docs: ChargebackDailyDocument[], store: HistoryStore, le
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, docs.length) }, worker));
-  if (failure !== undefined) throw new HistoryFailure(failure instanceof LeaseLostError ? "lease_lost" : "history_write_failed", failure);
+  if (failure !== undefined) {
+    const reason = failure instanceof LeaseLostError ? "lease_lost" : failure instanceof HistoryConflictError ? "history_conflict" : "history_write_failed";
+    throw new HistoryFailure(reason, failure);
+  }
   return written;
 }
 
@@ -136,13 +163,14 @@ export async function runHistoryStep(input: HistoryStepInput): Promise<HistoryLi
     if (store === undefined) throw new HistoryFailure("history_store_missing");
     const tail = previousMonthTail(input.period, input.now, input.closeAfterDays);
     const rows = tail === null ? input.rows : [...input.rows, ...(await step("history_ledger_read_failed", () => readTail(input, tail)))];
-    const options = { now: input.now, closeAfterDays: input.closeAfterDays, rateCardVersion: input.rateCard.version, contractScheduleVersion: input.schedule.version };
+    const coveredDays = new Set([...daysOf(input.period.start, input.now), ...(tail === null ? [] : daysOf(tail.start, new Date(tail.end.getTime() - 1)))]);
+    const options = { now: input.now, closeAfterDays: input.closeAfterDays, rateCardVersion: input.rateCard.version, contractScheduleVersion: input.schedule.version, coveredDays };
     const docs = buildDailyDocuments(rows, options);
-    const months = [...new Set(docs.map((d) => d.month))].sort();
+    const months = [...new Set([...coveredDays].map((day) => day.slice(0, 7)))].sort();
     const plans: HistoryPlan[] = [];
     for (const month of months) {
       const stored = await step("history_read_failed", () => store.readSummaries(month));
-      plans.push(planHistoryWrites(docs.filter((d) => d.month === month), stored, input.now));
+      plans.push(planHistoryWrites(docs.filter((d) => d.month === month), stored, options));
     }
     counts.historyDocuments = docs.length;
     for (const plan of plans) {

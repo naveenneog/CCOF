@@ -451,10 +451,7 @@ function Invoke-Stage2 {
         $m = @($actual | Where-Object { $_.name -ceq $c.name })
         Assert-Stg ($m.Count -eq 1) "container $($c.name) missing"
         Assert-Stg (@($m[0].resource.partitionKey.paths)[0] -ceq $c.partitionKey) "container $($c.name) partition key $(@($m[0].resource.partitionKey.paths)[0])"
-        if ($c.name -ceq 'chargebackDaily') {
-            $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
-            Assert-Stg ($m[0].resource.defaultTtl -eq $(if ($null -eq $ttl) { $null } else { [long]$ttl * 86400 })) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)"
-        }
+        if ($c.name -ceq 'chargebackDaily') { Assert-Stg (Test-StgChargebackTtl $Cfg $m[0].resource.defaultTtl) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)" }
         $v += [ordered]@{ name = $c.name; partitionKey = $c.partitionKey }
     }
     $docs = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount))

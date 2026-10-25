@@ -64,12 +64,14 @@ export interface ChargebackDailyDocument extends HistoryKey {
   contentHash: string;
 }
 
-// What the reconciler keeps of a stored document to plan the next write.
+// What the reconciler keeps of a stored document to plan the next write; etag, when known, makes the write conditional.
 export interface StoredSummary {
+  key: HistoryKey;
   contentHash: string;
   closed: boolean;
   requests: number;
   computedAt: string;
+  etag?: string;
 }
 
 export interface BuildOptions {
@@ -77,6 +79,12 @@ export interface BuildOptions {
   closeAfterDays: number;
   rateCardVersion: string;
   contractScheduleVersion: string;
+}
+
+// The days the run read whole (the current month to now, the previous month's open tail): only their stored
+// documents can be compared with what the run computed.
+export interface PlanOptions extends BuildOptions {
+  coveredDays: ReadonlySet<string>;
 }
 
 export interface HistoryPlan {
@@ -101,17 +109,20 @@ export function isDayClosed(day: string, now: Date, closeAfterDays: number): boo
   return now.getTime() >= Date.parse(`${day}T00:00:00Z`) + (1 + closeAfterDays) * DAY_MS;
 }
 
-function keyOf({ row, classified }: HistoryRow, day: string): HistoryKey {
-  const attributed = classified.attribution !== null;
+// Valid ids are kept even when the row is not attributed, as the report keeps them (analytics/workbooks/pricing.kql).
+function keyOf({ row }: HistoryRow, day: string): HistoryKey {
   return {
     day,
     chargebackId: valid(row.chargebackId, CHARGEBACK_ID),
-    projectId: attributed ? valid(row.projectId, ID) : "",
-    classification: attributed ? valid(row.classification, ID) : "",
-    personId: attributed ? valid(row.personId, GUID).toLowerCase() : "",
+    projectId: valid(row.projectId, ID),
+    classification: valid(row.classification, ID),
+    personId: valid(row.personId, GUID).toLowerCase(),
     model: valid(row.model, MODEL),
   };
 }
+
+// Every token count known and zero: no usage, left out as the report leaves it out (admin chargeback queries).
+const zeroUsage = (row: LedgerRow): boolean => CATEGORIES.every(([, column]) => row[column] === 0);
 
 interface Tally {
   key: HistoryKey;
@@ -163,49 +174,69 @@ function toDocument(tally: Tally, options: BuildOptions): ChargebackDailyDocumen
   };
 }
 
-// Rows refused before any backend call carry no usage and rows without a valid time have no day: both are left out.
+const emptyTally = (key: HistoryKey): Tally => ({
+  key,
+  counts: { requests: 0, pricedRequests: 0, partialRequests: 0, unpricedRequests: 0, unattributedRequests: 0 },
+  tokens: zeroTokens(),
+  known: zeroTokens(),
+  listCcu: new Money(0),
+  contractCcu: new Money(0),
+});
+
+// Rows without usage (refused before any backend call, or every token count zero) and rows without a valid time
+// (no day) are left out.
 export function buildDailyDocuments(rows: readonly HistoryRow[], options: BuildOptions): ChargebackDailyDocument[] {
   const tallies = new Map<string, Tally>();
   for (const historyRow of rows) {
-    if (historyRow.classified.outcome.kind === "no_usage") continue;
+    if (historyRow.classified.outcome.kind === "no_usage" || zeroUsage(historyRow.row)) continue;
     const timestamp = historyRow.row.timestamp;
     if (typeof timestamp !== "string" || !UTC_INSTANT.test(timestamp)) continue;
     const key = keyOf(historyRow, timestamp.slice(0, 10));
     const id = historyDocumentId(key);
-    let tally = tallies.get(id);
-    if (tally === undefined) {
-      tally = {
-        key,
-        counts: { requests: 0, pricedRequests: 0, partialRequests: 0, unpricedRequests: 0, unattributedRequests: 0 },
-        tokens: zeroTokens(),
-        known: zeroTokens(),
-        listCcu: new Money(0),
-        contractCcu: new Money(0),
-      };
-      tallies.set(id, tally);
-    }
+    const tally = tallies.get(id) ?? emptyTally(key);
+    tallies.set(id, tally);
     addRow(tally, historyRow);
   }
   return [...tallies.values()].map((tally) => toDocument(tally, options)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 export const storedSummaryOf = (doc: ChargebackDailyDocument): StoredSummary => ({
+  key: { day: doc.day, chargebackId: doc.chargebackId, projectId: doc.projectId, classification: doc.classification, personId: doc.personId, model: doc.model },
   contentHash: doc.contentHash,
   closed: doc.closed,
   requests: doc.requests,
   computedAt: doc.computedAt,
 });
 
-export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, now: Date): HistoryPlan {
+const sum = (values: Iterable<{ requests: number }>): number => [...values].reduce((n, v) => n + v.requests, 0);
+
+// A day is planned as a whole, because a row can move between documents of its day (a late trace adds its
+// chargeback ID or person): a stored document the run no longer computes is zeroed, a day whose total would fall is
+// refused, and an open day is rewritten only when its last write is OPEN_REWRITE_MINUTES old, all of it at once.
+// Closing writes are never deferred, and a closed document is never written again.
+export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, options: PlanOptions): HistoryPlan {
   const plan: HistoryPlan = { writes: [], unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 };
-  for (const doc of docs) {
-    const current = stored.get(doc.id);
-    if (current === undefined) plan.writes.push(doc);
-    else if (current.closed) plan.closedSkipped += 1;
-    else if (doc.requests < current.requests) plan.shrinkRefused += 1;
-    else if (doc.contentHash === current.contentHash) plan.unchanged += 1;
-    else if (!doc.closed && now.getTime() - Date.parse(current.computedAt) < OPEN_REWRITE_MINUTES * 60_000) plan.notDue += 1;
-    else plan.writes.push(doc);
+  const days = new Map<string, { docs: ChargebackDailyDocument[]; stored: Array<[string, StoredSummary]> }>();
+  const dayOf = (day: string) => days.get(day) ?? days.set(day, { docs: [], stored: [] }).get(day)!;
+  for (const doc of docs) dayOf(doc.day).docs.push(doc);
+  for (const entry of stored) if (options.coveredDays.has(entry[1].key.day)) dayOf(entry[1].key.day).stored.push(entry);
+  for (const [day, group] of days) {
+    const computed = new Set(group.docs.map((d) => d.id));
+    const zeroed = group.stored.filter(([id, s]) => !computed.has(id) && !s.closed).map(([, s]) => toDocument(emptyTally(s.key), options));
+    const all = [...group.docs, ...zeroed];
+    if (sum(all) < sum(group.stored.map(([, s]) => s))) {
+      plan.shrinkRefused += all.length;
+      continue;
+    }
+    const lastWrite = Math.max(...group.stored.map(([, s]) => Date.parse(s.computedAt)));
+    const due = isDayClosed(day, options.now, options.closeAfterDays) || !(options.now.getTime() - lastWrite < OPEN_REWRITE_MINUTES * 60_000);
+    for (const doc of all) {
+      const current = stored.get(doc.id);
+      if (current?.closed) plan.closedSkipped += 1;
+      else if (current?.contentHash === doc.contentHash) plan.unchanged += 1;
+      else if (!due) plan.notDue += 1;
+      else plan.writes.push(doc);
+    }
   }
   return plan;
 }

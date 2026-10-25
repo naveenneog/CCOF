@@ -37,6 +37,10 @@ function stored(doc: ChargebackDailyDocument, changes: Partial<StoredSummary> = 
   return new Map([[doc.id, { ...storedSummaryOf(doc), ...changes }]]);
 }
 
+// The plan for days the run read whole: every day of the documents and the stored summaries.
+const plan = (docs: ChargebackDailyDocument[], summaries: ReadonlyMap<string, StoredSummary>, now: string, closeAfterDays = 2) =>
+  planHistoryWrites(docs, summaries, { now: at(now), closeAfterDays, ...versions, coveredDays: new Set([...docs.map((d) => d.day), ...[...summaries.values()].map((s) => s.key.day)]) });
+
 test("one document per day, chargeback ID, group, classification, person and model, with summed totals", () => {
   const docs = build([
     row({ timestamp: "2026-10-11T08:00:00.0000000Z" }),
@@ -74,10 +78,12 @@ test("unknown token categories are not summed and are counted as known per categ
   assert.equal(doc.tokensKnownRequests.input, 2);
 });
 
-test("a row without attribution is kept with empty ids and counted as unattributed; an unpriced model is counted unpriced", () => {
-  const docs = build([row({ attributionKnown: false }), row({ model: "claude-unknown-9" })]);
+test("a row without attribution keeps its valid ids, as the report does, and is counted unattributed; an unpriced model is counted unpriced", () => {
+  const docs = build([row({ attributionKnown: false, model: "claude-haiku-4-5-20251001" }), row({ model: "claude-unknown-9" })]);
   const unattributed = docs.find((d) => d.unattributedRequests === 1);
-  assert.deepEqual([unattributed?.personId, unattributed?.projectId, unattributed?.classification], ["", "", ""]);
+  assert.deepEqual([unattributed?.personId, unattributed?.projectId, unattributed?.classification, unattributed?.requests], [PERSON_A, "CCOFPILOT01", "STD", 1]);
+  const [invalid] = build([row({ attributionKnown: false, personId: "not-a-guid" })]);
+  assert.equal(invalid.personId, "");
   const unpriced = docs.find((d) => d.model === "claude-unknown-9");
   assert.deepEqual([unpriced?.unpricedRequests, unpriced?.listCcu], [1, "0"]);
 });
@@ -103,9 +109,9 @@ test("the month boundary: rows of the last day of a month go to that month's par
 
 test("a new document is written; an unchanged one is skipped", () => {
   const [doc] = build([row()]);
-  assert.deepEqual(planHistoryWrites([doc], new Map(), at("2026-10-11T13:00:00Z")).writes.map((d) => d.id), [doc.id]);
-  const plan = planHistoryWrites([doc], stored(doc, { computedAt: "2026-10-11T10:00:00.000Z" }), at("2026-10-11T13:00:00Z"));
-  assert.deepEqual([plan.writes.length, plan.unchanged], [0, 1]);
+  assert.deepEqual(plan([doc], new Map(), "2026-10-11T13:00:00Z").writes.map((d) => d.id), [doc.id]);
+  const result = plan([doc], stored(doc, { computedAt: "2026-10-11T10:00:00.000Z" }), "2026-10-11T13:00:00Z");
+  assert.deepEqual([result.writes.length, result.unchanged], [0, 1]);
 });
 
 test("a late row changes the open day's totals and it is written again once the stored copy is old enough", () => {
@@ -113,9 +119,8 @@ test("a late row changes the open day's totals and it is written again once the 
   const later = build([row(), row({ ingestedAt: "2026-10-11T12:59:00.0000000Z" })]);
   const old = stored(first[0], { computedAt: "2026-10-11T11:59:00.000Z" });
   const recent = stored(first[0], { computedAt: "2026-10-11T12:30:00.000Z" });
-  const now = at("2026-10-11T13:00:00Z");
-  assert.equal(planHistoryWrites(later, old, now).writes[0]?.requests, 2);
-  const deferred = planHistoryWrites(later, recent, now);
+  assert.equal(plan(later, old, "2026-10-11T13:00:00Z").writes[0]?.requests, 2);
+  const deferred = plan(later, recent, "2026-10-11T13:00:00Z");
   assert.deepEqual([deferred.writes.length, deferred.notDue], [0, 1]);
   assert.equal(OPEN_REWRITE_MINUTES, 60);
 });
@@ -123,20 +128,58 @@ test("a late row changes the open day's totals and it is written again once the 
 test("closing a day writes it at once, even if the open copy was written a minute ago", () => {
   const open = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z" })], "2026-10-10T23:59:00Z");
   const closing = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z" })], "2026-10-11T00:00:00Z");
-  const plan = planHistoryWrites(closing, stored(open[0], { computedAt: "2026-10-10T23:59:00.000Z" }), at("2026-10-11T00:00:00Z"));
-  assert.equal(plan.writes[0]?.closed, true);
+  const result = plan(closing, stored(open[0], { computedAt: "2026-10-10T23:59:00.000Z" }), "2026-10-11T00:00:00Z");
+  assert.equal(result.writes[0]?.closed, true);
 });
 
 test("a closed day is never written again, even with more rows", () => {
   const [closedDoc] = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z" })], "2026-10-11T00:00:00Z");
   const more = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z" }), row({ timestamp: "2026-10-08T13:00:00.0000000Z" })], "2026-10-12T00:00:00Z");
-  const plan = planHistoryWrites(more, stored(closedDoc), at("2026-10-12T00:00:00Z"));
-  assert.deepEqual([plan.writes.length, plan.closedSkipped], [0, 1]);
+  const result = plan(more, stored(closedDoc), "2026-10-12T00:00:00Z");
+  assert.deepEqual([result.writes.length, result.closedSkipped], [0, 1]);
 });
 
 test("a document is never replaced by one with fewer requests (rows aged out or a short read)", () => {
   const [two] = build([row(), row()]);
   const [one] = build([row()]);
-  const plan = planHistoryWrites([one], stored(two, { computedAt: "2026-10-11T00:00:00.000Z" }), at("2026-10-11T13:00:00Z"));
-  assert.deepEqual([plan.writes.length, plan.shrinkRefused], [0, 1]);
+  const result = plan([one], stored(two, { computedAt: "2026-10-11T00:00:00.000Z" }), "2026-10-11T13:00:00Z");
+  assert.deepEqual([result.writes.length, result.shrinkRefused], [0, 1]);
+});
+
+test("a request with every token count known and zero is no usage, as in the report, and is left out", () => {
+  const docs = build([row({ input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 }), row({ input: 0, output: 0, cacheRead: null, cacheWrite5m: 0, cacheWrite1h: 0 })]);
+  assert.deepEqual(docs.map((d) => d.requests), [1]);
+});
+
+test("a row that moves to another key (its trace arrived later) is not counted twice: the old document is zeroed", () => {
+  const before = build([row({ requestId: "r-1", chargebackId: "" })]);
+  const first = plan(before, new Map(), "2026-10-11T13:00:00Z");
+  const summaries = new Map(first.writes.map((d) => [d.id, { ...storedSummaryOf(d), computedAt: "2026-10-11T11:00:00.000Z" }]));
+  const after = build([row({ requestId: "r-1", chargebackId: "WBS-100" })]);
+  const second = plan(after, summaries, "2026-10-11T13:00:00Z");
+  const byCharge = Object.fromEntries(second.writes.map((d) => [d.chargebackId, d.requests]));
+  assert.deepEqual(byCharge, { "": 0, "WBS-100": 1 });
+  assert.equal(second.writes.reduce((n, d) => n + d.requests, 0), 1);
+});
+
+test("a day is written as a whole: a recent write of the day defers every change of that day, including a moved row", () => {
+  const before = build([row({ chargebackId: "" })]);
+  const summaries = new Map(before.map((d) => [d.id, { ...storedSummaryOf(d), computedAt: "2026-10-11T12:30:00.000Z" }]));
+  const after = build([row({ chargebackId: "WBS-100" })]);
+  const deferred = plan(after, summaries, "2026-10-11T13:00:00Z");
+  assert.deepEqual([deferred.writes.length, deferred.notDue], [0, 2]);
+});
+
+test("closing a day closes a document whose rows moved away, with zero totals", () => {
+  const before = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "" })], "2026-10-09T00:00:00Z");
+  const summaries = new Map(before.map((d) => [d.id, storedSummaryOf(d)]));
+  const after = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "WBS-100" })], "2026-10-11T00:00:00Z");
+  const closing = plan(after, summaries, "2026-10-11T00:00:00Z");
+  assert.deepEqual(closing.writes.map((d) => [d.chargebackId, d.requests, d.closed]).sort(), [["", 0, true], ["WBS-100", 1, true]]);
+});
+
+test("a stored document of a day the run did not read is left alone", () => {
+  const [old] = build([row({ timestamp: "2026-09-30T12:00:00.0000000Z" })], "2026-10-01T00:00:00Z");
+  const result = planHistoryWrites([], new Map([[old.id, storedSummaryOf(old)]]), { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-11"]) });
+  assert.equal(result.writes.length, 0);
 });

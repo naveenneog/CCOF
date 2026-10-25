@@ -76,6 +76,11 @@ test("history rows: one per chargeback ID, group and person, filtered, with the 
   assert.deepEqual(byGroup.map((r) => r.person).sort(), [P1, P2]);
 });
 
+test("a zeroed document (its request moved to another key) adds no row", () => {
+  const zero = doc("2026-09-04", { chargebackId: "", requests: 0, pricedRequests: 0, listCcu: "0", tokensKnownRequests: { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 } });
+  const rows = historyRows([zero, doc("2026-09-04")], { project: "", group: "", developer: "", model: "", family: "", classification: "", chargeback: "" }, [], { from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z" });
+  assert.deepEqual(rows.map((r) => r.chargebackId), ["WBS-1"]);
+});
 test("merging adds counts, tokens and amounts by key and empties columns history cannot fill", () => {
   const history = historyRows([doc("2026-09-30")], { project: "", group: "", developer: "", model: "", family: "", classification: "", chargeback: "" }, [], { from: "2026-09-01T00:00:00.000Z", to: "2026-10-10T00:00:00.000Z" });
   const laColumns = ["chargebackId", "projectLabel", "person", "requests", "knownListCcu", "listCcu", "knownListUsd", "listUsd", "inputTokens", "failedRequests", "completeness"];
