@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-10-25 — Resume after lost local state
+
+- Stage 1 read-back no longer fails when the local state was lost after Stage 6 integrated the Function Apps with
+  the network. Without a Stage 6 record it accepts no integration or the Functions subnet the configuration names;
+  with a record, only that record's subnet.
+- Troubleshooting: Azure Cloud Shell idle timeout during Stages 6 and 7, recovery after Cloud Shell lost `$HOME`,
+  and the Stage 1 `verify_failed … VNet subnet` error.
+
+## 2026-10-25 — Configuration reference reworked
+
+- The configuration reference is now six pages: an overview with a complete sample, Entra and group forms, resource
+  forms (Foundry, network, API Management, Cosmos DB) and three tables of every template key.
+- Each reuse-or-create choice shows both forms as JSON and the lines the stage prints. The three `entra.existing` IDs
+  (`gatewayAppId`, `resolverAppId`, `adminAppId`) are each optional; what Stage 4 changes on a reused application is listed.
+- Network forms for `create`, `existing` and `verify`, with `infra/prereqs/network.bicep` and a parameters file.
+- Tests: all leaf keys of the template must be on the pages; the sample runs through `Read-StgConfig`.
+
 ## 2026-10-25 — Configuration reference
 
 - New page [configuration.md](get-started/configuration.md): each key of the staged configuration template that holds a

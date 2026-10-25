@@ -2,7 +2,42 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-CONFIG-GUIDE — configuration reference page (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
+
+### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)
+
+- Live evidence (user run, 2026-10-25): Azure Cloud Shell without persistent storage lost `$HOME`, including
+  `.staged-state`, during Stage 6. After a fresh clone, Stage 1 failed with
+  `verify_failed: <app> VNet subnet is '/subscriptions/.../subnets/snet-functions', expected '' for completed stages`:
+  Stage 6 had already integrated the Function Apps, and with no Stage 6 record the read-back accepted only no integration.
+- Acceptance: with a Stage 6 record, Stage 1 accepts only that record's Functions subnet; without one, it accepts no
+  integration or the Functions subnet the configuration names (`network.existing.functionsSubnetId`, or in create mode
+  the subnet built from `network.create.vnetName` and `subnets.functions.name`). Any other subnet still fails.
+- Code: `Get-StgAllowedFunctionsSubnets` in `infra/staged/Staged.Common.ps1`, used by `Test-Stage1` in
+  `infra/staged/Staged.Resources.ps1`. Three rows added to [troubleshooting](operate/troubleshooting.md): Cloud Shell
+  idle timeout, recovery after lost `$HOME`, and this error.
+- Checks: `tests/Test-StagedStages.ps1` 499 checks pass (a mutation that dropped the `''` case was caught); docs tests
+  27/27; packet gate PASS (23 passed, 2 warned, 0 failed, includes `npm test`), all in a logged-out Azure CLI profile.
+
+**Previous packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
+
+### G-CONFIG-GUIDE-2 — configuration reference reworked (complete, 2026-10-25)
+
+- Owner feedback: the page named only some keys and showed one `entra.existing` ID. Acceptance: for each reuse-or-create
+  choice (Entra applications, groups, Foundry and backends, network, API Management, Cosmos DB) both forms as JSON with
+  the lines the stage prints; every leaf key of the template in a table with required, template value, allowed values
+  and reader; one complete sample that `Read-StgConfig` accepts.
+- Pages: `configuration.md` (choices, commands, sample), `configuration-identity.md`, `configuration-resources.md` and
+  three `configuration-reference*.md` tables, each under the 15 KB reader-page limit.
+- Tests (`tests/docs-reader-pages.test.ts`): the template's leaf paths, arrays collapsed, must all be named on the
+  pages (failed first: the split pages did not exist); every JSON block parses; the sample block runs through
+  `Read-StgConfig` in `pwsh`. Negative: removing `gateway.keyVersion` failed the leaf test, a non-GUID `tenantId` in the
+  sample failed the sample test; both restored.
+- Facts read from `Resolve-StgApp`, `Invoke-Stage4`, Stage 0, `Read-StgConfig`, `main.bicep`, `stage6-network.bicep`,
+  `network.bicep`. Not code-verified: the Application Administrator role for reused applications (Learn), the meanings of
+  the gateway, resolver and reconciler tuning keys beyond their units.
+
+**Previous packet:** G-CONFIG-GUIDE — configuration reference page (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-CONFIG-GUIDE — configuration reference page (complete, 2026-10-25)
 
@@ -18,6 +53,7 @@
 
 **Previous packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
 
+- Public release 14: `5604486` on `naveenneog/CCOF` `main`, the `e5e7d8d..f368d2d` diff applied with no conflicts. Scrub check: 10 matches, all hypothetical `contoso` examples (3 new on the configuration page, kept as written). No real lab identifier in the public tree; gitleaks: the 3 known `projectApi` false positives; docs tests 25/25; public CI run `40195975284` success.
 ### G-NOVICE — first-time reader deployment (complete, 2026-10-25)
 
 - Acceptance: a reader following only the README and get-started pages reaches Stage 8 and a working developer

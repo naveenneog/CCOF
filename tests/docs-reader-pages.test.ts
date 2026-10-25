@@ -3,7 +3,8 @@
 // quotes are lines the scripts print.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -175,30 +176,86 @@ test("developer setup has one sign-in step for both sign-in methods, and the met
   assert.match(decide, /\| Developer sign-in \|[^\n]*`client\.signInMethod`[^\n]*`entra\.allowAzureCliClient(: true)?`/);
 });
 
-test("the configuration page names every REPLACE- key and every decision key of the template, and is linked", () => {
+const configPages = ["configuration", "configuration-identity", "configuration-resources", "configuration-reference", "configuration-reference-2", "configuration-reference-3"].map((n) => `docs/get-started/${n}.md`);
+const configText = () => configPages.map((p) => read(p)).join("\n");
+
+// Leaf key paths of the template, arrays collapsed to []; map keys that are model or family names are generic.
+const templateLeafPaths = (): string[] => {
   const template = JSON.parse(read("infra/staged/staged.config.example.json"));
-  const replaced: string[] = [];
+  const out = new Set<string>();
   const walk = (value: unknown, at: string): void => {
-    if (typeof value === "string") { if (value.includes("REPLACE-")) replaced.push(at); return; }
-    if (Array.isArray(value)) { value.forEach((v) => walk(v, `${at}[]`)); return; }
-    if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) walk(v, at ? `${at}.${k}` : k);
+    if (Array.isArray(value)) { if (!value.length) out.add(at); else value.forEach((v) => walk(v, `${at}[]`)); return; }
+    if (value && typeof value === "object") {
+      const entries = Object.entries(value);
+      if (!entries.length) out.add(at);
+      for (const [k, v] of entries) walk(v, at ? `${at}.${k}` : k);
+      return;
+    }
+    out.add(at);
   };
   walk(template, "");
-  const decisions = ["tenantId", "subscriptionId", "resourceGroup", "location", "stage1.prefix", "stage1.approveNewPublicApimBootstrap",
-    "stage1.apimPublisherEmail", "stage1.apimPublisherName", "stage1.functionsPublicNetworkAccess", "stage1.cosmosLocations",
-    "stage1.cosmosCapacityMode", "stage1.foundry.create", "stage1.foundry.accountName", "stage1.foundry.deployments",
-    "stage1.foundry.modelProviderData", "network.mode", "network.existing", "network.create", "apim.existing", "backends[].id",
-    "backends[].subscriptionId", "backends[].resourceGroup", "backends[].accountName", "backends[].url", "backends[].deploymentInferenceGeo",
-    "backends[].privateEndpoint", "entra.existing", "entra.allowAzureCliClient", "entra.adminEditors", "groups[].groupId",
-    "groups[].groupDisplayName", "groups[].budget", "groups[].familyPolicy", "groups[].chargebackId", "client.group", "client.signInMethod",
-    "client.models", "resolver.budgetEnforcement", "reconciler.timerEnabled", "sync.mode", "syncTimerEnabled", "workbook.resourceName", "acceptance"];
-  assert.ok(replaced.length >= 8, "the template still holds REPLACE- values");
-  const page = "docs/get-started/configuration.md";
-  assert.ok(existsSync(path.join(root, page)), `${page} exists`);
-  const text = read(page);
-  const missing = [...new Set([...replaced, ...decisions])].filter((k) => !text.includes(`\`${k}\``));
-  assert.deepEqual(missing, [], "keys the configuration page does not name");
-  assert.ok(text.split("\n").length < 400, "the configuration page stays under 400 lines");
+  return [...out].map((p) => p.replace(/deploymentInferenceGeo\.[^.]+$/, "deploymentInferenceGeo.<deployment>").replace(/families\.(haiku|sonnet)\b/, "families.<family>"));
+};
+
+test("the configuration pages name every leaf key of the template and the decision keys", () => {
+  const decisions = ["stage1.cosmosLocations", "stage1.foundry.deployments", "stage1.foundry.modelProviderData", "network.existing", "network.create",
+    "network.existing.privateDnsZoneIds.cosmos", "network.existing.privateDnsZoneIds.blob", "network.existing.privateDnsZoneIds.foundry.cognitiveServices",
+    "network.existing.privateDnsZoneIds.foundry.openAi", "network.existing.privateDnsZoneIds.foundry.aiServices", "apim.existing.name", "apim.existing.subscriptionId",
+    "apim.existing.resourceGroup", "entra.existing.gatewayAppId", "entra.existing.resolverAppId", "entra.existing.adminAppId", "groups[].groupId",
+    "backends[].deploymentInferenceGeo", "groups[].budget", "groups[].familyPolicy", "acceptance", "acceptance.expectedGroup"];
+  for (const p of configPages) assert.ok(existsSync(path.join(root, p)), `${p} exists`);
+  const text = configText();
+  const missing = [...new Set([...templateLeafPaths(), ...decisions])].filter((k) => !text.includes(`\`${k}\``));
+  assert.deepEqual(missing, [], "keys the configuration pages do not name");
+  for (const p of configPages) assert.ok(read(p).split("\n").length < 400, `${p} stays under 400 lines`);
+});
+
+test("the configuration pages are linked and show create and reuse JSON for every reuse-or-create choice", () => {
   assert.match(read("docs/get-started/03-deploy.md").split("## Stage 0")[0], /\]\(configuration\.md\)/, "linked from Before Stage 0");
   assert.match(read("docs/INDEX.md"), /\]\(get-started\/configuration\.md\)/, "linked from the documentation map");
+  const overview = read(configPages[0]);
+  for (const p of configPages.slice(1)) assert.ok(overview.includes(`](${path.basename(p)})`), `configuration.md links ${path.basename(p)}`);
+  const identity = read("docs/get-started/configuration-identity.md");
+  for (const key of ["gatewayAppId", "resolverAppId", "adminAppId"]) assert.ok(identity.includes(`"${key}"`), `an Entra snippet shows ${key}`);
+  for (const line of ["reuse existing gateway application", "reuse application '", "created application '", "created group "]) assert.ok(identity.includes(line), `identity page quotes "${line}"`);
+  const stages = readdirSync(path.join(root, "infra/staged")).filter((f) => f.startsWith("Staged.")).map((f) => read(`infra/staged/${f}`)).join("\n");
+  for (const fragment of ["reuse existing $Kind application", "reuse application '$DisplayName'", "created application '$DisplayName'", "created group $($g.groupDisplayName)", "lacks deployments"]) {
+    assert.ok(stages.includes(fragment), `a staged script prints "${fragment}"`);
+  }
+  const resources = read("docs/get-started/configuration-resources.md");
+  for (const heading of ["## Foundry and backends", "## Network", "## API Management"]) {
+    assert.ok(resources.includes(heading), `resources page has ${heading}`);
+    const section = resources.split(heading)[1].split("\n## ")[0];
+    assert.ok(/Create new/.test(section) && /Reuse existing|Existing/.test(section), `${heading} shows both choices`);
+    assert.ok((section.match(/```json/g) ?? []).length >= 2, `${heading} has at least two JSON snippets`);
+  }
+  const cosmos = resources.split("## Cosmos DB")[1];
+  assert.ok(/One region, serverless/.test(cosmos) && /Two regions, provisioned/.test(cosmos), "Cosmos DB shows one and two regions");
+  assert.ok((cosmos.match(/```json/g) ?? []).length >= 2, "Cosmos DB has two JSON snippets");
+  assert.ok(resources.includes("infra/prereqs/network.bicep"), "the network section points at the network module");
+});
+
+test("every JSON block on the configuration pages parses, and the complete sample passes Read-StgConfig", () => {
+  for (const p of configPages) {
+    for (const m of read(p).matchAll(/```json\r?\n([\s\S]*?)```/g)) {
+      const body = m[1].trim();
+      assert.doesNotThrow(() => JSON.parse(body.startsWith("{") ? body : `{${body}}`), `${p}: a JSON block parses`);
+    }
+  }
+  const overview = read(configPages[0]);
+  const section = overview.split("## Complete sample")[1];
+  assert.ok(section, "configuration.md has a Complete sample section");
+  const sample = /```json\r?\n([\s\S]*?)```/.exec(section)?.[1];
+  assert.ok(sample, "the Complete sample section holds a JSON block");
+  assert.doesNotMatch(sample, /REPLACE-/, "the sample holds no placeholder");
+  const dirPath = mkdtempSync(path.join(tmpdir(), "ccof-config-sample-"));
+  try {
+    const file = path.join(dirPath, "staged.config.json");
+    writeFileSync(file, sample);
+    const script = `. '${path.join(root, "infra/staged/Invoke-StagedDeployment.ps1")}' -DotSourceOnly; $null = Read-StgConfig '${file}'; 'sample accepted'`;
+    const output = execFileSync("pwsh", ["-NoProfile", "-Command", script], { cwd: root, encoding: "utf8" });
+    assert.match(output, /sample accepted/);
+  } finally {
+    rmSync(dirPath, { recursive: true, force: true });
+  }
 });

@@ -18,7 +18,8 @@
 - [x] G-NOVICE: a first-time reader deploys from the README alone ([evidence](evidence/2026-10-25-novice/README.md)); each failure met is recorded with a capture and either refused at Stage 0 or explained on the page where it is met; one developer sign-in step for both sign-in methods.
 - [ ] G-CCMODEL: resolve CC-01 (Claude Code model-catalog notice for deployment names).
 - [x] G-CONFIG-GUIDE: configuration reference page for every staged configuration key, with a test that follows the template.
-
+- [x] G-CONFIG-GUIDE-2: configuration reference reworked: create-new and reuse-existing JSON per choice, every template key in a table, a validated complete sample.
+- [x] G-RESUME: Stage 1 read-back after lost local state accepts the configured Functions subnet when Stage 6 has no record; troubleshooting rows for Cloud Shell timeout and lost `$HOME`.
 | Packet | Status | Acceptance |
 | --- | --- | --- |
 | G0 — Baseline and contract | Complete | ADR-0033 records the baseline model; ADR-0034 records the decision; unknowns logged |
