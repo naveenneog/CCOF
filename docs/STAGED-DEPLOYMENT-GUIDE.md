@@ -401,7 +401,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** creates the `ccof` database and eight containers: `entitlement`, `projects` (group
   documents live here), `subscriptionIndex`, `budgetState`, `aggregateBudgetState`, `syncLease`,
   `reconcilerLease`, `backends`; plus `adminConfig` when the admin app is included
-  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)).
+  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)). With `audit.chargebackHistory.enabled: true` it also
+  creates `chargebackDaily` ([chargeback history](operate/chargeback-history.md)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 2`, preview then `-Apply`.
 - **Portal:** workbook section 08 (Cosmos DB → Data Explorer).
@@ -413,7 +414,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** gives each managed identity the least access it needs: storage and metrics for each app,
   Cosmos SQL roles per container, Log Analytics Reader for the reconciler and admin, and Cognitive
   Services User for APIM on each Foundry account
-  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)).
+  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)). With chargeback history it also grants the reconciler
+  write access to `chargebackDaily` and the admin app read access.
 - **Who:** access administrator.
 - **Cloud Shell:** `-Stage 3`, preview then `-Apply`.
 - **Portal:** workbook section 15 (Access control (IAM) per resource; Cosmos data-plane roles through
@@ -444,7 +446,11 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   second diagnostic setting `ccof-gateway-archive` (GatewayLogs, GatewayLlmLogs to storage); with
   `audit.workspaceRetentionDays` it sets the Log Analytics retention, which Stage 1 cannot change on an existing
   install ([ADR-0043](adr/0043-long-term-audit-archive.md), [audit archive](operate/audit-archive.md)). An existing
-  install gets the archive by adding the `audit` section and rerunning Stage 5; Stage 1 is not rerun.
+  install gets the archive by adding the `audit.archive` block and rerunning Stage 5, then Stage 7 and Stage 8,
+  which refuse with `stage_dependency_changed` until rerun; Stage 1 is not rerun. With
+  `audit.chargebackHistory.enabled: true` it writes the reconciler's and admin app's history settings; history needs
+  `reconciler.timerEnabled: true`. An existing install turns history on with Stages 2, 3, 5, 7 and 8 in that order,
+  from an updated checkout ([chargeback history](operate/chargeback-history.md#turn-on-in-an-existing-deployment)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 5`, preview then `-Apply`. The preview prints one `audit archive:` line (account,
   region, retention, immutability, SKU, workspace retention, or `off`).
