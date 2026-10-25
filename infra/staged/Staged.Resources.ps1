@@ -441,12 +441,18 @@ function Invoke-Stage6 {
 function Invoke-Stage2 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1
+    $listContainers = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName)) }
+    if (Get-StgChargebackHistory $Cfg) {
+        # A first run has no database yet, so no container to compare.
+        $before = try { & $listContainers } catch { if ("$_" -match 'NotFound') { @() } else { throw } }
+        if ($problem = Get-StgChargebackTtlTransitionProblem -Cfg $Cfg -Containers $before) { throw $problem }
+    }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
         autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
         chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }
     if (-not $Apply) { return $null }
-    $actual = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName))
+    $actual = & $listContainers
     $v = @()
     foreach ($c in $out.containers) {
         $m = @($actual | Where-Object { $_.name -ceq $c.name })

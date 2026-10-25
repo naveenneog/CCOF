@@ -64,6 +64,13 @@ function Get-StgLogRetentionDays {
     return 30
 }
 
+function Get-StgLogRetentionSettings {
+    # The stage5-config.bicep logRetention parameter: the admin app's ADMIN_LOG_RETENTION_DAYS and, when Stage 5 raised
+    # the retention, ADMIN_LOG_RETENTION_HELD_FROM. Written on every Stage 5 run, with chargeback history on or off.
+    param($Cfg, [string]$HeldFrom)
+    return [ordered]@{ days = (Get-StgLogRetentionDays $Cfg); heldFrom = $HeldFrom }
+}
+
 function Get-StgAuditArchiveName {
     # Stage 1 storage names are <prefix><uniqueString><app suffix> (main.bicep): the archive uses suffix aud.
     param($Names)
@@ -137,6 +144,36 @@ function Get-StgRecordedRetentionHeldFrom {
         if ($doc.RootElement.TryGetProperty('heldFrom', [ref]$element) -and $element.ValueKind -eq [Text.Json.JsonValueKind]::String) { return $element.GetString() }
         return $null
     } finally { $doc.Dispose() }
+}
+
+function Get-StgPreviousRetentionHeldFrom {
+    # The instant the last Stage 5 recorded. Without evidence/stage5.retention.json (the state folder was lost, R3-4),
+    # the instant the deployment carries now, so a later Stage 5 does not drop it. A present file is used as it is,
+    # even with no instant. A read failure other than a missing workbook stops Stage 5.
+    param($Cfg, $Names, [string]$Path = (Join-Path $script:StateDir 'evidence/stage5.retention.json'))
+    if (Test-Path -LiteralPath $Path) { return Get-StgRecordedRetentionHeldFrom $Path }
+    $settings = if ($Cfg.stage1.includeAdmin) {
+        Invoke-StgAzJson @('functionapp', 'config', 'appsettings', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--name', $Names.apps.admin.functionApp)
+    } else { @() }
+    $content = $null
+    if ($Cfg.workbook.resourceName) {
+        # serializedData is returned only with canFetchContent=true (Microsoft.Insights/workbooks GET); az rest adds it,
+        # as Invoke-QsAz refuses & in an argument.
+        $url = "https://management.azure.com/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Insights/workbooks/$($Cfg.workbook.resourceName)?api-version=2023-06-01"
+        try { $content = [string](Invoke-StgAzJson @('rest', '--method', 'get', '--url', $url, '--url-parameters', 'canFetchContent=true', '--headers', 'Accept=application/json')).properties.serializedData }
+        catch { if ("$_" -notmatch 'NotFound') { throw } }
+    }
+    return Get-StgDeployedRetentionHeldFrom -AdminSettings $settings -WorkbookContent $content
+}
+
+function Get-StgDeployedRetentionHeldFrom {
+    # The later of ADMIN_LOG_RETENTION_HELD_FROM (az functionapp config appsettings list) and the instant in the
+    # workbook's retention cut (analytics/workbooks/queries.ts retentionCut); $null when neither holds one.
+    param($AdminSettings, [string]$WorkbookContent)
+    $found = @(@($AdminSettings | Where-Object { $_.name -ceq 'ADMIN_LOG_RETENTION_HELD_FROM' -and $_.value } | ForEach-Object { [string]$_.value }) +
+        @([regex]::Matches([string]$WorkbookContent, 'max_of\(ReportNow - \d+ \* 1d, datetime\((\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\)\)') | ForEach-Object { $_.Groups[1].Value }))
+    if (-not $found.Count) { return $null }
+    return @($found | Sort-Object { [DateTimeOffset]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) })[-1]
 }
 
 function Get-StgAuditArchiveProblems {

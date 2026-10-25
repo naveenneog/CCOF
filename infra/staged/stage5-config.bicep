@@ -38,8 +38,10 @@ param sync object
 param reconciler object
 param budgetState object = { graceSeconds: 900, hardLimitSeconds: 3600 }
 param syncTimerEnabled bool = false
-@description('audit.chargebackHistory (ADR-0044): enabled, closeAfterDays, ttlDays, logRetentionDays, logRetentionHeldFrom (ADR-0043; empty: none). Empty: off.')
+@description('audit.chargebackHistory (ADR-0044): enabled, closeAfterDays, ttlDays, logRetentionDays. Empty: off.')
 param chargebackHistory object = {}
+@description('Admin app log retention (ADR-0043), with or without history: days (effective workspace retention), heldFrom (empty: none). Empty: no setting.')
+param logRetention object = {}
 
 param resolverApiAppId string
 param apimIdentityAppId string
@@ -163,12 +165,15 @@ resource adminInsights 'Microsoft.Insights/components@2020-02-02' existing = if 
 // Admin app settings (docs/ADMIN-V3.md Settings, docs/archive/ADMIN-QUICK-STAGES.md 4g). One shared
 // workspace: the reconciler logs through its diagnostic setting (site id), the admin audit through its
 // Application Insights component.
-// Chargeback history (ADR-0044): the export reads months before the workspace retention from chargebackDaily. After
-// Stage 5 raised the retention, the oldest instant the workspace then held (ADR-0043): deleted rows do not come back.
-var adminHistorySettings = (chargebackHistory.?enabled ?? false) ? union({
+// Chargeback history (ADR-0044): the export reads months before the workspace retention from chargebackDaily.
+var adminHistorySettings = (chargebackHistory.?enabled ?? false) ? {
   ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'
-  ADMIN_LOG_RETENTION_DAYS: string(chargebackHistory.logRetentionDays)
-}, empty(chargebackHistory.?logRetentionHeldFrom ?? '') ? {} : { ADMIN_LOG_RETENTION_HELD_FROM: chargebackHistory.logRetentionHeldFrom }) : {}
+} : {}
+// The effective workspace retention and, after Stage 5 raised it, the oldest instant the workspace then held (ADR-0043:
+// deleted rows do not come back). Chargeback reports use them with history on or off.
+var adminRetentionSettings = empty(logRetention) ? {} : union({
+  ADMIN_LOG_RETENTION_DAYS: string(logRetention.days)
+}, empty(logRetention.?heldFrom ?? '') ? {} : { ADMIN_LOG_RETENTION_HELD_FROM: logRetention.heldFrom })
 resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnabled) {
   parent: adminSite
   name: 'appsettings'
@@ -201,7 +206,7 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     ADMIN_CLIENT_ID: admin.?clientId ?? ''
     ADMIN_GATEWAY_URL: admin.?gatewayUrl ?? ''
     ADMIN_PROJECT_HEADER: admin.?projectHeader ?? 'x-ccof-project'
-  }, adminHistorySettings)
+  }, adminRetentionSettings, adminHistorySettings)
 }
 
 output gatewayUrl string = '${api.outputs.gatewayUrl}/${apim.apiPath}'

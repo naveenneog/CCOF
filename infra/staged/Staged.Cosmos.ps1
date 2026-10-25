@@ -144,3 +144,20 @@ function Test-StgChargebackTtl {
     $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
     return $(if ($null -eq $ttl) { $null -eq $DefaultTtl } else { $DefaultTtl -eq [long]$ttl * 86400 })
 }
+
+# ADR-0044 decision 10 (council round 3): ttlDays between null and a number on an existing chargebackDaily is refused.
+# Without defaultTtl the documents carry no ttl and the coverage records say they never expire, so a new defaultTtl
+# would let Cosmos DB delete documents the export still reports as covered; removing defaultTtl stops all expiry
+# (item ttl is ignored without it) while the coverage records still say the months expire, so the export would refuse
+# them. $Containers: az cosmosdb sql container list. Returns the refusal, or $null.
+function Get-StgChargebackTtlTransitionProblem {
+    param($Cfg, $Containers)
+    $h = Get-StgChargebackHistory $Cfg
+    $existing = @($Containers | Where-Object { $_.name -ceq 'chargebackDaily' })[0]
+    if (-not $h -or -not $existing) { return $null }
+    $had = $existing.resource.defaultTtl
+    if (($null -eq $had) -eq ($null -eq $h.ttlDays)) { return $null }
+    $procedure = "See 'Changing ttlDays between null and a number' in docs/operate/chargeback-history.md (ADR-0044 decision 10)."
+    if ($null -eq $had) { return "chargeback_history_ttl_transition: chargebackDaily has no time to live, so its months are recorded as never expiring; ttlDays $($h.ttlDays) would let Cosmos DB delete documents the export reports as covered. Keep audit.chargebackHistory.ttlDays null, or start the history again. $procedure" }
+    return "chargeback_history_ttl_transition: chargebackDaily has a time to live of $([long]$had / 86400) days; ttlDays null would stop expiry while the months are recorded as expiring, and the export would refuse them. To keep history longer, raise ttlDays (at most $($script:ChargebackTtlMaxDays)). $procedure"
+}

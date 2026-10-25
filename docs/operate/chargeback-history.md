@@ -38,12 +38,11 @@ until then the export reads the months it does not hold from history
   month's last `closeAfterDays` + 1 days. Earlier days, and days the reconciler never read while stopped, are never
   filled in: an export that includes them is refused with `history_not_covered`, not shown as zero. The first run holds only what the workspace still keeps: with the minimum 30-day retention, a first run
   on the 31st of a 31-day month may find part of day 1 already deleted.
-- **How long.** `ttlDays: null` keeps documents until someone deletes them. With a number, every document of a month
-  expires at one instant, `ttlDays` days after the month ends, and the month's coverage record keeps that instant
-  in `expiresAt`
+- **How long.** `ttlDays: null` keeps documents until deleted. With a number, every document of a month expires at
+  one instant, `ttlDays` days after the month ends, kept in the month's coverage record as `expiresAt`
   ([ADR-0044 decision 9](../adr/0044-chargeback-history-in-cosmos.md)). From one day before it, the export refuses
-  the month's days with `history_expired` (below). A changed `ttlDays` applies to documents written after the
-  change; a closed month keeps the expiry it was written with.
+  the month's days with `history_expired` (below). A changed `ttlDays` applies to documents written afterwards.
+  Changing between `null` and a number, and deleting history: [changes](chargeback-history-changes.md).
 
 ## Which export uses it
 
@@ -127,8 +126,9 @@ ask the platform engineer for the two values. A custom range may span at most 62
    - Stage 4 (Entra administrator), only if you changed `admin.extraAllowedClientIds`.
    - Stage 5 (platform engineer): writes the reconciler and admin settings, and turns the reconciler timer on.
    - Stage 7 (platform engineer): publishes the reconciler and admin code from the updated checkout; history is
-     new code, so this is needed even when Stage 7 is not asked to rerun. Groups edited in the admin console since
-     the first seed are left as they are, each named in a `WARNING:` line.
+     new code, so this is needed even when Stage 7 is not asked to rerun. If a group was edited in the admin console
+     since the first seed, Stage 7 stops with `seed_documents_differ`; set `stage7.keepDifferingGroups: true` to keep
+     the console's version ([configuration reference](../get-started/configuration-reference-2.md#groups)).
    - Stage 8 (platform engineer): acceptance.
 
 A stage run out of order refuses with `stage_config_changed` (its inputs changed) or `stage_dependency_changed`

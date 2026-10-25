@@ -216,10 +216,12 @@ pwsh -File $run -Stage 7 -ConfigPath $cfg -Apply
 - [ ] `Configure this machine: pwsh -File scripts/client/Set-ClaudeCodeGateway.ps1 …`, the command for developers;
 - [ ] the last line `stage 7 completed and verified in … s`.
 
-A rerun prints `present-equal` instead of `created` for documents that already exist. A group document that differs
-(edited in the admin console) is left as it is, with a `WARNING: projects/<group id> differs from the configuration
-(...)` line naming the fields; any other document that differs stops the stage with `seed_documents_differ` and is
-not overwritten ([Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1) `Invoke-StgSeed`).
+A rerun prints `present-equal` instead of `created` for documents that already exist. A document that differs is
+never overwritten. A group document that differs (edited in the admin console) stops the stage with
+`seed_documents_differ`, naming each group and the differing fields; set `stage7.keepDifferingGroups: true` to keep
+the console's version, and the stage then ends with a `kept N console-edited group(s): …` line
+([configuration reference](configuration-reference-2.md#groups)). Any other document that differs always stops the
+stage ([Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1) `Invoke-StgSeed`).
 A first run right after Stage 6 can stop with a storage `403`; rerun after about five minutes
 ([troubleshooting](../operate/troubleshooting.md)).
 

@@ -80,9 +80,12 @@ come back ([data retention](https://learn.microsoft.com/en-us/azure/azure-monito
 For `now - retention` days after a raise from P to R days at time T, the workspace holds rows only from T - P. Stage 5
 therefore records, before it deploys or changes anything, the instant the workspace holds rows from
 (`Get-StgRetentionHeldFrom`: the later of T - P and an instant recorded at an earlier raise) in
-`evidence/stage5.retention.json` in the state folder, and passes it to:
+`evidence/stage5.retention.json` in the state folder, and passes it to the places below. When that file is absent (the
+state folder was lost, council round 3), Stage 5 takes the earlier instant from the deployment instead: the later of
+the admin app's `ADMIN_LOG_RETENTION_HELD_FROM` and the instant in the deployed workbook's retention cut
+(`Get-StgPreviousRetentionHeldFrom`), so a rerun does not drop it. The instant then goes to:
 
-- the workbook (`retentionHeldFrom`) and, with chargeback history on, the admin app (`ADMIN_LOG_RETENTION_HELD_FROM`):
+- the workbook (`retentionHeldFrom`) and the admin app (`ADMIN_LOG_RETENTION_HELD_FROM`, with chargeback history on or off):
   `RetentionTruncated` is true for a period that starts before the later of `now - retention` and that instant
   ([queries.ts](../../analytics/workbooks/queries.ts));
 - the history export (ADR-0044): its boundary is the first whole month after that later instant
@@ -90,10 +93,11 @@ therefore records, before it deploys or changes anything, the instant the worksp
 
 Lowering the retention records nothing (the workspace holds `now - retention`), and an unchanged retention keeps
 the recorded instant until `now - retention` passes it. The instant is not a stage output, so later stages are not
-asked to rerun. Limits: a retention changed outside Stage 5 (Portal, CLI) is not recorded. Without chargeback
-history the admin app has neither `ADMIN_LOG_RETENTION_DAYS` nor `ADMIN_LOG_RETENTION_HELD_FROM`, and its console
-flag uses the 90-day default (unchanged by this decision). The workbook now uses the effective retention
-(`Get-StgLogRetentionDays`) instead of `stage1.retentionInDays`.
+asked to rerun. Limits: a retention changed outside Stage 5 (Portal, CLI) is not recorded. Every Stage 5 run writes
+`ADMIN_LOG_RETENTION_DAYS` (the effective retention, `Get-StgLogRetentionDays`) and, when recorded,
+`ADMIN_LOG_RETENTION_HELD_FROM` to the admin app whether chargeback history is on or off (`logRetention` in
+[stage5-config.bicep](../../infra/staged/stage5-config.bicep)), so the console's chargeback flag matches the workbook.
+The workbook now uses the effective retention instead of `stage1.retentionInDays`.
 
 Turning the archive on in a running deployment needs Stage 5 only: no new code runs, and Stage 5's recorded
 outputs do not change, so Stages 7 and 8 are not asked to rerun (`Get-StgOutputHash` excludes the verify record;

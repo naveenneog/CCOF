@@ -66,7 +66,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    for both (a slow Cosmos holds the next budget run) and a separate timer function (a second schedule and
    identity to deploy for the same rows the run already read).
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
-   neither; absent: off), and `RECONCILER_HISTORY_TTL_DAYS` (`ttlDays`, only when set; decision 9). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
+   neither; absent: off), and `RECONCILER_HISTORY_TTL_DAYS` (`ttlDays`, only when set; decision 9). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off); Stage 5 writes `ADMIN_LOG_RETENTION_DAYS` with history on or off (ADR-0043).
    Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver.
    An absent section, or `{ "enabled": false }` with no other key, leaves every stage hash unchanged; any other
    present value (including `enabled: false` beside other keys) is part of the Stage 2, 3 and 5 hashes.
@@ -114,6 +114,21 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    in the coverage with the expiry computed from `defaultTtl` (open days are rewritten at different times, and a
    changed `defaultTtl` applies at once to every document, so the admin app would need the current value and every
    document's last write); per-document expiry checks at read time (an expired document is simply absent).
+10. **ttlDays between null and a number** (council round 3, 2026-10-26). Decision 9 holds while `ttlDays` stays a
+   number or stays null. A change between them breaks it for months already written: from null, the new
+   `defaultTtl` applies at once to documents that carry no `ttl` (they expire from their last write), while those
+   months' coverage records say they never expire; to null, Cosmos DB ignores item `ttl` without a container
+   `defaultTtl` ([time to live](https://learn.microsoft.com/en-us/azure/cosmos-db/time-to-live)), so nothing
+   expires while the coverage records still give an expiry. Chosen: Stage 2 reads the existing container (an ARM
+   read) before it previews or deploys and refuses the change with `chargeback_history_ttl_transition`
+   (`Get-StgChargebackTtlTransitionProblem`). The documented procedure is to raise `ttlDays` (up to 24,855) instead of
+   null, or to export, delete the container and start the history again
+   ([chargeback history changes](../operate/chargeback-history-changes.md)). Rejected:
+   the reconciler rewriting the coverage record of every month in the container and the export refusing months
+   whose recorded expiry does not match the current setting. It needs a cross-partition read of every coverage
+   record each run, the container's current `defaultTtl` in the admin app, and a refusal window between Stage 2 and
+   the next reconciler run; the transition is rare and a refusal before any change is simpler to verify. Limit: a
+   `defaultTtl` changed outside Stage 2 (Portal, CLI) is not detected.
 
 ## Consequences
 
@@ -129,16 +144,28 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 - History follows the rate card in force when the day closed; a later rate-card correction does not change it.
 - With `ttlDays`, a month is kept `ttlDays` days after it ends (decision 9), then refused as `history_expired` from
   one day before that. A changed `ttlDays` applies to documents written after the change: a closed month is never
-  written again, so it keeps the expiry it was written with; to delete older history sooner, delete it by hand
-  (AUD-C7).
+  written again, so it keeps the expiry it was written with; to delete older history sooner, use the deletion tool
+  below.
+- Deletion (council round 3, 2026-10-26): `scripts/history/delete-chargeback-history.ts` deletes whole months, or one
+  person's documents in them, with `DefaultAzureCredential` (what-if unless `--confirm`;
+  [chargeback history changes](../operate/chargeback-history-changes.md#delete-history)). A whole month's coverage
+  record is deleted before its documents, so the export refuses the month (`history_not_covered`) rather than return
+  it as covered with documents missing; for one person the coverage record first records the deletion in
+  `personDeletions` (no ID) and the month stays covered without that person. The previous month and later are
+  refused, because the reconciler may still write them. The Stage 3 roles still cannot delete: the operator takes the
+  built-in Data Contributor role on the container for the task and runs the tool from inside the virtual network.
 - Turning history on in a running deployment (council round 2, 2026-10-26) needs Stages 2, 3 and 5 (container,
   grants, settings) and Stage 7, because the reconciler and admin code that write and read history are new; Stage 4
   only when `admin.extraAllowedClientIds` changes. Stage 5's recorded outputs (gateway URL, settings list, workbook
   flag) do not change, so Stage 7 is not forced by the dependency check and is run for the code. A Stage 7 rerun
   seeds create-only: group documents edited in the admin console since the first seed now differ from the
-  configuration, and Stage 7 keeps them and prints a warning naming the fields instead of stopping with
-  `seed_documents_differ` (`Invoke-StgSeed` passes the group ids as `-KeepDiffering`); other differing documents
-  still stop it. Stage 5 replaces each app's whole settings set, so it now writes
+  configuration. Council round 3 (2026-10-26) reverted round 2's default of keeping them: Stage 7 stops with
+  `seed_documents_differ`, naming each group and the differing fields, unless the configuration sets
+  `stage7.keepDifferingGroups: true`; then it keeps them, ends with `kept N console-edited group(s): …` and records
+  them in `evidence/stage7.verify.json` (`seed.kept`). Why: keeping silently hid a configuration that no longer
+  describes the deployment, and a warning in a long log is easy to miss; an opt-in in the configuration is
+  reviewable and part of the Stage 7 hash. `groups[]` seeds a group once; afterwards the admin console owns it.
+  Other differing documents always stop Stage 7. Stage 5 replaces each app's whole settings set, so it now writes
   `AzureWebJobs.snapshotApply.Disabled: true` itself (ADR-0024); before, a Stage 5 rerun dropped the switch that
   Stage 7 had left and the Stage 1 recheck failed. A Stage 5 rerun with a changed rendered policy leaves the
   previous policy fragments in API Management (ADR-0039); removing them is a documented manual step
@@ -150,7 +177,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 ## Rollback
 
 Set `audit.chargebackHistory.enabled` to false (or remove the section) and rerun Stages 2, 3 and 5. Stage 5
-removes the `RECONCILER_HISTORY_*`, `ADMIN_CHARGEBACK_HISTORY_CONTAINER` and `ADMIN_LOG_RETENTION_DAYS` settings
+removes the `RECONCILER_HISTORY_*` and `ADMIN_CHARGEBACK_HISTORY_CONTAINER` settings
 (the settings resource replaces the whole set), so the reconciler stops writing and the export reads Log Analytics
 only. The stage deployments are incremental and never delete, so these remain until removed by hand:
 

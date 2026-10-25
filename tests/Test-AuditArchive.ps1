@@ -240,10 +240,43 @@ New-Item -ItemType Directory -Force -Path (Split-Path $recorded) | Out-Null
 @{ days = 90; heldFrom = '2026-09-10T00:00:00.000Z' } | ConvertTo-Json | Set-Content -LiteralPath $recorded -Encoding utf8NoBOM
 Assert-Contract ((Get-StgRecordedRetentionHeldFrom $recorded) -ceq '2026-09-10T00:00:00.000Z' -and $null -eq (Get-StgRecordedRetentionHeldFrom ($recorded + '.absent'))) 'The previous instant comes from the file the last Stage 5 apply wrote.'
 Remove-Item -LiteralPath $recorded
+# Lost state folder (council round 3, R3-4): without evidence/stage5.retention.json the previous instant comes from the
+# deployment: the later of the admin app's ADMIN_LOG_RETENTION_HELD_FROM and the workbook's retention cut.
+$wbText = '{"items":[{"content":{"query":"let ReportNow = now(); let RetentionCut = max_of(ReportNow - 90 * 1d, datetime(2026-09-12T00:00:00.000Z));"}}]}'
+$adminList = @(@{ name = 'ADMIN_WORKSPACE_ID'; value = 'x' }, @{ name = 'ADMIN_LOG_RETENTION_HELD_FROM'; value = '2026-09-10T00:00:00.000Z' })
+Assert-Contract ((Get-StgDeployedRetentionHeldFrom -AdminSettings $adminList -WorkbookContent $null) -ceq '2026-09-10T00:00:00.000Z') 'The admin app setting must give the deployed instant.'
+Assert-Contract ((Get-StgDeployedRetentionHeldFrom -AdminSettings @() -WorkbookContent $wbText) -ceq '2026-09-12T00:00:00.000Z') 'Without the admin setting the workbook retention cut must give the deployed instant.'
+Assert-Contract ((Get-StgDeployedRetentionHeldFrom -AdminSettings $adminList -WorkbookContent $wbText) -ceq '2026-09-12T00:00:00.000Z') 'With both, the later instant must be kept.'
+Assert-Contract ($null -eq (Get-StgDeployedRetentionHeldFrom -AdminSettings @(@{ name = 'ADMIN_LOG_RETENTION_DAYS'; value = '90' }) -WorkbookContent '{"q":"ReportNow - 90 * 1d"}')) 'Without either, there is no deployed instant.'
+$queriesTs = Get-Content -Raw (Join-Path $root 'analytics\workbooks\queries.ts')
+Assert-Contract ($queriesTs.Contains('const cut = `ReportNow - ${answers.retentionDays} * 1d`;') -and $queriesTs.Contains('return `max_of(${cut}, datetime(${answers.retentionHeldFrom}))`;')) 'The workbook retention cut the fallback parses must match queries.ts.'
+$script:AzCalls = [Collections.Generic.List[string]]::new()
+$script:WorkbookAnswer = { @{ properties = @{ serializedData = $wbText } } }
+function Invoke-StgAzJson {
+    param([string[]]$Arguments)
+    $script:AzCalls.Add($Arguments -join ' ')
+    if ($Arguments[0] -ceq 'rest') { return & $script:WorkbookAnswer }
+    return $adminList
+}
+$lostCfg = @{ subscriptionId = 's'; resourceGroup = 'r'; stage1 = @{ includeAdmin = $true }; workbook = @{ resourceName = 'wb' } }
+$lostNames = @{ apps = @{ admin = @{ functionApp = 'adm' } } }
+Assert-Contract ((Get-StgPreviousRetentionHeldFrom -Cfg $lostCfg -Names $lostNames -Path ($recorded + '.absent')) -ceq '2026-09-12T00:00:00.000Z' -and @($script:AzCalls | Where-Object { $_ -match 'appsettings list .*--name adm' }).Count -eq 1 -and @($script:AzCalls | Where-Object { $_ -match '^rest --method get --url https://management\.azure\.com/subscriptions/s/resourceGroups/r/providers/Microsoft\.Insights/workbooks/wb\?api-version=2023-06-01 --url-parameters canFetchContent=true' -and $_ -notmatch '&' }).Count -eq 1) "Without the evidence file Stage 5 must read the instant back from the admin app and the workbook: $($script:AzCalls -join ' | ')"
+@{ days = 90; heldFrom = $null } | ConvertTo-Json | Set-Content -LiteralPath $recorded -Encoding utf8NoBOM
+$script:AzCalls.Clear()
+Assert-Contract ($null -eq (Get-StgPreviousRetentionHeldFrom -Cfg $lostCfg -Names $lostNames -Path $recorded) -and $script:AzCalls.Count -eq 0) 'With the evidence file, its value is used, even none, and Azure is not read.'
+Remove-Item -LiteralPath $recorded
+$script:AzCalls.Clear()
+$script:WorkbookAnswer = { throw 'ERROR: (ResourceNotFound) The Resource was not found.' }
+$noAdmin = @{ subscriptionId = 's'; resourceGroup = 'r'; stage1 = @{ includeAdmin = $false }; workbook = @{ resourceName = 'wb' } }
+Assert-Contract ($null -eq (Get-StgPreviousRetentionHeldFrom -Cfg $noAdmin -Names $lostNames -Path ($recorded + '.absent')) -and @($script:AzCalls | Where-Object { $_ -match 'appsettings' }).Count -eq 0) 'Without an admin app and with no workbook yet, there is no previous instant.'
+$script:WorkbookAnswer = { throw 'ERROR: (AuthorizationFailed) no access' }
+$failed = try { $null = Get-StgPreviousRetentionHeldFrom -Cfg $noAdmin -Names $lostNames -Path ($recorded + '.absent'); '' } catch { $_.Exception.Message }
+Assert-Contract ($failed -match 'AuthorizationFailed') 'Any other read failure must stop Stage 5 rather than drop the instant.'
+. (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
 $stage5Bicep = Get-Content -Raw (Join-Path $root 'infra\staged\stage5-config.bicep')
-Assert-Contract ($stage5Bicep -match "ADMIN_LOG_RETENTION_HELD_FROM: chargebackHistory\.logRetentionHeldFrom") 'Stage 5 must write ADMIN_LOG_RETENTION_HELD_FROM when an instant is recorded.'
+Assert-Contract ($stage5Bicep -match "ADMIN_LOG_RETENTION_HELD_FROM: logRetention\.heldFrom") 'Stage 5 must write ADMIN_LOG_RETENTION_HELD_FROM when an instant is recorded.'
 $deployPart = $stage5.Substring(0, $stage5.IndexOf('Invoke-StgBicep'))
-Assert-Contract ($deployPart -match 'Get-StgRetentionHeldFrom' -and $deployPart -match 'logRetentionHeldFrom' -and $deployPart -match 'stage5\.retention\.json' -and $applyPart -match 'logRetention = ') 'Invoke-Stage5 must compute the instant before it deploys the settings, record it before any change, pass it to the admin settings and the workbook, and show it in its verify record.'
+Assert-Contract ($deployPart -match 'Get-StgRetentionHeldFrom' -and $deployPart -match 'logRetentionHeldFrom' -and $deployPart -match 'logRetention = Get-StgLogRetentionSettings' -and $deployPart -match 'Get-StgPreviousRetentionHeldFrom -Cfg \$Cfg -Names \$s1\.names' -and $deployPart -match 'stage5\.retention\.json' -and $applyPart -match 'logRetention = ') 'Invoke-Stage5 must compute the instant before it deploys the settings, record it before any change, pass it to the admin settings and the workbook, and show it in its verify record.'
 $common = (Get-Command Get-StgQuickstartParameters).ScriptBlock.ToString()
 Assert-Contract ($common -match 'logRetentionDays = \(Get-StgLogRetentionDays \$Cfg\)') 'The workbook must use the effective retention (audit.workspaceRetentionDays, else stage1.retentionInDays).'
 $qs = Get-Content -Raw (Join-Path $root 'infra\quickstart\Deploy-Quickstart.ps1')

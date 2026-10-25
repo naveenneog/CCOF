@@ -48,12 +48,11 @@ function Invoke-Stage5 {
     # is recorded before anything changes, and the workbook, the console and the history export start there.
     $retentionDays = Get-StgLogRetentionDays $Cfg
     $currentRetention = if ($null -ne $Cfg.audit.workspaceRetentionDays) { (Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.OperationalInsights/workspaces/$($s1.names.logAnalyticsWorkspace)" '2023-09-01').properties.retentionInDays } else { $null }
-    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgRecordedRetentionHeldFrom)
+    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgPreviousRetentionHeldFrom -Cfg $Cfg -Names $s1.names)
     if ($heldFrom) { Write-Host "log retention: the workspace holds rows from $heldFrom (retention raised to $retentionDays days); reports flag earlier periods as retention_truncated" }
     if ($Apply) { $null = Write-StgEvidence 'stage5.retention.json' ([ordered]@{ days = $retentionDays; heldFrom = $heldFrom }) }
     $ctx.P.logRetentionHeldFrom = $heldFrom
     $history = Get-StgChargebackHistory $Cfg
-    if ($history) { $history.logRetentionHeldFrom = [string]$heldFrom }
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -84,6 +83,7 @@ function Invoke-Stage5 {
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
         auditArchive = $(if ($audit) { $audit } else { @{} })
         chargebackHistory = $history ?? @{}
+        logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
@@ -127,7 +127,7 @@ function Invoke-Stage7 {
     Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
-        Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function"
+        Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function; a group document edited in the admin console $(if ($Cfg.stage7.keepDifferingGroups -eq $true) { 'is kept (stage7.keepDifferingGroups)' } else { 'stops the stage' })"
         Write-Host "preview: delegated snapshot of $(@($entra.groups.Values).Count) groups, applied through the sync app's snapshotApply function"
         Write-Host "preview: write the client config.json for $(if ($Cfg.client.Contains('group')) { "group $($Cfg.client.group)" } else { 'client.projectId/classification' })"
         return $null
@@ -148,7 +148,7 @@ function Invoke-Stage7 {
     }
     # Invoke-StgSeed checks baseline documents against onboarding's schema and adds the group documents;
     # with the runner off it seeds through the sync app's registrySeed function.
-    $result.seed = Invoke-StgSeed -Ctx $ctx -GroupDocuments $groupDocs
+    $result.seed = Invoke-StgSeed -Ctx $ctx -GroupDocuments $groupDocs -KeepDifferingGroups ($Cfg.stage7.keepDifferingGroups -eq $true)
     # Delegated snapshot (docs/runbooks/CLOUD-SHELL-QUICKSTART.md section 5): the operator's own
     # Graph read through Azure CLI; no application permission.
     $groupsFile = Join-Path $ctx.GeneratedDir 'snapshot-groups.json'
@@ -171,6 +171,7 @@ function Invoke-Stage7 {
     Assert-Stg ($LASTEXITCODE -eq 0) 'client config failed the client validator'
     $result.client = $client
     $null = Write-StgEvidence 'stage7.verify.json' $result
+    if ($kept = Format-StgKeptGroups -Kept $result.seed.kept -GroupDocuments $groupDocs) { Write-Host $kept -ForegroundColor Yellow }
     return $result
 }
 

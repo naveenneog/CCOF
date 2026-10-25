@@ -72,6 +72,7 @@ function Read-StgConfig {
     }
     $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
     foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
+    foreach ($p in @(Get-StgStage7Problems $c)) { $problems.Add($p) }
     if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
@@ -189,6 +190,7 @@ function Get-StgStageInput {
         default { throw "invalid stage number $Number" }
     }
     if ($Number -eq 5 -and ($audit = Get-StgAuditStageInput $Cfg)) { $input.audit = $audit }
+    if ($Number -eq 7 -and $Cfg.Contains('stage7')) { $input.stage7 = $Cfg.stage7 }
     # ADR-0044: only when configured, so a configuration without it (or with { enabled: false } alone) keeps its earlier hashes.
     if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory -and -not (Test-StgOffOnly $Cfg.audit.chargebackHistory)) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
     $canonical = ConvertTo-StgCanonical $input | ConvertTo-Json -Depth 100 -Compress

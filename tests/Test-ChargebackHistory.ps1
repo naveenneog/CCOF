@@ -58,7 +58,15 @@ Assert-Contract ($settingsText -match "RECONCILER_HISTORY_CONTAINER: 'chargeback
 Assert-Contract ($settingsText -match "reconcilerHistorySettings = \(chargebackHistory\.\?enabled \?\? false\) \?") 'The reconciler history settings must be written only when enabled.'
 # ADR-0044 decision 9: the reconciler gives each document a time to live ending ttlDays after its month, so it needs ttlDays.
 Assert-Contract ($settingsText -match "chargebackHistory\.\?ttlDays == null \? \{\} : \{ RECONCILER_HISTORY_TTL_DAYS: string\(chargebackHistory\.ttlDays\) \}") 'Stage 5 must write RECONCILER_HISTORY_TTL_DAYS when ttlDays is set, and nothing when it is null.'
-Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'ADMIN_LOG_RETENTION_DAYS: string\(chargebackHistory\.logRetentionDays\)' -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history settings and pass history to the settings module.'
+Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history setting and pass history to the settings module.'
+# The admin chargeback reports use the effective retention and the held-from instant with history on or off: only the
+# container setting depends on audit.chargebackHistory.enabled.
+$historyVar = [regex]::Match($stage5Text, '(?ms)^var adminHistorySettings = .*?^(var|resource)').Value
+$retentionVar = [regex]::Match($stage5Text, '(?ms)^var adminRetentionSettings = .*?^(var|resource)').Value
+Assert-Contract ($historyVar -and $historyVar -notmatch 'ADMIN_LOG_RETENTION') 'The admin retention settings must not be inside the history-only settings.'
+Assert-Contract ($retentionVar -match 'ADMIN_LOG_RETENTION_DAYS: string\(logRetention\.days\)' -and $retentionVar -match 'ADMIN_LOG_RETENTION_HELD_FROM: logRetention\.heldFrom' -and $retentionVar -notmatch 'chargebackHistory') 'Stage 5 must write ADMIN_LOG_RETENTION_DAYS (and the held-from instant when recorded) from logRetention, whatever audit.chargebackHistory says.'
+Assert-Contract ($stage5Text -match '\}, adminRetentionSettings, adminHistorySettings\)') 'The admin settings must include the retention settings on every Stage 5 run.'
+Assert-Contract ($appText -match 'logRetention = Get-StgLogRetentionSettings -Cfg \$Cfg -HeldFrom \$heldFrom') 'Stage 5 must pass the retention settings to the admin app on every run.'
 Assert-Contract ($appText -match '\$history = Get-StgChargebackHistory \$Cfg' -and $appText -match 'chargebackHistory = \$history \?\? @\{\}') 'Stage 5 must pass the validated history configuration.'
 
 # Driver: validation, the normalised value each stage receives, and the stage hashes.
@@ -122,6 +130,11 @@ foreach ($case in @(
     Assert-Contract ((& $retentionProblems (New-RetentionCfg $case.stage1 $case.workspace $e)) -match "more than the $e days") "ttlDays $e ($($case.name)) must be refused: not more than the workspace keeps."
     Assert-Contract ((& $retentionProblems (New-RetentionCfg $case.stage1 $case.workspace ($e + 1))).Count -eq 0) "ttlDays $($e + 1) ($($case.name)) must be accepted."
 }
+# History off with a raised retention: the admin app still receives the effective retention and the held-from instant.
+$historyOff = New-Cfg @{ enabled = $false }; $historyOff.audit.workspaceRetentionDays = 400
+$offRetention = Get-StgLogRetentionSettings -Cfg $historyOff -HeldFrom '2026-09-10T00:00:00.000Z'
+Assert-Contract ($null -eq (Get-StgChargebackHistory $historyOff) -and $offRetention.days -eq 400 -and $offRetention.heldFrom -ceq '2026-09-10T00:00:00.000Z') 'History off with a raised retention must still give the admin app the retention days and the held-from instant.'
+Assert-Contract ((Get-StgLogRetentionSettings -Cfg (New-Cfg $null) -HeldFrom $null).days -eq 30 -and (Get-StgLogRetentionSettings -Cfg (New-Cfg $null) -HeldFrom $null).heldFrom -ceq '') 'Without audit settings the admin app receives stage1.retentionInDays and no held-from instant.'
 
 # enabled false with no other key is off and hashes as if absent; any other present value is a hash input.
 $withoutAudit = New-Cfg $null
@@ -145,6 +158,37 @@ $withOtherAudit = New-Cfg $null; $withOtherAudit.audit = @{ other = 1 }
 Assert-Contract ((Get-StgStageInput $withoutAudit 2) -ceq (Get-StgStageInput $withOtherAudit 2)) 'Other audit keys must not change the Stage 2 hash.'
 
 # Stage 2 read-back of the time to live.
+# ttlDays between null and a number on an existing container (council round 3, R3-3): refused before any change. With
+# no defaultTtl, documents carry no expiry and coverage records say "never", so a new defaultTtl would delete documents
+# the export reports as covered; removing defaultTtl stops expiry while coverage records still say they expire.
+$ttl400 = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
+$noTtl = New-Cfg $good
+$existing = { param($DefaultTtl) @(@{ name = 'projects'; resource = @{} }, @{ name = 'chargebackDaily'; resource = $(if ($null -ne $DefaultTtl) { @{ defaultTtl = $DefaultTtl } } else { @{} }) }) }
+$toNumber = Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers (& $existing $null)
+Assert-Contract ($toNumber -match '^chargeback_history_ttl_transition' -and $toNumber -match 'ttlDays' -and $toNumber -match 'chargeback-history\.md') "null -> 400 days on an existing container must be refused with the procedure: $toNumber"
+$toNull = Get-StgChargebackTtlTransitionProblem -Cfg $noTtl -Containers (& $existing 34560000)
+Assert-Contract ($toNull -match '^chargeback_history_ttl_transition' -and $toNull -match '400 days' -and $toNull -match '24855' -and $toNull -match 'chargeback-history\.md') "400 days -> null on an existing container must be refused, naming the largest ttlDays: $toNull"
+Assert-Contract ($null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers (& $existing 86400000)) -and $null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $noTtl -Containers (& $existing $null))) 'A number -> number or null -> null ttlDays is not a transition.'
+Assert-Contract ($null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers @(@{ name = 'projects'; resource = @{} })) -and $null -eq (Get-StgChargebackTtlTransitionProblem -Cfg (New-Cfg @{ enabled = $false }) -Containers (& $existing $null))) 'A new container, or history off, is never refused.'
+$stage2Body = (Get-Command Invoke-Stage2).ScriptBlock.ToString()
+$checkAt = $stage2Body.IndexOf('Get-StgChargebackTtlTransitionProblem'); $deployAt = $stage2Body.IndexOf('Invoke-StgBicep')
+Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $deployAt) 'Stage 2 must refuse a ttlDays transition before it previews or deploys anything.'
+# Stage 2 with fakes: the refusal comes before any deployment; a first run (no database yet) deploys.
+$script:Deployed = 0; $script:ListAnswer = $null
+function Get-StgStage { param($Cfg, $Number) @{ names = @{ cosmosAccount = 'acct' } } }
+function Invoke-StgBicep { $script:Deployed++; @{} }
+function Invoke-StgAzJson { param([string[]]$Arguments) & $script:ListAnswer }
+$ttl400.cosmos.databaseName = 'ccof'; $ttl400.subscriptionId = 's'; $ttl400.resourceGroup = 'r'
+$script:ListAnswer = { & $existing $null }
+$refusal = try { $null = Invoke-Stage2 -Cfg $ttl400; '' } catch { $_.Exception.Message }
+Assert-Contract ($refusal -match '^chargeback_history_ttl_transition' -and $script:Deployed -eq 0) "Stage 2 must refuse null -> 400 days before deploying: $refusal"
+$script:ListAnswer = { throw "ERROR: (NotFound) Owner resource does not exist" }
+$null = Invoke-Stage2 -Cfg $ttl400
+Assert-Contract ($script:Deployed -eq 1) 'Stage 2 must deploy when the database does not exist yet.'
+$script:ListAnswer = { throw 'ERROR: (AuthorizationFailed) no access' }
+$other = try { $null = Invoke-Stage2 -Cfg $ttl400; '' } catch { $_.Exception.Message }
+Assert-Contract ($other -match 'AuthorizationFailed' -and $script:Deployed -eq 1) 'Any other read failure must stop Stage 2.'
+. (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
 Assert-Contract ((Test-StgChargebackTtl (New-Cfg $good) $null) -and -not (Test-StgChargebackTtl (New-Cfg $good) 86400)) 'ttlDays null must read back as no defaultTtl.'
 $ttlCfg = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
 Assert-Contract ((Test-StgChargebackTtl $ttlCfg 34560000) -and -not (Test-StgChargebackTtl $ttlCfg $null) -and -not (Test-StgChargebackTtl $ttlCfg 86400)) 'ttlDays must read back as ttlDays x 86400 seconds.'
