@@ -51,7 +51,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 5. **Grants** (Stage 3): the reconciler gets the reconciler writer role and Cosmos DB Built-in Data Reader (for the
    hash query) on `chargebackDaily`; the admin app gets Built-in Data Reader on it. No delete for anyone.
 6. **Reads** (`admin/src/history.ts`): the usage export splits its range at the boundary, the first UTC month
-   start on or after `now - ADMIN_LOG_RETENTION_DAYS`. Before it, rows come from `chargebackDaily`; from it, from
+   start on or after `now - ADMIN_LOG_RETENTION_DAYS`, and never after the current month's start. Before it, rows come from `chargebackDaily`; from it, from
    Log Analytics as before. Rows with the same chargeback ID, group and person are merged: counts, tokens and
    amounts are added; columns history cannot fill (AUD-C8) are empty on merged rows. The history part must start
    and end on whole UTC days; backend and tag filters are refused for it. The console views stay on Log Analytics.
