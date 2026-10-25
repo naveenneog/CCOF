@@ -23,6 +23,7 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 | [Troubleshooting](operate/troubleshooting.md) | Platform engineer |
 | [Audit archive](operate/audit-archive.md): long-term copy of the gateway log | Auditor, platform engineer |
 | [Chargeback history](operate/chargeback-history.md): daily chargeback totals beyond the Log Analytics retention, and how to download an old month | Finance, platform engineer |
+| [Chargeback history changes](operate/chargeback-history-changes.md): change the expiry, delete history | Platform engineer |
 
 ## Reference
 

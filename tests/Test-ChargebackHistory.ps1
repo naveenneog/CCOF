@@ -158,6 +158,37 @@ $withOtherAudit = New-Cfg $null; $withOtherAudit.audit = @{ other = 1 }
 Assert-Contract ((Get-StgStageInput $withoutAudit 2) -ceq (Get-StgStageInput $withOtherAudit 2)) 'Other audit keys must not change the Stage 2 hash.'
 
 # Stage 2 read-back of the time to live.
+# ttlDays between null and a number on an existing container (council round 3, R3-3): refused before any change. With
+# no defaultTtl, documents carry no expiry and coverage records say "never", so a new defaultTtl would delete documents
+# the export reports as covered; removing defaultTtl stops expiry while coverage records still say they expire.
+$ttl400 = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
+$noTtl = New-Cfg $good
+$existing = { param($DefaultTtl) @(@{ name = 'projects'; resource = @{} }, @{ name = 'chargebackDaily'; resource = $(if ($null -ne $DefaultTtl) { @{ defaultTtl = $DefaultTtl } } else { @{} }) }) }
+$toNumber = Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers (& $existing $null)
+Assert-Contract ($toNumber -match '^chargeback_history_ttl_transition' -and $toNumber -match 'ttlDays' -and $toNumber -match 'chargeback-history\.md') "null -> 400 days on an existing container must be refused with the procedure: $toNumber"
+$toNull = Get-StgChargebackTtlTransitionProblem -Cfg $noTtl -Containers (& $existing 34560000)
+Assert-Contract ($toNull -match '^chargeback_history_ttl_transition' -and $toNull -match '400 days' -and $toNull -match '24855' -and $toNull -match 'chargeback-history\.md') "400 days -> null on an existing container must be refused, naming the largest ttlDays: $toNull"
+Assert-Contract ($null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers (& $existing 86400000)) -and $null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $noTtl -Containers (& $existing $null))) 'A number -> number or null -> null ttlDays is not a transition.'
+Assert-Contract ($null -eq (Get-StgChargebackTtlTransitionProblem -Cfg $ttl400 -Containers @(@{ name = 'projects'; resource = @{} })) -and $null -eq (Get-StgChargebackTtlTransitionProblem -Cfg (New-Cfg @{ enabled = $false }) -Containers (& $existing $null))) 'A new container, or history off, is never refused.'
+$stage2Body = (Get-Command Invoke-Stage2).ScriptBlock.ToString()
+$checkAt = $stage2Body.IndexOf('Get-StgChargebackTtlTransitionProblem'); $deployAt = $stage2Body.IndexOf('Invoke-StgBicep')
+Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $deployAt) 'Stage 2 must refuse a ttlDays transition before it previews or deploys anything.'
+# Stage 2 with fakes: the refusal comes before any deployment; a first run (no database yet) deploys.
+$script:Deployed = 0; $script:ListAnswer = $null
+function Get-StgStage { param($Cfg, $Number) @{ names = @{ cosmosAccount = 'acct' } } }
+function Invoke-StgBicep { $script:Deployed++; @{} }
+function Invoke-StgAzJson { param([string[]]$Arguments) & $script:ListAnswer }
+$ttl400.cosmos.databaseName = 'ccof'; $ttl400.subscriptionId = 's'; $ttl400.resourceGroup = 'r'
+$script:ListAnswer = { & $existing $null }
+$refusal = try { $null = Invoke-Stage2 -Cfg $ttl400; '' } catch { $_.Exception.Message }
+Assert-Contract ($refusal -match '^chargeback_history_ttl_transition' -and $script:Deployed -eq 0) "Stage 2 must refuse null -> 400 days before deploying: $refusal"
+$script:ListAnswer = { throw "ERROR: (NotFound) Owner resource does not exist" }
+$null = Invoke-Stage2 -Cfg $ttl400
+Assert-Contract ($script:Deployed -eq 1) 'Stage 2 must deploy when the database does not exist yet.'
+$script:ListAnswer = { throw 'ERROR: (AuthorizationFailed) no access' }
+$other = try { $null = Invoke-Stage2 -Cfg $ttl400; '' } catch { $_.Exception.Message }
+Assert-Contract ($other -match 'AuthorizationFailed' -and $script:Deployed -eq 1) 'Any other read failure must stop Stage 2.'
+. (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
 Assert-Contract ((Test-StgChargebackTtl (New-Cfg $good) $null) -and -not (Test-StgChargebackTtl (New-Cfg $good) 86400)) 'ttlDays null must read back as no defaultTtl.'
 $ttlCfg = New-Cfg @{ enabled = $true; closeAfterDays = 2; ttlDays = 400 }
 Assert-Contract ((Test-StgChargebackTtl $ttlCfg 34560000) -and -not (Test-StgChargebackTtl $ttlCfg $null) -and -not (Test-StgChargebackTtl $ttlCfg 86400)) 'ttlDays must read back as ttlDays x 86400 seconds.'

@@ -114,6 +114,21 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    in the coverage with the expiry computed from `defaultTtl` (open days are rewritten at different times, and a
    changed `defaultTtl` applies at once to every document, so the admin app would need the current value and every
    document's last write); per-document expiry checks at read time (an expired document is simply absent).
+10. **ttlDays between null and a number** (council round 3, 2026-10-26). Decision 9 holds while `ttlDays` stays a
+   number or stays null. A change between them breaks it for months already written: from null, the new
+   `defaultTtl` applies at once to documents that carry no `ttl` (they expire from their last write), while those
+   months' coverage records say they never expire; to null, Cosmos DB ignores item `ttl` without a container
+   `defaultTtl` ([time to live](https://learn.microsoft.com/en-us/azure/cosmos-db/time-to-live)), so nothing
+   expires while the coverage records still give an expiry. Chosen: Stage 2 reads the existing container (an ARM
+   read) before it previews or deploys and refuses the change with `chargeback_history_ttl_transition`
+   (`Get-StgChargebackTtlTransitionProblem`). The documented procedure is to raise `ttlDays` (up to 24,855) instead of
+   null, or to export, delete the container and start the history again
+   ([chargeback history changes](../operate/chargeback-history-changes.md)). Rejected:
+   the reconciler rewriting the coverage record of every month in the container and the export refusing months
+   whose recorded expiry does not match the current setting. It needs a cross-partition read of every coverage
+   record each run, the container's current `defaultTtl` in the admin app, and a refusal window between Stage 2 and
+   the next reconciler run; the transition is rare and a refusal before any change is simpler to verify. Limit: a
+   `defaultTtl` changed outside Stage 2 (Portal, CLI) is not detected.
 
 ## Consequences
 

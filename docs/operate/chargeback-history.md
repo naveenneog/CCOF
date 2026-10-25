@@ -38,12 +38,11 @@ until then the export reads the months it does not hold from history
   month's last `closeAfterDays` + 1 days. Earlier days, and days the reconciler never read while stopped, are never
   filled in: an export that includes them is refused with `history_not_covered`, not shown as zero. The first run holds only what the workspace still keeps: with the minimum 30-day retention, a first run
   on the 31st of a 31-day month may find part of day 1 already deleted.
-- **How long.** `ttlDays: null` keeps documents until someone deletes them. With a number, every document of a month
-  expires at one instant, `ttlDays` days after the month ends, and the month's coverage record keeps that instant
-  in `expiresAt`
+- **How long.** `ttlDays: null` keeps documents until deleted. With a number, every document of a month expires at
+  one instant, `ttlDays` days after the month ends, kept in the month's coverage record as `expiresAt`
   ([ADR-0044 decision 9](../adr/0044-chargeback-history-in-cosmos.md)). From one day before it, the export refuses
-  the month's days with `history_expired` (below). A changed `ttlDays` applies to documents written after the
-  change; a closed month keeps the expiry it was written with.
+  the month's days with `history_expired` (below). A changed `ttlDays` applies to documents written afterwards.
+  Changing between `null` and a number, and deleting history: [changes](chargeback-history-changes.md).
 
 ## Which export uses it
 
