@@ -155,10 +155,35 @@ Assert-Contract ($action -ceq 'deploy') 'Existing-network mode must not be block
 $unsafeCreateRetry = $false
 try { $null = Get-StgNetworkAction -Mode 'create' -VnetExists $true -StageStateExists $false } catch { $unsafeCreateRetry = $_.Exception.Message -match 'network_create_existing_vnet' }
 Assert-Contract $unsafeCreateRetry 'Create mode without Stage 2 state must refuse to rewrite an existing VNet subnet list.'
+# A rerun after a failed Stage 6 read-back: the VNet came from this resource group's own succeeded stage6-network
+# deployment, so redeploying the same template is the recovery, not a refusal (live 2026-10-25).
+$action = Get-StgNetworkAction -Mode 'create' -VnetExists $true -StageStateExists $false -OwnDeploymentSucceeded $true
+Assert-Contract ($action -ceq 'deploy') 'A create-mode rerun after a failed read-back must redeploy its own network.'
+# "Own" means a succeeded stage6-network deployment whose vnetId output is this VNet, not merely the deployment name.
+$vnet = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/ccof-vnet'
+$own = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Succeeded'; outputs = @{ vnetId = @{ value = $vnet.ToUpperInvariant() } } } }
+Assert-Contract (-not (Test-StgOwnNetworkDeployment -Deployments @($own) -VnetId $vnet -Network @{ mode = 'create' })) 'A deployment that does not record create mode must not count as its own.'
+$other = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Succeeded'; outputs = @{ vnetId = @{ value = "$vnet-customer" } } } }
+$failed = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Failed'; outputs = @{ vnetId = @{ value = $vnet } } } }
+$noOutput = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Succeeded' } }
+$existingMode = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Succeeded'; parameters = @{ network = @{ value = @{ mode = 'existing' } } }; outputs = @{ vnetId = @{ value = $vnet } } } }
+$recorded = @{ mode = 'create'; create = @{ vnetName = 'ccof-vnet'; addressSpace = '10.64.0.0/16'; subnets = @{ apim = @{ name = 'snet-apim'; prefix = '10.64.1.0/24' } } } }
+$own.properties.parameters = @{ network = @{ value = $recorded } }
+$current = @{ mode = 'create'; create = @{ vnetName = 'ccof-vnet'; addressSpace = '10.64.0.0/16'; subnets = @{ apim = @{ prefix = '10.64.1.0/24'; name = 'snet-apim' } } } }
+Assert-Contract (Test-StgOwnNetworkDeployment -Deployments @($own) -VnetId $vnet -Network $current) 'A succeeded create-mode stage6-network deployment of this VNet with the same network settings must count as its own.'
+$changedNet = @{ mode = 'create'; create = @{ vnetName = 'ccof-vnet'; addressSpace = '10.64.0.0/16'; subnets = @{ apim = @{ name = 'snet-apim'; prefix = '10.64.9.0/24' } } } }
+Assert-Contract (-not (Test-StgOwnNetworkDeployment -Deployments @($own) -VnetId $vnet -Network $changedNet)) 'Changed subnet settings must not be redeployed over the existing VNet.'
+Assert-Contract (-not (Test-StgOwnNetworkDeployment -Deployments @($own) -VnetId $vnet -Network $current -SharedResourceGroup $true)) 'A shared resource group must never count a VNet as its own.'
+Assert-Contract (-not (Test-StgOwnNetworkDeployment -Deployments @($other, $failed, $noOutput, $existingMode) -VnetId $vnet -Network $current)) 'Another VNet, a failed deployment, one without a vnetId output or an existing-mode deployment must not count as its own.'
 $dnsConfig = @{ subscriptionId = '00000000-0000-4000-8000-000000000001'; resourceGroup = 'rg'; network = @{ mode = 'create' } }
 $dnsOutputs = @{ functionsSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/functions'; privateDnsZoneIds = @{ cosmos = 'cosmos-zone'; blob = 'blob-zone' } }
 $dnsTargets = Get-StgNetworkDnsTargets -Cfg $dnsConfig -Outputs $dnsOutputs -HasFoundry $true
 Assert-Contract ($dnsTargets.vnetId -ceq '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet' -and $dnsTargets.zoneIds.Count -eq 5) 'Stage 6 must derive DNS targets when earlier deployment outputs lack VNet and Foundry zone IDs.'
+# The network template lists the Foundry zone IDs even when no Foundry account gets an endpoint; those zones do not exist.
+$dnsOutputs.foundryPrivateDnsZoneIds = @('zone-cognitiveservices', 'zone-openai', 'zone-servicesai')
+$dnsTargets = Get-StgNetworkDnsTargets -Cfg $dnsConfig -Outputs $dnsOutputs -HasFoundry $false
+Assert-Contract (($dnsTargets.zoneIds -join ',') -ceq 'cosmos-zone,blob-zone') "Without a Foundry private endpoint Stage 6 must not read Foundry DNS zones: $($dnsTargets.zoneIds -join ',')"
+Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\staged\stage6-network.bicep')) -match 'output foundryPrivateDnsZoneIds array = empty\(foundryAccounts\) \? \[\] : foundryZoneIds') 'The network template must output Foundry zone IDs only when it creates Foundry endpoints.'
 $headers = New-StgGatewayHeaders -Token 'token-placeholder' -Project 'PROJECT01' -ProjectHeader 'x-customer-project'
 Assert-Contract ($headers['x-customer-project'] -ceq 'PROJECT01' -and -not $headers.ContainsKey('x-ccof-project')) 'Stage 8 must use the configured project selector header.'
 # Cosmos DB resilience (ADR-0036): regions in failover order, zone redundancy, consistency; read back in Stage 1.
@@ -289,7 +314,43 @@ try {
         Assert-Contract $refusedClient "client.group case $case must be refused."
     }
 } finally { Set-Item function:New-QsClientFiles $realClientFiles }
+# Azure CLI developer sign-in (ADR-0041): Stage 4 reads back the gateway's preauthorized clients; Stage 7 writes
+# client.signInMethod into the client files only when Stage 4 allowed the Azure CLI.
+Assert-Contract ($entraText -match 'foreach \(\$cid in \$clients\)' -and $entraText -match 'gateway app does not preauthorize client') 'Stage 4 must read back every gateway client it preauthorizes, the Azure CLI included.'
+$signInDir = Join-Path ([IO.Path]::GetTempPath()) "staged-signin-$([guid]::NewGuid().ToString('N'))"
+try {
+    [void][IO.Directory]::CreateDirectory($signInDir)
+    $files = @{ clientConfig = (Join-Path $signInDir 'client-config.json'); onboardingJson = (Join-Path $signInDir 'onboarding.json') }
+    $reset = { foreach ($f in $files.Values) { '{"schemaVersion":1,"tenantId":"t"}' | Set-Content -LiteralPath $f -Encoding utf8NoBOM } }
+    & $reset
+    Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ group = 'g' } } -AzureCliAllowed $true
+    Assert-Contract (-not (Get-Content -Raw $files.clientConfig).Contains('signInMethod')) 'Without client.signInMethod the client files stay unchanged.'
+    Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ group = 'g'; signInMethod = 'azure-cli' } } -AzureCliAllowed $true
+    foreach ($f in $files.Values) { Assert-Contract ((Get-Content -Raw $f | ConvertFrom-Json).signInMethod -ceq 'azure-cli') "client.signInMethod azure-cli must reach $(Split-Path $f -Leaf)." }
+    foreach ($case in @(@{ method = 'azure-cli'; allowed = $false; why = 'Stage 4 did not allow the Azure CLI' }, @{ method = 'az'; allowed = $true; why = 'an unknown method' })) {
+        & $reset
+        $refused = $false
+        try { Set-StgClientSignInMethod -Client $files -Cfg @{ client = @{ signInMethod = $case.method } } -AzureCliAllowed $case.allowed } catch { $refused = $_.Exception.Message -match 'client_sign_in_invalid' }
+        Assert-Contract ($refused -and -not (Get-Content -Raw $files.clientConfig).Contains('signInMethod')) "client.signInMethod must be refused, files unchanged, when $($case.why)."
+    }
+} finally { Remove-Item -LiteralPath $signInDir -Recurse -Force -ErrorAction SilentlyContinue }
+$groupWithMethod = @{ client = @{ group = $exampleCfg.client.group; signInMethod = 'azure-cli' }; groups = $exampleCfg.groups }
+$realClientFiles = ${function:New-QsClientFiles}
+try {
+    Set-Item function:New-QsClientFiles { @{ ok = $true } }
+    $accepted = $true; try { $null = Invoke-StgClient -Ctx @{} -Cfg $groupWithMethod -EntraGroups $entraGroups } catch { $accepted = $false }
+    Assert-Contract $accepted 'client.group accepts signInMethod beside it.'
+} finally { Set-Item function:New-QsClientFiles $realClientFiles }
 $stage7Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage7')[0].Body.Extent.Text
+Assert-Contract ($stage7Body -match 'Set-StgClientSignInMethod -Client \$client -Cfg \$Cfg -AzureCliAllowed') 'Stage 7 must apply client.signInMethod to the client files.'
+foreach ($case in @(@{ method = 'azure-cli'; allowed = $false }, @{ method = 'az'; allowed = $true })) {
+    $refused = $false
+    try { Assert-StgClientSignInMethod -Cfg @{ client = @{ signInMethod = $case.method } } -AzureCliAllowed $case.allowed } catch { $refused = $_.Exception.Message -match 'client_sign_in_invalid' }
+    Assert-Contract $refused "Assert-StgClientSignInMethod must refuse signInMethod '$($case.method)' (Azure CLI allowed: $($case.allowed))."
+}
+Assert-StgClientSignInMethod -Cfg @{ client = @{ signInMethod = 'azure-cli' } } -AzureCliAllowed $true
+$checkAt = $stage7Body.IndexOf('Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed')
+Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $stage7Body.IndexOf('if (-not $Apply)')) 'Stage 7 must check client.signInMethod before its preview and before any deployment step.'
 $stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
 $qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
 Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'
@@ -368,6 +429,13 @@ try {
     Assert-Contract $placeholderRefused 'The example''s placeholder subnet IDs must be refused in verify mode.'
     $c.network.existing = @{ functionsSubnetId = "$vnetPath/functions"; privateEndpointSubnetId = "$vnetPath/private"; apimSubnetId = "$vnetPath/apim" }
     $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    # Neither a new API Management (approveNewPublicApimBootstrap) nor an existing one: refused before Stage 1, which
+    # is create-only, instead of at Stage 3 with apim_missing.
+    $noGateway = $false
+    try { $null = Read-StgConfig $tmp } catch { $noGateway = $_.Exception.Message -match 'apim\.existing' -and $_.Exception.Message -match 'approveNewPublicApimBootstrap' }
+    Assert-Contract $noGateway 'A configuration with no API Management (neither new nor existing) must be refused before Stage 1.'
+    $c.apim.existing = @{ name = 'apim-existing'; subscriptionId = '00000000-0000-4000-8000-000000000002'; resourceGroup = 'rg-apim' }
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
     $read = Read-StgConfig $tmp
     Assert-Contract ($read.network.mode -ceq 'verify') 'The example network mode must be verify: the customer builds the network.'
     foreach ($value in @('true', 1, $null)) {
@@ -413,6 +481,17 @@ try {
     $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'industry' }
     Assert-Contract $bad 'Anthropic model-provider industry must use a supported lowercase value.'
     $c.stage1.foundry.modelProviderData.industry = 'technology'
+    # A new Foundry account with public access disabled is reachable from the gateway only through a private endpoint.
+    $savedNet = $c.network.mode; $savedBackend = $c.backends[0].Clone(); $savedAccount = $c.stage1.foundry.accountName
+    $c.network.mode = 'create'; $c.stage1.foundry.publicNetworkAccess = 'Disabled'; $c.stage1.foundry.accountName = 'labfoundry'
+    $c.backends[0].accountName = $c.stage1.foundry.accountName; $c.backends[0].subscriptionId = $c.subscriptionId; $c.backends[0].resourceGroup = $c.resourceGroup; $c.backends[0].privateEndpoint = $false
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'publicNetworkAccess' -and $_.Exception.Message -match 'privateEndpoint' }
+    Assert-Contract $bad 'A private Foundry account whose backend has no private endpoint must be refused before Stage 1.'
+    $c.backends[0].privateEndpoint = $true
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $null = Read-StgConfig $tmp
+    $c.network.mode = $savedNet; $c.backends[0] = $savedBackend; $c.stage1.foundry.accountName = $savedAccount
     $c.stage1.foundry.deployments[1].name = $c.stage1.foundry.deployments[0].name
     $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
     $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'unique' }
@@ -467,8 +546,12 @@ try {
     Assert-Contract $mismatch 'State of another subscription must be refused.'
     $cfgA.stage1.prefix = 'xyz789'
     $changed = $false
-    try { $null = Get-StgStage $cfgA 1 } catch { $changed = $_.Exception.Message -match 'stage_config_changed' }
+    try { $null = Get-StgStage $cfgA 1 } catch { $changed = $_.Exception.Message -match 'stage_config_changed'; $stage1Message = $_.Exception.Message }
     Assert-Contract $changed 'Stage outputs must not be reused after that stage config changes.'
+    # Stage 1 is create-only: its changed-config message must not send the reader to a preview that refuses the same way.
+    Assert-Contract ($stage1Message -match 'create-only' -and $stage1Message -match 'new resource group' -and $stage1Message -notmatch 'preview and apply stage 1 again') "Stage 1 changed-config message must say Stage 1 is create-only: $stage1Message"
+    $newRgPreview = [regex]::Match((Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Resources.ps1')), "preview: resource group [^\r\n]*").Value
+    Assert-Contract ($newRgPreview -match 'create-only' -and $newRgPreview -match 'stage1') "The Stage 1 preview of a new resource group must say its stage1 values are final: $newRgPreview"
     $cfgA.stage1.prefix = 'abc123'
     # Network-last order: 2 schema, 3 grants (needs 2), 4 Entra, 5 configuration, 6 network, 7 code (needs 6).
     Assert-Contract ((@(Get-StgStageDependencies 3) -join ',') -ceq '1,2') 'Grants (Stage 3) must depend on Stage 1 and the schema (Stage 2).'
@@ -477,6 +560,11 @@ try {
     foreach ($n in 2..5) { Assert-Contract (@(Get-StgStageDependencies $n) -notcontains 6) "Stage $n must not need the network: it runs before Stage 6." }
     Save-StgStage $cfgA 2 @{ marker = 'schema-a' }
     Save-StgStage $cfgA 3 @{ marker = 'grants-a' }
+    # One changed setting can be an input of several verified stages: name them all, in order, at once.
+    $savedCosmos = $cfgA.cosmos; $cfgA.cosmos = @{ databaseName = 'changed' }
+    $listed = ''; try { $null = Get-StgStage $cfgA 3 } catch { $listed = $_.Exception.Message }
+    Assert-Contract ($listed -match 'stage_config_changed' -and $listed -match 'stages 2, 3\b') "Every verified stage whose inputs changed must be named at once: $listed"
+    $cfgA.cosmos = $savedCosmos
     Save-StgStage $cfgA 1 @{ marker = 'a'; durationSeconds = 999 }
     Assert-Contract ((Get-StgStage $cfgA 3).marker -ceq 'grants-a') 'A duration-only change must not invalidate dependent stages.'
     Save-StgStage $cfgA 2 @{ marker = 'schema-a'; verify = @{ containers = 9; readAt = 'later' } }

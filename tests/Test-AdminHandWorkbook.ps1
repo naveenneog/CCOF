@@ -5,8 +5,12 @@ $text = (Get-Content (Join-Path $root 'docs/runbooks/PUBLIC-ACCESS-WORKBOOK.md')
 $boundary = $text.IndexOf("`n---`n`n<!-- ADMIN-HAND-CONFIG-APPENDIX-START -->", [StringComparison]::Ordinal)
 if ($boundary -lt 0) { throw 'Append-only admin boundary is missing.' }
 $original = $text.Substring(0, $boundary)
+# The hand-copy client source blocks must track client/ (tests/manual-guide.test.ts checks each one against the real
+# file); every other line of the original workbook stays frozen.
+$original = [regex]::Replace($original, '(?s)(#### File `C:\\ccof-client\\client\\[^`]+`\s*\n+```javascript\n).*?(```)', '$1<client source>$2')
+if ([regex]::Matches($original, '<client source>```').Count -ne 9) { throw 'Expected the nine hand-copy client source blocks.' }
 $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($original))).ToLowerInvariant()
-if ($digest -cne 'fb87965cc53372171951594e458dc83c3cfd1ff22a6b5fc13ea68f91bb8b5147') {
+if ($digest -cne '7d0f2910c9366105e05a1bdcd69a8012ac3d417673597691c44c615599325379') {
     throw 'Original workbook changed. Modules 00-16 and the existing Step 13 must remain untouched.'
 }
 $appendix = $text.Substring($boundary)

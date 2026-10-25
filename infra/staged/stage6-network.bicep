@@ -157,7 +157,7 @@ resource foundryZoneGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGro
 }]
 
 output foundryPrivateEndpointIds array = [for (f, i) in foundryAccounts: foundryEndpoints[i].id]
-output foundryPrivateDnsZoneIds array = foundryZoneIds
+output foundryPrivateDnsZoneIds array = empty(foundryAccounts) ? [] : foundryZoneIds
 output vnetId string = createNetwork ? net!.outputs.vnetId : first(split(ids.functions, '/subnets/'))
 output functionsSubnetId string = ids.functions
 output apimSubnetId string = ids.apim

@@ -4,10 +4,13 @@
 
 function New-CcofCodeEnvironment {
     param($Config, [string]$ConfigPath)
+    # ADR-0041: the Azure CLI refreshes a token only when under 5 minutes remain, so a 300-second helper cache
+    # could hand Claude Code a token that expires before the next call.
+    $ttlSeconds = if ($Config.signInMethod -ceq 'azure-cli') { [Math]::Min($Config.helperTtlSeconds, 240) } else { $Config.helperTtlSeconds }
     $envs = @{
         ANTHROPIC_BASE_URL = $Config.gatewayUrl
         ANTHROPIC_MODEL = $Config.models.default
-        CLAUDE_CODE_API_KEY_HELPER_TTL_MS = [string]($Config.helperTtlSeconds * 1000)
+        CLAUDE_CODE_API_KEY_HELPER_TTL_MS = [string]($ttlSeconds * 1000)
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = $(if ($Config.disableNonessentialTraffic) { '1' } else { '0' })
         CCOF_CONFIG_FILE = $ConfigPath
         CLAUDE_CODE_USE_FOUNDRY = '0'; CLAUDE_CODE_USE_BEDROCK = '0'; CLAUDE_CODE_USE_VERTEX = '0'
@@ -31,12 +34,14 @@ function New-CcofUsageWrapper {
         (Claude Code docs, "Customize your status line", Windows configuration). -ExecutionPolicy Bypass applies
         to that one process and does not override a Group Policy execution policy.
     #>
-    param([string]$ConfigPath, [string]$NodePath, [string]$UsageEntryPath)
-    foreach ($value in @($ConfigPath, $NodePath, $UsageEntryPath)) {
+    param([string]$ConfigPath, [string]$NodePath, [string]$UsageEntryPath, [string]$TokenHelperPath)
+    foreach ($value in @($ConfigPath, $NodePath, $UsageEntryPath) + @($TokenHelperPath | Where-Object { $_ })) {
         if (-not [IO.Path]::IsPathFullyQualified($value) -or $value -match "[`r`n]") { throw 'Usage paths must be absolute and contain no line breaks.' }
     }
     $q = { param([string]$s) "'" + $s.Replace("'", "''") + "'" }
-    return "`$ErrorActionPreference = 'Stop'`r`n`$env:CCOF_CONFIG_FILE = $(& $q $ConfigPath)`r`n& $(& $q $NodePath) $(& $q $UsageEntryPath) @args`r`nexit `$LASTEXITCODE`r`n"
+    # In azure-cli mode /usage takes its token from the same helper Claude Code runs (client/src/helper-token.mjs).
+    $helperLine = if ($TokenHelperPath) { "`$env:CCOF_TOKEN_HELPER = $(& $q $TokenHelperPath)`r`n" } else { '' }
+    return "`$ErrorActionPreference = 'Stop'`r`n`$env:CCOF_CONFIG_FILE = $(& $q $ConfigPath)`r`n$helperLine& $(& $q $NodePath) $(& $q $UsageEntryPath) @args`r`nexit `$LASTEXITCODE`r`n"
 }
 
 function Get-CcofUsageCommand {
@@ -104,7 +109,9 @@ function Set-CcofClaudeCode {
     $settings.model = $config.models.default
     $settings.availableModels = @($config.models.available)
     $settings.enforceAvailableModels = $true
-    $shim = New-ClientTokenShim $ConfigPath $NodePath $TokenEntryPath
+    $azureCli = $config.signInMethod -ceq 'azure-cli'
+    $shim = if ($azureCli) { New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir (Get-ClientAzureCliProfilePath $ConfigPath) -AzureCliPath (Resolve-ClientAzureCliPath) }
+            else { New-ClientTokenShim $ConfigPath $NodePath $TokenEntryPath }
     $paths = @($path, $helper)
     $usageShimPath = Join-Path $ClaudeHome 'ccof-usage.ps1'
     $skillPath = Join-Path $ClaudeHome 'skills/usage/SKILL.md'
@@ -112,7 +119,7 @@ function Set-CcofClaudeCode {
     if ($UsageEntryPath) {
         # The command line is run by Git Bash or PowerShell: refuse characters either would expand in it.
         if ($usageShimPath -match '[`$"]') { throw 'The Claude home path holds a backtick, dollar sign or quote, which the /usage skill command cannot carry; nothing was changed.' }
-        $usageShim = New-CcofUsageWrapper $ConfigPath $NodePath $UsageEntryPath
+        $usageShim = New-CcofUsageWrapper $ConfigPath $NodePath $UsageEntryPath $(if ($azureCli) { $helper } else { '' })
         $usageCommand = Get-CcofUsageCommand $usageShimPath
         $usageSkill = New-CcofUsageSkill $usageCommand
         $paths += @($usageShimPath, $skillPath)
@@ -137,5 +144,6 @@ function Set-CcofClaudeCode {
     Write-ClientJson $path $settings
     if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult } | ConvertTo-Json -Compress)
+    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult
+        signInMethod = $(if ($azureCli) { 'azure-cli' } else { 'msal' }); signIn = "`"$helper`" login" } | ConvertTo-Json -Compress)
 }

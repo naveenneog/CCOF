@@ -1,0 +1,5 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 0 -ConfigPath $cfg
+ 119 |  … ms.Count) { throw "invalid staged configuration:`n  - $($problems -jo …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | invalid staged configuration:   - stage1.foundry.publicNetworkAccess is Disabled, so the gateway reaches
+     | ccofnv2foundry1025 only through a private endpoint: set privateEndpoint to true on its backends entry

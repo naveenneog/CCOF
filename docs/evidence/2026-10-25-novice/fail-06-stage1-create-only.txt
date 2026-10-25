@@ -1,0 +1,7 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 1 -ConfigPath $cfg
+Exception: /home/alex/ccof/infra/staged/Staged.Resources.ps1:86
+Line |
+  86 |  … ctedJson) { throw "stage1_parameters_changed: '$key' differs from the …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | stage1_parameters_changed: 'approveNewPublicApimBootstrap' differs from the succeeded Stage 1 deployment; Stage
+     | 1 is create-only. Use a new prefix/RG for a new deployment.

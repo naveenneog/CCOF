@@ -105,6 +105,7 @@ function Invoke-Stage7 {
     $ctx.PollSeconds = 15
     $docs = New-QsSeedDocuments -P $ctx.P -ClassificationGroupDisplayNames $ctx.State.completed['1'].outputs.classificationGroupDisplayNames
     $groupDocs = @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups)
+    Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
         Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function"
@@ -146,6 +147,7 @@ function Invoke-Stage7 {
     if ($LASTEXITCODE) { throw 'snapshot_apply_failed: infra/sync/Invoke-SnapshotApplyThroughFunction.ps1' }
     $result.snapshot = @{ sha256 = $sha; groups = @($entra.groups.Keys) }
     $client = Invoke-StgClient -Ctx $ctx -Cfg $Cfg -EntraGroups $entra.groups
+    Set-StgClientSignInMethod -Client $client -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
     $null = & node (Join-Path $script:Repo 'client/bin/validate-config.mjs') $client.clientConfig
     Assert-Stg ($LASTEXITCODE -eq 0) 'client config failed the client validator'
     $result.client = $client

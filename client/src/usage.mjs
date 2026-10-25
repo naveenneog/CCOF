@@ -90,7 +90,7 @@ export function statusLine(usage) {
   return `CCOF ${formatAmount(top.spent.usd)}/${formatAmount(top.budget.usd)}${pct ? ` (${pct})` : ''}${warn}`;
 }
 
-export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeoutMs = 15_000 }) {
+export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeoutMs = 15_000, signIn = 'run ccof-token login' }) {
   const url = `${String(gatewayUrl).replace(/\/+$/, '')}/ccof/me/usage`;
   const response = await fetchImpl(url, {
     method: 'GET', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
@@ -104,7 +104,7 @@ export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeout
   }
   const retry = response.headers.get('retry-after');
   switch (response.status) {
-    case 401: throw new UsageError('The gateway did not accept your sign-in. Sign in again: run ccof-token login.');
+    case 401: throw new UsageError(`The gateway did not accept your sign-in. Sign in again: ${signIn}.`);
     case 403: throw new UsageError('This sign-in is not allowed to read usage from the gateway.');
     case 404: throw new UsageError('This gateway does not offer usage figures yet. Ask your platform team.');
     case 429: throw new UsageError(`Usage was asked for too often. Retry in ${/^\d+$/.test(retry ?? '') ? retry : 'a few'} seconds.`);
@@ -115,12 +115,18 @@ export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeout
 
 async function defaultLoad() {
   const { loadConfig } = await import('./config.mjs');
+  const { config, configPath } = await loadConfig();
+  const base = { gatewayUrl: config.gatewayUrl, configDir: path.dirname(configPath) };
+  if (config.signInMethod === 'azure-cli') {
+    const { helperToken } = await import('./helper-token.mjs');
+    const helper = process.env.CCOF_TOKEN_HELPER;
+    return { ...base, token: () => helperToken(helper), signIn: `run "${helper}" login` };
+  }
   const { createTokenService } = await import('./token-service.mjs');
   const { createRuntime } = await import('./msal-runtime.mjs');
-  const { config, configPath } = await loadConfig();
   const runtime = await createRuntime(config, configPath, { report: () => {} });
   const service = createTokenService(config, runtime);
-  return { gatewayUrl: config.gatewayUrl, configDir: path.dirname(configPath), token: () => service.token() };
+  return { ...base, token: () => service.token() };
 }
 
 async function readCache(file, nowMs) {
@@ -143,12 +149,12 @@ export async function runUsageCli(args, {
   if (statusMode) {
     // A status line runs often and must stay quiet: any failure prints nothing.
     try {
-      const { gatewayUrl, configDir, token } = await load();
+      const { gatewayUrl, configDir, token, signIn } = await load();
       const file = path.join(configDir, STATUSLINE_CACHE_FILE);
       const nowMs = now().getTime();
       let line = await readCache(file, nowMs);
       if (line === null) {
-        line = statusLine(await fetchUsage({ gatewayUrl, token: await token(), fetchImpl }));
+        line = statusLine(await fetchUsage({ gatewayUrl, token: await token(), fetchImpl, signIn }));
         await writeFile(file, JSON.stringify({ at: nowMs, line }), 'utf8');
       }
       if (line) stdout(`${line}\n`);
@@ -156,8 +162,8 @@ export async function runUsageCli(args, {
     return 0;
   }
   try {
-    const { gatewayUrl, token } = await load();
-    const usage = await fetchUsage({ gatewayUrl, token: await token(), fetchImpl });
+    const { gatewayUrl, token, signIn } = await load();
+    const usage = await fetchUsage({ gatewayUrl, token: await token(), fetchImpl, signIn });
     stdout(`${formatUsage(usage, now()).join('\n')}\n`);
     return 0;
   } catch (error) {

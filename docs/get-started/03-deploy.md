@@ -43,10 +43,37 @@ Set the main deployment values first:
 ```
 
 This is an example of the main choices, not a complete configuration file. Keep the copied template and fill every
-applicable `REPLACE-` value, including backend and group settings. Use `network.mode: create` only for a lab.
+applicable `REPLACE-` value, including backend and group settings. With `network.mode: create` the three
+`network.existing` subnet IDs are not used and can keep their `REPLACE-` values. `workbook.resourceName` takes a
+new GUID: `[guid]::NewGuid()`. Use `network.mode: create` only for a lab.
+
+**Stage 1 is create-only.** Once Stage 1 has run, its `stage1` values cannot be changed in that resource group;
+a different value means a new resource group. Check these before the first `-Apply`:
+
+| Setting | Template | Lab (2026-10-24 and 2026-10-25 runs) | Why |
+| --- | --- | --- | --- |
+| `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one. Stage 0 refuses a configuration with neither |
+| `stage1.functionsPublicNetworkAccess` | `Disabled` | `Enabled` | `Disabled` closes the apps and their deployment (SCM) endpoint to the internet ([App Service access restrictions](https://learn.microsoft.com/azure/app-service/overview-access-restrictions)): Stage 7 publishing and the admin console then need a machine on the VNet ([network](../NETWORK.md)) |
+| `stage1.cosmosLocations` | `eastus2` + `centralus`, zone-redundant | `isZoneRedundant: false`, or one region with `cosmosCapacityMode: serverless` | Zone-redundant Cosmos DB capacity was refused in East US 2 ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)) |
+| `stage1.foundry.deployments` | Claude 4.5 and 5 | Deployments that match free quota ([prerequisites](02-prerequisites.md#microsoft-foundry-models)) | Quota differs per subscription |
+| `backends[].privateEndpoint` (the backend for the new Foundry account) | `false` | `true` | `stage1.foundry.publicNetworkAccess: Disabled` leaves the gateway only a private endpoint to Foundry. Stage 0 refuses the two disagreeing |
+
+These settings are not create-only, but the template's values differ from what the README describes:
+
+| Setting | Template | For dollar budgets |
+| --- | --- | --- |
+| `resolver.budgetEnforcement` | `token-limits-only` (token limits, no dollar budget) | `budget-state` ([budgets](../operate/budgets-and-guard.md)) |
+| `reconciler.timerEnabled` | `false` | `true`: the reconciler prices usage on its schedule |
+| `groups[].budget.perUser` | `25000` `CCU` | For example `100` `USD` |
+
 The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
 without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with
 `stage N preview only: nothing changed. Rerun with -Apply.`; Stage 0 is read-only and has no `-Apply` step.
+
+**Developer sign-in method.** Chosen in [prerequisites, Decide before you start](02-prerequisites.md#decide-before-you-start):
+`client.signInMethod` (`msal` or `azure-cli`), and for `azure-cli` also `entra.allowAzureCliClient: true`, set
+before Stage 4 ([guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in)). Developers run the
+same setup and sign-in commands either way.
 
 ---
 

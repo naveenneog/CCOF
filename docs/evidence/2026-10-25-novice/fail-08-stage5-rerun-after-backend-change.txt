@@ -1,0 +1,6 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 7 -ConfigPath $cfg
+Exception: /home/alex/ccof/infra/staged/Staged.Common.ps1:272
+Line |
+ 272 |          throw "stage_config_changed: inputs for stage $Number changed …
+     |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | stage_config_changed: inputs for stage 5 changed after it was verified; preview and apply stage 5 again.

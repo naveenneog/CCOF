@@ -43,11 +43,35 @@ The [demo evidence](../evidence/2026-10-24-demo/README.md) records which directo
 
 ## Microsoft Foundry models
 
-- [ ] Claude deployments that exist, or quota and purchase rights for Stage 1 to create them. Check the quota:
+- [ ] Claude deployments that exist, or quota and purchase rights for Stage 1 to create them. Check the quota (the
+      table output of this command omits the quota names, so the names are selected from the JSON):
 
 ```powershell
-az cognitiveservices usage list -l eastus2 -o table   # lines ending ".Azure" are Foundry Claude quota
+az cognitiveservices usage list -l eastus2 -o json | ConvertFrom-Json |
+  Where-Object { $_.name.value -like '*claude*.Azure' } |
+  Select-Object @{ n = 'quota'; e = { $_.name.value } }, currentValue, limit
 ```
+
+Each line is `AIServices.<sku>.<model>.Azure`; free capacity is `limit` minus `currentValue`. It maps to one entry
+in `stage1.foundry.deployments` and one in `backends[].deploymentInferenceGeo`:
+
+| Quota line | `model` | `sku` | `capacity` | `deploymentInferenceGeo` |
+| --- | --- | --- | --- | --- |
+| `AIServices.GlobalStandard.claude-sonnet-5-5.Azure`, 0 of 80 used | `claude-sonnet-5-5` | `GlobalStandard` | up to 80 | `global` |
+| `AIServices.DataZoneStandard.claude-haiku-5-5.Azure`, 0 of 27 used | `claude-haiku-5-5` | `DataZoneStandard` | up to 27 | `us` |
+
+`us` (DataZone) usage is priced at 1.1 times `global` in [config/rate-card.json](../../config/rate-card.json).
+
+The `version` comes from the model list; Stage 0 refuses a model, version or `sku` the region does not offer:
+
+```powershell
+az cognitiveservices model list -l eastus2 -o json | ConvertFrom-Json |
+  Where-Object { $_.model.format -eq 'Anthropic' } |
+  Select-Object @{ n = 'model'; e = { $_.model.name } }, @{ n = 'version'; e = { $_.model.version } },
+    @{ n = 'skus'; e = { ($_.model.skus.name | Sort-Object -Unique) -join ', ' } } | Sort-Object model, version -Unique
+```
+
+Model names in `groups[].familyPolicy.families`, `client.models` and `acceptance` use the same deployment names.
 
 ## Network (customer-built mode)
 
@@ -87,5 +111,6 @@ Stage 4 creates them, or merges its settings into existing ones (`entra.existing
 | Dollar budgets enforced | `budget-state` (enforced) or `token-limits-only` | `resolver.budgetEnforcement` |
 | Budget guard | Example: warn at 80%, rate allowance 5% per projection window; not a strict cap | `reconciler.budgetGuard`; [budgets](../operate/budgets-and-guard.md) |
 | Cosmos DB redundancy | One region, or two regions with failover | `stage1.cosmosLocations`; [guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy) |
+| Developer sign-in | `msal` (default: the CCOF helper, Node.js on each machine) or `azure-cli` (interactive `az login` through a helper; the Azure CLI on each machine). Before Stage 4 | `client.signInMethod`, and `entra.allowAzureCliClient: true` for `azure-cli`; [guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in) |
 
 Next: [deploy](03-deploy.md).

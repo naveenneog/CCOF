@@ -18,7 +18,7 @@ function invalid(field) {
 }
 
 export function validateConfig(value) {
-  if (!object(value) || Object.keys(value).some((key) => !keys.includes(key) && key !== 'project')) invalid('keys');
+  if (!object(value) || Object.keys(value).some((key) => !keys.includes(key) && !['project', 'signInMethod'].includes(key))) invalid('keys');
   for (const key of keys) if (!Object.hasOwn(value, key)) invalid(key);
   if (value.schemaVersion !== 1) invalid('schemaVersion');
   if (!guid.test(value.tenantId ?? '') || !guid.test(value.clientId ?? '')) invalid('tenantId/clientId');
@@ -65,6 +65,11 @@ export function validateConfig(value) {
           (typeof project.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(project.id))) ||
         typeof project.selectorHeader !== 'string' || !/^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(project.selectorHeader) ||
         reserved.includes(project.selectorHeader.toLowerCase())) invalid('project');
+  }
+  if (Object.hasOwn(value, 'signInMethod')) {
+    if (!['msal', 'azure-cli'].includes(value.signInMethod)) invalid('signInMethod');
+    // ADR-0041: the Azure CLI helper passes the scope to az.cmd through cmd.exe, so only plain URI characters.
+    if (value.signInMethod === 'azure-cli' && !/^[A-Za-z0-9:/._-]+$/.test(value.scope)) invalid('scope');
   }
   return { ...value, gatewayUrl: gateway.toString().replace(/\/+$/, '') };
 }

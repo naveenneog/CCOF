@@ -135,6 +135,10 @@ function Invoke-Stage4 {
     Assert-Stg (@($gwNow.identifierUris) -contains "api://$($gw.appId)") 'gateway identifier URI missing'
     Assert-Stg ($gwNow.api.requestedAccessTokenVersion -eq 2) 'gateway tokens are not v2'
     Assert-Stg (@($gwNow.api.oauth2PermissionScopes | Where-Object { $_.value -ceq 'access_as_user' -and $_.isEnabled }).Count -eq 1) 'access_as_user scope missing'
+    $gwScopeId = @($gwNow.api.oauth2PermissionScopes | Where-Object { $_.value -ceq 'access_as_user' })[0].id
+    foreach ($cid in $clients) {
+        Assert-Stg (@($gwNow.api.preAuthorizedApplications | Where-Object { $_.appId -ieq $cid -and @($_.delegatedPermissionIds) -contains $gwScopeId }).Count -eq 1) "gateway app does not preauthorize client $cid for access_as_user"
+    }
     if ($adm) {
         $admNow = Get-StgAppById $adm.appId
         $admScopeId = @($admNow.api.oauth2PermissionScopes | Where-Object { $_.value -ceq 'Projects.Manage' })[0].id

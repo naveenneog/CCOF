@@ -12,7 +12,7 @@ function New-CcofDesktopProfile {
         inferenceGatewayAuthScheme = 'bearer'
         inferenceModels = @($models | ForEach-Object { @{ name = $_ } })
     }
-    if ($Schema.credentialKinds -ccontains 'external-idp' -and
+    if ($Config.signInMethod -cne 'azure-cli' -and $Schema.credentialKinds -ccontains 'external-idp' -and
         $Schema.keys -ccontains 'inferenceIdpOidc' -and $Schema.keys -ccontains 'inferenceIdpAuthFlow') {
         $scope = [string]$Config.scope
         $selfPrefix = "api://$($Config.clientId)/"
@@ -30,8 +30,14 @@ function New-CcofDesktopProfile {
         $profile.inferenceCredentialKind = 'helper-script'
         $profile.inferenceCredentialHelper = $HelperPath
         $profile.inferenceCredentialHelperArgs = @('token')
-        $profile.inferenceCredentialHelperTtlSec = $Config.helperTtlSeconds
-        $profile.inferenceCredentialHelperTimeoutSec = $Config.tokenTimeoutSeconds * 3
+        if ($Config.signInMethod -ceq 'azure-cli') {
+            # ADR-0041: under the Azure CLI 5-minute refresh floor, and long enough for one interactive sign-in.
+            $profile.inferenceCredentialHelperTtlSec = [Math]::Min($Config.helperTtlSeconds, 240)
+            $profile.inferenceCredentialHelperTimeoutSec = $Config.loginTimeoutSeconds + $Config.tokenTimeoutSeconds * 2
+        } else {
+            $profile.inferenceCredentialHelperTtlSec = $Config.helperTtlSeconds
+            $profile.inferenceCredentialHelperTimeoutSec = $Config.tokenTimeoutSeconds * 3
+        }
         $profile.inferenceCredentialHelperSilentRefreshEnabled = $true
         if ($profile.inferenceCredentialHelperTimeoutSec -gt 600) { throw 'Configuration tokenTimeoutSeconds exceeds the Desktop helper timeout support.' }
     }
@@ -66,7 +72,8 @@ function Set-CcofClaudeDesktop {
         if ($Schema.keys -cnotcontains $key) { throw 'The installed Desktop schema does not support an existing profile key. Review it in the application; nothing was overwritten.' }
         $profile[$key] = $existing[$key]
     }
-    $shim = New-ClientTokenShim $ConfigPath $NodePath $TokenEntryPath
+    $shim = if ($config.signInMethod -ceq 'azure-cli') { New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir (Get-ClientAzureCliProfilePath $ConfigPath) -AzureCliPath (Resolve-ClientAzureCliPath) }
+            else { New-ClientTokenShim $ConfigPath $NodePath $TokenEntryPath }
     $meta = Read-ClientJson $metaPath
     if ($meta.hybridPointer) { throw 'Desktop uses a hybrid bootstrap selection. Switch to a local configuration in Desktop before rerunning; nothing was changed.' }
     if ($meta.Contains('entries') -and $meta.entries -isnot [array]) { throw 'Desktop metadata entries must be an array; nothing was changed.' }
@@ -80,6 +87,9 @@ function Set-CcofClaudeDesktop {
     Write-ClientJson $profilePath $profile
     Write-ClientJson $metaPath $meta
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-desktop'; changeId = $snapshot.Manifest.changeId
-        credentialKind = $profile.inferenceCredentialKind } | ConvertTo-Json -Compress)
+    $result = [ordered]@{ event = 'configured'; component = 'claude-desktop'; changeId = $snapshot.Manifest.changeId
+        credentialKind = $profile.inferenceCredentialKind; signInMethod = $(if ($config.signInMethod -ceq 'azure-cli') { 'azure-cli' } else { 'msal' }) }
+    # external-idp: Claude Desktop runs the Entra sign-in itself; otherwise the developer signs in once through the helper.
+    if ($profile.inferenceCredentialKind -ceq 'helper-script') { $result.signIn = "`"$helperPath`" login" }
+    return ($result | ConvertTo-Json -Compress)
 }

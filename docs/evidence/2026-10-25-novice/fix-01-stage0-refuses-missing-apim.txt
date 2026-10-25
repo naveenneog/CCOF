@@ -1,0 +1,7 @@
+PS /home/alex/ccof> pwsh -File $run -Stage 0 -ConfigPath $cfg
+Line |
+ 113 |  … ms.Count) { throw "invalid staged configuration:`n  - $($problems -jo …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | invalid staged configuration:   - no API Management: set stage1.approveNewPublicApimBootstrap to true (Stage 1
+     | creates a new one) or name an existing one in apim.existing { name, subscriptionId, resourceGroup }; Stage 1 is
+     | create-only, so decide before it runs

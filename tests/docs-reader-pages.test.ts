@@ -162,3 +162,15 @@ test("earlier-path guides live in docs/archive, listed by its README, with worki
   assert.deepEqual(stale, [], "no file refers to an archived guide by its former docs/ path");
   assert.match(read("docs/INDEX.md"), /\(archive\/README\.md\)/);
 });
+
+test("developer setup has one sign-in step for both sign-in methods, and the method is a deployment decision", () => {
+  const setup = read("docs/get-started/05-developer-setup.md");
+  const step2 = setup.split("## 2.")[1].split("\n## ")[0];
+  assert.match(step2, /& "\$env:USERPROFILE\\\.claude\\ccof-token\.cmd" login/);
+  assert.match(step2, /"signIn"/, "step 2 points at the command setup printed");
+  assert.doesNotMatch(setup, /Open `client-config\.json`/, "the developer does not choose a route by reading the configuration");
+  assert.doesNotMatch(setup, /\.\\client\\bin\\ccof-token\.cmd login/, "no second, repository-path sign-in command");
+  for (const method of ["msal", "azure-cli"]) assert.ok(step2.includes(`\`${method}\``), `step 2 says what ${method} shows`);
+  const decide = read("docs/get-started/02-prerequisites.md").split("## Decide before you start")[1];
+  assert.match(decide, /\| Developer sign-in \|[^\n]*`client\.signInMethod`[^\n]*`entra\.allowAzureCliClient(: true)?`/);
+});

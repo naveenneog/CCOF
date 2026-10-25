@@ -17,7 +17,7 @@ function Test-Case([string]$Name, [scriptblock]$Test) {
 }
 function Refuses([scriptblock]$Action, [string]$Pattern) {
     try { & $Action | Out-Null } catch {
-        Assert ($_.Exception.Message -match $Pattern) 'Refusal did not name the expected remedy'
+        Assert ($_.Exception.Message -match $Pattern) "Refusal did not name the expected remedy: $($_.Exception.Message)"
         return
     }
     throw 'Expected refusal'
@@ -84,6 +84,9 @@ try {
         Assert ($settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS -ceq '300000') 'Helper TTL incorrect'
         Assert ($settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -ceq '1') 'Traffic decision missing'
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'Silent token command missing'
+        # One sign-in command for every method: the helper setup just wrote, with `login`.
+        Assert ($codeResult.signInMethod -ceq 'msal') "Sign-in method not reported: $($codeResult.signInMethod)"
+        Assert ($codeResult.signIn -ceq ('"' + (Join-Path $claudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($codeResult.signIn)"
         $snapshot = Join-Path $backupRoot $codeResult.changeId
         $manifest = Read-ClientJson (Join-Path $snapshot 'snapshot.json')
         $record = $manifest.files | Where-Object { [string]::Equals($_.path, $settingsPath, 'Ordinal') }
@@ -222,6 +225,7 @@ try {
         Assert ($profile.inferenceGatewayBaseUrl -ceq $config.gatewayUrl) 'Desktop URL is wrong'
         Assert ($profile.inferenceGatewayAuthScheme -ceq 'bearer') 'Desktop must send bearer tokens'
         Assert ($profile.inferenceCredentialHelperArgs[0] -ceq 'token') 'Desktop helper is not silent'
+        Assert ($desktopResult.signIn -ceq ('"' + (Join-Path (Split-Path $desktopRoot -Parent) 'ccof-token.cmd') + '" login')) "Desktop sign-in command not reported: $($desktopResult.signIn)"
         Assert ($profile.inferenceCredentialHelperTtlSec -lt $config.minimumTokenLifetimeSeconds) 'Desktop TTL too long'
         $meta = Read-ClientJson (Join-Path $desktopRoot '_meta.json')
         Assert ($meta.appliedId -ceq $config.desktop.profileId) 'New profile not selected'
@@ -530,6 +534,154 @@ try {
             Refuses { Merge-CcofProjectHeaders -Sources @($source) -Project $project } 'headers|credential'
         }
         Refuses { Merge-CcofProjectHeaders -Sources @('X-Other: one', 'X-Other: two') -Project $project } 'conflict'
+    }
+
+    # Azure CLI sign-in (ADR-0041): a mock az.cmd records each call and the profile folder it ran with.
+    $azConfig = $config.Clone(); $azConfig.signInMethod = 'azure-cli'
+    $azConfigPath = Join-Path $work 'az-mode/config.json'
+    Write-ClientJson $azConfigPath $azConfig
+    $mockDir = Join-Path $work 'mock-az'
+    [void][IO.Directory]::CreateDirectory($mockDir)
+    [IO.File]::WriteAllText((Join-Path $mockDir 'az.cmd'), @'
+@echo off
+>>"%~dp0calls.log" echo [%AZURE_CONFIG_DIR%] %*
+if "%1"=="login" goto login
+if "%1"=="logout" goto logout
+if "%2"=="show" goto show
+if "%2"=="get-access-token" goto token
+exit /b 99
+:token
+if not exist "%~dp0session" goto needlogin
+echo eyJ.mock.token
+exit /b 0
+:needlogin
+>&2 echo AADSTS50076 interaction required.
+exit /b 1
+:show
+if not exist "%~dp0session" goto needlogin
+echo developer@example.test
+exit /b 0
+:login
+echo LOGIN-OUTPUT-NOT-A-TOKEN
+>"%~dp0session" echo signed-in
+exit /b 0
+:logout
+del "%~dp0session"
+exit /b 0
+'@)
+    $mockAz = Join-Path $mockDir 'az.cmd'
+    # A planted az.cmd in the folder the helper is started from, and first on PATH: the helper must use neither.
+    $planted = Join-Path $work 'untrusted project'
+    [void][IO.Directory]::CreateDirectory($planted)
+    [IO.File]::WriteAllText((Join-Path $planted 'az.cmd'), "@echo off`r`n>>`"%~dp0planted.log`" echo %*`r`necho eyJ.planted.token`r`nexit /b 0`r`n")
+    function Invoke-AzHelper([string]$Helper, [string]$Argument) {
+        $out = Join-Path $mockDir 'stdout.txt'; $err = Join-Path $mockDir 'stderr.txt'
+        $saved = $env:PATH; $env:PATH = "$planted;$saved"
+        Push-Location -LiteralPath $planted
+        try { & $env:ComSpec /d /c "`"$Helper`" $Argument" 1> $out 2> $err; $code = $LASTEXITCODE } finally { Pop-Location; $env:PATH = $saved }
+        return @{ exitCode = $code; stdout = ([IO.File]::ReadAllText($out)).Trim(); stderr = ([IO.File]::ReadAllText($err)).Trim() }
+    }
+    function Use-MockAzOnPath([scriptblock]$Body) { $saved = $env:PATH; $env:PATH = "$mockDir;$saved"; try { & $Body } finally { $env:PATH = $saved } }
+    function Read-AzCalls { $log = Join-Path $mockDir 'calls.log'; if (Test-Path $log) { $c = @(Get-Content $log); Remove-Item $log; return $c }; return @() }
+
+    Test-Case 'Azure CLI helper refuses an unsafe tenant, scope or profile folder before writing anything' {
+        $good = @{ TenantId = $config.tenantId; Scope = $config.scope; AzureConfigDir = (Join-Path $work 'az-profile'); AzureCliPath = $mockAz }
+        Assert ((New-ClientAzureCliTokenShim @good).Contains("set `"AZ=$mockAz`"")) 'Valid values refused, or az.cmd not pinned by its full path'
+        foreach ($bad in @(@{ TenantId = 'common' }, @{ TenantId = "$($config.tenantId)&calc" }, @{ Scope = "$($config.scope)&calc" },
+            @{ Scope = 'api://x/a%PATH%' }, @{ Scope = 'api://x/a"b' }, @{ AzureConfigDir = 'relative\az' }, @{ AzureConfigDir = 'C:\a"b\az' },
+            @{ AzureConfigDir = "C:\a`r`nb\az" }, @{ AzureCliPath = 'az.cmd' }, @{ AzureCliPath = 'C:\a"b\az.cmd' }, @{ AzureCliPath = "C:\a`nb\az.cmd" })) {
+            $values = $good.Clone(); foreach ($k in $bad.Keys) { $values[$k] = $bad[$k] }
+            Refuses { New-ClientAzureCliTokenShim @values } 'tenant|scope|folder|Azure CLI path'
+        }
+    }
+    Test-Case 'Azure CLI helper: one interactive sign-in, its own profile, only the token on stdout, and login/status/logout' {
+        $azProfile = Join-Path $work 'az profile 100%'
+        $helper = Join-Path $work 'az-helper/ccof-token.cmd'
+        Write-ClientText $helper (New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir $azProfile -AzureCliPath $mockAz)
+        $null = Read-AzCalls
+        $first = Invoke-AzHelper $helper 'token'
+        Assert ($first.exitCode -eq 0 -and $first.stdout -ceq 'eyJ.mock.token') "First token call: $($first | ConvertTo-Json -Compress)"
+        Assert ($first.stderr -match 'LOGIN-OUTPUT-NOT-A-TOKEN') 'az login output was not kept off stdout'
+        $calls = Read-AzCalls
+        Assert ($calls.Count -eq 3 -and $calls[0] -match ' account get-access-token ' -and $calls[1] -match ' login ' -and $calls[2] -match ' account get-access-token ') "Expected token, login, token: $($calls -join ' | ')"
+        Assert (@($calls | Where-Object { -not $_.StartsWith("[$azProfile] ") }).Count -eq 0) "Azure CLI ran outside the gateway profile: $($calls -join ' | ')"
+        Assert ($calls[1] -match "--tenant `"?$($config.tenantId)`"? --scope `"?$([regex]::Escape($config.scope))`"? --allow-no-subscriptions") "Sign-in arguments: $($calls[1])"
+        Assert ($calls[0] -match '--query accessToken --output tsv') "Token arguments: $($calls[0])"
+        $again = Invoke-AzHelper $helper ''
+        Assert ($again.stdout -ceq 'eyJ.mock.token' -and (Read-AzCalls).Count -eq 1) 'A cached token must not sign in again'
+        $status = Invoke-AzHelper $helper 'status'
+        Assert ($status.exitCode -eq 0 -and $status.stdout -match 'developer@example\.test') "status: $($status | ConvertTo-Json -Compress)"
+        $null = Read-AzCalls
+        $out = Invoke-AzHelper $helper 'logout'
+        Assert ($out.exitCode -eq 0 -and -not (Test-Path (Join-Path $mockDir 'session'))) 'logout did not sign out'
+        $login = Invoke-AzHelper $helper 'login'
+        Assert ($login.exitCode -eq 0 -and -not $login.stdout.Contains('eyJ') -and -not $login.stdout.Contains('LOGIN-OUTPUT')) "login printed to stdout: $($login.stdout)"
+        $bad = Invoke-AzHelper $helper 'bogus'
+        Assert ($bad.exitCode -ne 0 -and -not $bad.stdout) 'An unknown command must fail with nothing on stdout'
+        $null = Read-AzCalls
+        Assert (-not (Test-Path (Join-Path $planted 'planted.log'))) 'The az.cmd in the start folder or first on PATH ran instead of the pinned Azure CLI'
+    }
+    Test-Case 'Azure CLI helper: silent-token never opens a sign-in, and a missing Azure CLI exits 3' {
+        $helper = Join-Path $work 'az-helper2/ccof-token.cmd'
+        Write-ClientText $helper (New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir (Join-Path $work 'az-p2') -AzureCliPath $mockAz)
+        Remove-Item (Join-Path $mockDir 'session') -ErrorAction SilentlyContinue; $null = Read-AzCalls
+        $silent = Invoke-AzHelper $helper 'silent-token'
+        $calls = @(Read-AzCalls)
+        Assert ($silent.exitCode -eq 4 -and -not $silent.stdout -and $calls.Count -eq 1 -and $calls[0] -match ' account get-access-token ') "silent-token while signed out: $($silent | ConvertTo-Json -Compress) calls: $($calls -join ' | ')"
+        Assert ($silent.stderr -match 'AADSTS50076' -and $silent.stderr -match 'login') "silent-token must pass the Entra code and name login: $($silent.stderr)"
+        $gone = Join-Path $work 'az-helper3/ccof-token.cmd'
+        Write-ClientText $gone (New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir (Join-Path $work 'az-p3') -AzureCliPath (Join-Path $work 'uninstalled/az.cmd'))
+        $missing = Invoke-AzHelper $gone 'token'
+        Assert ($missing.exitCode -eq 3 -and -not $missing.stdout -and $missing.stderr -match 'installazurecliwindows') "Missing Azure CLI: $($missing | ConvertTo-Json -Compress)"
+        Assert (-not (Test-Path (Join-Path $planted 'planted.log'))) 'A planted az.cmd ran when the pinned Azure CLI was missing'
+    }
+    Test-Case 'Setup refuses azure-cli mode when the Azure CLI is not installed, before writing anything' {
+        $options = $codeArgs.Clone(); $options.ConfigPath = $azConfigPath; $options.ClaudeHome = Join-Path $work 'az-none/.claude'
+        $options.VSCodeSettingsPath = Join-Path $work 'az-none/code/settings.json'
+        $saved = $env:PATH; $env:PATH = (Join-Path $env:SystemRoot 'System32') + ';' + (Split-Path $node -Parent)
+        try { Refuses { Set-CcofClaudeCode @options -Confirmed } 'azure_cli_missing' } finally { $env:PATH = $saved }
+        Assert (-not (Test-Path -LiteralPath $options.ClaudeHome)) 'Files written although the Azure CLI is missing'
+    }
+    Test-Case 'the verifier finds the Claude Code helper, else the Desktop helper, else reports it missing' {
+        $root = Join-Path $work 'helpers'; $code = Join-Path $root 'profile/.claude/ccof-token.cmd'; $desk = Join-Path $root 'local/Claude-3p/ccof-token.cmd'
+        $args2 = @{ UserProfile = (Join-Path $root 'profile'); LocalAppData = (Join-Path $root 'local') }
+        Assert ($null -eq (Resolve-ClientTokenHelperPath @args2)) 'A helper was reported where none exists'
+        Write-ClientText $desk '@echo off'
+        Assert ((Resolve-ClientTokenHelperPath @args2) -ceq $desk) 'The Desktop helper was not found'
+        Write-ClientText $code '@echo off'
+        Assert ((Resolve-ClientTokenHelperPath @args2) -ceq $code) 'The Claude Code helper was not preferred'
+        $script = Join-Path $script:ClientRepoRoot 'scripts/client/Test-ClientGatewayAccess.ps1'
+        Assert ([IO.File]::ReadAllText($script) -match 'token_helper_missing') 'The verifier does not report a missing helper'
+    }
+    Test-Case 'Claude Code in azure-cli mode writes the Azure CLI helper, a cache below the Azure CLI refresh floor, and pins the helper for /usage' {
+        $options = $codeArgs.Clone(); $options.ConfigPath = $azConfigPath; $options.ClaudeHome = Join-Path $work 'az-mode/.claude'
+        $options.VSCodeSettingsPath = Join-Path $work 'az-mode/code/settings.json'
+        $result = Use-MockAzOnPath { Set-CcofClaudeCode @options -Confirmed } | ConvertFrom-Json -AsHashtable
+        Assert ($result.signInMethod -ceq 'azure-cli') "Sign-in method not reported: $($result.signInMethod)"
+        Assert ($result.signIn -ceq ('"' + (Join-Path $options.ClaudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($result.signIn)"
+        $shim = [IO.File]::ReadAllText((Join-Path $options.ClaudeHome 'ccof-token.cmd'))
+        Assert ($shim -match '"%AZ%" account get-access-token' -and $shim.Contains("set `"AZ=$mockAz`"") -and $shim -notmatch '\bnode\b') "Claude Code helper is not the Azure CLI helper pinned to the installed az.cmd: $(($shim -split "`r`n") -match '^set .AZ=')"
+        Assert ($shim.Contains('set "AZURE_CONFIG_DIR=' + (Join-Path (Split-Path $azConfigPath -Parent) 'az') + '"')) 'Profile folder is not beside the configuration'
+        $settings = Read-ClientJson (Join-Path $options.ClaudeHome 'settings.json')
+        Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'apiKeyHelper not set'
+        Assert ([int]$settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS -le 240000) "Helper cache too long: $($settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS)"
+        $wrapper = [IO.File]::ReadAllText((Join-Path $options.ClaudeHome 'ccof-usage.ps1'))
+        Assert ($wrapper.Contains("`$env:CCOF_TOKEN_HELPER = '" + (Join-Path $options.ClaudeHome 'ccof-token.cmd') + "'")) 'Usage wrapper does not pin the helper'
+    }
+    Test-Case 'Desktop in azure-cli mode uses helper-script with the Azure CLI helper even when external-idp is supported' {
+        $modern = @{ keys = $keys + @('inferenceIdpOidc', 'inferenceIdpAuthFlow'); credentialKinds = @('external-idp', 'helper-script') }
+        $options = $desktopArgs.Clone(); $options.ConfigPath = $azConfigPath; $options.Schema = $modern
+        $options.LibraryPath = Join-Path $work 'az-mode/Claude-3p/configLibrary'
+        $result = Use-MockAzOnPath { Set-CcofClaudeDesktop @options -Confirmed } | ConvertFrom-Json -AsHashtable
+        Assert ($result.credentialKind -ceq 'helper-script') 'Desktop did not use the helper'
+        Assert ($result.signInMethod -ceq 'azure-cli') "Desktop sign-in method not reported: $($result.signInMethod)"
+        Assert ($result.signIn -ceq ('"' + (Join-Path (Split-Path $options.LibraryPath -Parent) 'ccof-token.cmd') + '" login')) "Desktop sign-in command not reported: $($result.signIn)"
+        $profile = Read-ClientJson (Join-Path $options.LibraryPath "$($config.desktop.profileId).json")
+        Assert ($profile.inferenceProvider -ceq 'gateway' -and $profile.inferenceGatewayAuthScheme -ceq 'bearer') 'Not a gateway bearer profile'
+        Assert ($profile.inferenceCredentialHelperTtlSec -le 240) 'Desktop helper cache too long'
+        Assert ($profile.inferenceCredentialHelperTimeoutSec -ge ($config.loginTimeoutSeconds + $config.tokenTimeoutSeconds)) 'Helper timeout too short for one sign-in'
+        $shim = [IO.File]::ReadAllText($profile.inferenceCredentialHelper)
+        Assert ($shim -match '"%AZ%" login' -and $shim -notmatch '\bnode\b') 'Desktop helper is not the Azure CLI helper'
     }
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

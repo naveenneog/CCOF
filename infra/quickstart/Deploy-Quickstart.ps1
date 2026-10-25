@@ -62,6 +62,44 @@ function Invoke-QuickstartSteps {
     return [pscustomobject]@{ Failed = $null; State = $state }
 }
 
+function Get-QsAzErrorSummary {
+    <# The failing resource and innermost code and message of an ARM error, or $null when the text is not ARM JSON. #>
+    param([string]$Text)
+    function Get-JsonObjectAt([string]$s) {
+        $start = $s.IndexOf('{'); if ($start -lt 0) { return $null }
+        $depth = 0; $inString = $false
+        for ($i = $start; $i -lt $s.Length; $i++) {
+            $ch = $s[$i]
+            if ($inString) { if ($ch -eq '\') { $i++ } elseif ($ch -eq '"') { $inString = $false }; continue }
+            if ($ch -eq '"') { $inString = $true } elseif ($ch -eq '{') { $depth++ } elseif ($ch -eq '}' -and --$depth -eq 0) {
+                try { return $s.Substring($start, $i - $start + 1) | ConvertFrom-Json -AsHashtable -Depth 100 } catch { return $null }
+            }
+        }
+        return $null
+    }
+    $json = Get-JsonObjectAt $Text
+    if (-not $json) { return $null }
+    $node = if ($json.error) { $json.error } else { $json }
+    if (-not $node.message) { return $null }
+    $resource = $null
+    while ($true) {
+        if ($node.target -match '/providers/(.+)$' -and $Matches[1] -notmatch '^Microsoft\.Resources/deployments/') { $resource = $Matches[1] }
+        $next = @($node.details | Where-Object { $_ -is [Collections.IDictionary] -and $_.message })
+        if (-not $next.Count) { break }
+        $node = $next[0]
+    }
+    $code = $node.code; $message = [string]$node.message
+    # Some services put their own JSON error inside "message".
+    for ($guard = 0; $guard -lt 3; $guard++) {
+        $inner = Get-JsonObjectAt $message
+        if (-not ($inner -and $inner.message)) { break }
+        if ($inner.code) { $code = $inner.code }
+        $message = [string]$inner.message
+    }
+    $message = ($message -split '\r?\nActivityId:')[0].Trim()
+    return (@($resource, $code, $message) | Where-Object { $_ }) -join ': '
+}
+
 function Invoke-QsAz {
     # az with arguments free of ( ) | & < > ^ and quotes (Windows); JSON bodies go through files.
     param([string[]]$Arguments)
@@ -78,6 +116,8 @@ function Invoke-QsAz {
             Start-Sleep -Seconds $pauses[$try]; continue
         }
         if ($err -match 'Timeout waiting for token from portal') { throw "az $($Arguments[0..1] -join ' ') failed: $err -- Cloud Shell could not get a token from the Portal session after $($pauses.Count) retries. Reload the Azure Portal browser tab (sign in again if asked), reopen Cloud Shell, check with: az account get-access-token --resource https://graph.microsoft.com/ -o none ; then rerun this script (it resumes)." }
+        $summary = Get-QsAzErrorSummary $err
+        if ($summary) { throw "az $($Arguments[0..1] -join ' ') failed: $summary`nFull error: $err" }
         throw "az $($Arguments[0..1] -join ' ') failed: $err"
     }
     $text = @($out | Where-Object { $_ -is [string] }) -join "`n"

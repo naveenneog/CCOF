@@ -2,7 +2,64 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-DOCS-R2 — novice reader fixes (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
+
+### G-NOVICE — first-time reader deployment (complete, 2026-10-25)
+
+- Acceptance: a reader following only the README and get-started pages reaches Stage 8 and a working developer
+  setup with `signInMethod: azure-cli`; each failure met is captured, and is either refused at Stage 0 with the fix
+  named or explained where it is met; developers have one sign-in step for both methods.
+- Live: attempt 1 (`ccof-nov-rg`) stopped at Stage 3 and was deleted (Stage 1 is create-only; Foundry account
+  purged to free 20 + 20 DataZone units). Attempt 2 (`ccof-nov2-rg`) passed Stages 0-8; Stage 8 anonymous `401`,
+  Haiku `200`, Opus `403`. Developer setup from page 5 in a scratch profile: `claude -p` answered, `/usage` showed
+  USD 0 of 100. The interactive sign-in window was replaced by a copy of an already signed-in profile.
+- Code fixes (each failing first): Stage 0 refuses no API Management and a private Foundry account without a private
+  endpoint; Stage 1 create-only messages; Stage 6 read-back skips Foundry zones it did not create and redeploys its
+  own network after a failed read-back; changed-config errors name every affected stage; ARM errors lead with
+  resource, code and innermost message; setup prints `signInMethod` and `signIn`.
+- Council: round 1 Architect BLOCK (Stage 6 recovery trusted any succeeded `stage6-network` deployment); Coder and
+  QA PASS-WITH-NOTES (same guard, duplicate AZ-05 row); UX PASS-WITH-NOTES (Desktop sign-in wording, capture omitted
+  the model notice); Security PASS (hardening note on the same guard). Fixed with failing tests first: the guard now
+  requires create mode, this VNet's `vnetId` output, unchanged `network.create` and a non-shared resource group
+  (verified on the live deployment), [ADR-0042](adr/0042-stage0-refusals-and-stage6-recovery.md). Round 2: Architect
+  PASS, UX PASS-WITH-NOTES (Desktop links, fixed).
+- Open: CC-01 (Claude Code model-catalog notice), next packet G-CCMODEL. Decision record:
+  [ADR-0042](adr/0042-stage0-refusals-and-stage6-recovery.md).
+
+**Previous packet:** G-AZCLI — Azure CLI developer sign-in (complete; [ADR-0041](adr/0041-azure-cli-developer-sign-in.md)).
+
+### G-AZCLI — Azure CLI developer sign-in (complete, 2026-10-25)
+
+Acceptance:
+- Given `signInMethod: azure-cli`, Claude Code setup writes `ccof-token.cmd` that runs `az login` once when no
+  cached token exists, in the profile `<config folder>\az`, and prints only the token; `settings.json` points
+  `apiKeyHelper` at it with a cache time of at most 240 s.
+- Claude Desktop setup writes a `helper-script` profile using the same helper, even when `external-idp` is
+  supported.
+- `/usage` gets its token from that helper.
+- Unsafe tenant, scope or folder values are refused before any file is written.
+- Stage 7 writes `signInMethod` only when Stage 4 allowed the Azure CLI; Stage 4 reads back the preauthorization.
+- Live: the helper's token is accepted by the gateway (HTTP 200) and its claims match AZ-01.
+
+Result:
+- Checks: client Node 77/77; client PowerShell 46/46 (a planted `az.cmd` in the working folder or first on `PATH`
+  never runs; a signed-out `silent-token` makes one token call and no sign-in); staged checks 478; full `npm test`
+  with a logged-out isolated Azure CLI profile; `node .ironclad/gate.mjs --stage packet` PASS (22 passed, 3
+  warnings: uncommitted size before this commit, file-size budget on files this packet does not touch, open G-R3 and
+  E2E-01). Mutation checks on the helper generator and the Stage 7 ordering were caught.
+- Test contract change: `tests/Test-AdminHandWorkbook.ps1` pinned the whole original workbook by hash, while
+  `tests/manual-guide.test.ts` requires its nine hand-copy client source blocks to equal `client/`. The first client
+  change since 2026-10-16 made the two contradict. The hash now covers the original text with those nine blocks
+  replaced by a placeholder; the digest is identical at `28a0bad` and after this change. A prose edit and a source
+  drift each still fail.
+- Live, demo lab 2026-10-25 (Azure CLI 2.91.0): token claims as AZ-01; `/usage` returned the developer's groups;
+  `POST /v1/messages` HTTP 200; `claude -p` with the generated `settings.json` answered `OK`, including from a
+  folder holding a planted `az.cmd`, which did not run.
+- Council round 1: Security HIGH (helper ran `az.cmd` by bare name, so a planted `az.cmd` in the project folder
+  could run); Coder High (the status line could open a browser sign-in on every refresh); UX BLOCK (`/usage` turned
+  every helper failure into "sign in first"); two Medium (Desktop-only helper path, late Stage 7 check). Each fixed
+  with a failing test first. Round 2: Architect PASS-WITH-NOTES (the 240 s cap relies on the Azure CLI 2.91.0
+  refresh floor, recorded in AZ-02); Coder PASS; QA PASS; UX PASS; Security PASS.
 
 ### G-DOCS-R2 — novice reader fixes (complete, 2026-10-24)
 

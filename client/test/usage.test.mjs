@@ -179,3 +179,29 @@ test('a used-up budget says so on the status line, with or without a guard warni
   assert.equal(statusLine(usage([scope({ ...used, warning: true, projectedPercent: 115.8 })])), 'CCOF $2.14/$2.00 (107%) - budget used up, requests refused');
   assert.equal(statusLine(usage([scope({ ...used, warning: false })])), 'CCOF $2.14/$2.00 (107%) - budget used up, requests refused');
 });
+test('azure-cli mode: /usage takes the token from CCOF_TOKEN_HELPER and its 401 names the Azure CLI helper (ADR-0041)', { skip: process.platform !== 'win32' && 'cmd helper' }, async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'ccof-usage-azcli-'));
+  const example = JSON.parse(await readFile(new URL('../config.example.json', import.meta.url), 'utf8'));
+  const file = path.join(dir, 'config.json');
+  await writeFile(file, JSON.stringify({ ...example, tenantId: '11111111-1111-4111-8111-111111111111', clientId: '33333333-3333-4333-8333-333333333333',
+    scope: 'api://22222222-2222-4222-8222-222222222222/access_as_user', desktop: { ...example.desktop, profileId: '44444444-4444-4444-8444-444444444444' }, signInMethod: 'azure-cli' }));
+  const helper = path.join(dir, 'ccof-token.cmd');
+  await writeFile(helper, '@echo off\r\nif "%~1"=="silent-token" (echo eyJ.usage.helper) else (exit /b 9)\r\n');
+  const saved = { config: process.env.CCOF_CONFIG_FILE, helper: process.env.CCOF_TOKEN_HELPER };
+  process.env.CCOF_CONFIG_FILE = file;
+  try {
+    let out = ''; let seen = '';
+    delete process.env.CCOF_TOKEN_HELPER;
+    assert.equal(await runUsageCli([], { stdout: (v) => { out += v; }, fetchImpl: async () => { throw new Error('no call expected'); } }), 1);
+    assert.match(out, /^invalid_configuration: CCOF_TOKEN_HELPER/);
+    process.env.CCOF_TOKEN_HELPER = helper; out = '';
+    const unauthorized = async (url, init) => { seen = init.headers.Authorization; return new Response('{}', { status: 401 }); };
+    assert.equal(await runUsageCli([], { stdout: (v) => { out += v; }, fetchImpl: unauthorized }), 1);
+    assert.equal(seen, 'Bearer eyJ.usage.helper');
+    assert.ok(out.includes(`run "${helper}" login`), out);
+    assert.doesNotMatch(out, /run ccof-token login/);
+  } finally {
+    for (const [key, name] of [['config', 'CCOF_CONFIG_FILE'], ['helper', 'CCOF_TOKEN_HELPER']]) { if (saved[key] === undefined) delete process.env[name]; else process.env[name] = saved[key]; }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
