@@ -224,4 +224,29 @@ Assert-Contract ($stage5 -match 'Get-StgAuditDeployment' -and $stage5 -match 'au
 $applyPart = $stage5.Substring($stage5.IndexOf('if (-not $Apply) { return $null }'))
 Assert-Contract ($applyPart -match 'Set-StgWorkspaceRetention' -and $applyPart -match 'Test-StgAuditArchive') 'Invoke-Stage5 must set workspace retention and read back the archive only when applying.'
 
+# ---------------------------------------------------------------- retention held from (ADR-0043)
+# Raising the workspace retention does not bring back deleted rows: Stage 5 records the oldest instant the workspace
+# held when it raised it, and the reports use the later of that and now - retention.
+$now = [DateTimeOffset]::Parse('2026-10-10T00:00:00Z')
+$held = { param($Current, $Desired, $Previous, $At = $now) Get-StgRetentionHeldFrom -CurrentDays $Current -DesiredDays $Desired -Previous $Previous -Now $At }
+Assert-Contract ((& $held 30 90 $null) -ceq '2026-09-10T00:00:00.000Z') 'Raising 30 -> 90 must record now - 30 days.'
+Assert-Contract ((& $held 90 180 '2026-09-10T00:00:00.000Z' ([DateTimeOffset]::Parse('2026-11-01T00:00:00Z'))) -ceq '2026-09-10T00:00:00.000Z') 'A second raise must keep the later of the recorded instant and now - the previous retention.'
+Assert-Contract ($null -eq (& $held 90 30 $null)) 'Lowering records nothing: the workspace holds now - retention.'
+Assert-Contract ((& $held 90 90 '2026-09-10T00:00:00.000Z' ([DateTimeOffset]::Parse('2026-10-20T00:00:00Z'))) -ceq '2026-09-10T00:00:00.000Z') 'Unchanged retention keeps the recorded instant while it is later than now - retention.'
+Assert-Contract ($null -eq (& $held 90 90 '2026-09-10T00:00:00.000Z' ([DateTimeOffset]::Parse('2027-01-15T00:00:00Z')))) 'The recorded instant is dropped once now - retention passes it.'
+Assert-Contract ((& $held $null 30 '2026-09-20T00:00:00.000Z') -ceq '2026-09-20T00:00:00.000Z') 'Without audit.workspaceRetentionDays Stage 5 does not change retention and keeps the recorded instant.'
+$recorded = Join-Path $root '.env.public-test-scratch\stage5.retention.test.json'
+New-Item -ItemType Directory -Force -Path (Split-Path $recorded) | Out-Null
+@{ days = 90; heldFrom = '2026-09-10T00:00:00.000Z' } | ConvertTo-Json | Set-Content -LiteralPath $recorded -Encoding utf8NoBOM
+Assert-Contract ((Get-StgRecordedRetentionHeldFrom $recorded) -ceq '2026-09-10T00:00:00.000Z' -and $null -eq (Get-StgRecordedRetentionHeldFrom ($recorded + '.absent'))) 'The previous instant comes from the file the last Stage 5 apply wrote.'
+Remove-Item -LiteralPath $recorded
+$stage5Bicep = Get-Content -Raw (Join-Path $root 'infra\staged\stage5-config.bicep')
+Assert-Contract ($stage5Bicep -match "ADMIN_LOG_RETENTION_HELD_FROM: chargebackHistory\.logRetentionHeldFrom") 'Stage 5 must write ADMIN_LOG_RETENTION_HELD_FROM when an instant is recorded.'
+$deployPart = $stage5.Substring(0, $stage5.IndexOf('Invoke-StgBicep'))
+Assert-Contract ($deployPart -match 'Get-StgRetentionHeldFrom' -and $deployPart -match 'logRetentionHeldFrom' -and $deployPart -match 'stage5\.retention\.json' -and $applyPart -match 'logRetention = ') 'Invoke-Stage5 must compute the instant before it deploys the settings, record it before any change, pass it to the admin settings and the workbook, and show it in its verify record.'
+$common = (Get-Command Get-StgQuickstartParameters).ScriptBlock.ToString()
+Assert-Contract ($common -match 'logRetentionDays = \(Get-StgLogRetentionDays \$Cfg\)') 'The workbook must use the effective retention (audit.workspaceRetentionDays, else stage1.retentionInDays).'
+$qs = Get-Content -Raw (Join-Path $root 'infra\quickstart\Deploy-Quickstart.ps1')
+Assert-Contract ($qs -match 'retentionHeldFrom') 'The workbook answers must carry retentionHeldFrom when Stage 5 recorded one.'
+
 "Audit archive: $passed checks passed (validation, names, hash, template, read-back, Stage 5 wiring). No Azure calls."

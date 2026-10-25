@@ -48,7 +48,7 @@ function historySplit(period: Range, backend: string, deps: V3Dependencies): { h
   const settings = readHistorySettings(deps.env);
   if (settings === null) return { history: null, logs: period };
   if (settings === "invalid") throw new ApiError(503, "chargeback_history_settings_invalid");
-  const split = splitRange(period, historyBoundary(deps.now(), settings.retentionDays));
+  const split = splitRange(period, historyBoundary(deps.now(), settings.retentionDays, settings.retentionHeldFrom));
   if (split.history && backend) throw new ApiError(400, "backend_filter_not_in_history");
   if (split.history && !deps.chargebackHistory) throw new ApiError(503, "chargeback_history_not_configured");
   return split;

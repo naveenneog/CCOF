@@ -73,6 +73,28 @@ retention change from option 1.
 - Lifecycle deletion does not act on blobs in a container with an immutability policy; with immutability on, expired
   blobs are deleted by an operator.
 
+## Raising the workspace retention
+
+(Council round 2, 2026-10-26.) Raising the retention keeps rows longer from then on; rows already deleted do not
+come back ([data retention](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/data-retention-configure)).
+For `now - retention` days after a raise from P to R days at time T, the workspace holds rows only from T - P. Stage 5
+therefore records, before it deploys or changes anything, the instant the workspace holds rows from
+(`Get-StgRetentionHeldFrom`: the later of T - P and an instant recorded at an earlier raise) in
+`evidence/stage5.retention.json` in the state folder, and passes it to:
+
+- the workbook (`retentionHeldFrom`) and, with chargeback history on, the admin app (`ADMIN_LOG_RETENTION_HELD_FROM`):
+  `RetentionTruncated` is true for a period that starts before the later of `now - retention` and that instant
+  ([queries.ts](../../analytics/workbooks/queries.ts));
+- the history export (ADR-0044): its boundary is the first whole month after that later instant
+  ([admin/src/history.ts](../../admin/src/history.ts) `historyBoundary`).
+
+Lowering the retention records nothing (the workspace holds `now - retention`), and an unchanged retention keeps
+the recorded instant until `now - retention` passes it. The instant is not a stage output, so later stages are not
+asked to rerun. Limits: a retention changed outside Stage 5 (Portal, CLI) is not recorded. Without chargeback
+history the admin app has neither `ADMIN_LOG_RETENTION_DAYS` nor `ADMIN_LOG_RETENTION_HELD_FROM`, and its console
+flag uses the 90-day default (unchanged by this decision). The workbook now uses the effective retention
+(`Get-StgLogRetentionDays`) instead of `stage1.retentionInDays`.
+
 ## Integration with ADR-0044 (2026-10-25)
 
 The archive's Stage 5 hash input (`Get-StgAuditStageInput`) covers only `audit.archive` and `audit.workspaceRetentionDays`. `audit.chargebackHistory` is part of the Stage 2, 3 and 5 inputs by ADR-0044, so configuring it does change the Stage 5 hash; a configuration without any `audit` key, or with only `{ "enabled": false }` sections, keeps its earlier hashes ([Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).

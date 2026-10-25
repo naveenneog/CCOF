@@ -93,7 +93,7 @@ export function buildWorkbook(rawAnswers: unknown, rawCard: unknown, rawLedger: 
   const workbook = layout(answers, card, queries);
   // Only answers that change the report; paths and deployment names differ per machine and run.
   const reportAnswers = Object.fromEntries(["workbookDisplayName", "workspaceResourceId", "gatewayResourceId",
-    "reconcilerResourceId", ...workbookSettingKeys, "retentionDays"].map(key => [key, answers[key as keyof typeof answers]]));
+    "reconcilerResourceId", ...workbookSettingKeys, "retentionDays", "retentionHeldFrom"].map(key => [key, answers[key as keyof typeof answers]]));
   const contentTags = {
     "ccof-rate-card": rateCardSha256, "ccof-ledger": ledgerSha256,
     "ccof-answers": digest(JSON.stringify(reportAnswers)), "ccof-content": digest(JSON.stringify(workbook)),

@@ -128,8 +128,12 @@ history key does the same for Stages 2, 3 and 5. Stage 1 is not affected.
 
 **Effective Log Analytics retention** is `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays`. The
 history export uses it to decide which months come from history (`ADMIN_LOG_RETENTION_DAYS`), and `ttlDays` must be
-more than it. After raising it, the export reads the added months from Log Analytics at once, but the workspace
-holds them only as data ages in; until then those months show only what the workspace kept.
+more than it. Raising it does not bring back rows the workspace already deleted. When Stage 5 raises
+`audit.workspaceRetentionDays`, it records the oldest instant the workspace then holds (now minus the old retention)
+in `ADMIN_LOG_RETENTION_HELD_FROM` and in the workbook; reports flag periods before that instant as
+`retention_truncated`, and the history export reads them from history, until now minus the new retention passes that
+instant ([ADR-0043](../adr/0043-long-term-audit-archive.md#raising-the-workspace-retention)). Lowering it records
+nothing. The workbook also uses the effective retention.
 
 ### Audit archive
 

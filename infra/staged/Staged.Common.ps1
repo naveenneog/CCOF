@@ -482,7 +482,7 @@ function Get-StgQuickstartParameters {
         registrations = $entra.registrations; backends = @($Cfg.backends); cosmos = $Cfg.cosmos
         resolver = $Cfg.resolver; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         gateway = $Cfg.gateway; rateCard = $rate; workbook = $Cfg.workbook; runner = @{ enabled = $false }
-        logRetentionDays = $Cfg.stage1.retentionInDays
+        logRetentionDays = (Get-StgLogRetentionDays $Cfg)
     }
 }
 

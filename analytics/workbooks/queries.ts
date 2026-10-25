@@ -1,7 +1,21 @@
 import type { WorkbookAnswers } from "./config.ts";
 import { kqlString } from "./rate-card.ts";
 
-export type ReportContext = Pick<WorkbookAnswers, "maxQueryDays" | "retentionDays" | "gatewayResourceId" | "reconcilerResourceId" | "budgetLookbackDays">;
+export type ReportContext = Pick<WorkbookAnswers, "maxQueryDays" | "retentionDays" | "retentionHeldFrom" | "gatewayResourceId" | "reconcilerResourceId" | "budgetLookbackDays">;
+
+// A UTC instant as Stage 5 writes it (toISOString); the format is checked before it is placed in KQL.
+export function isUtcInstant(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+// The oldest instant the workspace holds: now - retentionDays, or, after Stage 5 raised the retention, the later of
+// that and the instant it recorded (ADR-0043): raising retention does not bring back rows already deleted.
+function retentionCut(answers: ReportContext): string {
+  const cut = `ReportNow - ${answers.retentionDays} * 1d`;
+  if (answers.retentionHeldFrom == null) return cut;
+  if (!isUtcInstant(answers.retentionHeldFrom)) throw new Error("retentionHeldFrom: invalid_format");
+  return `max_of(${cut}, datetime(${answers.retentionHeldFrom}))`;
+}
 
 export function context(answers: ReportContext): string {
   return `let ReportNow = now();
@@ -14,7 +28,7 @@ let ToTime = case(PeriodMode == "month", startofmonth(ReportNow, 1),
 let RangeValid = isnotnull(FromTime) and isnotnull(ToTime) and FromTime < ToTime
     and ToTime - FromTime <= ${answers.maxQueryDays} * 1d;
 // Rows older than the workspace retention are gone: such a period can only give lower bounds.
-let RetentionTruncated = RangeValid and FromTime < ReportNow - ${answers.retentionDays} * 1d;
+let RetentionTruncated = RangeValid and FromTime < ${retentionCut(answers)};
 let GatewayResourceId = ${kqlString(answers.gatewayResourceId)};
 let ReconcilerResourceId = ${kqlString(answers.reconcilerResourceId)};
 let BudgetLookbackDays = ${answers.budgetLookbackDays};

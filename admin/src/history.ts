@@ -9,6 +9,7 @@ import { ccuToUsdText } from "./units.ts";
 import type { Doc } from "./validation.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
 import { Money } from "../../src/cost/money.ts";
+import { isUtcInstant } from "../../analytics/workbooks/queries.ts";
 
 type TokenTotals = Record<"input" | "output" | "cacheRead" | "cacheWrite5m" | "cacheWrite1h", number>;
 
@@ -36,7 +37,9 @@ export interface Coverage { days: Readonly<Record<string, "open" | "closed">>; e
 // its time to live has passed, and the export's reads take time (ADR-0044 decision 9).
 export const HISTORY_EXPIRY_MARGIN_MS = 86_400_000;
 
-export interface HistorySettings { container: string; retentionDays: number }
+// retentionHeldFrom (ADMIN_LOG_RETENTION_HELD_FROM, ADR-0043): after Stage 5 raised the workspace retention, the
+// oldest instant the workspace then held; null otherwise.
+export interface HistorySettings { container: string; retentionDays: number; retentionHeldFrom: string | null }
 export interface Range { from: string; to: string }
 export interface HistoryFilters { project: string; group: string; developer: string; model: string; family: string; classification: string; chargeback: string }
 
@@ -58,14 +61,17 @@ export function readHistorySettings(env: Readonly<Record<string, string | undefi
   if (!container) return null;
   const raw = env.ADMIN_LOG_RETENTION_DAYS?.trim();
   const retentionDays = raw ? Number(raw) : 90;
+  const retentionHeldFrom = env.ADMIN_LOG_RETENTION_HELD_FROM?.trim() || null;
   if (!COSMOS_NAME.test(container) || !Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 4383) return "invalid";
-  return { container, retentionDays };
+  if (retentionHeldFrom !== null && !isUtcInstant(retentionHeldFrom)) return "invalid";
+  return { container, retentionDays, retentionHeldFrom };
 }
 
 // The first UTC month start the workspace still holds whole, but never after the current month's start: the current
-// month always comes from Log Analytics, as before.
-export function historyBoundary(now: Date, retentionDays: number): Date {
-  const oldest = new Date(now.getTime() - retentionDays * DAY_MS);
+// month always comes from Log Analytics, as before. The workspace holds rows from now - retentionDays, or, after
+// a raised retention, from the later of that and retentionHeldFrom (deleted rows do not come back).
+export function historyBoundary(now: Date, retentionDays: number, retentionHeldFrom: string | null = null): Date {
+  const oldest = new Date(Math.max(now.getTime() - retentionDays * DAY_MS, retentionHeldFrom === null ? -Infinity : Date.parse(retentionHeldFrom)));
   const start = Date.UTC(oldest.getUTCFullYear(), oldest.getUTCMonth(), 1);
   const whole = start === oldest.getTime() ? start : Date.UTC(oldest.getUTCFullYear(), oldest.getUTCMonth() + 1, 1);
   return new Date(Math.min(whole, Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));

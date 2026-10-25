@@ -291,7 +291,7 @@ function New-QsWorkbookAnswers {
         defaultProjectId = $s.defaultProjectId; maxRows = $s.maxRows; topUsers = $s.topUsers
         maxQueryDays = $s.maxQueryDays; budgetLookbackDays = $s.budgetLookbackDays
         retentionDays = if ($null -ne $P.logRetentionDays) { $P.logRetentionDays } else { 31 }
-    } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $file -Encoding utf8NoBOM
+    } | ForEach-Object { if ($P.logRetentionHeldFrom) { $_.retentionHeldFrom = $P.logRetentionHeldFrom }; $_ } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $file -Encoding utf8NoBOM
     return $file
 }
 

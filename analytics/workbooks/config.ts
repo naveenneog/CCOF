@@ -1,4 +1,5 @@
 import { fields, positiveInteger, text } from "./rate-card.ts";
+import { isUtcInstant } from "./queries.ts";
 
 export interface WorkbookAnswers {
   schemaVersion: 1;
@@ -21,6 +22,8 @@ export interface WorkbookAnswers {
   maxQueryDays: number;
   budgetLookbackDays: number;
   retentionDays: number;
+  // Optional (ADR-0043): after Stage 5 raised the workspace retention, the oldest instant the workspace then held.
+  retentionHeldFrom?: string | null;
 }
 
 const required = [
@@ -48,7 +51,7 @@ export function validateWorkbookSettings(value: unknown): WorkbookSettings {
 }
 
 export function validateAnswers(value: unknown): WorkbookAnswers {
-  const answers = fields(value, "answers", required);
+  const answers = fields(value, "answers", required, ["retentionHeldFrom"]);
   if (answers.schemaVersion !== 1) throw new Error("schemaVersion: must_be_1");
   const settingKeys: readonly string[] = workbookSettingKeys;
   for (const key of required.filter(key => key !== "schemaVersion" && key !== "retentionDays" && !settingKeys.includes(key))) {
@@ -75,5 +78,6 @@ export function validateAnswers(value: unknown): WorkbookAnswers {
   check("outputDirectory", /^\.env\.[a-z0-9][a-z0-9._-]*$/i);
   validateWorkbookSettings(Object.fromEntries(workbookSettingKeys.map(key => [key, answers[key]])));
   positiveInteger(answers.retentionDays, "retentionDays");
+  if (answers.retentionHeldFrom != null && !isUtcInstant(answers.retentionHeldFrom)) throw new Error("retentionHeldFrom: invalid_format");
   return { ...answers } as unknown as WorkbookAnswers;
 }

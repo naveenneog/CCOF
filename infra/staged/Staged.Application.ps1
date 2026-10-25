@@ -44,6 +44,16 @@ function Invoke-Stage5 {
     $usagePolicy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).usage.policy.xml") -Raw
     # API Management refuses an API policy over 16 KB: the policy is deployed as one fragment per section (ADR-0039).
     $policyDeployment = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.deployment.json") -Raw | ConvertFrom-Json -AsHashtable
+    # ADR-0043: raising the workspace retention does not bring back deleted rows. The oldest instant the workspace holds
+    # is recorded before anything changes, and the workbook, the console and the history export start there.
+    $retentionDays = Get-StgLogRetentionDays $Cfg
+    $currentRetention = if ($null -ne $Cfg.audit.workspaceRetentionDays) { (Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.OperationalInsights/workspaces/$($s1.names.logAnalyticsWorkspace)" '2023-09-01').properties.retentionInDays } else { $null }
+    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgRecordedRetentionHeldFrom)
+    if ($heldFrom) { Write-Host "log retention: the workspace holds rows from $heldFrom (retention raised to $retentionDays days); reports flag earlier periods as retention_truncated" }
+    if ($Apply) { $null = Write-StgEvidence 'stage5.retention.json' ([ordered]@{ days = $retentionDays; heldFrom = $heldFrom }) }
+    $ctx.P.logRetentionHeldFrom = $heldFrom
+    $history = Get-StgChargebackHistory $Cfg
+    if ($history) { $history.logRetentionHeldFrom = [string]$heldFrom }
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -73,7 +83,7 @@ function Invoke-Stage5 {
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
         auditArchive = $(if ($audit) { $audit } else { @{} })
-        chargebackHistory = (Get-StgChargebackHistory $Cfg) ?? @{}
+        chargebackHistory = $history ?? @{}
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
@@ -100,6 +110,7 @@ function Invoke-Stage5 {
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
     $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
+    $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }
 }

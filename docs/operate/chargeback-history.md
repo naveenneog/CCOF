@@ -8,7 +8,10 @@ still holds: [chargeback and user tags](chargeback-and-tags.md).
 ## What it keeps
 
 The chargeback reports read the usage ledger in Log Analytics. Log Analytics keeps it for the **effective
-retention**: `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays` (30 in the template). With
+retention**: `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays` (30 in the template).
+After Stage 5 raises `audit.workspaceRetentionDays`, the workspace holds the added days only as new rows age in;
+until then the export reads the months it does not hold from history
+([ADR-0043](../adr/0043-long-term-audit-archive.md#raising-the-workspace-retention)). With
 `audit.chargebackHistory.enabled: true`:
 
 - **What is kept.** The reconciler writes one document per UTC day, tag value, group, person and model to the
@@ -175,15 +178,9 @@ Set `enabled: false` (or remove the `audit.chargebackHistory` section) and previ
 their records of their inputs change either way, so each refuses with `stage_config_changed` until it is rerun. If
 Stage 7 or 8 then refuses with `stage_dependency_changed`, rerun it. Stage 5 removes the reconciler's and admin
 app's history settings: the reconciler stops writing, and the export reads Log Analytics only. The stages never
-delete, so these remain until removed by hand
-([ADR-0044, Rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback)):
-
-- the `chargebackDaily` container with its daily totals and coverage records:
-  `az cosmosdb sql container delete --account-name <account> --resource-group <rg> --database-name <database> --name chargebackDaily`
-  (or Data Explorer in the Portal, from the VNet);
-- the three Stage 3 role assignments scoped to `.../colls/chargebackDaily`: list them with
-  `az cosmosdb sql role assignment list` and delete each with `az cosmosdb sql role assignment delete --role-assignment-id <id>`;
-- the `ccof-chargeback-history` lease document in the reconciler's lease container (harmless).
+delete: the `chargebackDaily` container, its three Stage 3 role assignments and the `ccof-chargeback-history`
+lease document remain until removed by hand, with the commands in
+[ADR-0044, Rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback).
 
 A section that is only `{ "enabled": false }` is recorded as if it were absent; with any other key beside it, as
 in the template, it is part of the Stage 2, 3 and 5 records ([configuration reference](../get-started/configuration-reference-3.md#audit)).

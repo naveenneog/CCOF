@@ -19,7 +19,10 @@ With `audit.archive.enabled: true`, Stage 5 ([Staged.Audit.ps1](../../infra/stag
 With `audit.workspaceRetentionDays`, Stage 5 also sets the workspace retention (30-730 days) with
 `az monitor log-analytics workspace update --retention-time`. Lowering it later removes workspace data older than
 the new value ([data retention](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/data-retention-configure)),
-and the chargeback reports then cover fewer days. Stage 5 reads every item back; the result is in
+and the chargeback reports then cover fewer days. Raising it does not bring back data already deleted: Stage 5
+prints `log retention: the workspace holds rows from <instant> ...` and the reports flag earlier periods as
+`retention_truncated` until the new retention has filled
+([ADR-0043](../adr/0043-long-term-audit-archive.md#raising-the-workspace-retention)). Stage 5 reads every item back; the result is in
 `stage5.verify.json` under `audit`.
 
 The preview and the apply print one line, for example:

@@ -33,8 +33,10 @@ function doc(day: string, changes: Partial<HistoryDoc> = {}): HistoryDoc {
 
 test("history settings: absent is off, a valid container is read, an invalid one is refused", () => {
   assert.equal(readHistorySettings({}), null);
-  assert.deepEqual(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_DAYS: "30" }), { container: "chargebackDaily", retentionDays: 30 });
-  assert.deepEqual(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily" }), { container: "chargebackDaily", retentionDays: 90 });
+  assert.deepEqual(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_DAYS: "30" }), { container: "chargebackDaily", retentionDays: 30, retentionHeldFrom: null });
+  assert.deepEqual(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily" }), { container: "chargebackDaily", retentionDays: 90, retentionHeldFrom: null });
+  assert.deepEqual(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_DAYS: "90", ADMIN_LOG_RETENTION_HELD_FROM: "2026-09-10T00:00:00.000Z" }), { container: "chargebackDaily", retentionDays: 90, retentionHeldFrom: "2026-09-10T00:00:00.000Z" });
+  assert.equal(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_HELD_FROM: "10 September" }), "invalid");
   assert.equal(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "bad/name" }), "invalid");
   assert.equal(readHistorySettings({ ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_DAYS: "0" }), "invalid");
 });
@@ -226,4 +228,21 @@ test("the Cosmos store reads the coverage's days and expiry; a coverage written 
   assert.deepEqual(await store.readCoverage("2026-09"), { days: SEPTEMBER, expiresAt: "2027-10-06T00:00:00.000Z" });
   assert.deepEqual(await store.readCoverage("2026-08"), { days: SEPTEMBER, expiresAt: null });
   assert.equal(await store.readCoverage("2026-07"), null);
+});
+
+// ADR-0043/0044: after a retention change the workspace holds rows from the later of now - retention and the
+// instant Stage 5 recorded (ADMIN_LOG_RETENTION_HELD_FROM): raising retention does not bring back deleted rows.
+test("the boundary follows what the workspace holds after retention is raised, lowered or left unchanged", () => {
+  const raisedOn = "2026-09-10T00:00:00.000Z"; // 30 days held when raised to 90 on 10 October
+  assert.equal(historyBoundary(NOW, 90, raisedOn).toISOString(), "2026-10-01T00:00:00.000Z", "raised: September is not in the workspace yet");
+  assert.equal(historyBoundary(new Date("2027-01-15T00:00:00Z"), 90, raisedOn).toISOString(), "2026-11-01T00:00:00.000Z", "once now - retention passes the recorded instant, retention alone decides");
+  assert.equal(historyBoundary(NOW, 30, null).toISOString(), "2026-10-01T00:00:00.000Z", "lowered: no instant is recorded");
+  assert.equal(historyBoundary(NOW, 90, null).toISOString(), "2026-08-01T00:00:00.000Z", "unchanged");
+});
+
+test("after retention is raised, the months the workspace never held are exported from history", async () => {
+  const { call, timespans, reads } = setup({ ...HISTORY_ENV, ADMIN_LOG_RETENTION_DAYS: "90", ADMIN_LOG_RETENTION_HELD_FROM: "2026-09-10T00:00:00.000Z" });
+  const json = await call("export/usage?period=previous&format=json");
+  assert.equal(json.status, 200, JSON.stringify(json.jsonBody));
+  assert.deepEqual([timespans, reads.map((r) => r.month)], [[], ["2026-09"]]);
 });

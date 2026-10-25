@@ -108,6 +108,37 @@ function Set-StgWorkspaceRetention {
         '--workspace-name', $Names.logAnalyticsWorkspace, '--retention-time', "$days")
 }
 
+function Get-StgRetentionHeldFrom {
+    # ADR-0043: raising the workspace retention does not bring back rows already deleted. The workspace then holds rows
+    # from the later of now - the new retention and now - the retention it had (or the instant recorded at an earlier
+    # raise). Returns that instant as ISO 8601 while it is later than now - DesiredDays, else $null. CurrentDays is the
+    # workspace retention before this Stage 5 changes it ($null: Stage 5 does not change it); Previous is the instant
+    # recorded by the last Stage 5. After a lowered retention now - CurrentDays is before now - DesiredDays, so nothing is kept.
+    param($CurrentDays, [int]$DesiredDays, [string]$Previous, [DateTimeOffset]$Now = [DateTimeOffset]::UtcNow)
+    $held = if ($Previous) { [DateTimeOffset]::Parse($Previous, [Globalization.CultureInfo]::InvariantCulture) } else { $null }
+    if ($null -ne $CurrentDays) {
+        $before = $Now.AddDays(-[int]$CurrentDays)
+        if ($null -eq $held -or $before -gt $held) { $held = $before }
+    }
+    if ($null -eq $held -or $held -le $Now.AddDays(-$DesiredDays)) { return $null }
+    return $held.UtcDateTime.ToString('yyyy-MM-dd''T''HH:mm:ss.fff''Z''', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-StgRecordedRetentionHeldFrom {
+    # The instant the last Stage 5 apply recorded in evidence/stage5.retention.json, written before it deploys or
+    # changes the retention, so a run that fails afterwards does not lose it. Not a stage output: later stages are not
+    # asked to rerun because of it.
+    param([string]$Path = (Join-Path $script:StateDir 'evidence/stage5.retention.json'))
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    # Read as text: ConvertFrom-Json would turn the ISO 8601 string into a local DateTime.
+    $doc = [Text.Json.JsonDocument]::Parse((Get-Content -LiteralPath $Path -Raw))
+    try {
+        $element = [Text.Json.JsonElement]::new()
+        if ($doc.RootElement.TryGetProperty('heldFrom', [ref]$element) -and $element.ValueKind -eq [Text.Json.JsonValueKind]::String) { return $element.GetString() }
+        return $null
+    } finally { $doc.Dispose() }
+}
+
 function Get-StgAuditArchiveProblems {
     # Read-back of the archive from ARM objects; returns what differs from the deployed intent.
     param($Deployment, $Account, $ManagementPolicy, $Immutability, $Diagnostic, $Workspace, $WorkspaceRetentionDays)

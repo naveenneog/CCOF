@@ -59,7 +59,7 @@ Assert-Contract ($settingsText -match "reconcilerHistorySettings = \(chargebackH
 # ADR-0044 decision 9: the reconciler gives each document a time to live ending ttlDays after its month, so it needs ttlDays.
 Assert-Contract ($settingsText -match "chargebackHistory\.\?ttlDays == null \? \{\} : \{ RECONCILER_HISTORY_TTL_DAYS: string\(chargebackHistory\.ttlDays\) \}") 'Stage 5 must write RECONCILER_HISTORY_TTL_DAYS when ttlDays is set, and nothing when it is null.'
 Assert-Contract ($stage5Text -match "ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'" -and $stage5Text -match 'ADMIN_LOG_RETENTION_DAYS: string\(chargebackHistory\.logRetentionDays\)' -and $stage5Text -match 'chargebackHistory: chargebackHistory') 'Stage 5 must write the admin history settings and pass history to the settings module.'
-Assert-Contract ($appText -match 'chargebackHistory = \(Get-StgChargebackHistory \$Cfg\)') 'Stage 5 must pass the validated history configuration.'
+Assert-Contract ($appText -match '\$history = Get-StgChargebackHistory \$Cfg' -and $appText -match 'chargebackHistory = \$history \?\? @\{\}') 'Stage 5 must pass the validated history configuration.'
 
 # Driver: validation, the normalised value each stage receives, and the stage hashes.
 . (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
