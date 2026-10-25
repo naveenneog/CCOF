@@ -6,7 +6,7 @@
 
 import type { RateCard } from "../cost/rate-card.ts";
 import type { ContractSchedule } from "../cost/contract-schedule.ts";
-import { COVERAGE_ID, COVERAGE_SCHEMA, HISTORY_MAX_WRITES_PER_RUN, buildDailyDocuments, mergeCoverage, planHistoryWrites, storedSummaryOf } from "./history.ts";
+import { COVERAGE_ID, COVERAGE_SCHEMA, HISTORY_MAX_WRITES_PER_RUN, buildDailyDocuments, mergeCoverage, monthExpiry, planHistoryWrites, storedSummaryOf, ttlSeconds } from "./history.ts";
 import type { ChargebackDailyDocument, CoverageDocument, DayState, HistoryRow, StoredSummary } from "./history.ts";
 import { HISTORY_LEASE_ID, LeaseLostError, acquireLease } from "./lease.ts";
 import type { Lease, LeaseStore } from "./lease.ts";
@@ -86,6 +86,8 @@ export function createCachedHistoryStore(container: HistoryContainer, now: () =>
 
 export interface HistoryStepInput {
   closeAfterDays: number;
+  // The container's time to live in days (ADR-0044 decision 9); null: documents never expire.
+  ttlDays: number | null;
   rows: readonly HistoryRow[];
   period: BudgetPeriod;
   now: Date;
@@ -206,6 +208,9 @@ export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCou
       for (const entry of await step("history_read_failed", () => store.readSummaries(month))) stored.set(...entry);
     }
     const plan = planHistoryWrites(docs, stored, options);
+    const ttlDays = input.ttlDays;
+    if (ttlDays !== null) plan.writes = plan.writes.map((doc) => ({ ...doc, ttl: ttlSeconds(monthExpiry(doc.month, ttlDays), input.now) }));
+    const monthsWithDocuments = new Set([...stored.values()].map((s) => s.key.day.slice(0, 7)));
     counts.historyDocuments = docs.length;
     counts.historyUnchanged = plan.unchanged;
     counts.historyNotDue = plan.notDue;
@@ -216,7 +221,7 @@ export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCou
     // Lowering writes first, all of them, then the rest (HistoryPlan.loweringCount).
     await writeAll(plan.writes.slice(0, plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
     await writeAll(plan.writes.slice(plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
-    await writeCoverage(plan.coverage, store, input, counts, stop);
+    await writeCoverage(plan.coverage, monthsWithDocuments, store, input, counts, stop);
     return { historyOutcome: "written", historyReason: null, ...counts };
   } catch (error) {
     const failure = error instanceof HistoryFailure ? error : new HistoryFailure(error instanceof LedgerReadError ? error.reason : "history_failed", error);
@@ -224,17 +229,32 @@ export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCou
   }
 }
 
+// The earliest instant a document of the month can expire (ADR-0044 decision 9). This run's writes expire at the
+// month's expiry (earlier when capped); an earlier write expires no later than the stored expiresAt; a document
+// written while there was no time to live takes the container's default from its last write, so at the earliest
+// ttlDays after the month starts. Null without ttlDays: the container then expires nothing.
+function coverageExpiry(month: string, stored: CoverageDocument | null, hasDocuments: boolean, ttlDays: number | null, now: Date): string | null {
+  if (ttlDays === null) return null;
+  const candidates = [now.getTime() + ttlSeconds(monthExpiry(month, ttlDays), now) * 1000];
+  if (typeof stored?.expiresAt === "string") candidates.push(Date.parse(stored.expiresAt));
+  else if (stored !== null || hasDocuments) candidates.push(Date.parse(`${month}-01T00:00:00Z`) + ttlDays * DAY_MS);
+  return new Date(Math.min(...candidates)).toISOString();
+}
+
 // After every document write succeeded: the coverage of each month the plan covered, only when it changed.
-async function writeCoverage(coverage: ReadonlyMap<string, DayState>, store: HistoryStore, input: HistoryStepInput, counts: HistoryCounts, stop: Stop): Promise<void> {
+async function writeCoverage(coverage: ReadonlyMap<string, DayState>, monthsWithDocuments: ReadonlySet<string>, store: HistoryStore, input: HistoryStepInput, counts: HistoryCounts, stop: Stop): Promise<void> {
   for (const month of [...new Set([...coverage.keys()].map((day) => day.slice(0, 7)))].sort()) {
     checkStop(stop);
     const update = new Map([...coverage].filter(([day]) => day.startsWith(month)));
     const stored = await step("history_read_failed", () => store.readCoverage(month));
-    const days = mergeCoverage(stored?.days, update);
-    if (days === null) continue;
+    const merged = mergeCoverage(stored?.days, update);
+    const expiresAt = coverageExpiry(month, stored, monthsWithDocuments.has(month), input.ttlDays, input.now);
+    if (merged === null && expiresAt === (stored?.expiresAt ?? null)) continue;
+    const days = merged ?? { ...stored?.days };
     await step("history_write_failed", () => input.lease.ensure());
     try {
-      await store.writeCoverage({ id: COVERAGE_ID, schema: COVERAGE_SCHEMA, month, days, computedAt: input.now.toISOString() });
+      // ttl -1 with ttlDays: the coverage never expires, or it would expire on the container's default.
+      await store.writeCoverage({ id: COVERAGE_ID, schema: COVERAGE_SCHEMA, month, days, computedAt: input.now.toISOString(), expiresAt, ...(input.ttlDays === null ? {} : { ttl: -1 }) });
     } catch (error) {
       throw new HistoryFailure(error instanceof HistoryConflictError ? "history_conflict" : "history_write_failed", error);
     }

@@ -9,6 +9,7 @@ import { ccuToUsdText } from "./units.ts";
 import type { Doc } from "./validation.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
 import { Money } from "../../src/cost/money.ts";
+import { isUtcInstant } from "../../analytics/workbooks/queries.ts";
 
 type TokenTotals = Record<"input" | "output" | "cacheRead" | "cacheWrite5m" | "cacheWrite1h", number>;
 
@@ -25,12 +26,20 @@ export interface HistoryDoc {
 export interface HistoryStore {
   // The documents of one month (the partition) with fromDay <= day < toDay.
   listDays(month: string, fromDay: string, toDay: string): Promise<HistoryDoc[]>;
-  // The month's coverage (src/reconciler/history.ts CoverageDocument.days): the days history holds, open or closed.
-  // Null: the reconciler never covered the month.
-  readCoverage(month: string): Promise<Readonly<Record<string, "open" | "closed">> | null>;
+  // The month's coverage (src/reconciler/history.ts CoverageDocument): the days history holds, open or closed, and
+  // the earliest instant a document of the month can expire (null: never). Null: the reconciler never covered it.
+  readCoverage(month: string): Promise<Coverage | null>;
 }
 
-export interface HistorySettings { container: string; retentionDays: number }
+export interface Coverage { days: Readonly<Record<string, "open" | "closed">>; expiresAt: string | null }
+
+// A day whose documents expire within this margin is refused as expired: Cosmos DB stops returning a document once
+// its time to live has passed, and the export's reads take time (ADR-0044 decision 9).
+export const HISTORY_EXPIRY_MARGIN_MS = 86_400_000;
+
+// retentionHeldFrom (ADMIN_LOG_RETENTION_HELD_FROM, ADR-0043): after Stage 5 raised the workspace retention, the
+// oldest instant the workspace then held; null otherwise.
+export interface HistorySettings { container: string; retentionDays: number; retentionHeldFrom: string | null }
 export interface Range { from: string; to: string }
 export interface HistoryFilters { project: string; group: string; developer: string; model: string; family: string; classification: string; chargeback: string }
 
@@ -52,14 +61,17 @@ export function readHistorySettings(env: Readonly<Record<string, string | undefi
   if (!container) return null;
   const raw = env.ADMIN_LOG_RETENTION_DAYS?.trim();
   const retentionDays = raw ? Number(raw) : 90;
+  const retentionHeldFrom = env.ADMIN_LOG_RETENTION_HELD_FROM?.trim() || null;
   if (!COSMOS_NAME.test(container) || !Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 4383) return "invalid";
-  return { container, retentionDays };
+  if (retentionHeldFrom !== null && !isUtcInstant(retentionHeldFrom)) return "invalid";
+  return { container, retentionDays, retentionHeldFrom };
 }
 
 // The first UTC month start the workspace still holds whole, but never after the current month's start: the current
-// month always comes from Log Analytics, as before.
-export function historyBoundary(now: Date, retentionDays: number): Date {
-  const oldest = new Date(now.getTime() - retentionDays * DAY_MS);
+// month always comes from Log Analytics, as before. The workspace holds rows from now - retentionDays, or, after
+// a raised retention, from the later of that and retentionHeldFrom (deleted rows do not come back).
+export function historyBoundary(now: Date, retentionDays: number, retentionHeldFrom: string | null = null): Date {
+  const oldest = new Date(Math.max(now.getTime() - retentionDays * DAY_MS, retentionHeldFrom === null ? -Infinity : Date.parse(retentionHeldFrom)));
   const start = Date.UTC(oldest.getUTCFullYear(), oldest.getUTCMonth(), 1);
   const whole = start === oldest.getTime() ? start : Date.UTC(oldest.getUTCFullYear(), oldest.getUTCMonth() + 1, 1);
   return new Date(Math.min(whole, Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
@@ -110,16 +122,22 @@ function completenessOf(row: Doc): string {
   return "complete";
 }
 
-// The days of a history range the reconciler never covered (refused: no data there is not zero usage) and the
-// covered days not yet closed (at most an hour behind the ledger). One point read per month.
-export async function historyCoverage(store: HistoryStore, range: Range): Promise<{ uncovered: string[]; open: string[] }> {
-  const result = { uncovered: [] as string[], open: [] as string[] };
-  const months = new Map<string, Readonly<Record<string, string>> | null>();
+// The days of a history range the reconciler never covered (refused: no data there is not zero usage), the covered
+// days whose documents expired or expire within HISTORY_EXPIRY_MARGIN_MS (refused: some of their documents may be
+// gone), and the covered days not yet closed (at most an hour behind the ledger). One point read per month.
+export async function historyCoverage(store: HistoryStore, range: Range, now: Date): Promise<{ uncovered: string[]; expired: string[]; expiresAt: string | null; open: string[] }> {
+  const result = { uncovered: [] as string[], expired: [] as string[], expiresAt: null as string | null, open: [] as string[] };
+  const months = new Map<string, Coverage | null>();
   for (let at = Date.parse(range.from); at < Date.parse(range.to); at += DAY_MS) {
     const d = day(at);
     if (!months.has(d.slice(0, 7))) months.set(d.slice(0, 7), await store.readCoverage(d.slice(0, 7)));
-    const state = months.get(d.slice(0, 7))?.[d];
+    const coverage = months.get(d.slice(0, 7));
+    const state = coverage?.days[d];
     if (state === undefined) result.uncovered.push(d);
+    else if (coverage?.expiresAt && Date.parse(coverage.expiresAt) - HISTORY_EXPIRY_MARGIN_MS <= now.getTime()) {
+      result.expired.push(d);
+      if (result.expiresAt === null || coverage.expiresAt < result.expiresAt) result.expiresAt = coverage.expiresAt;
+    }
     else if (state !== "closed") result.open.push(d);
   }
   return result;
@@ -216,8 +234,8 @@ export function createCosmosHistoryStore(container: Container): HistoryStore {
     },
     async readCoverage(month) {
       try {
-        const { resource } = await container.item("coverage", month).read<{ days?: Record<string, "open" | "closed"> }>();
-        return resource?.days ?? null;
+        const { resource } = await container.item("coverage", month).read<{ days?: Record<string, "open" | "closed">; expiresAt?: string | null }>();
+        return resource?.days ? { days: resource.days, expiresAt: resource.expiresAt ?? null } : null;
       } catch (error) {
         if ((error as { code?: unknown }).code === 404) return null;
         throw error;

@@ -48,7 +48,7 @@ function historySplit(period: Range, backend: string, deps: V3Dependencies): { h
   const settings = readHistorySettings(deps.env);
   if (settings === null) return { history: null, logs: period };
   if (settings === "invalid") throw new ApiError(503, "chargeback_history_settings_invalid");
-  const split = splitRange(period, historyBoundary(deps.now(), settings.retentionDays));
+  const split = splitRange(period, historyBoundary(deps.now(), settings.retentionDays, settings.retentionHeldFrom));
   if (split.history && backend) throw new ApiError(400, "backend_filter_not_in_history");
   if (split.history && !deps.chargebackHistory) throw new ApiError(503, "chargeback_history_not_configured");
   return split;
@@ -97,7 +97,11 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   const filters = { ...readChargebackFilters(rest, deps.now(), cfg.ok ? cfg.value.maxQueryDays : 62), offset: 0, limit: EXPORT_ROWS_MAX };
   const split = historySplit(filters.period, filters.backend, deps);
   // ADR-0044 decision 8: a day history never covered is refused, never exported as zero usage.
-  const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history) : null;
+  const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history, deps.now()) : null;
+  // ADR-0044 decision 9: a day whose documents may have expired is refused, never exported with what is left.
+  if (coverage && coverage.expired.length) {
+    return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_expired", expiredDays: coverage.expired, expiresAt: coverage.expiresAt } };
+  }
   if (coverage && coverage.uncovered.length) {
     return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_not_covered", uncoveredDays: coverage.uncovered } };
   }
@@ -139,5 +143,9 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
     basis: "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.",
     filters: { project: filters.project, group: filters.group, developer: filters.developer, model: filters.model, backend: filters.backend,
       family: filters.family, classification: filters.classification, chargeback: filters.chargeback },
-  }, { "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX) }, label);
+  }, {
+    "x-ccof-truncated": String(truncated), "x-ccof-row-limit": String(EXPORT_ROWS_MAX),
+    // The CSV has no sources: covered history days not yet closed, comma-separated (empty: none).
+    ...(coverage ? { "x-ccof-history-open-days": coverage.open.join(",") } : {}),
+  }, label);
 }

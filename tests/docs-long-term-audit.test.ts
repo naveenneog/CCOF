@@ -140,12 +140,12 @@ test("the history page quotes the timer and coverage refusals, and it or trouble
   const names = ["history_not_covered", "uncoveredDays", "openDays", "history_range_not_whole_days", "backend_filter_not_in_history",
     "chargeback_history_not_configured", "chargeback_history_settings_invalid", "historyClosedRefused", "historyBudgetDeferred",
     "historyCoverageWritten", "historyShrinkRefused", "history_lease_held", "history_time_budget", "history_lease_unavailable",
-    "history_conflict", "history_write_failed", "history_read_failed", "history_ledger_read_failed", "history_store_missing"];
+    "history_conflict", "history_write_failed", "history_read_failed", "history_ledger_read_failed", "history_store_missing", "history_expired", "expiredDays"];
   for (const name of names) {
     assert.ok(code.includes(name), `${name} is in the code`);
     assert.ok(new RegExp(`\\b${name}\\b`).test(page + troubleshooting), `chargeback-history.md or troubleshooting.md names ${name}`);
   }
-  for (const name of ["history_not_covered", "uncoveredDays", "openDays", "historyClosedRefused"]) assert.ok(page.includes(name), `chargeback-history.md names ${name}`);
+  for (const name of ["history_not_covered", "uncoveredDays", "openDays", "historyClosedRefused", "history_expired", "X-CCOF-History-Open-Days"]) assert.ok(page.includes(name), `chargeback-history.md names ${name}`);
   assert.match(page, /409/);
   assert.match(page, /ccof-chargeback-history/, "names the history lease");
   assert.match(page, /\(troubleshooting\.md#chargeback-history\)/);

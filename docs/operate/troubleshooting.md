@@ -57,6 +57,7 @@ Export responses ([admin/src/export.ts](../../admin/src/export.ts), [admin/src/h
 | `400` `backend_filter_not_in_history` | A `backend` filter on a range with a history part; history has no backend | Remove `backend`, or keep the range inside the months Log Analytics holds |
 | `400` `unknown_parameter` | A parameter the export does not take, such as `tags`, `offset` or `limit` (all exports) | Remove it |
 | `409` `history_not_covered` with `uncoveredDays` | Days the reconciler never recorded: before the month history was turned on, while the reconciler was stopped, or not yet written because of the write limit | Narrow the range to covered days. Days left by the write limit are covered by a later run: retry then |
+| `409` `history_expired` with `expiredDays` and `expiresAt` | With `audit.chargebackHistory.ttlDays`, a month's documents expire `ttlDays` days after the month ends; the export refuses its days from one day before `expiresAt` | Narrow the range to later months. The expired totals cannot be recovered; the [audit archive](audit-archive.md), if it was on, still holds the request log |
 | `503` `chargeback_history_not_configured` | The admin app has the history container setting but no Cosmos DB connection | Rerun Stage 5, then Stage 7, from the deployment's checkout |
 | `503` `chargeback_history_settings_invalid` | `ADMIN_CHARGEBACK_HISTORY_CONTAINER` is not a valid container name, or `ADMIN_LOG_RETENTION_DAYS` is not a whole number 1-4383 | Rerun Stage 5; it writes both. Do not edit them by hand |
 
@@ -78,3 +79,23 @@ when the Azure error had one.
 | `historyShrinkRefused` above 0 | A day's recomputed total is lower than the stored one (a partial read, or rows the workspace has deleted); not written, the day stays open | None if it clears; a day that stays open is listed in `openDays` |
 | `historyBudgetDeferred` above 0 | Writes over the 1,000 per run limit, left for the next run; those days are not yet covered | None; it falls to 0 |
 | `historyCoverageWritten` | Months whose coverage record this run updated | Information only |
+
+## Old policy fragments
+
+Stage 5 deploys the gateway policy as policy fragments whose names end with a hash of their content
+([ADR-0039](../adr/0039-gateway-policy-fragments.md)). When a Stage 5 run renders a changed policy, the fragments of
+the previous policy stay in API Management; nothing uses them, and Stage 5 does not delete them ([roadmap](../ROADMAP.md)).
+To remove them, after Stage 5 has verified, with Azure CLI and API Management Contributor:
+
+```powershell
+$apim = az apim show -g <resource group> -n <API Management name> --query id -o tsv
+$v = 'api-version=2024-05-01'
+az rest --method get --url "$apim/policyFragments?$v" --query "value[].name" -o tsv
+# For each fragment named <apiId>-<section>-<12 hex characters> that the current policy does not include:
+az rest --method post --url "$apim/policyFragments/<name>/listReferences?$v" --query "length(value)"
+az rest --method delete --url "$apim/policyFragments/<name>?$v"   # only when listReferences returned 0
+```
+
+The current policy's fragment names are in `.staged-state/generated/gateway/<apiId>.policy.deployment.json` under
+`fragments` (each `id`). A fragment that an API revision still includes is listed by `listReferences`; keep it
+([list references](https://learn.microsoft.com/en-us/rest/api/apimanagement/policy-fragment/list-references)).

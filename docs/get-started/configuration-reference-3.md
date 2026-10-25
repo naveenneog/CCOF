@@ -128,8 +128,12 @@ history key does the same for Stages 2, 3 and 5. Stage 1 is not affected.
 
 **Effective Log Analytics retention** is `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays`. The
 history export uses it to decide which months come from history (`ADMIN_LOG_RETENTION_DAYS`), and `ttlDays` must be
-more than it. After raising it, the export reads the added months from Log Analytics at once, but the workspace
-holds them only as data ages in; until then those months show only what the workspace kept.
+more than it. Raising it does not bring back rows the workspace already deleted. When Stage 5 raises
+`audit.workspaceRetentionDays`, it records the oldest instant the workspace then holds (now minus the old retention)
+in `ADMIN_LOG_RETENTION_HELD_FROM` and in the workbook; reports flag periods before that instant as
+`retention_truncated`, and the history export reads them from history, until now minus the new retention passes that
+instant ([ADR-0043](../adr/0043-long-term-audit-archive.md#raising-the-workspace-retention)). Lowering it records
+nothing. The workbook also uses the effective retention.
 
 ### Audit archive
 
@@ -159,4 +163,4 @@ Read by [Staged.Cosmos.ps1](../../infra/staged/Staged.Cosmos.ps1). Other keys in
 | `audit.chargebackHistory` | No | see below | Absent or `null`: off | `Staged.Cosmos.ps1` |
 | `audit.chargebackHistory.enabled` | Yes, inside the section | `false` | JSON `true` or `false`. `true`: Stage 2 creates `chargebackDaily`, Stage 3 grants it, Stage 5 writes the settings. `true` needs `reconciler.timerEnabled: true`: only the reconciler's timer run writes history. With the timer off the configuration check refuses: `audit.chargebackHistory.enabled is true but reconciler.timerEnabled is not: history is written only by the reconciler timer run; set reconciler.timerEnabled to true or audit.chargebackHistory.enabled to false (ADR-0044)` | `Staged.Cosmos.ps1` |
 | `audit.chargebackHistory.closeAfterDays` | If enabled | `2` | Whole number 1-7: whole days after a UTC day ends before its totals are final (`RECONCILER_HISTORY_CLOSE_AFTER_DAYS`) | `app-settings.bicep` |
-| `audit.chargebackHistory.ttlDays` | If enabled | `null` | `null`: kept until deleted. A whole number above the effective Log Analytics retention, at most 24855 (the largest Cosmos DB time to live, in seconds, that fits a 32-bit signed number): the container's time to live, counted from each day's last write | `stage2-schema.bicep` |
+| `audit.chargebackHistory.ttlDays` | If enabled | `null` | `null`: kept until deleted. A whole number above the effective Log Analytics retention, at most 24855 (the largest Cosmos DB time to live, in seconds, that fits a 32-bit signed number): every document of a month expires this many days after the month ends (`RECONCILER_HISTORY_TTL_DAYS`, ADR-0044 decision 9) | `stage2-schema.bicep` |

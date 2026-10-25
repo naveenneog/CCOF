@@ -8,7 +8,7 @@ import { isIdentifier, isObject } from "./validation.ts";
 import type { Doc } from "./validation.ts";
 import { chargebackQueries, lf, reconcilerQueryBase, reportingRateCard, sha256, usageQueryBase } from "../../analytics/workbooks/chargeback-queries.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
-import { bounded } from "../../analytics/workbooks/queries.ts";
+import { bounded, isUtcInstant } from "../../analytics/workbooks/queries.ts";
 import { compileRateCard } from "../../analytics/workbooks/rate-card.ts";
 import { renderQuery } from "../../analytics/workbooks/render.ts";
 import type { RenderParameters } from "../../analytics/workbooks/render.ts";
@@ -36,7 +36,8 @@ const FAMILY = ["haiku", "sonnet", "opus", "fable", "mythos", "unknown"];
 
 export interface QuerySources { ledger: string; pricing: string; budgets: string }
 export type Configured<T> = { ok: true; value: T; permission: string } | { ok: false; reason: string; permission: string };
-export interface ChargebackSettings { workspaceId: string; gatewayResourceId: string; maxQueryDays: number; retentionDays: number }
+// retentionHeldFrom (ADMIN_LOG_RETENTION_HELD_FROM, ADR-0043): set by Stage 5 when it raised the workspace retention.
+export interface ChargebackSettings { workspaceId: string; gatewayResourceId: string; maxQueryDays: number; retentionDays: number; retentionHeldFrom?: string | null }
 export interface ReconcilerSettings { workspaceId: string; resourceIds: string[]; intervalMinutes: number; lookbackDays: number }
 export interface AuditSettings { workspaceId: string; resourceIds: string[] }
 
@@ -53,10 +54,11 @@ export function readChargebackSettings(env: Readonly<Record<string, string | und
   if (!workspaceId || !gatewayResourceId) return { ok: false, reason: "chargeback_not_configured", permission };
   const maxQueryDays = intSetting(env.ADMIN_CHARGEBACK_MAX_QUERY_DAYS, 62, 31, 366);
   const retentionDays = intSetting(env.ADMIN_LOG_RETENTION_DAYS, 90, 1, 4383);
-  if (!isGuid(workspaceId) || !APIM_ID.test(gatewayResourceId) || maxQueryDays === null || retentionDays === null) {
+  const retentionHeldFrom = env.ADMIN_LOG_RETENTION_HELD_FROM?.trim() || null;
+  if (!isGuid(workspaceId) || !APIM_ID.test(gatewayResourceId) || maxQueryDays === null || retentionDays === null || (retentionHeldFrom !== null && !isUtcInstant(retentionHeldFrom))) {
     return { ok: false, reason: "chargeback_settings_invalid", permission };
   }
-  return { ok: true, value: { workspaceId, gatewayResourceId, maxQueryDays, retentionDays }, permission };
+  return { ok: true, value: { workspaceId, gatewayResourceId, maxQueryDays, retentionDays, retentionHeldFrom }, permission };
 }
 
 export function readReconcilerSettings(env: Readonly<Record<string, string | undefined>>): Configured<ReconcilerSettings> {
@@ -163,8 +165,8 @@ export function prepareRateCard(rateCard: unknown): PreparedCard {
   return { card, text, sha: sha256(text), version: String(rateCard.version ?? "") };
 }
 
-function reportSettings(cb: { gatewayResourceId: string; maxQueryDays: number; retentionDays: number }, reconcilerId = "", lookbackDays = 31) {
-  return { maxQueryDays: cb.maxQueryDays, retentionDays: cb.retentionDays, gatewayResourceId: cb.gatewayResourceId, reconcilerResourceId: reconcilerId, budgetLookbackDays: lookbackDays };
+function reportSettings(cb: { gatewayResourceId: string; maxQueryDays: number; retentionDays: number; retentionHeldFrom?: string | null }, reconcilerId = "", lookbackDays = 31) {
+  return { maxQueryDays: cb.maxQueryDays, retentionDays: cb.retentionDays, retentionHeldFrom: cb.retentionHeldFrom ?? null, gatewayResourceId: cb.gatewayResourceId, reconcilerResourceId: reconcilerId, budgetLookbackDays: lookbackDays };
 }
 
 // The bound chargeback KQL for one view: the workbook builder's text with admin options, rendered.

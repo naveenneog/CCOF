@@ -226,14 +226,14 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
     await lease.release().catch(() => false);
   }
   // After the budget lease is released (ADR-0044 decision 7): history never holds up or fails the budget run.
-  if (settings.history && planned && summary.outcome === "written") history = await runHistory(historyInput(settings, settings.history.closeAfterDays, assets, deps, planned, period, runId, context));
+  if (settings.history && planned && summary.outcome === "written") history = await runHistory(historyInput(settings, settings.history, assets, deps, planned, period, runId, context));
   return finish({ ...summary, ...(planned ? describe(planned) : {}), statesWritten: written, ...history });
 }
 
-function historyInput(settings: ReconcilerSettings, closeAfterDays: number, assets: RunAssets, deps: RunDependencies, planned: Planned, period: BudgetPeriod, runId: string, context: RunContext) {
+function historyInput(settings: ReconcilerSettings, { closeAfterDays, ttlDays }: NonNullable<ReconcilerSettings["history"]>, assets: RunAssets, deps: RunDependencies, planned: Planned, period: BudgetPeriod, runId: string, context: RunContext) {
   const timeBudgetMs = context.historyTimeBudgetMs ?? Math.max(15_000, settings.intervalMinutes * 30_000);
   return {
-    closeAfterDays, rows: planned.historyRows, period, now: context.now(), leases: deps.leases, leaseSeconds: settings.leaseSeconds, holder: runId, clock: context.now, timeBudgetMs, rateCard: assets.rateCard, schedule: assets.schedule, ledgerKql: assets.ledgerKql,
+    closeAfterDays, ttlDays, rows: planned.historyRows, period, now: context.now(), leases: deps.leases, leaseSeconds: settings.leaseSeconds, holder: runId, clock: context.now, timeBudgetMs, rateCard: assets.rateCard, schedule: assets.schedule, ledgerKql: assets.ledgerKql,
     gatewayResourceId: settings.gatewayResourceId, ledgerMaxRows: settings.ledgerMaxRows, writeConcurrency: settings.writeConcurrency,
     store: deps.history, queryLedger: (query: string, timespan: string) => deps.queryLedger(query, timespan),
   };

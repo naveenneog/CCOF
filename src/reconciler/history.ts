@@ -69,6 +69,8 @@ export interface ChargebackDailyDocument extends HistoryKey {
   closed: boolean;
   computedAt: string;
   contentHash: string;
+  // Seconds to live from this write (ADR-0044 decision 9); absent without ttlDays.
+  ttl?: number;
 }
 
 // open: written from a whole read, still changing; closed: final (every document of the day closed, or none).
@@ -80,6 +82,11 @@ export interface CoverageDocument {
   month: string;
   days: Record<string, DayState>;
   computedAt: string;
+  // The earliest instant a document of the month can expire (ADR-0044 decision 9); null: documents never expire.
+  // Absent in a coverage written before expiry was recorded.
+  expiresAt?: string | null;
+  // -1 with ttlDays: the coverage itself never expires, so an expired month is told apart from one never covered.
+  ttl?: number;
 }
 
 // What the reconciler keeps of a stored document to plan the next write; etag, when known, makes the write conditional.
@@ -131,6 +138,20 @@ const zeroTokens = (): TokenTotals => ({ input: 0, output: 0, cacheRead: 0, cach
 // A Cosmos id may not hold / \ ? or #, and a chargeback ID may hold "/": the id is a digest of the key.
 export function historyDocumentId(key: HistoryKey): string {
   return sha256(JSON.stringify([key.day, key.chargebackId, key.projectId, key.classification, key.personId, key.model]));
+}
+
+// The largest Cosmos DB time to live: a 32-bit signed number of seconds.
+export const MAX_TTL_SECONDS = 2_147_483_647;
+
+// Every document of a month, and so every day of it, expires at one instant: ttlDays after the month ends.
+export function monthExpiry(month: string, ttlDays: number): Date {
+  const [year, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, m, 1) + ttlDays * DAY_MS);
+}
+
+// The time to live of a write at `now` that should expire at `expiry`: capped at MAX_TTL_SECONDS, at least 1.
+export function ttlSeconds(expiry: Date, now: Date): number {
+  return Math.max(1, Math.min(MAX_TTL_SECONDS, Math.round((expiry.getTime() - now.getTime()) / 1000)));
 }
 
 export function isDayClosed(day: string, now: Date, closeAfterDays: number): boolean {

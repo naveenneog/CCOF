@@ -135,6 +135,8 @@ test("the cached store reads a month's summaries once per 60 minutes, writes con
       writes.push([doc.id, etag]);
       return `e-${writes.length}`;
     },
+    readCoverage: async () => null,
+    writeCoverage: async () => "e-c",
   };
   const clock = new ManualClock("2026-10-11T13:00:00Z");
   const store = createCachedHistoryStore(container, clock.now);
@@ -157,6 +159,8 @@ test("a write conflict (another instance wrote first) drops the month's cache an
   const container: HistoryContainer = {
     querySummaries: async () => { queries += 1; return []; },
     write: async () => { throw new HistoryConflictError(); },
+    readCoverage: async () => null,
+    writeCoverage: async () => "e-c",
   };
   const store = createCachedHistoryStore(container, new ManualClock("2026-10-11T13:00:00Z").now);
   await store.readSummaries("2026-10");
@@ -170,7 +174,7 @@ test("a write conflict (another instance wrote first) drops the month's cache an
 });
 
 test("a failed write leaves the cached summary unchanged", async () => {
-  const container: HistoryContainer = { querySummaries: async () => [], write: async () => { throw new Error("503"); } };
+  const container: HistoryContainer = { querySummaries: async () => [], write: async () => { throw new Error("503"); }, readCoverage: async () => null, writeCoverage: async () => "e-c" };
   const store = createCachedHistoryStore(container, new ManualClock("2026-10-11T13:00:00Z").now);
   await store.readSummaries("2026-10");
   await assert.rejects(store.write(await firstDocument()));
@@ -269,4 +273,112 @@ test("coverage is not written when a history write fails", async () => {
   history.failWrite = new Error("503");
   await run(pilot({ history }), "2026-10-11T13:00:00Z");
   assert.equal(history.coverage.size, 0);
+});
+
+// ---- expiry (ADR-0044 decision 9): a month's documents expire together, and the coverage says when ----
+const TTL = { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "400" };
+const OCTOBER_EXPIRES = Date.parse("2026-11-01T00:00:00Z") + 400 * 86_400_000;
+const expiryOf = (writtenAt: string, ttl: number | undefined) => Date.parse(writtenAt) + (ttl ?? NaN) * 1000;
+
+test("with ttlDays every document of a month expires ttlDays after the month ends, whenever it is written", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  azure.options.ledger = ledgerBody([charged("2026-10-11T12:00:00.0000000Z"), charged("2026-10-11T12:30:00.0000000Z"), charged("2026-10-10T12:00:00.0000000Z")]);
+  await run(azure, "2026-10-11T14:30:00Z", TTL);
+  assert.deepEqual(history.writes.map((d) => d.ttl), [Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T13:00:00Z")) / 1000), Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T13:00:00Z")) / 1000), Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T14:30:00Z")) / 1000)]);
+  assert.deepEqual([expiryOf("2026-10-11T13:00:00Z", history.writes[0].ttl), expiryOf("2026-10-11T14:30:00Z", history.writes[2].ttl)], [OCTOBER_EXPIRES, OCTOBER_EXPIRES]);
+  const coverage = history.coverage.get("2026-10");
+  assert.deepEqual([coverage?.expiresAt, coverage?.ttl], [new Date(OCTOBER_EXPIRES).toISOString(), -1], "the coverage records the expiry and never expires itself");
+});
+
+test("without ttlDays no document carries a time to live and the coverage has no expiry", async () => {
+  const history = new MemoryHistory();
+  await run(pilot({ history }), "2026-10-11T13:00:00Z");
+  assert.deepEqual([history.writes.every((d) => d.ttl === undefined), history.coverage.get("2026-10")?.expiresAt, history.coverage.get("2026-10")?.ttl], [true, null, undefined]);
+});
+
+test("the coverage keeps the earliest expiry of any write: a lower ttlDays lowers it, a higher one does not raise it", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  await run(azure, "2026-10-11T13:01:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "500" });
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, new Date(OCTOBER_EXPIRES).toISOString());
+  const lowered = await run(azure, "2026-10-11T13:02:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "300" });
+  assert.deepEqual([history.coverage.get("2026-10")?.expiresAt, lowered.runLine.historyCoverageWritten], [new Date(OCTOBER_EXPIRES - 100 * 86_400_000).toISOString(), 1], "rewritten although no day changed");
+});
+
+test("ttlDays set after documents were written without one: the coverage assumes they expire ttlDays after the month starts", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z");
+  await run(azure, "2026-10-11T13:01:00Z", TTL);
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, new Date(Date.parse("2026-10-01T00:00:00Z") + 400 * 86_400_000).toISOString());
+});
+
+test("ttlDays removed (the container no longer expires anything): the coverage expiry is cleared", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  await run(azure, "2026-10-11T13:01:00Z");
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, null);
+});
+
+test("a time to live longer than Cosmos DB holds is capped, and the coverage records the capped expiry", async () => {
+  const history = new MemoryHistory();
+  await run(pilot({ history }), "2026-10-11T13:00:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24855" });
+  assert.deepEqual([history.writes[0].ttl, history.coverage.get("2026-10")?.expiresAt], [2_147_483_647, new Date(Date.parse("2026-10-11T13:00:00Z") + 2_147_483_647_000).toISOString()]);
+});
+
+// ---- every run-line field and reason the documentation names (council round 2, N1) ----
+test("a key that appears for a closed day is refused and counted as historyClosedRefused", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history, ledger: ledgerBody([charged("2026-10-05T12:00:00.0000000Z")]) });
+  await run(azure, "2026-10-08T01:00:00Z");
+  await run(azure, "2026-10-08T01:01:00Z");
+  assert.equal([...history.docs.values()].find((d) => d.day === "2026-10-05")?.closed, true);
+  azure.options.ledger = ledgerBody([charged("2026-10-05T12:00:00.0000000Z"), { ...charged("2026-10-05T13:00:00.0000000Z"), chargebackId: "WBS-200" }]);
+  const { runLine } = await run(azure, "2026-10-08T02:30:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyClosedRefused, runLine.historyClosedSkipped], ["written", 1, 1]);
+});
+
+test("an open day whose total would fall is not written and is counted as historyShrinkRefused", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history, ledger: ledgerBody([charged("2026-10-11T10:00:00.0000000Z"), charged("2026-10-11T11:00:00.0000000Z")]) });
+  await run(azure, "2026-10-11T12:00:00Z");
+  azure.options.ledger = ledgerBody([charged("2026-10-11T10:00:00.0000000Z")]);
+  const { runLine } = await run(azure, "2026-10-11T13:30:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyShrinkRefused, [...history.docs.values()][0].requests], ["written", 1, 2]);
+});
+
+test("writes beyond the per-run limit wait for the next run and are counted as historyBudgetDeferred", async () => {
+  const history = new MemoryHistory();
+  const many = Array.from({ length: 1000 }, (_, i) => ({ ...charged("2026-10-10T12:00:00.0000000Z"), chargebackId: `WBS-${i}` }));
+  const azure = pilot({ history, ledger: ledgerBody([...many, charged("2026-10-11T12:00:00.0000000Z")]) });
+  const { runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([runLine.historyOutcome, runLine.historyWritten, runLine.historyBudgetDeferred], ["written", 1000, 1]);
+  assert.equal(history.coverage.get("2026-10")?.days["2026-10-11"], undefined, "a deferred day is not covered yet");
+});
+
+test("a history lease that cannot be written fails history with history_lease_unavailable and its code", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  const create = azure.leases.create.bind(azure.leases);
+  azure.leases.create = async (doc: Parameters<typeof create>[0]) => {
+    if (doc.id === HISTORY_LEASE) throw Object.assign(new Error("unavailable"), { code: 503 });
+    return create(doc);
+  };
+  const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z");
+  assert.deepEqual([summary.outcome, runLine.historyOutcome, runLine.historyReason, runLine.historyErrorCode], ["written", "failed", "history_lease_unavailable", "503"]);
+});
+
+test("a failed read of the previous month's open days fails history with history_ledger_read_failed", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  azure.options.ledger = async () => {
+    if ((azure.queries.at(-1)?.timespan ?? "").startsWith("2026-10-")) throw Object.assign(new Error("timeout"), { code: 504 });
+    return ledgerBody([charged("2026-11-01T01:00:00.0000000Z")]);
+  };
+  const { summary, runLine } = await run(azure, "2026-11-01T02:00:00Z");
+  assert.deepEqual([summary.outcome, runLine.historyOutcome, runLine.historyReason], ["written", "failed", "history_ledger_read_failed"]);
 });
