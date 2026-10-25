@@ -7,7 +7,9 @@
 //   - infra/workbook/main.bicep: the chargeback workbook, only when content is supplied;
 //   - the API-level Azure Monitor logger and diagnostic of infra/poc/phase4-apim-telemetry.bicep. Stage 1
 //     already created the APIM and Function resource-log diagnostic settings; a second setting with the
-//     same categories and workspace would be refused, so they are not repeated.
+//     same categories and workspace would be refused, so they are not repeated;
+//   - optional long-term audit archive (ADR-0043): a storage account and the gateway's second diagnostic
+//     setting, ccof-gateway-archive, with a storage destination only.
 // A sites/config appsettings resource replaces the whole set: this stage is the only settings writer.
 targetScope = 'resourceGroup'
 
@@ -48,6 +50,9 @@ param workbook object = {}
 @description('Empty leaves any existing workbook untouched.')
 param workbookContent object = {}
 param workbookContentTags object = {}
+
+@description('Long-term audit archive (ADR-0043): Staged.Audit.ps1 Get-StgAuditDeployment; {} deploys nothing.')
+param auditArchive object = {}
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: names.logAnalyticsWorkspace
@@ -111,6 +116,25 @@ module apiTelemetry 'stage5-api-telemetry.bicep' = {
   scope: resourceGroup(apim.subscriptionId, apim.resourceGroup)
   params: { apimName: apim.name, apiId: apim.apiId }
   dependsOn: [api]
+}
+
+module auditStorage 'stage5-audit-archive.bicep' = if (!empty(auditArchive)) {
+  name: '${names.deploymentPrefix}-stage5-audit-archive'
+  params: {
+    accountName: auditArchive.accountName
+    location: auditArchive.location
+    tags: auditArchive.?tags ?? {}
+    storageSku: auditArchive.storageSku
+    retentionDays: auditArchive.?retentionDays
+    immutabilityDays: auditArchive.?immutabilityDays
+    lockedContainers: auditArchive.?lockedContainers ?? []
+  }
+}
+
+module auditDiagnostic 'stage5-audit-diagnostic.bicep' = if (!empty(auditArchive)) {
+  name: '${names.deploymentPrefix}-stage5-audit-diagnostic'
+  scope: resourceGroup(apim.subscriptionId, apim.resourceGroup)
+  params: { apimName: apim.name, storageAccountId: auditStorage!.outputs.id }
 }
 
 module workbookFull '../workbook/main.bicep' = if (!empty(workbookContent)) {

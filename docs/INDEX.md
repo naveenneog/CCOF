@@ -21,6 +21,7 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 | [Budgets and the budget guard](operate/budgets-and-guard.md) | Budget owner |
 | [Chargeback and user tags](operate/chargeback-and-tags.md) | Finance, admin |
 | [Troubleshooting](operate/troubleshooting.md) | Platform engineer |
+| [Audit archive](operate/audit-archive.md): long-term copy of the gateway log | Auditor, platform engineer |
 
 ## Reference
 

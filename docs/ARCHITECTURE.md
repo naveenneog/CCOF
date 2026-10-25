@@ -70,7 +70,9 @@ amber dashed components are optional, not universally deployed.
    input/output/cache-read/cache-write-5m/cache-write-1h categories are reported without logging
    prompts, responses or credentials. Stream cache categories remain unknown. Workbook selectors
    are not access controls, list-price reporting is not a Marketplace invoice or dollar enforcement,
-   and historical group attribution is never rewritten using today's membership.
+   and historical group attribution is never rewritten using today's membership. With `audit.archive`, a second
+   diagnostic setting, `ccof-gateway-archive`, copies GatewayLogs/GatewayLlmLogs to a firewalled storage account for
+   long-term audit, independent of the workspace retention ([ADR-0043](adr/0043-long-term-audit-archive.md)).
 7. **Revocation and classification changes.** Group removal must successfully sync and refresh the
    resolver/cache before new requests are denied. Baseline allow TTL is 120 seconds, refusal TTL
    30 seconds, with an additional 3600-second last-known-good allowance on resolver failure;
