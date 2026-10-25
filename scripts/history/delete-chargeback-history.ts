@@ -71,6 +71,9 @@ function checkOptions(options: DeleteOptions): void {
 }
 
 export async function deleteHistory(container: HistoryDeleteContainer, options: DeleteOptions): Promise<MonthResult[]> {
+  // History stores personId in lower case (keyOf in src/reconciler/history.ts); an Entra object ID pasted in upper
+  // case must still match, or a deletion request would silently delete nothing.
+  options = { ...options, personId: options.personId === null ? null : options.personId.toLowerCase() };
   checkOptions(options);
   const results: MonthResult[] = [];
   for (const month of [...new Set(options.months)].sort()) {
@@ -114,7 +117,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       else if (flag === "--database") args.database = value;
       else if (flag === "--container") args.container = value;
       else if (flag === "--month") args.months.push(value);
-      else if (flag === "--person") args.personId = value;
+      else if (flag === "--person") args.personId = value.toLowerCase();
       else throw new DeleteRefused("history_delete_usage", `unknown option ${flag}`);
     }
   }

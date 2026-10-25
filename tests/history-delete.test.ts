@@ -85,6 +85,16 @@ test("one person: only their documents go; the coverage notes the deletion witho
   assert.ok(!JSON.stringify(coverage).includes(ALICE), "the coverage record must not hold the deleted person's ID");
 });
 
+test("one person given in upper case deletes the same documents: history stores personId in lower case", async () => {
+  const carol = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+  const docs = [...monthDocs("2025-01"), { id: "d-carol", month: "2025-01", personId: carol, day: "2025-01-01" }];
+  const { container, items } = fakeContainer(docs);
+  const results = await deleteHistory(container, { months: ["2025-01"], personId: carol.toUpperCase(), confirm: true, now: NOW });
+  assert.deepEqual(results, [{ month: "2025-01", documents: 1, deleted: 1, coverage: "noted" }]);
+  assert.ok(![...items.values()].some((d) => d.personId === carol), "the upper-case request must delete the stored lower-case documents");
+  assert.equal(parseArgs(["--endpoint", "https://acct.documents.azure.com:443/", "--database", "ccof", "--month", "2025-01", "--person", carol.toUpperCase()]).personId, carol);
+});
+
 test("a person with no documents in the month changes nothing", async () => {
   const { container, calls } = fakeContainer(monthDocs("2025-01"));
   const results = await deleteHistory(container, { months: ["2025-01"], personId: "33333333-3333-4333-8333-333333333333", confirm: true, now: NOW });
