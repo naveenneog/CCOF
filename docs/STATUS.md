@@ -2,7 +2,24 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
+
+### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)
+
+- Live evidence (user run, 2026-10-25): Azure Cloud Shell without persistent storage lost `$HOME`, including
+  `.staged-state`, during Stage 6. After a fresh clone, Stage 1 failed with
+  `verify_failed: <app> VNet subnet is '/subscriptions/.../subnets/snet-functions', expected '' for completed stages`:
+  Stage 6 had already integrated the Function Apps, and with no Stage 6 record the read-back accepted only no integration.
+- Acceptance: with a Stage 6 record, Stage 1 accepts only that record's Functions subnet; without one, it accepts no
+  integration or the Functions subnet the configuration names (`network.existing.functionsSubnetId`, or in create mode
+  the subnet built from `network.create.vnetName` and `subnets.functions.name`). Any other subnet still fails.
+- Code: `Get-StgAllowedFunctionsSubnets` in `infra/staged/Staged.Common.ps1`, used by `Test-Stage1` in
+  `infra/staged/Staged.Resources.ps1`. Three rows added to [troubleshooting](operate/troubleshooting.md): Cloud Shell
+  idle timeout, recovery after lost `$HOME`, and this error.
+- Checks: `tests/Test-StagedStages.ps1` 499 checks pass (a mutation that dropped the `''` case was caught); docs tests
+  27/27; packet gate PASS (23 passed, 2 warned, 0 failed, includes `npm test`), all in a logged-out Azure CLI profile.
+
+**Previous packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-CONFIG-GUIDE-2 — configuration reference reworked (complete, 2026-10-25)
 

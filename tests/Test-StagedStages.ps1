@@ -159,6 +159,15 @@ Assert-Contract $unsafeCreateRetry 'Create mode without Stage 2 state must refus
 # deployment, so redeploying the same template is the recovery, not a refusal (live 2026-10-25).
 $action = Get-StgNetworkAction -Mode 'create' -VnetExists $true -StageStateExists $false -OwnDeploymentSucceeded $true
 Assert-Contract ($action -ceq 'deploy') 'A create-mode rerun after a failed read-back must redeploy its own network.'
+# Stage 1 read-back after the local state was lost while Stage 6 was running: the apps may already sit in the
+# Functions subnet the configuration names (live 2026-10-25, Cloud Shell without persistent storage).
+$subnetCfg = @{ subscriptionId = '00000000-0000-4000-8000-000000000001'; resourceGroup = 'rg'; network = @{ mode = 'existing'; existing = @{ functionsSubnetId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/snet-functions' } } }
+$allowed = @(Get-StgAllowedFunctionsSubnets -Cfg $subnetCfg -NetworkOutputs $null)
+Assert-Contract (($allowed -join ',') -ceq (',' + $subnetCfg.network.existing.functionsSubnetId)) "Without a Stage 6 record, no integration or the configured Functions subnet must be accepted: $($allowed -join ',')"
+$createCfg = @{ subscriptionId = '00000000-0000-4000-8000-000000000001'; resourceGroup = 'rg'; network = @{ mode = 'create'; create = @{ vnetName = 'lab-vnet'; subnets = @{ functions = @{ name = 'snet-functions' } } } } }
+Assert-Contract ((@(Get-StgAllowedFunctionsSubnets -Cfg $createCfg -NetworkOutputs $null))[1] -ceq '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/lab-vnet/subnets/snet-functions') 'Create mode must accept its own Functions subnet.'
+$recorded = @(Get-StgAllowedFunctionsSubnets -Cfg $subnetCfg -NetworkOutputs @{ functionsSubnetId = 'recorded-subnet' })
+Assert-Contract (($recorded -join ',') -ceq 'recorded-subnet') 'With a Stage 6 record, only its subnet must be accepted.'
 # "Own" means a succeeded stage6-network deployment whose vnetId output is this VNet, not merely the deployment name.
 $vnet = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/ccof-vnet'
 $own = @{ name = 'stage6-network'; properties = @{ provisioningState = 'Succeeded'; outputs = @{ vnetId = @{ value = $vnet.ToUpperInvariant() } } } }

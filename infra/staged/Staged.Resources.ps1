@@ -202,8 +202,8 @@ function Test-Stage1 {
         $site = Get-StgSite $Cfg $a.service.name
         $settings = @(Invoke-StgAzJson @('functionapp', 'config', 'appsettings', 'list', '--subscription', $sub, '--resource-group', $rg, '--name', $a.service.name))
         Assert-Stg ($site.publicNetworkAccess -ceq $Cfg.stage1.functionsPublicNetworkAccess) "$($a.service.name) PNA $($site.publicNetworkAccess)"
-        $expectedSubnet = if ($network) { $network.functionsSubnetId } else { '' }
-        Assert-Stg ($site.virtualNetworkSubnetId -ieq $expectedSubnet) "$($a.service.name) VNet subnet is '$($site.virtualNetworkSubnetId)', expected '$expectedSubnet' for completed stages"
+        $allowedSubnets = Get-StgAllowedFunctionsSubnets -Cfg $Cfg -NetworkOutputs $network
+        Assert-Stg (@($allowedSubnets | Where-Object { $site.virtualNetworkSubnetId -ieq $_ }).Count -gt 0) "$($a.service.name) VNet subnet is '$($site.virtualNetworkSubnetId)', expected one of '$($allowedSubnets -join "', '")' for completed stages"
         Assert-Stg ($site.httpsOnly -eq $true) "$($a.service.name) does not require HTTPS"
         Assert-Stg ($site.runtimeName -ceq 'node' -and $site.runtimeVersion -ceq '22') "$($a.service.name) runtime is $($site.runtimeName) $($site.runtimeVersion), expected Node 22"
         Assert-Stg ($site.ftpsState -ceq 'Disabled') "$($a.service.name) FTPS state is $($site.ftpsState)"

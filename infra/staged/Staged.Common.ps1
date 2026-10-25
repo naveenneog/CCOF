@@ -206,6 +206,17 @@ function Get-StgStageDependencies {
         default { throw "invalid stage number $Number" }
     }
 }
+function Get-StgAllowedFunctionsSubnets {
+    <# Subnets the Function Apps may be integrated with at Stage 1 read-back. With a Stage 6 record: its subnet.
+       Without one (not yet run, or the local state was lost after Stage 6 integrated the apps): none, or the
+       Functions subnet the configuration names. #>
+    param($Cfg, $NetworkOutputs)
+    if ($NetworkOutputs) { return @([string]$NetworkOutputs.functionsSubnetId) }
+    $configured = if ($Cfg.network.mode -eq 'create') {
+        "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Network/virtualNetworks/$($Cfg.network.create.vnetName)/subnets/$($Cfg.network.create.subnets.functions.name)"
+    } else { [string]$Cfg.network.existing.functionsSubnetId }
+    return @('', $configured)
+}
 function Test-StgOwnNetworkDeployment {
     <# True when this resource group's succeeded create-mode stage6-network deployment produced this VNet from the
        same network.create settings as the current configuration, so redeploying it changes nothing. #>

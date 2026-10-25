@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-25 — Resume after lost local state
+
+- Stage 1 read-back no longer fails when the local state was lost after Stage 6 integrated the Function Apps with
+  the network. Without a Stage 6 record it accepts no integration or the Functions subnet the configuration names;
+  with a record, only that record's subnet.
+- Troubleshooting: Azure Cloud Shell idle timeout during Stages 6 and 7, recovery after Cloud Shell lost `$HOME`,
+  and the Stage 1 `verify_failed … VNet subnet` error.
+
 ## 2026-10-25 — Configuration reference reworked
 
 - The configuration reference is now six pages: an overview with a complete sample, Entra and group forms, resource
