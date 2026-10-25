@@ -63,7 +63,7 @@ function Read-StgConfig {
             $problems.Add('reconciler.budgetGuard needs warnPercent 1-99, overshootPercent 1-50 and projectionMinutes 1-60 as whole numbers (ADR-0040)')
         }
     }
-    foreach ($p in @(Get-StgCosmosProblems $c)) { $problems.Add($p) }
+    foreach ($p in @(Get-StgCosmosProblems $c) + @(Get-StgAuditProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {
         if ($b.subscriptionId -ine $c.subscriptionId -or $b.resourceGroup -ine $c.resourceGroup) {
@@ -188,6 +188,7 @@ function Get-StgStageInput {
         8 { $input += @{ stage1=$Cfg.stage1; acceptance=$Cfg.acceptance; gateway=$Cfg.gateway; admin=$Cfg.admin } }
         default { throw "invalid stage number $Number" }
     }
+    if ($Number -eq 5 -and ($audit = Get-StgAuditStageInput $Cfg)) { $input.audit = $audit }
     $canonical = ConvertTo-StgCanonical $input | ConvertTo-Json -Depth 100 -Compress
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
 }
@@ -498,5 +499,5 @@ function Get-StgApimIdentity {
     $apim = Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)" '2024-05-01'
     $principal = [string]$apim.identity.principalId
     if ($principal -notmatch $script:Guid) { throw "apim_identity_missing: $($a.name) has no system-assigned identity." }
-    return @{ id = $apim.id; principalId = $principal; gatewayUrl = $apim.properties.gatewayUrl; name = $a.name }
+    return @{ id = $apim.id; principalId = $principal; gatewayUrl = $apim.properties.gatewayUrl; name = $a.name; location = $apim.location }
 }

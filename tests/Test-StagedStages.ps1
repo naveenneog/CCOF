@@ -22,13 +22,16 @@ function Build-Arm([string]$Relative) {
     return ($out -join "`n") | ConvertFrom-Json -AsHashtable -Depth 100
 }
 function Get-Resources($Template) {
-    foreach ($resource in $Template.resources) {
+    # languageVersion 2.0 templates hold resources in an object keyed by symbolic name.
+    $items = if ($Template.resources -is [Collections.IDictionary]) { $Template.resources.Values } else { $Template.resources }
+    foreach ($resource in $items) {
         $resource
         if ($resource.properties.template) { Get-Resources $resource.properties.template }
     }
 }
 function Test-StageBoundary($Arm, [string[]]$Allowed, [string]$Stage) {
-    foreach ($r in @(Get-Resources $Arm)) {
+    # An `existing` reference (languageVersion 2.0) deploys nothing.
+    foreach ($r in @(Get-Resources $Arm | Where-Object { $_.existing -ne $true })) {
         if ($r.type -notin $Allowed) { throw "$Stage declares a resource outside its boundary: $($r.type)" }
     }
 }
@@ -43,7 +46,10 @@ $boundaries = [ordered]@{
         'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')
     'infra\staged\stage5-config.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Web/sites/config', 'Microsoft.ApiManagement/service/apis',
         'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/apis/operations/policies', 'Microsoft.ApiManagement/service/policyFragments', 'Microsoft.ApiManagement/service/loggers',
-        'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks')
+        'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks',
+        # The long-term audit archive (ADR-0043): its account, containers, policies and diagnostic setting.
+        'Microsoft.Storage/storageAccounts', 'Microsoft.Storage/storageAccounts/blobServices/containers', 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies',
+        'Microsoft.Storage/storageAccounts/managementPolicies', 'Microsoft.Insights/diagnosticSettings')
 }
 $arms = @{}
 foreach ($path in $boundaries.Keys) {
@@ -61,8 +67,10 @@ Assert-Contract $caught 'Negative control: an injected role assignment was not r
 
 # Stage 5 (configuration) must never grant: no Authorization resource anywhere, including the reused modules.
 Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -Match 'Authorization|sqlRole')) 'Stage 5 contains a grant.'
-# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates).
-Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')) 'Stage 5 repeats a diagnostic setting.'
+# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): its only one is
+# the audit archive's, with a storage destination (ADR-0043; tests/Test-AuditArchive.ps1).
+$stage5Diag = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')
+Assert-Contract ($stage5Diag.Count -eq 1 -and $stage5Diag[0].name -ceq 'ccof-gateway-archive' -and -not $stage5Diag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
 
 # Stage 3 and Stage 4 keep the quickstart's Cosmos data contract.
 $quick = Build-Arm 'infra\quickstart\modules\cosmos-data.bicep'

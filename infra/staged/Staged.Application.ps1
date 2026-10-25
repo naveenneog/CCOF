@@ -60,6 +60,10 @@ function Invoke-Stage5 {
     # The resolver reads Cosmos in the configured failover order when the account has two or more regions (ADR-0036).
     $resolverSettings = @{}; foreach ($k in $Cfg.resolver.Keys) { $resolverSettings[$k] = $Cfg.resolver[$k] }
     $resolverSettings.preferredRegions = @((Get-StgCosmosPreferredRegions $Cfg) -split ',' | Where-Object { $_ })
+    # Long-term audit archive (ADR-0043): in the gateway's region; never rewrites an immutability policy the owner locked.
+    $auditLocked = if (Get-StgAuditArchive $Cfg) { Get-StgAuditLockedContainers "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Storage/storageAccounts/$(Get-StgAuditArchiveName $s1.names)" } else { @() }
+    $audit = Get-StgAuditDeployment -Cfg $Cfg -Names $s1.names -ApimLocation $ctx.Apim.location -LockedContainers $auditLocked
+    Write-Host (Format-StgAuditPreview -Deployment $audit -WorkspaceRetentionDays $Cfg.audit.workspaceRetentionDays)
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
@@ -68,6 +72,7 @@ function Invoke-Stage5 {
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
+        auditArchive = $(if ($audit) { $audit } else { @{} })
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
@@ -92,6 +97,8 @@ function Invoke-Stage5 {
     Assert-Stg (Test-StgUsagePolicyDeployed $usageDeployed) 'the deployed get-my-usage policy is not the rendered usage policy'
     $v.usageOperation = @{ method = $usageOp.properties.method; urlTemplate = $usageOp.properties.urlTemplate; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($usagePolicy))) -Algorithm SHA256).Hash; deployedPolicyChecked = $true }
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
+    Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
+    $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }
 }
