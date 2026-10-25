@@ -403,8 +403,10 @@ Chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md), option
 states, the same reconciler run turns the ledger rows it already priced into daily totals per day, chargeback ID,
 group, person and model, and writes the changed ones to the Cosmos container `chargebackDaily` (partition key
 `/month`). Early in a month it reads the previous month's last days with one extra ledger query, so their late rows
-are counted before the days close. The admin usage export reads months older than the Log Analytics retention from
-that container and later ones from Log Analytics.
+are counted before the days close. The admin usage export reads months older than the effective Log Analytics
+retention (`audit.workspaceRetentionDays` if set, else `stage1.retentionInDays`) from that container and later ones
+from Log Analytics ([chargeback history](operate/chargeback-history.md)).
+<!-- CODE-NOTE: update the run order (history inside or after the budget lease) to the code's decision. -->
 
 ## 7. Why this reuses, rather than replaces, the reference repository's infrastructure
 
