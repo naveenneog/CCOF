@@ -25,6 +25,9 @@ export interface HistoryDoc {
 export interface HistoryStore {
   // The documents of one month (the partition) with fromDay <= day < toDay.
   listDays(month: string, fromDay: string, toDay: string): Promise<HistoryDoc[]>;
+  // The month's coverage (src/reconciler/history.ts CoverageDocument.days): the days history holds, open or closed.
+  // Null: the reconciler never covered the month.
+  readCoverage(month: string): Promise<Readonly<Record<string, "open" | "closed">> | null>;
 }
 
 export interface HistorySettings { container: string; retentionDays: number }
@@ -107,6 +110,21 @@ function completenessOf(row: Doc): string {
   return "complete";
 }
 
+// The days of a history range the reconciler never covered (refused: no data there is not zero usage) and the
+// covered days not yet closed (at most an hour behind the ledger). One point read per month.
+export async function historyCoverage(store: HistoryStore, range: Range): Promise<{ uncovered: string[]; open: string[] }> {
+  const result = { uncovered: [] as string[], open: [] as string[] };
+  const months = new Map<string, Readonly<Record<string, string>> | null>();
+  for (let at = Date.parse(range.from); at < Date.parse(range.to); at += DAY_MS) {
+    const d = day(at);
+    if (!months.has(d.slice(0, 7))) months.set(d.slice(0, 7), await store.readCoverage(d.slice(0, 7)));
+    const state = months.get(d.slice(0, 7))?.[d];
+    if (state === undefined) result.uncovered.push(d);
+    else if (state !== "closed") result.open.push(d);
+  }
+  return result;
+}
+
 // Rows per chargeback ID, group and person, labelled as the report labels them (analytics/workbooks/pricing.kql).
 export function historyRows(docs: readonly HistoryDoc[], filters: HistoryFilters, groups: readonly GroupMetadata[], period: Range): Doc[] {
   const groupOf = new Map(groups.map((g) => [`${g.projectId}|${g.classification}`, g.groupId.toLowerCase()]));
@@ -167,8 +185,9 @@ function mergeRow(la: Doc, history: Doc, columns: readonly string[]): Doc {
   return Object.fromEntries(columns.map((c) => [c, merged[c]]));
 }
 
-// Log Analytics rows (null columns: there were none) with history rows; sorted as the report sorts them.
-export function mergeUsageRows(laRows: readonly Doc[], laColumns: readonly string[] | null, history: readonly Doc[]): { columns: string[]; rows: Doc[] } {
+// Log Analytics rows (null columns: there were none) with history rows; sorted as the report sorts them. Every row
+// carries the whole export period: a Log Analytics row only covers the part after the boundary.
+export function mergeUsageRows(laRows: readonly Doc[], laColumns: readonly string[] | null, history: readonly Doc[], period: Range): { columns: string[]; rows: Doc[] } {
   const columns = laColumns === null ? [...HISTORY_COLUMNS] : [...laColumns];
   const byKey = new Map(history.map((row) => [keyOf(row), row]));
   const rows = laRows.map((row) => {
@@ -178,6 +197,10 @@ export function mergeUsageRows(laRows: readonly Doc[], laColumns: readonly strin
     return mergeRow(row, match, columns);
   });
   for (const row of byKey.values()) rows.push(Object.fromEntries(columns.map((c) => [c, row[c] ?? null])));
+  for (const row of rows) {
+    if (columns.includes("periodStart")) row.periodStart = period.from;
+    if (columns.includes("periodEnd")) row.periodEnd = period.to;
+  }
   const usdOf = (row: Doc) => (typeof row.knownListUsd === "string" ? Number(row.knownListUsd) : -Infinity);
   rows.sort((a, b) => String(a.chargebackId).localeCompare(String(b.chargebackId)) || String(a.projectLabel).localeCompare(String(b.projectLabel)) || usdOf(b) - usdOf(a));
   return { columns, rows };
@@ -190,6 +213,15 @@ export function createCosmosHistoryStore(container: Container): HistoryStore {
       const query = { query: "SELECT * FROM c WHERE c.month = @month AND c.day >= @from AND c.day < @to", parameters: [{ name: "@month", value: month }, { name: "@from", value: fromDay }, { name: "@to", value: toDay }] };
       const { resources } = await container.items.query<HistoryDoc>(query, { partitionKey: month }).fetchAll();
       return resources;
+    },
+    async readCoverage(month) {
+      try {
+        const { resource } = await container.item("coverage", month).read<{ days?: Record<string, "open" | "closed"> }>();
+        return resource?.days ?? null;
+      } catch (error) {
+        if ((error as { code?: unknown }).code === 404) return null;
+        throw error;
+      }
     },
   };
 }

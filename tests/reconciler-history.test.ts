@@ -4,10 +4,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  HISTORY_MAX_WRITES_PER_RUN,
   OPEN_REWRITE_MINUTES,
   buildDailyDocuments,
   historyDocumentId,
   isDayClosed,
+  mergeCoverage,
   planHistoryWrites,
   storedSummaryOf,
 } from "../src/reconciler/history.ts";
@@ -171,16 +173,71 @@ test("a day is written as a whole: a recent write of the day defers every change
   assert.deepEqual([deferred.writes.length, deferred.notDue], [0, 2]);
 });
 
-test("closing a day closes a document whose rows moved away, with zero totals", () => {
+test("closing a day whose documents changed writes the final totals open first, and closes them at the next run", () => {
   const before = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "" })], "2026-10-09T00:00:00Z");
   const summaries = new Map(before.map((d) => [d.id, storedSummaryOf(d)]));
   const after = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "WBS-100" })], "2026-10-11T00:00:00Z");
-  const closing = plan(after, summaries, "2026-10-11T00:00:00Z");
+  const settling = plan(after, summaries, "2026-10-11T00:00:00Z");
+  assert.deepEqual(settling.writes.map((d) => [d.chargebackId, d.requests, d.closed]).sort(), [["", 0, false], ["WBS-100", 1, false]]);
+  for (const d of settling.writes) summaries.set(d.id, storedSummaryOf(d));
+  const closing = plan(after, summaries, "2026-10-11T00:01:00Z");
   assert.deepEqual(closing.writes.map((d) => [d.chargebackId, d.requests, d.closed]).sort(), [["", 0, true], ["WBS-100", 1, true]]);
+});
+
+test("a closed day is frozen as a whole: a key that moves after the close adds no new document", () => {
+  const [closedDoc] = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "" })], "2026-10-11T00:00:00Z");
+  const moved = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z", chargebackId: "WBS-100" })], "2026-10-12T00:00:00Z");
+  const result = plan(moved, stored(closedDoc), "2026-10-12T00:00:00Z");
+  assert.deepEqual([result.writes.length, result.closedRefused], [0, 1]);
+});
+
+test("a close interrupted part-way is finished by the next run: documents still open with final totals are closed", () => {
+  const rows = [row({ timestamp: "2026-10-08T12:00:00.0000000Z" }), row({ timestamp: "2026-10-08T12:00:00.0000000Z", personId: PERSON_B })];
+  const open = build(rows, "2026-10-10T12:00:00Z");
+  const closed = build(rows, "2026-10-11T00:00:00Z");
+  const summaries = new Map([[closed[0].id, storedSummaryOf(closed[0])], [open[1].id, storedSummaryOf(open[1])]]);
+  const result = plan(closed, summaries, "2026-10-11T00:05:00Z");
+  assert.deepEqual([result.writes.map((d) => [d.id, d.closed]), result.closedSkipped, result.closedRefused], [[[closed[1].id, true]], 1, 0]);
+  const changed = build([...rows, row({ timestamp: "2026-10-08T13:00:00.0000000Z", personId: PERSON_B })], "2026-10-11T00:00:00Z");
+  const refused = plan(changed, summaries, "2026-10-11T00:05:00Z");
+  assert.deepEqual([refused.writes.length, refused.closedRefused], [0, 1]);
 });
 
 test("a stored document of a day the run did not read is left alone", () => {
   const [old] = build([row({ timestamp: "2026-09-30T12:00:00.0000000Z" })], "2026-10-01T00:00:00Z");
   const result = planHistoryWrites([], new Map([[old.id, storedSummaryOf(old)]]), { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-11"]) });
-  assert.deepEqual(result, { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 });
+  assert.deepEqual(result, { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0, budgetDeferred: 0, coverage: new Map([["2026-10-11", "open"]]) });
+});
+test("a run writes at most maxWrites documents, whole days, oldest first; a first day larger than that is written whole", () => {
+  const docs = build([
+    row({ timestamp: "2026-10-11T09:00:00.0000000Z" }), row({ timestamp: "2026-10-11T09:00:00.0000000Z", personId: PERSON_B }),
+    row({ timestamp: "2026-10-10T09:00:00.0000000Z" }), row({ timestamp: "2026-10-09T09:00:00.0000000Z" }),
+  ]);
+  const options = { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-09", "2026-10-10", "2026-10-11"]) };
+  const limited = planHistoryWrites(docs, new Map(), { ...options, maxWrites: 3 });
+  assert.deepEqual([limited.writes.map((d) => d.day).sort(), limited.budgetDeferred], [["2026-10-09", "2026-10-10"], 2]);
+  const oneDay = planHistoryWrites(docs.filter((d) => d.day === "2026-10-11"), new Map(), { ...options, maxWrites: 1 });
+  assert.deepEqual([oneDay.writes.length, oneDay.budgetDeferred], [2, 0]);
+  assert.equal(HISTORY_MAX_WRITES_PER_RUN, 1000);
+});
+
+test("coverage records every covered day the plan completes: closed once all its documents are, open otherwise, none for deferred days", () => {
+  const docs = build([row({ timestamp: "2026-10-08T12:00:00.0000000Z" }), row({ timestamp: "2026-10-10T12:00:00.0000000Z" }), row({ timestamp: "2026-10-11T09:00:00.0000000Z" })]);
+  const coveredDays = new Set(["2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"]);
+  const options = { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays };
+  const first = planHistoryWrites(docs, new Map(), options);
+  // 07 had no usage and is due: closed. 08 is due but its document is new: written open first.
+  assert.deepEqual(Object.fromEntries(first.coverage), { "2026-10-07": "closed", "2026-10-08": "open", "2026-10-09": "open", "2026-10-10": "open", "2026-10-11": "open" });
+  const summaries = new Map(first.writes.map((d) => [d.id, storedSummaryOf(d)]));
+  const second = planHistoryWrites(docs, summaries, { ...options, now: at("2026-10-11T13:01:00Z") });
+  assert.equal(second.coverage.get("2026-10-08"), "closed");
+  const deferred = planHistoryWrites(docs, new Map(), { ...options, maxWrites: 1 });
+  assert.deepEqual([deferred.coverage.has("2026-10-08"), deferred.coverage.has("2026-10-10"), deferred.coverage.get("2026-10-07")], [true, false, "closed"]);
+});
+
+test("coverage merges: days are added, open becomes closed, a closed day never reopens", () => {
+  const stored = { "2026-10-01": "closed", "2026-10-02": "open" } as const;
+  const merged = mergeCoverage(stored, new Map([["2026-10-01", "open"], ["2026-10-02", "closed"], ["2026-10-03", "open"]]));
+  assert.deepEqual(merged, { "2026-10-01": "closed", "2026-10-02": "closed", "2026-10-03": "open" });
+  assert.equal(mergeCoverage(merged, new Map([["2026-10-03", "open"]])), null, "no change: nothing to write");
 });

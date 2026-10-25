@@ -64,7 +64,7 @@ try {
     Assert-Contract ($null -eq (Get-StgAuditArchive (Read-Config $c))) 'audit.archive.enabled false must leave the archive off.'
     # Another feature's key under audit (ADR-0044 owns audit.chargebackHistory and validates it) is not refused
     # by the archive validation.
-    $c = New-ValidConfig; $c.audit.chargebackHistory = @{ enabled = $true; closeAfterDays = 2; ttlDays = $null }
+    $c = New-ValidConfig; $c.audit.chargebackHistory = @{ enabled = $true; closeAfterDays = 2; ttlDays = $null }; $c.reconciler.timerEnabled = $true
     $null = Read-Config $c; $passed++
 
     Test-Refused { param($c) $c.audit.archive.enabled = 'true' } 'audit\.archive\.enabled' 'enabled must be a JSON boolean.'

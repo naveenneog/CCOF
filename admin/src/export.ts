@@ -16,7 +16,7 @@ import type { Doc } from "./validation.ts";
 import type { V3Dependencies } from "./v3.ts";
 import type { GroupMetadata } from "../../analytics/workbooks/chargeback-queries.ts";
 import { DEFAULT_USER_TAG_LABEL, userTagHeaders } from "../../src/contracts/user-tags.ts";
-import { historyBoundary, historyRows, mergeUsageRows, readHistoryDocs, readHistorySettings, splitRange } from "./history.ts";
+import { historyBoundary, historyCoverage, historyRows, mergeUsageRows, readHistoryDocs, readHistorySettings, splitRange } from "./history.ts";
 import type { HistoryStore, Range } from "./history.ts";
 
 export const EXPORT_ROWS_MAX = 5000;
@@ -96,6 +96,11 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   const cfg = readChargebackSettings(deps.env);
   const filters = { ...readChargebackFilters(rest, deps.now(), cfg.ok ? cfg.value.maxQueryDays : 62), offset: 0, limit: EXPORT_ROWS_MAX };
   const split = historySplit(filters.period, filters.backend, deps);
+  // ADR-0044 decision 8: a day history never covered is refused, never exported as zero usage.
+  const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history) : null;
+  if (coverage && coverage.uncovered.length) {
+    return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_not_covered", uncoveredDays: coverage.uncovered } };
+  }
   const result = await helpers.capability(deps, cfg, "chargeback", async () => {
     const card = await helpers.currentRateCard(deps);
     if (!card || !cfg.ok || !deps.sources || !deps.operations.query) throw new ProviderError(503, "rate_card_unavailable");
@@ -112,8 +117,8 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
     }
     if (!split.history) return { ...(logs as NonNullable<typeof logs>), rateCardVersion: prepared.version };
     const docs = await readHistoryDocs(deps.chargebackHistory as HistoryStore, split.history);
-    const merged = mergeUsageRows(logs?.rows ?? [], logs?.columns ?? null, historyRows(docs, filters, groups, filters.period));
-    const sources = [{ source: "chargebackHistory", ...split.history }, ...(split.logs ? [{ source: "logAnalytics", ...split.logs }] : [])];
+    const merged = mergeUsageRows(logs?.rows ?? [], logs?.columns ?? null, historyRows(docs, filters, groups, filters.period), filters.period);
+    const sources = [{ source: "chargebackHistory", ...split.history, openDays: coverage?.open ?? [] }, ...(split.logs ? [{ source: "logAnalytics", ...split.logs }] : [])];
     return { columns: merged.columns, rows: merged.rows.slice(0, EXPORT_ROWS_MAX), truncated: (logs?.truncated ?? false) || merged.rows.length > EXPORT_ROWS_MAX, rateCardVersion: prepared.version, sources };
   });
   // Only an available or partial (truncated) capability carries data.

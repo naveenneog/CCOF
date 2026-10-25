@@ -323,7 +323,7 @@
       "storageSku": "Standard_LRS"
     },
     "chargebackHistory": {
-      "enabled": true,
+      "enabled": false,
       "closeAfterDays": 2,
       "ttlDays": null
     }

@@ -38,13 +38,30 @@ function Get-StgAuditArchive {
     return [ordered]@{ retentionDays = $a.retentionDays; immutabilityDays = $a.immutabilityDays; storageSku = ($a.storageSku ?? 'Standard_LRS') }
 }
 
+function Test-StgOffOnly {
+    # { enabled: false } and nothing else: a feature switched off that hashes as if its section were absent.
+    param($Value)
+    return $Value -is [Collections.IDictionary] -and $Value.Count -eq 1 -and $Value.Contains('enabled') -and $Value.enabled -is [bool] -and -not $Value.enabled
+}
+
 function Get-StgAuditStageInput {
     # Stage 5 hash input: present only when an archive key is configured, so other configurations keep their hash.
     param($Cfg)
     if ($Cfg.audit -isnot [Collections.IDictionary]) { return $null }
     $in = [ordered]@{}
-    foreach ($k in 'archive', 'workspaceRetentionDays') { if ($Cfg.audit.ContainsKey($k)) { $in[$k] = $Cfg.audit[$k] } }
+    foreach ($k in 'archive', 'workspaceRetentionDays') { if ($Cfg.audit.ContainsKey($k) -and -not (Test-StgOffOnly $Cfg.audit[$k])) { $in[$k] = $Cfg.audit[$k] } }
     if ($in.Count) { return $in } else { return $null }
+}
+
+function Get-StgLogRetentionDays {
+    # The days the workspace keeps the ledger: audit.workspaceRetentionDays when set (Stage 5 applies it), otherwise
+    # stage1.retentionInDays (30 when absent). Chargeback history (ADR-0044) uses this one value for the export
+    # boundary (ADMIN_LOG_RETENTION_DAYS) and the ttlDays floor.
+    param($Cfg)
+    $w = if ($Cfg.audit -is [Collections.IDictionary]) { $Cfg.audit.workspaceRetentionDays } else { $null }
+    if ($null -ne $w) { return [int]$w }
+    if ($Cfg.stage1.retentionInDays) { return [int]$Cfg.stage1.retentionInDays }
+    return 30
 }
 
 function Get-StgAuditArchiveName {
