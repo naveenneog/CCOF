@@ -144,8 +144,16 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 - History follows the rate card in force when the day closed; a later rate-card correction does not change it.
 - With `ttlDays`, a month is kept `ttlDays` days after it ends (decision 9), then refused as `history_expired` from
   one day before that. A changed `ttlDays` applies to documents written after the change: a closed month is never
-  written again, so it keeps the expiry it was written with; to delete older history sooner, delete it by hand
-  (AUD-C7).
+  written again, so it keeps the expiry it was written with; to delete older history sooner, use the deletion tool
+  below.
+- Deletion (council round 3, 2026-10-26): `scripts/history/delete-chargeback-history.ts` deletes whole months, or one
+  person's documents in them, with `DefaultAzureCredential` (what-if unless `--confirm`;
+  [chargeback history changes](../operate/chargeback-history-changes.md#delete-history)). A whole month's coverage
+  record is deleted before its documents, so the export refuses the month (`history_not_covered`) rather than return
+  it as covered with documents missing; for one person the coverage record first records the deletion in
+  `personDeletions` (no ID) and the month stays covered without that person. The previous month and later are
+  refused, because the reconciler may still write them. The Stage 3 roles still cannot delete: the operator takes the
+  built-in Data Contributor role on the container for the task and runs the tool from inside the virtual network.
 - Turning history on in a running deployment (council round 2, 2026-10-26) needs Stages 2, 3 and 5 (container,
   grants, settings) and Stage 7, because the reconciler and admin code that write and read history are new; Stage 4
   only when `admin.extraAllowedClientIds` changes. Stage 5's recorded outputs (gateway URL, settings list, workbook
