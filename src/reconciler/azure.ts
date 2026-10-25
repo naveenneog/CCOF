@@ -10,6 +10,9 @@ import type { TokenCredential } from "@azure/identity";
 import type { LeaseDocument, LeaseStore, LeaseWrite } from "./lease.ts";
 import { createLedgerQuery, logAnalyticsScope } from "./log-analytics.ts";
 import type { FetchLike } from "./log-analytics.ts";
+import type { ChargebackDailyDocument, StoredSummary } from "./history.ts";
+import { createCachedHistoryStore } from "./history-run.ts";
+import type { HistoryStore } from "./history-run.ts";
 import type { RunDependencies } from "./run.ts";
 import type { ReconcilerSettings } from "./settings.ts";
 
@@ -59,6 +62,24 @@ async function readAll(container: Container): Promise<unknown[]> {
 
 const fetchAdapter: FetchLike = (url, init) => fetch(url, init);
 
+// The chargeback history container (ADR-0044), partitioned on /month: summaries come from one single-partition
+// query of only the fields the plan needs.
+export function createHistoryStore(container: Container, now: () => Date): HistoryStore {
+  return createCachedHistoryStore(
+    {
+      async querySummaries(month) {
+        const query = { query: "SELECT c.id, c.contentHash, c.closed, c.requests, c.computedAt FROM c WHERE c.month = @month", parameters: [{ name: "@month", value: month }] };
+        const { resources } = await container.items.query<StoredSummary & { id: string }>(query, { partitionKey: month }).fetchAll();
+        return resources;
+      },
+      async upsert(doc: ChargebackDailyDocument) {
+        await container.items.upsert(doc);
+      },
+    },
+    now,
+  );
+}
+
 export function createReconcilerDependencies(settings: ReconcilerSettings, credential: TokenCredential): RunDependencies {
   const client = new CosmosClient({ endpoint: settings.cosmosEndpoint, aadCredentials: credential });
   const database = client.database(settings.cosmosDatabase);
@@ -88,5 +109,6 @@ export function createReconcilerDependencies(settings: ReconcilerSettings, crede
     writeAggregateState: async (doc) => {
       await aggregateState.items.upsert(doc);
     },
+    ...(settings.history ? { history: createHistoryStore(database.container(settings.history.container), () => new Date()) } : {}),
   };
 }

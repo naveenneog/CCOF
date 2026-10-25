@@ -4,6 +4,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createCachedHistoryStore } from "../src/reconciler/history-run.ts";
+import type { HistoryContainer } from "../src/reconciler/history-run.ts";
 import { runReconciler } from "../src/reconciler/run.ts";
 import type { RunAssets } from "../src/reconciler/run.ts";
 import { readReconcilerSettings } from "../src/reconciler/settings.ts";
@@ -108,4 +110,43 @@ test("a failed budget run writes no history", async () => {
   const { summary } = await run(azure, "2026-10-11T13:00:00Z");
   assert.equal(summary.outcome, "failed");
   assert.deepEqual([history.reads.length, history.writes.length], [0, 0]);
+});
+
+test("the cached store reads a month's summaries once per 60 minutes and keeps them current after each write", async () => {
+  const queries: string[] = [];
+  const upserts: string[] = [];
+  const container: HistoryContainer = {
+    querySummaries: async (month) => {
+      queries.push(month);
+      return [{ id: "a", contentHash: "h1", closed: false, requests: 1, computedAt: "2026-10-11T12:00:00.000Z" }];
+    },
+    upsert: async (doc) => {
+      upserts.push(doc.id);
+    },
+  };
+  const clock = new ManualClock("2026-10-11T13:00:00Z");
+  const store = createCachedHistoryStore(container, clock.now);
+  assert.equal((await store.readSummaries("2026-10")).get("a")?.contentHash, "h1");
+  const [doc] = (await (async () => {
+    const history = new MemoryHistory();
+    await run(pilot({ history }), "2026-10-11T13:00:00Z");
+    return history.writes;
+  })());
+  await store.write(doc);
+  clock.advance(59 * 60);
+  const cached = await store.readSummaries("2026-10");
+  assert.deepEqual([queries.length, upserts, cached.get(doc.id)?.contentHash], [1, [doc.id], doc.contentHash]);
+  clock.advance(60);
+  await store.readSummaries("2026-10");
+  assert.equal(queries.length, 2);
+});
+
+test("a failed upsert leaves the cached summary unchanged", async () => {
+  const container: HistoryContainer = { querySummaries: async () => [], upsert: async () => { throw new Error("503"); } };
+  const store = createCachedHistoryStore(container, new ManualClock("2026-10-11T13:00:00Z").now);
+  const history = new MemoryHistory();
+  await run(pilot({ history }), "2026-10-11T13:00:00Z");
+  await store.readSummaries("2026-10");
+  await assert.rejects(store.write(history.writes[0]));
+  assert.equal((await store.readSummaries("2026-10")).size, 0);
 });

@@ -5,7 +5,7 @@
 
 import type { RateCard } from "../cost/rate-card.ts";
 import type { ContractSchedule } from "../cost/contract-schedule.ts";
-import { buildDailyDocuments, planHistoryWrites } from "./history.ts";
+import { buildDailyDocuments, planHistoryWrites, storedSummaryOf } from "./history.ts";
 import type { ChargebackDailyDocument, HistoryPlan, HistoryRow, StoredSummary } from "./history.ts";
 import { LeaseLostError } from "./lease.ts";
 import type { Lease } from "./lease.ts";
@@ -19,6 +19,34 @@ export interface HistoryStore {
   // Summaries of the stored documents of one month (partition key /month).
   readSummaries(month: string): Promise<ReadonlyMap<string, StoredSummary>>;
   write(doc: ChargebackDailyDocument): Promise<void>;
+}
+
+// The Cosmos operations behind the store (azure.ts): one single-partition query and an upsert.
+export interface HistoryContainer {
+  querySummaries(month: string): Promise<Array<StoredSummary & { id: string }>>;
+  upsert(doc: ChargebackDailyDocument): Promise<void>;
+}
+
+// Summaries are read once per month and host instance every SUMMARY_CACHE_MINUTES (AUD-C1), and updated after each
+// successful write. Another instance's writes are seen at the next refresh; the plan's guards hold either way.
+export const SUMMARY_CACHE_MINUTES = 60;
+
+export function createCachedHistoryStore(container: HistoryContainer, now: () => Date): HistoryStore {
+  const cache = new Map<string, { readAt: number; summaries: Map<string, StoredSummary> }>();
+  return {
+    async readSummaries(month) {
+      const hit = cache.get(month);
+      if (hit !== undefined && now().getTime() - hit.readAt < SUMMARY_CACHE_MINUTES * 60_000) return hit.summaries;
+      const readAt = now().getTime();
+      const summaries = new Map((await container.querySummaries(month)).map(({ id, ...summary }) => [id, summary]));
+      cache.set(month, { readAt, summaries });
+      return summaries;
+    },
+    async write(doc) {
+      await container.upsert(doc);
+      cache.get(doc.month)?.summaries.set(doc.id, storedSummaryOf(doc));
+    },
+  };
 }
 
 export interface HistoryStepInput {
