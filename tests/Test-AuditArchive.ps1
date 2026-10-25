@@ -104,6 +104,8 @@ Assert-Contract ((Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDa
 # ---------------------------------------------------------------- Stage 5 configuration hash
 $base = @{ tenantId = 't'; subscriptionId = 's'; resourceGroup = 'rg'; stage1 = @{ prefix = 'ccoflab' }; apim = @{}; backends = @(); groups = @() }
 $hashOff = Get-StgStageInput $base 5
+# The same configuration's Stage 5 hash before ADR-0043 (e076ae1): installs without audit.* keep their Stage 5 record.
+Assert-Contract ($hashOff -ceq '2bc716561bbb3953e72e476d27a6ea91f710d37ec9f8aa444aefb32a1f9d8482') "A configuration without audit.* must keep its pre-archive Stage 5 hash (got $hashOff)."
 $withOther = $base.Clone(); $withOther.audit = @{ chargebackHistory = @{ enabled = $true } }
 Assert-Contract ((Get-StgStageInput $withOther 5) -ceq $hashOff) 'Another feature''s audit key must not change the Stage 5 hash of an archive-less configuration.'
 $withArchive = $base.Clone(); $withArchive.audit = @{ archive = @{ enabled = $true; retentionDays = 2555 } }
