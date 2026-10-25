@@ -95,6 +95,8 @@ export interface HistoryPlan {
   unchanged: number;
   notDue: number;
   closedSkipped: number;
+  // New, changed or zeroed documents of a day that already has a closed document: never written.
+  closedRefused: number;
   shrinkRefused: number;
 }
 
@@ -168,14 +170,17 @@ function toDocument(tally: Tally, options: BuildOptions): ChargebackDailyDocumen
     contractScheduleVersion: options.contractScheduleVersion,
     closed,
   };
-  return {
-    id: historyDocumentId(tally.key),
-    schema: HISTORY_SCHEMA,
-    ...totals,
-    computedAt: options.now.toISOString(),
-    contentHash: sha256(JSON.stringify(totals)),
-  };
+  const doc: ChargebackDailyDocument = { id: historyDocumentId(tally.key), schema: HISTORY_SCHEMA, ...totals, computedAt: options.now.toISOString(), contentHash: "" };
+  return withClosed(doc, closed);
 }
+
+// The content hash covers every total and `closed`, in the document's field order.
+function totalsHash(doc: ChargebackDailyDocument, closed: boolean): string {
+  const { id: _id, schema: _schema, computedAt: _computedAt, contentHash: _contentHash, ...totals } = doc;
+  return sha256(JSON.stringify({ ...totals, closed }));
+}
+
+const withClosed = (doc: ChargebackDailyDocument, closed: boolean): ChargebackDailyDocument => ({ ...doc, closed, contentHash: totalsHash(doc, closed) });
 
 const emptyTally = (key: HistoryKey): Tally => ({
   key,
@@ -216,9 +221,13 @@ const sum = (values: Iterable<{ requests: number }>): number => [...values].redu
 // A day is planned as a whole, because a row can move between documents of its day (a late trace adds its
 // chargeback ID or person): a stored document the run no longer computes is zeroed, a day whose total would fall is
 // refused, and an open day is rewritten only when its last write is OPEN_REWRITE_MINUTES old, all of it at once.
-// Closing writes are never deferred, and a closed document is never written again.
+// Closing is two-phase and never deferred: a day due to close whose totals differ from the stored ones is written
+// open first; once every document of the day holds its final totals, they are all written closed. A day with any
+// closed document is frozen: its other documents may only be closed with unchanged totals (finishing an interrupted
+// close); every new, changed or zeroed document of it is refused (closedRefused), so a key that moves after the close
+// can never be counted twice.
 export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, options: PlanOptions): HistoryPlan {
-  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 };
+  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0 };
   const raising: ChargebackDailyDocument[] = [];
   const days = new Map<string, { docs: ChargebackDailyDocument[]; stored: Array<[string, StoredSummary]> }>();
   const dayOf = (day: string) => days.get(day) ?? days.set(day, { docs: [], stored: [] }).get(day)!;
@@ -228,16 +237,31 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
     const computed = new Set(group.docs.map((d) => d.id));
     const zeroed = group.stored.filter(([id, s]) => !computed.has(id) && !s.closed).map(([, s]) => toDocument(emptyTally(s.key), options));
     const all = [...group.docs, ...zeroed];
+    // Stored open with exactly these totals: only `closed` would change.
+    const settled = (doc: ChargebackDailyDocument) => stored.get(doc.id)?.contentHash === totalsHash(doc, false);
+    if (group.stored.some(([, s]) => s.closed)) {
+      for (const doc of all) {
+        if (stored.get(doc.id)?.closed) plan.closedSkipped += 1;
+        else if (settled(doc)) raising.push(withClosed(doc, true));
+        else plan.closedRefused += 1;
+      }
+      continue;
+    }
     if (sum(all) < sum(group.stored.map(([, s]) => s))) {
       plan.shrinkRefused += all.length;
       continue;
     }
+    const closing = isDayClosed(day, options.now, options.closeAfterDays);
+    if (closing && all.every(settled)) {
+      raising.push(...all.map((doc) => withClosed(doc, true)));
+      continue;
+    }
     const lastWrite = Math.max(...group.stored.map(([, s]) => Date.parse(s.computedAt)));
-    const due = isDayClosed(day, options.now, options.closeAfterDays) || !(options.now.getTime() - lastWrite < OPEN_REWRITE_MINUTES * 60_000);
-    for (const doc of all) {
+    const due = closing || !(options.now.getTime() - lastWrite < OPEN_REWRITE_MINUTES * 60_000);
+    for (const computedDoc of all) {
+      const doc = closing ? withClosed(computedDoc, false) : computedDoc;
       const current = stored.get(doc.id);
-      if (current?.closed) plan.closedSkipped += 1;
-      else if (current?.contentHash === doc.contentHash) plan.unchanged += 1;
+      if (current?.contentHash === doc.contentHash) plan.unchanged += 1;
       else if (!due) plan.notDue += 1;
       else if (current !== undefined && doc.requests < current.requests) plan.writes.push(doc);
       else raising.push(doc);

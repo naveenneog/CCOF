@@ -42,8 +42,12 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
      total request count would fall is refused (never lower a total); writes that lower a document's count all
      finish before the others start, so an interrupted run leaves a day too low, repaired by the next run, never
      counted twice;
-   - a day closes once `closeAfterDays` whole days have passed after it; its documents are written once with
-     `closed: true`, and a closed document is never written again;
+   - a day closes once `closeAfterDays` whole days have passed after it, in two phases: if its computed totals
+     differ from the stored ones, they are first written open (lowering first, as above); once every document of
+     the day holds its final totals, all of them are written with `closed: true`. A day with any closed document
+     is frozen as a whole: a closed document is never written again, its open documents may only be closed with
+     unchanged totals (finishing an interrupted close), and every new, changed or zeroed document of that day is
+     refused and counted as `historyClosedRefused`, so a key that moves after the close is never counted twice;
    - skip a document whose content hash is unchanged; defer an open day's changes until its last write is 60
      minutes old, all of the day together (cost bound, AUD-C1);
    - stored summaries (key, hash, closed, requests, time, etag) come from one single-partition query per month,

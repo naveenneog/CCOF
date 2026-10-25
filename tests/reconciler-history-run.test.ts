@@ -77,9 +77,12 @@ test("early in a month the previous month's open days are read with one extra qu
   };
   const { runLine } = await run(azure, "2026-11-01T02:00:00Z");
   assert.deepEqual(azure.queries.map((q) => q.timespan), ["2026-11-01T00:00:00.000Z/2026-12-01T00:00:00.000Z", "2026-10-29T00:00:00.000Z/2026-11-01T00:00:00.000Z"]);
-  assert.deepEqual(history.writes.map((d) => [d.month, d.day, d.closed]).sort(), [["2026-10", "2026-10-29", true], ["2026-10", "2026-10-31", false], ["2026-11", "2026-11-01", false]]);
+  // A day due to close is first written open with its final totals, then closed by the next run.
+  assert.deepEqual(history.writes.map((d) => [d.month, d.day, d.closed]).sort(), [["2026-10", "2026-10-29", false], ["2026-10", "2026-10-31", false], ["2026-11", "2026-11-01", false]]);
   assert.deepEqual(history.reads.sort(), ["2026-10", "2026-11"]);
   assert.equal(runLine.historyOutcome, "written");
+  await run(azure, "2026-11-01T02:01:00Z");
+  assert.deepEqual([...history.docs.values()].map((d) => [d.day, d.closed]).sort(), [["2026-10-29", true], ["2026-10-31", false], ["2026-11-01", false]]);
 });
 
 test("after the previous month's last day has closed there is no extra query", async () => {

@@ -157,7 +157,7 @@ function errorCode(error: unknown): string | null {
 }
 
 export async function runHistoryStep(input: HistoryStepInput): Promise<HistoryLine> {
-  const counts = { historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyShrinkRefused: 0 };
+  const counts = { historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyClosedRefused: 0, historyShrinkRefused: 0 };
   try {
     const store = input.store;
     if (store === undefined) throw new HistoryFailure("history_store_missing");
@@ -177,6 +177,7 @@ export async function runHistoryStep(input: HistoryStepInput): Promise<HistoryLi
       counts.historyUnchanged += plan.unchanged;
       counts.historyNotDue += plan.notDue;
       counts.historyClosedSkipped += plan.closedSkipped;
+      counts.historyClosedRefused += plan.closedRefused;
       counts.historyShrinkRefused += plan.shrinkRefused;
     }
     // Lowering writes first, all of them, then the rest (HistoryPlan.loweringCount).
