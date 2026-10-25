@@ -2,7 +2,21 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
+**Active packet:** G-CONFIG-GUIDE — configuration reference page (complete; [ROADMAP](ROADMAP.md)).
+
+### G-CONFIG-GUIDE — configuration reference page (complete, 2026-10-25)
+
+- Acceptance: one page, [configuration.md](get-started/configuration.md), names every template key that holds a
+  `REPLACE-` value or is a decision key, with what it is, where to get the value and a hypothetical lab example;
+  it is linked from the deploy page (Before Stage 0) and the documentation map.
+- Checks: a test in `tests/docs-reader-pages.test.ts` computes the `REPLACE-` key paths from the template and adds
+  the decision keys; it failed first because the page did not exist, passes with it, and failed again when one key
+  (`groups[].familyPolicy`) was removed from the page. Claims were read from `Read-StgConfig`, the Cosmos, Groups
+  and Resources scripts and the Stage 5 Bicep. Docs tests pass.
+- Source commit: `d1c4eeb` (`docs: add configuration reference page for the staged configuration file`), local `main`.
+- Checks run: `npm test` 80/80 and the packet gate PASS (23 passed, 2 warned, 0 failed), both in a logged-out Azure CLI profile.
+
+**Previous packet:** G-NOVICE — first-time reader deployment from the README (complete; [ROADMAP](ROADMAP.md), [evidence](evidence/2026-10-25-novice/README.md)).
 
 ### G-NOVICE — first-time reader deployment (complete, 2026-10-25)
 

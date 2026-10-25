@@ -174,3 +174,31 @@ test("developer setup has one sign-in step for both sign-in methods, and the met
   const decide = read("docs/get-started/02-prerequisites.md").split("## Decide before you start")[1];
   assert.match(decide, /\| Developer sign-in \|[^\n]*`client\.signInMethod`[^\n]*`entra\.allowAzureCliClient(: true)?`/);
 });
+
+test("the configuration page names every REPLACE- key and every decision key of the template, and is linked", () => {
+  const template = JSON.parse(read("infra/staged/staged.config.example.json"));
+  const replaced: string[] = [];
+  const walk = (value: unknown, at: string): void => {
+    if (typeof value === "string") { if (value.includes("REPLACE-")) replaced.push(at); return; }
+    if (Array.isArray(value)) { value.forEach((v) => walk(v, `${at}[]`)); return; }
+    if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) walk(v, at ? `${at}.${k}` : k);
+  };
+  walk(template, "");
+  const decisions = ["tenantId", "subscriptionId", "resourceGroup", "location", "stage1.prefix", "stage1.approveNewPublicApimBootstrap",
+    "stage1.apimPublisherEmail", "stage1.apimPublisherName", "stage1.functionsPublicNetworkAccess", "stage1.cosmosLocations",
+    "stage1.cosmosCapacityMode", "stage1.foundry.create", "stage1.foundry.accountName", "stage1.foundry.deployments",
+    "stage1.foundry.modelProviderData", "network.mode", "network.existing", "network.create", "apim.existing", "backends[].id",
+    "backends[].subscriptionId", "backends[].resourceGroup", "backends[].accountName", "backends[].url", "backends[].deploymentInferenceGeo",
+    "backends[].privateEndpoint", "entra.existing", "entra.allowAzureCliClient", "entra.adminEditors", "groups[].groupId",
+    "groups[].groupDisplayName", "groups[].budget", "groups[].familyPolicy", "groups[].chargebackId", "client.group", "client.signInMethod",
+    "client.models", "resolver.budgetEnforcement", "reconciler.timerEnabled", "sync.mode", "syncTimerEnabled", "workbook.resourceName", "acceptance"];
+  assert.ok(replaced.length >= 8, "the template still holds REPLACE- values");
+  const page = "docs/get-started/configuration.md";
+  assert.ok(existsSync(path.join(root, page)), `${page} exists`);
+  const text = read(page);
+  const missing = [...new Set([...replaced, ...decisions])].filter((k) => !text.includes(`\`${k}\``));
+  assert.deepEqual(missing, [], "keys the configuration page does not name");
+  assert.ok(text.split("\n").length < 400, "the configuration page stays under 400 lines");
+  assert.match(read("docs/get-started/03-deploy.md").split("## Stage 0")[0], /\]\(configuration\.md\)/, "linked from Before Stage 0");
+  assert.match(read("docs/INDEX.md"), /\]\(get-started\/configuration\.md\)/, "linked from the documentation map");
+});

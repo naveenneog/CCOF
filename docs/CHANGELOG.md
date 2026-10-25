@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-10-25 — Configuration reference
+
+- New page [configuration.md](get-started/configuration.md): each key of the staged configuration template that holds a
+  `REPLACE-` value or is a decision, with its meaning, where to find the value and an example. Linked from the deploy
+  page and the documentation map.
+- A documentation test reads the template and fails when a `REPLACE-` key is not on the page.
+
 ## 2026-10-25 — First-time reader deployment
 
 - Stage 0 refuses a configuration that creates no API Management and names none, and a new private Foundry account

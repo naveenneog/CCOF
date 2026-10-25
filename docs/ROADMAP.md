@@ -17,6 +17,7 @@
 - [x] G-AZCLI: Azure CLI developer sign-in (ADR-0041). Given `signInMethod: azure-cli` in the client configuration, the setup scripts write a `ccof-token.cmd` that signs in with `az login` in its own Azure CLI profile and prints only the gateway token; Claude Code `settings.json`, the Claude Desktop helper-script profile and `/usage` use it; Stage 7 writes the key only when Stage 4 allowed the Azure CLI; Stage 4 reads back the Azure CLI preauthorization; a live token reaches the gateway with HTTP 200.
 - [x] G-NOVICE: a first-time reader deploys from the README alone ([evidence](evidence/2026-10-25-novice/README.md)); each failure met is recorded with a capture and either refused at Stage 0 or explained on the page where it is met; one developer sign-in step for both sign-in methods.
 - [ ] G-CCMODEL: resolve CC-01 (Claude Code model-catalog notice for deployment names).
+- [x] G-CONFIG-GUIDE: configuration reference page for every staged configuration key, with a test that follows the template.
 
 | Packet | Status | Acceptance |
 | --- | --- | --- |
