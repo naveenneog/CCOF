@@ -37,7 +37,9 @@ Option 2, deployed by Stage 5 so an existing install gets it on a Stage 5 rerun,
 retention change from option 1.
 
 - Configuration `audit.archive { enabled, retentionDays, immutabilityDays, storageSku }`. An absent section, or
-  `enabled: false`, deploys nothing and leaves the Stage 5 configuration hash unchanged. Validation is in
+  `enabled: false`, deploys nothing. An absent section, or `{ "enabled": false }` with no other key, leaves the Stage 5
+  configuration hash unchanged; any other present value, including `enabled: false` beside other keys, is part of
+  the hash (`Test-StgOffOnly`, `Get-StgAuditStageInput`). Validation is in
   [Staged.Audit.ps1](../../infra/staged/Staged.Audit.ps1). `coolAfterDays` and `archiveAfterDays` are refused:
   append blobs cannot be tiered (AUD-A5).
 - Account name: the Stage 1 storage stem plus `aud` (the resolver's storage name with `res` replaced), 24
@@ -50,7 +52,10 @@ retention change from option 1.
 - A lifecycle rule deletes append blobs older than `retentionDays` (null keeps them).
 - Diagnostic setting `ccof-gateway-archive` on the gateway: GatewayLogs and GatewayLlmLogs to the account.
 - `audit.workspaceRetentionDays` (30-730), when present, sets the workspace default retention through
-  `az monitor log-analytics workspace update` (AUD-A8). `stage1.retentionInDays` keeps its Stage 1 value.
+  `az monitor log-analytics workspace update` (AUD-A8). `stage1.retentionInDays` keeps its Stage 1 value. What the
+  workspace keeps is `audit.workspaceRetentionDays` when set, otherwise `stage1.retentionInDays`
+  (`Get-StgLogRetentionDays`); chargeback history (ADR-0044) uses that one value. Removing the key does not restore
+  the Stage 1 value in Azure: set it to `stage1.retentionInDays` instead.
 - Stage 5 read-back checks the account, the containers and policies, the lifecycle rule, the diagnostic setting
   and the workspace retention.
 
@@ -70,4 +75,4 @@ retention change from option 1.
 
 ## Integration with ADR-0044 (2026-10-25)
 
-The archive's Stage 5 hash input (`Get-StgAuditStageInput`) covers only `audit.archive` and `audit.workspaceRetentionDays`. `audit.chargebackHistory` is part of the Stage 2, 3 and 5 inputs by ADR-0044, so configuring it does change the Stage 5 hash; a configuration without any `audit` key keeps its earlier hashes ([Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).
+The archive's Stage 5 hash input (`Get-StgAuditStageInput`) covers only `audit.archive` and `audit.workspaceRetentionDays`. `audit.chargebackHistory` is part of the Stage 2, 3 and 5 inputs by ADR-0044, so configuring it does change the Stage 5 hash; a configuration without any `audit` key, or with only `{ "enabled": false }` sections, keeps its earlier hashes ([Test-AuditArchive.ps1](../../tests/Test-AuditArchive.ps1)).

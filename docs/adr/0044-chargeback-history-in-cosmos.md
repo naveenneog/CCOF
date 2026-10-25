@@ -52,8 +52,14 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    A history failure never fails the budget run: the run line carries `historyOutcome` and its counts.
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
    neither; absent: off). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
-   Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver,
-   part of the Stage 2, 3 and 5 configuration hashes only when present.
+   Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver.
+   An absent section, or `{ "enabled": false }` with no other key, leaves every stage hash unchanged; any other
+   present value (including `enabled: false` beside other keys) is part of the Stage 2, 3 and 5 hashes.
+   The workspace's retention is one value, `audit.workspaceRetentionDays` when set (ADR-0043), otherwise
+   `stage1.retentionInDays` (`Get-StgLogRetentionDays`): it is `ADMIN_LOG_RETENTION_DAYS` (the export boundary and
+   the report's `RetentionTruncated` flag) and the floor of `ttlDays`, which must be more than it and at most 24,855
+   (`defaultTtl` is a 32-bit number of seconds). History is written only by the reconciler's timer run, so
+   `enabled: true` with `reconciler.timerEnabled` not true is refused.
 5. **Grants** (Stage 3): the reconciler gets the reconciler writer role and Cosmos DB Built-in Data Reader (for the
    hash query) on `chargebackDaily`; the admin app gets Built-in Data Reader on it. No delete for anyone.
 6. **Reads** (`admin/src/history.ts`): the usage export splits its range at the boundary, the first UTC month
@@ -72,3 +78,6 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 - An open day in history is at most 60 minutes behind the ledger; the export reads only closed months.
 - History follows the rate card in force when the day closed; a later rate-card correction does not change it.
 - Turning history off stops writes and reads; the container and its documents stay until deleted by hand.
+- The committed example (`infra/staged/staged.config.example.json`) shows `audit.chargebackHistory` with
+  `enabled: false`, because its `reconciler.timerEnabled` is false (timers stay off until a deployment is verified)
+  and enabled history without the timer is refused. Turn both on together.
