@@ -30,6 +30,8 @@ export interface ReconcilerSettings {
   containers: ReconcilerContainers;
   // ADR-0040, optional: all three guard settings or none.
   guard?: { warnPercent: number; overshootPercent: number; projectionMinutes: number };
+  // ADR-0044, optional: both history settings or neither.
+  history?: { container: string; closeAfterDays: number };
 }
 
 export interface SettingProblem {
@@ -86,7 +88,11 @@ const RANGES = {
   RECONCILER_BUDGET_WARN_PERCENT: [1, 99],
   RECONCILER_OVERSHOOT_PERCENT: [1, 50],
   RECONCILER_PROJECTION_MINUTES: [1, 60],
+  // ADR-0044: closing a day later than a week only delays history; retention allows more (AUD-C5).
+  RECONCILER_HISTORY_CLOSE_AFTER_DAYS: [1, 7],
 } as const;
+
+export const HISTORY_SETTING_NAMES = ["RECONCILER_HISTORY_CONTAINER", "RECONCILER_HISTORY_CLOSE_AFTER_DAYS"] as const;
 
 export const GUARD_SETTING_NAMES = ["RECONCILER_BUDGET_WARN_PERCENT", "RECONCILER_OVERSHOOT_PERCENT", "RECONCILER_PROJECTION_MINUTES"] as const;
 
@@ -190,6 +196,10 @@ export function readReconcilerSettings(settings: Settings): SettingsResult {
   const guard = guardGiven
     ? { warnPercent: r.integer("RECONCILER_BUDGET_WARN_PERCENT"), overshootPercent: r.integer("RECONCILER_OVERSHOOT_PERCENT"), projectionMinutes: r.integer("RECONCILER_PROJECTION_MINUTES") }
     : undefined;
+  const historyGiven = HISTORY_SETTING_NAMES.some((name) => settings[name]?.trim());
+  const historyContainer = historyGiven ? r.matching("RECONCILER_HISTORY_CONTAINER", COSMOS_NAME) : undefined;
+  const history = historyGiven ? { container: historyContainer, closeAfterDays: r.integer("RECONCILER_HISTORY_CLOSE_AFTER_DAYS") } : undefined;
+  if (historyContainer !== undefined && Object.values(containers).includes(historyContainer)) r.fail("RECONCILER_HISTORY_CONTAINER", "same_as_other_container");
 
   // A healthy run renews state before the previous run's state lapses only if
   // the validity outlasts the interval plus the longest ledger read.
@@ -222,6 +232,7 @@ export function readReconcilerSettings(settings: Settings): SettingsResult {
       cosmosDatabase: cosmosDatabase as string,
       containers: containers as ReconcilerContainers,
       ...(guard ? { guard: guard as NonNullable<ReconcilerSettings["guard"]> } : {}),
+      ...(history ? { history: history as NonNullable<ReconcilerSettings["history"]> } : {}),
     },
   };
 }
