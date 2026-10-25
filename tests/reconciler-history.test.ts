@@ -159,6 +159,7 @@ test("a row that moves to another key (its trace arrived later) is not counted t
   const second = plan(after, summaries, "2026-10-11T13:00:00Z");
   const byCharge = Object.fromEntries(second.writes.map((d) => [d.chargebackId, d.requests]));
   assert.deepEqual(byCharge, { "": 0, "WBS-100": 1 });
+  assert.deepEqual([second.writes[0].requests, second.loweringCount], [0, 1], "lowering writes come first, so an interrupted run can only undercount");
   assert.equal(second.writes.reduce((n, d) => n + d.requests, 0), 1);
 });
 
@@ -181,5 +182,5 @@ test("closing a day closes a document whose rows moved away, with zero totals", 
 test("a stored document of a day the run did not read is left alone", () => {
   const [old] = build([row({ timestamp: "2026-09-30T12:00:00.0000000Z" })], "2026-10-01T00:00:00Z");
   const result = planHistoryWrites([], new Map([[old.id, storedSummaryOf(old)]]), { now: at("2026-10-11T13:00:00Z"), closeAfterDays: 2, ...versions, coveredDays: new Set(["2026-10-11"]) });
-  assert.deepEqual(result, { writes: [], unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 });
+  assert.deepEqual(result, { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 });
 });

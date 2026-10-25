@@ -39,7 +39,9 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
      days with one extra ledger query;
    - plan each day as a whole, because a row can move to another document of its day when its trace arrives
      later (AUD-C9): a stored document the run no longer computes is written with zero totals, and a day whose
-     total request count would fall is refused (never lower a total);
+     total request count would fall is refused (never lower a total); writes that lower a document's count all
+     finish before the others start, so an interrupted run leaves a day too low, repaired by the next run, never
+     counted twice;
    - a day closes once `closeAfterDays` whole days have passed after it; its documents are written once with
      `closed: true`, and a closed document is never written again;
    - skip a document whose content hash is unchanged; defer an open day's changes until its last write is 60

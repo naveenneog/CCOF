@@ -173,3 +173,23 @@ test("a failed write leaves the cached summary unchanged", async () => {
   await assert.rejects(store.write(await firstDocument()));
   assert.equal((await store.readSummaries("2026-10")).size, 0);
 });
+
+for (const [name, failWhen, left] of [
+  ["the zeroing write", (doc: { requests: number }) => doc.requests === 0, 1],
+  ["the raising write", (doc: { requests: number }) => doc.requests > 0, 0],
+] as const) {
+  test(`a run interrupted at ${name} of a moved row never leaves a double count, and the next run repairs it`, async () => {
+    const history = new MemoryHistory();
+    const azure = pilot({ history, ledger: ledgerBody([{ ...charged("2026-10-11T12:00:00.0000000Z"), chargebackId: "" }]) });
+    await run(azure, "2026-10-11T12:30:00Z");
+    azure.options.ledger = ledgerBody([charged("2026-10-11T12:00:00.0000000Z")]);
+    history.failWhen = failWhen;
+    // One write at a time: the order of the writes decides what an interruption leaves behind.
+    const interrupted = await run(azure, "2026-10-11T13:31:00Z", { ...HISTORY, RECONCILER_WRITE_CONCURRENCY: "1" });
+    const total = () => [...history.docs.values()].filter((d) => d.day === "2026-10-11").reduce((n, d) => n + d.requests, 0);
+    assert.deepEqual([interrupted.runLine.historyOutcome, total()], ["failed", left]);
+    history.failWhen = undefined;
+    await run(azure, "2026-10-11T14:32:00Z");
+    assert.equal(total(), 1);
+  });
+}

@@ -88,7 +88,10 @@ export interface PlanOptions extends BuildOptions {
 }
 
 export interface HistoryPlan {
+  // The first loweringCount writes lower a stored count; they must all finish before the others start, so that an
+  // interrupted run can leave a day too low (repaired by the next run) but never counted twice.
   writes: ChargebackDailyDocument[];
+  loweringCount: number;
   unchanged: number;
   notDue: number;
   closedSkipped: number;
@@ -215,7 +218,8 @@ const sum = (values: Iterable<{ requests: number }>): number => [...values].redu
 // refused, and an open day is rewritten only when its last write is OPEN_REWRITE_MINUTES old, all of it at once.
 // Closing writes are never deferred, and a closed document is never written again.
 export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, options: PlanOptions): HistoryPlan {
-  const plan: HistoryPlan = { writes: [], unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 };
+  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, shrinkRefused: 0 };
+  const raising: ChargebackDailyDocument[] = [];
   const days = new Map<string, { docs: ChargebackDailyDocument[]; stored: Array<[string, StoredSummary]> }>();
   const dayOf = (day: string) => days.get(day) ?? days.set(day, { docs: [], stored: [] }).get(day)!;
   for (const doc of docs) dayOf(doc.day).docs.push(doc);
@@ -235,8 +239,11 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
       if (current?.closed) plan.closedSkipped += 1;
       else if (current?.contentHash === doc.contentHash) plan.unchanged += 1;
       else if (!due) plan.notDue += 1;
-      else plan.writes.push(doc);
+      else if (current !== undefined && doc.requests < current.requests) plan.writes.push(doc);
+      else raising.push(doc);
     }
   }
+  plan.loweringCount = plan.writes.length;
+  plan.writes.push(...raising);
   return plan;
 }

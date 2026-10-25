@@ -179,7 +179,9 @@ export async function runHistoryStep(input: HistoryStepInput): Promise<HistoryLi
       counts.historyClosedSkipped += plan.closedSkipped;
       counts.historyShrinkRefused += plan.shrinkRefused;
     }
-    counts.historyWritten = await writeAll(plans.flatMap((p) => p.writes), store, input.lease, input.writeConcurrency);
+    // Lowering writes first, all of them, then the rest (HistoryPlan.loweringCount).
+    counts.historyWritten = await writeAll(plans.flatMap((p) => p.writes.slice(0, p.loweringCount)), store, input.lease, input.writeConcurrency);
+    counts.historyWritten += await writeAll(plans.flatMap((p) => p.writes.slice(p.loweringCount)), store, input.lease, input.writeConcurrency);
     return { historyOutcome: "written", historyReason: null, ...counts };
   } catch (error) {
     const failure = error instanceof HistoryFailure ? error : new HistoryFailure(error instanceof LedgerReadError ? error.reason : "history_failed", error);

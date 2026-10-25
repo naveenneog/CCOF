@@ -92,6 +92,8 @@ export class MemoryHistory implements HistoryStore {
   readonly reads: string[] = [];
   readonly writes: ChargebackDailyDocument[] = [];
   failWrite: unknown;
+  // Fail only the writes this selects (an interrupted run).
+  failWhen?: (doc: ChargebackDailyDocument) => boolean;
 
   async readSummaries(month: string) {
     this.reads.push(month);
@@ -101,6 +103,7 @@ export class MemoryHistory implements HistoryStore {
 
   async write(doc: ChargebackDailyDocument) {
     if (this.failWrite !== undefined) throw this.failWrite;
+    if (this.failWhen?.(doc)) throw new Error("interrupted");
     this.writes.push(structuredClone(doc));
     this.docs.set(doc.id, structuredClone(doc));
   }
