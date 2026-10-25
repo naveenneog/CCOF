@@ -66,15 +66,13 @@ These settings are not create-only, but the template's values differ from what t
 | `reconciler.timerEnabled` | `false` | `true`: the reconciler prices usage on its schedule |
 | `groups[].budget.perUser` | `25000` `CCU` | For example `100` `USD` |
 
-The template also turns on both long-term audit features
+The template turns on the audit archive and shows chargeback history switched off
 ([prerequisites, Decide before you start](02-prerequisites.md#decide-before-you-start)):
 
 | Setting | Template | Effect |
 | --- | --- | --- |
 | `audit.archive.enabled` | `true` | Stage 5 creates a storage account with a copy of every gateway request log ([audit archive](../operate/audit-archive.md)). `false` creates nothing |
-| `audit.chargebackHistory.enabled` | `true` | Stage 2 creates the Cosmos DB container `chargebackDaily` for daily chargeback totals ([chargeback history](../operate/chargeback-history.md)). Needs `reconciler.timerEnabled: true`. `false` creates nothing |
-
-<!-- CODE-NOTE: confirm the template defaults of `audit.chargebackHistory.enabled` and `reconciler.timerEnabled` after the timer check. -->
+| `audit.chargebackHistory.enabled` | `false` | `true`: Stage 2 creates the Cosmos DB container `chargebackDaily` for daily chargeback totals ([chargeback history](../operate/chargeback-history.md)). `true` needs `reconciler.timerEnabled: true`, which the template leaves off, so Stage 0 refuses `true` alone; set both to `true` together. `false` creates nothing |
 
 Every key, with create-new and reuse-existing JSON, the allowed values and a complete sample: [configuration reference](configuration.md). The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
 without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with

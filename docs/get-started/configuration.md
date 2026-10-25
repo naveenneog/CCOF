@@ -290,5 +290,6 @@ stays valid. Stage 0 additionally needs the account, its deployments and the app
 ```
 
 The sample turns on chargeback history (`audit.chargebackHistory`, with `reconciler.timerEnabled: true`) and leaves
-the audit archive off: it has no `audit.archive` block. The template turns both on; add the template's
+the audit archive off: it has no `audit.archive` block. The template does the opposite: its `audit.archive` is on,
+and its `audit.chargebackHistory` is `enabled: false` because its reconciler timer is off. Add the template's
 `audit.archive` block to keep a long-term copy of the gateway log ([audit archive](../operate/audit-archive.md)).

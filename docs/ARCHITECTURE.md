@@ -399,15 +399,18 @@ realtime ceiling is kept tight enough to hit the ±2-3% target. `docs/MARKETPLAC
 is resolved from Marketplace CCU billing, including prompt-cache tokens, and how per-project figures
 are tied to the invoice.
 
-Chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md), optional): after it writes the budget
-states, the same reconciler run turns the ledger rows it already priced into daily totals per day, chargeback ID,
-group, person and model, and writes the changed ones to the Cosmos container `chargebackDaily` (partition key
-`/month`). Early in a month it reads the previous month's last days with one extra ledger query, so their late rows
-are counted before the days close. The admin usage export reads months older than the effective Log Analytics
-retention (`audit.workspaceRetentionDays` if set, else `stage1.retentionInDays`) from that container and later ones
-from Log Analytics ([chargeback history](operate/chargeback-history.md)).
-<!-- CODE-NOTE: update the run order (history inside or after the budget lease) to the code's decision. -->
-
+Chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md), optional): after the reconciler run has
+written the budget states and the budget lease (`ccof-budget-reconciler`) is released, the same run turns the ledger
+rows it already priced into daily totals per day, chargeback ID, group, person and model, and writes the changed
+ones to the Cosmos container `chargebackDaily` (partition key `/month`). This step runs only when the budget part
+wrote its states, under its own lease `ccof-chargeback-history` in the same lease container, within half the run
+interval (at least 15 seconds) and at most 1,000 document writes per run; a failure is reported on the run line and
+never fails or delays the budget run ([run.ts](../src/reconciler/run.ts), [history-run.ts](../src/reconciler/history-run.ts)).
+Early in a month it reads the previous month's last days with one extra ledger query, so their late rows
+are counted before the days close. A monthly coverage document records which days history holds. The admin usage
+export reads months older than the effective Log Analytics retention (`audit.workspaceRetentionDays` if set, else
+`stage1.retentionInDays`) from that container and later ones from Log Analytics, and refuses days history does not
+cover ([chargeback history](operate/chargeback-history.md)).
 ## 7. Why this reuses, rather than replaces, the reference repository's infrastructure
 
 | Component | Reused as-is | Extended |

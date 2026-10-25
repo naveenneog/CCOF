@@ -2,7 +2,7 @@
 // the decision is on the get-started route, an existing deployment has a stage order, the deploy page quotes the
 // lines Stage 5 prints, and each feature has a cost with sources and a way to check it works.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -101,6 +101,64 @@ test("the configuration reference keeps both audit features under one Audit head
   assert.match(audit, /`audit\.workspaceRetentionDays` if set, else `stage1\.retentionInDays`|`audit\.workspaceRetentionDays`, or `stage1\.retentionInDays` when it is absent/);
   assert.match(audit, /Other keys inside `audit\.archive` are refused/);
   assert.match(audit, /Other keys inside\s+`audit\.chargebackHistory` are refused/);
+});
+
+test("no CODE-NOTE placeholder is left in the documentation", () => {
+  const files = (dir: string): string[] => readdirSync(path.join(root, dir), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith(".md") ? [path.join(dir, e.name)] : []));
+  const found = ["README.md", ...files("docs")].filter((p) => read(p).includes("CODE-NOTE"));
+  assert.deepEqual(found, []);
+});
+
+test("template statements match staged.config.example.json (history off with the timer, archive on)", () => {
+  const example = JSON.parse(read("infra/staged/staged.config.example.json"));
+  const archive = example.audit.archive.enabled;
+  const history = example.audit.chargebackHistory.enabled;
+  assert.equal(history, false, "history needs the timer, which the example keeps off");
+  assert.equal(example.reconciler.timerEnabled, false);
+  const row = (text: string, key: string) => text.split("\n").find((l) => l.startsWith(`| \`${key}\` |`)) ?? "";
+  for (const page of ["docs/get-started/configuration-reference-3.md", "docs/get-started/03-deploy.md"]) {
+    const text = read(page);
+    assert.ok(row(text, "audit.archive.enabled").includes(`| \`${archive}\` |`), `${page}: audit.archive.enabled template value`);
+    assert.ok(row(text, "audit.chargebackHistory.enabled").includes(`| \`${history}\` |`), `${page}: audit.chargebackHistory.enabled template value`);
+  }
+  const decide = section(read("docs/get-started/02-prerequisites.md"), "## Decide before you start").split("\n");
+  assert.match(decide.find((l) => l.includes("`audit.archive`")) ?? "", /On \(template\)/);
+  assert.match(decide.find((l) => l.includes("`audit.chargebackHistory`")) ?? "", /Off \(template\)/);
+  const pages = ["README.md", "docs/INDEX.md", "docs/get-started/02-prerequisites.md", "docs/get-started/03-deploy.md", "docs/get-started/configuration.md",
+    "docs/get-started/configuration-reference-3.md", "docs/operate/chargeback-history.md", "docs/operate/audit-archive.md", "docs/STAGED-DEPLOYMENT-GUIDE.md"];
+  const claims = pages.filter((p) => /both on|turns on both|template turns both|both long-term audit features/i.test(read(p)));
+  assert.deepEqual(claims, [], "no page says the template turns both features on");
+});
+
+test("the history page quotes the timer and coverage refusals, and it or troubleshooting names every new code as the code spells it", () => {
+  const page = read("docs/operate/chargeback-history.md");
+  const refusal = /'(audit\.chargebackHistory\.enabled is true but reconciler\.timerEnabled is not: [^']+)'/.exec(read("infra/staged/Staged.Cosmos.ps1"))?.[1];
+  assert.ok(refusal && page.replace(/\n\s*/g, " ").includes(refusal), "timer refusal quoted word for word");
+  const troubleshooting = section(read("docs/operate/troubleshooting.md"), "## Chargeback history");
+  const code = ["admin/src/export.ts", "admin/src/history.ts", "src/reconciler/history-run.ts", "src/reconciler/run.ts"].map(read).join("\n");
+  const names = ["history_not_covered", "uncoveredDays", "openDays", "history_range_not_whole_days", "backend_filter_not_in_history",
+    "chargeback_history_not_configured", "chargeback_history_settings_invalid", "historyClosedRefused", "historyBudgetDeferred",
+    "historyCoverageWritten", "historyShrinkRefused", "history_lease_held", "history_time_budget", "history_lease_unavailable",
+    "history_conflict", "history_write_failed", "history_read_failed", "history_ledger_read_failed", "history_store_missing"];
+  for (const name of names) {
+    assert.ok(code.includes(name), `${name} is in the code`);
+    assert.ok(new RegExp(`\\b${name}\\b`).test(page + troubleshooting), `chargeback-history.md or troubleshooting.md names ${name}`);
+  }
+  for (const name of ["history_not_covered", "uncoveredDays", "openDays", "historyClosedRefused"]) assert.ok(page.includes(name), `chargeback-history.md names ${name}`);
+  assert.match(page, /409/);
+  assert.match(page, /ccof-chargeback-history/, "names the history lease");
+  assert.match(page, /\(troubleshooting\.md#chargeback-history\)/);
+});
+
+test("the admin API and architecture pages describe the history part of the usage export and the run order", () => {
+  const api = section(read("docs/ADMIN-API.md"), "### Export for Power BI");
+  for (const text of ["409", "history_not_covered", "uncoveredDays", "openDays", "backend_filter_not_in_history", "history_range_not_whole_days"]) {
+    assert.ok(api.includes(text), `ADMIN-API export section names ${text}`);
+  }
+  const arch = read("docs/ARCHITECTURE.md");
+  assert.match(arch, /budget lease[^.]*released/);
+  assert.match(arch, /ccof-chargeback-history/);
 });
 
 test("the audit reader pages use plain terms, not unknown-register IDs", () => {

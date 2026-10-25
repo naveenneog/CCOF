@@ -108,20 +108,28 @@ Read by [infra/gateway/config.ts](../../infra/gateway/config.ts) (schema: `gatew
 
 ## Audit
 
-Two optional features under `audit`, both on in the template's `audit` block; each can be turned on alone:
+Two optional features under `audit`. The template turns on the audit archive and shows chargeback history switched
+off (`enabled: false`), because history needs the reconciler timer, which the template also leaves off. Each can be
+turned on alone:
 
 - **Audit archive** (`audit.archive`, `audit.workspaceRetentionDays`): a long-term copy of every gateway request log
   in a storage account ([operate: audit archive](../operate/audit-archive.md), [ADR-0043](../adr/0043-long-term-audit-archive.md)).
 - **Chargeback history** (`audit.chargebackHistory`): daily chargeback totals in Cosmos DB beyond the Log Analytics
   retention ([operate: chargeback history](../operate/chargeback-history.md), [ADR-0044](../adr/0044-chargeback-history-in-cosmos.md)).
 
-An absent `audit` section deploys nothing and leaves every stage's record of its inputs unchanged.
-<!-- CODE-NOTE: state what a present block with `enabled: false` changes in the stage records (Stages 2, 3 and 5). -->
+An absent `audit` section deploys nothing and leaves every stage's record of its inputs unchanged. So does
+`audit.archive` or `audit.chargebackHistory` given as `{ "enabled": false }` with no other key: it is recorded as if
+the section were absent ([Staged.Audit.ps1](../../infra/staged/Staged.Audit.ps1) `Test-StgOffOnly`). Any other
+present value is part of the record, including `enabled: false` beside other keys, as in the template's
+`audit.chargebackHistory` block: adding it to an existing deployment makes Stages 2, 3 and 5 ask to be previewed and
+applied again (`stage_config_changed`), which is harmless and creates nothing.
 Changing an archive key makes Stage 5 ask to be previewed and applied again (`stage_config_changed`); changing a
 history key does the same for Stages 2, 3 and 5. Stage 1 is not affected.
 
 **Effective Log Analytics retention** is `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays`. The
-history export uses it to decide which months come from history, and `ttlDays` is checked against it.
+history export uses it to decide which months come from history (`ADMIN_LOG_RETENTION_DAYS`), and `ttlDays` must be
+more than it. After raising it, the export reads the added months from Log Analytics at once, but the workspace
+holds them only as data ages in; until then those months show only what the workspace kept.
 
 ### Audit archive
 
@@ -135,7 +143,7 @@ Other keys inside `audit.archive` are refused.
 | `audit.archive.retentionDays` | No | `2555` | Whole number 1-36500: a lifecycle rule deletes log blobs that many days after their last write. Absent or `null`: blobs are kept, no deletion rule | `stage5-audit-archive.bicep` |
 | `audit.archive.immutabilityDays` | No | `null` | Whole number 1-146000, at most `retentionDays`: an unlocked time-based retention policy on both log containers (blobs cannot be changed or deleted until it expires; an administrator can still shorten or remove an unlocked policy). Absent or `null`: none | `stage5-audit-archive.bicep` |
 | `audit.archive.storageSku` | No | `Standard_LRS` | `Standard_LRS`, `Standard_ZRS`, `Standard_GRS`, `Standard_RAGRS`, `Standard_GZRS` or `Standard_RAGZRS`. Absent: `Standard_LRS` | `stage5-audit-archive.bicep` |
-| `audit.workspaceRetentionDays` | No | absent | Whole number 30-730: Stage 5 sets the Log Analytics workspace retention; absent leaves it at `stage1.retentionInDays`. Lowering it removes workspace data older than the new value | `Staged.Audit.ps1` |
+| `audit.workspaceRetentionDays` | No | absent | Whole number 30-730: Stage 5 sets the Log Analytics workspace retention. Absent: Stage 5 leaves the retention as it is; removing the key does not restore `stage1.retentionInDays`, so set it to that value instead. Lowering it removes workspace data older than the new value | `Staged.Audit.ps1` |
 
 `audit.archive.coolAfterDays` and `audit.archive.archiveAfterDays` are refused: Azure Monitor writes the logs as
 append blobs, and lifecycle management cannot move append blobs to Cool or Archive
@@ -149,6 +157,6 @@ Read by [Staged.Cosmos.ps1](../../infra/staged/Staged.Cosmos.ps1). Other keys in
 | Key | Req | Template | Allowed values and effect | Read by |
 | --- | --- | --- | --- | --- |
 | `audit.chargebackHistory` | No | see below | Absent or `null`: off | `Staged.Cosmos.ps1` |
-| `audit.chargebackHistory.enabled` | Yes, inside the section | `true` | JSON `true` or `false`. `true`: Stage 2 creates `chargebackDaily`, Stage 3 grants it, Stage 5 writes the settings. `true` needs `reconciler.timerEnabled: true`: only the reconciler's timer run writes history, and the configuration check refuses `true` with the timer off | `Staged.Cosmos.ps1` |
+| `audit.chargebackHistory.enabled` | Yes, inside the section | `false` | JSON `true` or `false`. `true`: Stage 2 creates `chargebackDaily`, Stage 3 grants it, Stage 5 writes the settings. `true` needs `reconciler.timerEnabled: true`: only the reconciler's timer run writes history. With the timer off the configuration check refuses: `audit.chargebackHistory.enabled is true but reconciler.timerEnabled is not: history is written only by the reconciler timer run; set reconciler.timerEnabled to true or audit.chargebackHistory.enabled to false (ADR-0044)` | `Staged.Cosmos.ps1` |
 | `audit.chargebackHistory.closeAfterDays` | If enabled | `2` | Whole number 1-7: whole days after a UTC day ends before its totals are final (`RECONCILER_HISTORY_CLOSE_AFTER_DAYS`) | `app-settings.bicep` |
 | `audit.chargebackHistory.ttlDays` | If enabled | `null` | `null`: kept until deleted. A whole number above the effective Log Analytics retention, at most 24855 (the largest Cosmos DB time to live, in seconds, that fits a 32-bit signed number): the container's time to live, counted from each day's last write | `stage2-schema.bicep` |

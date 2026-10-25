@@ -449,7 +449,7 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   install gets the archive by adding the `audit.archive` block and rerunning Stage 5, then Stage 7 and Stage 8,
   which refuse with `stage_dependency_changed` until rerun; Stage 1 is not rerun. With
   `audit.chargebackHistory.enabled: true` it writes the reconciler's and admin app's history settings; history needs
-  `reconciler.timerEnabled: true`. An existing install turns history on with Stages 2, 3, 5, 7 and 8 in that order,
+  `reconciler.timerEnabled: true` (the example has both `false`; Stage 0 refuses history without the timer). An existing install turns history on with Stages 2, 3, 5, 7 and 8 in that order,
   from an updated checkout ([chargeback history](operate/chargeback-history.md#turn-on-in-an-existing-deployment)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 5`, preview then `-Apply`. The preview prints one `audit archive:` line (account,

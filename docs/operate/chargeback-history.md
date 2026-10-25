@@ -15,16 +15,32 @@ retention**: `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays
   Cosmos DB container `chargebackDaily`: request counts, token totals and the list-price amount
   ([src/reconciler/history.ts](../../src/reconciler/history.ts)). The tag value is the one each request carried:
   the person's user tag, or the group's chargeback ID when the person has none.
-- **Who writes it.** Only the reconciler's timer run writes history. History needs `reconciler.timerEnabled: true`;
-  the configuration check refuses `audit.chargebackHistory.enabled: true` with `reconciler.timerEnabled: false`.
-- **When a day is final.** A day closes `closeAfterDays` whole days after it ends; later ledger rows for it are not
-  added. Until then its document is refreshed at most once an hour. A total is never lowered.
+- **Who writes it.** Only the reconciler's timer run writes history. History needs `reconciler.timerEnabled: true`.
+  With the timer off, the configuration check (Stage 0 and every stage) refuses with:
+  `audit.chargebackHistory.enabled is true but reconciler.timerEnabled is not: history is written only by the reconciler timer run; set reconciler.timerEnabled to true or audit.chargebackHistory.enabled to false (ADR-0044)`
+  ([Staged.Cosmos.ps1](../../infra/staged/Staged.Cosmos.ps1)). The template has both off; turn them on together.
+- **When it runs.** After the run has written the budget states and released the budget lease, and only when that
+  budget part wrote its states. History takes its own lease, `ccof-chargeback-history`, in the same lease container,
+  and stops after half the run interval (at least 15 seconds) and 1,000 document writes; whole days are written
+  oldest first and the rest wait for the next run. A history failure is reported on the run line and never fails
+  or delays budgets ([run.ts](../../src/reconciler/run.ts), [history-run.ts](../../src/reconciler/history-run.ts)).
+- **When a day is final.** A day is due to close `closeAfterDays` whole days after it ends. If its totals changed
+  since the last write, that run writes them still open and the next run (one reconciler interval later) writes the
+  day closed; a day already holding its final totals closes at once. Until then an open day is rewritten at most
+  once an hour, and a day's total is never lowered. A closed day is frozen: ledger rows that arrive for it later
+  are not added (`historyClosedRefused` on the run line); they stay in Log Analytics while the workspace keeps them.
 - **What it does not hold.** Per-request diagnostics: failed requests, duplicate copies, cache savings and the
   backend. Those columns are empty for history rows, and a `backend` filter is refused for those months.
-- **Where it starts.** <!-- CODE-NOTE: first-run backfill of the current month; replace this sentence with the
-  behaviour the code settles on. --> Days before history was turned on are not in it.
+- **Where it starts.** The first history run reads the whole current month from Log Analytics, so history covers
+  every day of that month from day 1, and, during the first `closeAfterDays` + 1 days of a month, the previous
+  month's last `closeAfterDays` + 1 days. Earlier days are never filled in: an export that includes them is refused
+  with `history_not_covered`, not shown as zero. The same applies to days the reconciler never read because it was
+  stopped. The first run holds only what the workspace still keeps: with the minimum 30-day retention, a first run
+  on the 31st of a 31-day month may find part of day 1 already deleted.
 - **How long.** `ttlDays: null` keeps documents until someone deletes them; a number deletes each day's document
-  that many days after its last write.
+  that many days after its last write. A month's coverage record (below) is rewritten until the month's last day
+  closes, so it can outlive its first days by up to a month: keep `ttlDays` about a month longer than the oldest
+  period you export.
 
 ## Which export uses it
 
@@ -33,15 +49,34 @@ History is read only by the usage export API, `GET /api/v3/export/usage`
 The console tabs, their **Export CSV** button and the workbook show only what Log Analytics holds.
 
 For a period that starts before the first whole month Log Analytics still holds, the export reads that part from
-`chargebackDaily` and the rest from Log Analytics, one row per tag value, group and person. The current month
-always comes from Log Analytics. The history part must start and end at 00:00 UTC. The JSON lists the parts in
-`sources` (`chargebackHistory`, `logAnalytics`); the CSV header uses the tag field name set in **User tags**.
-
-<!-- CODE-NOTE: incomplete coverage. Name the JSON field and the CSV column (or the refusal error) that report days
-history does not cover, and what a reader should do. -->
+`chargebackDaily` and the rest from Log Analytics, one row per tag value, group and person. Every row carries the
+whole requested period in `periodStart` and `periodEnd`. The current month always comes from Log Analytics. The
+history part must start and end at 00:00 UTC. The filters `project`, `group`, `developer`, `model`, `family`,
+`classification` and `chargeback` (the tag value) apply to the history part too; `backend` is refused there. The
+JSON lists the parts in `sources` (`chargebackHistory`, `logAnalytics`); the CSV header uses the tag field name set
+in **User tags**.
 
 Example: on a hypothetical 19 October with 30-day retention, `period=previous` (September) comes from history; a
 custom range 15 September to 10 October reads 15-30 September from history and 1-10 October from Log Analytics.
+
+### Days history does not cover
+
+A day without usage has no document, so each month in `chargebackDaily` also has one coverage record
+(`id: "coverage"`) listing the days history holds, each `open` or `closed`. The reconciler updates it after all of a
+run's document writes succeed; days left for the next run by the write limit are added when they are written. A
+closed day never becomes open again. Before reading, the export checks every day of the history part
+([admin/src/history.ts](../../admin/src/history.ts) `historyCoverage`):
+
+- **A day not covered** refuses the whole request with HTTP 409 and a JSON body (for `format=csv` too), for example
+  `{ "error": "history_not_covered", "uncoveredDays": ["2026-07-01", "2026-07-02"] }`. No file with zeros is
+  returned. Choose a range of covered days (`period=custom` with whole UTC days). The only other record of older
+  days is the gateway request log in the [audit archive](audit-archive.md), if it was on. Other export errors:
+  [troubleshooting](troubleshooting.md#chargeback-history).
+- **A covered day not yet closed** is exported, and the JSON lists it in the `openDays` of the `chargebackHistory`
+  entry in `sources`, for example
+  `"sources": [{ "source": "chargebackHistory", "from": "2026-09-01T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z", "openDays": [] }, ...]`.
+  Usually the list is empty; an open day's totals can still rise. The CSV has no such column: request
+  `format=json` to see it.
 
 ## Download an old month
 
@@ -80,8 +115,8 @@ ask the platform engineer for the two values. A custom range may span at most 62
 1. `git pull` in the checkout used for the deployment. Keep the same configuration file and its `.staged-state`
    folder.
 2. Add the `audit.chargebackHistory` block from
-   [staged.config.example.json](../../infra/staged/staged.config.example.json) and set
-   `reconciler.timerEnabled: true`.
+   [staged.config.example.json](../../infra/staged/staged.config.example.json) (the template has it switched off),
+   and set both `audit.chargebackHistory.enabled` and `reconciler.timerEnabled` to `true`.
 3. Preview, then apply, in this order:
    - Stage 2 (platform engineer): creates `chargebackDaily`.
    - Stage 3 (access administrator): grants the reconciler write access and the admin app read access to it.
@@ -107,8 +142,10 @@ union isfuzzy=true FunctionAppLogs, AppTraces
 | top 20 by TimeGenerated
 ```
 
-  Expected: `historyOutcome` is `written` after requests have been made. Empty `historyOutcome` means the reconciler
-  has no history settings: rerun Stages 5 and 7. `failed` gives a `historyReason`; the run retries on its next tick.
+  Expected: `historyOutcome` is `written` after requests have been made. No `historyOutcome` means the reconciler
+  has no history settings (rerun Stages 5 and 7) or the budget part of that run did not write (`outcome` is not
+  `written`; history waits for a run that does). `skipped` or `failed` gives a `historyReason`; see
+    [troubleshooting](troubleshooting.md#chargeback-history). The run retries on its next tick.
 - **Documents.** The template sets `stage1.cosmosPublicNetworkAccess: Disabled`, so Data Explorer in the Portal
   shows `chargebackDaily` only from a machine on the VNet.
 - **Export.** Once the first month is older than the effective retention, download it as above; the JSON
@@ -129,8 +166,19 @@ Prices are USD list prices; agreements and regions differ. The estimate comes fr
 
 ## Turn off
 
-Set `enabled: false` and preview and apply the stages the refusal messages name; Stage 5 then removes the history
-settings and the reconciler stops writing. The container and its documents stay; delete the container in the
-Portal (Cosmos DB account → **Data Explorer**, from the VNet) if the history is no longer needed.
+Set `enabled: false` (or remove the `audit.chargebackHistory` section) and preview and apply Stages 2, 3 and 5;
+their records of their inputs change either way, so each refuses with `stage_config_changed` until it is rerun. If
+Stage 7 or 8 then refuses with `stage_dependency_changed`, rerun it. Stage 5 removes the reconciler's and admin
+app's history settings: the reconciler stops writing, and the export reads Log Analytics only. The stages never
+delete, so these remain until removed by hand
+([ADR-0044, Rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback)):
 
-<!-- CODE-NOTE: confirm what `enabled: false` changes in the stage records and what remains after turning off. -->
+- the `chargebackDaily` container with its daily totals and coverage records:
+  `az cosmosdb sql container delete --account-name <account> --resource-group <rg> --database-name <database> --name chargebackDaily`
+  (or Data Explorer in the Portal, from the VNet);
+- the three Stage 3 role assignments scoped to `.../colls/chargebackDaily`: list them with
+  `az cosmosdb sql role assignment list` and delete each with `az cosmosdb sql role assignment delete --role-assignment-id <id>`;
+- the `ccof-chargeback-history` lease document in the reconciler's lease container (harmless).
+
+A section that is only `{ "enabled": false }` is recorded as if it were absent; with any other key beside it, as
+in the template, it is part of the Stage 2, 3 and 5 records ([configuration reference](../get-started/configuration-reference-3.md#audit)).
