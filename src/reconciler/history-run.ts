@@ -6,8 +6,8 @@
 
 import type { RateCard } from "../cost/rate-card.ts";
 import type { ContractSchedule } from "../cost/contract-schedule.ts";
-import { HISTORY_MAX_WRITES_PER_RUN, buildDailyDocuments, planHistoryWrites, storedSummaryOf } from "./history.ts";
-import type { ChargebackDailyDocument, HistoryRow, StoredSummary } from "./history.ts";
+import { COVERAGE_ID, COVERAGE_SCHEMA, HISTORY_MAX_WRITES_PER_RUN, buildDailyDocuments, mergeCoverage, planHistoryWrites, storedSummaryOf } from "./history.ts";
+import type { ChargebackDailyDocument, CoverageDocument, DayState, HistoryRow, StoredSummary } from "./history.ts";
 import { HISTORY_LEASE_ID, LeaseLostError, acquireLease } from "./lease.ts";
 import type { Lease, LeaseStore } from "./lease.ts";
 import { LedgerReadError, buildLedgerQuery, parseLedgerResponse } from "./ledger.ts";
@@ -20,6 +20,10 @@ export interface HistoryStore {
   // Summaries of the stored documents of one month (partition key /month).
   readSummaries(month: string): Promise<ReadonlyMap<string, StoredSummary>>;
   write(doc: ChargebackDailyDocument): Promise<void>;
+  // The month's coverage document (ADR-0044 decision 8); null when none was written yet.
+  readCoverage(month: string): Promise<CoverageDocument | null>;
+  // Conditional on the coverage last read for that month.
+  writeCoverage(doc: CoverageDocument): Promise<void>;
 }
 
 // Another writer changed the document since the summaries were read (Cosmos 409 on create, 412 on If-Match).
@@ -35,6 +39,9 @@ export class HistoryConflictError extends Error {
 export interface HistoryContainer {
   querySummaries(month: string): Promise<Array<StoredSummary & { id: string }>>;
   write(doc: ChargebackDailyDocument, etag: string | undefined): Promise<string>;
+  // A point read of the coverage document; a create or If-Match replace like write.
+  readCoverage(month: string): Promise<{ doc: CoverageDocument; etag: string } | null>;
+  writeCoverage(doc: CoverageDocument, etag: string | undefined): Promise<string>;
 }
 
 // Summaries are read once per month and host instance every SUMMARY_CACHE_MINUTES (AUD-C1) and updated after each
@@ -45,7 +52,17 @@ export const SUMMARY_CACHE_MINUTES = 60;
 
 export function createCachedHistoryStore(container: HistoryContainer, now: () => Date): HistoryStore {
   const cache = new Map<string, { readAt: number; summaries: Map<string, StoredSummary> }>();
+  const coverageEtags = new Map<string, string>();
   return {
+    async readCoverage(month) {
+      const read = await container.readCoverage(month);
+      if (read === null) coverageEtags.delete(month);
+      else coverageEtags.set(month, read.etag);
+      return read?.doc ?? null;
+    },
+    async writeCoverage(doc) {
+      coverageEtags.set(doc.month, await container.writeCoverage(doc, coverageEtags.get(doc.month)));
+    },
     async readSummaries(month) {
       const hit = cache.get(month);
       if (hit !== undefined && now().getTime() - hit.readAt < SUMMARY_CACHE_MINUTES * 60_000) return hit.summaries;
@@ -166,12 +183,12 @@ function errorCode(error: unknown): string | null {
 }
 
 type HistoryCounts = Record<
-  "historyDocuments" | "historyWritten" | "historyUnchanged" | "historyNotDue" | "historyClosedSkipped" | "historyClosedRefused" | "historyShrinkRefused" | "historyBudgetDeferred",
+  "historyDocuments" | "historyWritten" | "historyUnchanged" | "historyNotDue" | "historyClosedSkipped" | "historyClosedRefused" | "historyShrinkRefused" | "historyBudgetDeferred" | "historyCoverageWritten",
   number
 >;
 
 const emptyCounts = (): HistoryCounts => ({
-  historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyClosedRefused: 0, historyShrinkRefused: 0, historyBudgetDeferred: 0,
+  historyDocuments: 0, historyWritten: 0, historyUnchanged: 0, historyNotDue: 0, historyClosedSkipped: 0, historyClosedRefused: 0, historyShrinkRefused: 0, historyBudgetDeferred: 0, historyCoverageWritten: 0,
 });
 
 export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCounts = emptyCounts(), stop: Stop = { stopped: false }): Promise<HistoryLine> {
@@ -199,10 +216,29 @@ export async function runHistoryStep(input: HistoryStepInput, counts: HistoryCou
     // Lowering writes first, all of them, then the rest (HistoryPlan.loweringCount).
     await writeAll(plan.writes.slice(0, plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
     await writeAll(plan.writes.slice(plan.loweringCount), store, input.lease, input.writeConcurrency, counts, stop);
+    await writeCoverage(plan.coverage, store, input, counts, stop);
     return { historyOutcome: "written", historyReason: null, ...counts };
   } catch (error) {
     const failure = error instanceof HistoryFailure ? error : new HistoryFailure(error instanceof LedgerReadError ? error.reason : "history_failed", error);
     return { historyOutcome: "failed", historyReason: failure.reason, historyErrorCode: errorCode(failure.cause), ...counts };
+  }
+}
+
+// After every document write succeeded: the coverage of each month the plan covered, only when it changed.
+async function writeCoverage(coverage: ReadonlyMap<string, DayState>, store: HistoryStore, input: HistoryStepInput, counts: HistoryCounts, stop: Stop): Promise<void> {
+  for (const month of [...new Set([...coverage.keys()].map((day) => day.slice(0, 7)))].sort()) {
+    checkStop(stop);
+    const update = new Map([...coverage].filter(([day]) => day.startsWith(month)));
+    const stored = await step("history_read_failed", () => store.readCoverage(month));
+    const days = mergeCoverage(stored?.days, update);
+    if (days === null) continue;
+    await step("history_write_failed", () => input.lease.ensure());
+    try {
+      await store.writeCoverage({ id: COVERAGE_ID, schema: COVERAGE_SCHEMA, month, days, computedAt: input.now.toISOString() });
+    } catch (error) {
+      throw new HistoryFailure(error instanceof HistoryConflictError ? "history_conflict" : "history_write_failed", error);
+    }
+    counts.historyCoverageWritten += 1;
   }
 }
 

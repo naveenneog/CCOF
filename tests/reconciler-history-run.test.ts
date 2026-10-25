@@ -252,3 +252,21 @@ test("while another run holds the history lease, history is skipped and the budg
   const { summary, runLine } = await run(azure, "2026-10-11T13:00:00Z");
   assert.deepEqual([summary.outcome, azure.budgetStates.length, runLine.historyOutcome, runLine.historyReason, history.reads.length], ["written", 1, "skipped", "history_lease_held", 0]);
 });
+
+test("the first run covers every day of the current month to now, days without usage too; coverage follows the documents", async () => {
+  const history = new MemoryHistory();
+  const { runLine } = await run(pilot({ history }), "2026-10-11T13:00:00Z");
+  const days = history.coverage.get("2026-10")?.days ?? {};
+  const expected = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`2026-10-${String(i + 1).padStart(2, "0")}`, i < 8 ? "closed" : "open"]));
+  assert.deepEqual(days, expected);
+  assert.deepEqual([history.coverage.get("2026-10")?.schema, history.coverage.get("2026-10")?.id, runLine.historyCoverageWritten], ["ccof.chargeback.coverage.v1", "coverage", 1]);
+  const again = await run(pilot({ history }), "2026-10-11T13:01:00Z");
+  assert.equal(again.runLine.historyCoverageWritten, 0, "unchanged coverage is not rewritten");
+});
+
+test("coverage is not written when a history write fails", async () => {
+  const history = new MemoryHistory();
+  history.failWrite = new Error("503");
+  await run(pilot({ history }), "2026-10-11T13:00:00Z");
+  assert.equal(history.coverage.size, 0);
+});

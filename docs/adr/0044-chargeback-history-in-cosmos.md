@@ -79,19 +79,56 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 6. **Reads** (`admin/src/history.ts`): the usage export splits its range at the boundary, the first UTC month
    start on or after `now - ADMIN_LOG_RETENTION_DAYS`, and never after the current month's start. Before it, rows come from `chargebackDaily`; from it, from
    Log Analytics as before. Rows with the same chargeback ID, group and person are merged: counts, tokens and
-   amounts are added; columns history cannot fill (AUD-C8) are empty on merged rows. The history part must start
-   and end on whole UTC days; backend and tag filters are refused for it. The console views stay on Log Analytics.
+   amounts are added; columns history cannot fill (AUD-C8) are empty on merged rows. Every row of a split export
+   carries the whole export period in `periodStart` and `periodEnd`. The history part must start and end on whole
+   UTC days (`history_range_not_whole_days`). Of the export's filters, project, group, developer, model, family,
+   classification and chargeback (the chargeback ID) are applied to the history part as to the Log Analytics part;
+   `backend` is refused when the range has a history part (`backend_filter_not_in_history`, history has no
+   backend); user-tag, paging and trend parameters are not export parameters at all (`unknown_parameter`). The
+   console views stay on Log Analytics.
+8. **Coverage** (council review 2026-10-25): a day without usage has no document, so history alone cannot tell it
+   from a day it never read. Each month has one coverage document (`id: "coverage"`, `schema:
+   ccof.chargeback.coverage.v1`, `days: { "YYYY-MM-DD": "open" | "closed" }`, no `day` field, so the day queries
+   never return it). After all of a run's document writes succeed, the reconciler records every day it read whole
+   and planned in full: `closed` once every document of the day is closed (or the day had none and is due to
+   close), otherwise `open`; days left by the write budget are not recorded, and a closed day never reopens. The
+   run line counts `historyCoverageWritten`. The export reads the coverage of each month of its history part and
+   refuses the request with HTTP 409 `{ "error": "history_not_covered", "uncoveredDays": [...] }` (JSON and CSV
+   alike) when any day is not covered; covered days still open are listed in the JSON `sources[].openDays`.
 
 ## Consequences
 
 - Months older than the workspace retention can be exported with the same column names and the administrator's
   tag heading. Their per-request diagnostics are not kept.
-- Days before history was enabled, and previous-month days missed while the reconciler was stopped for longer
-  than `closeAfterDays` + 1 days into the next month, are not in history. A month enabled mid-way is backfilled
-  from the rows of that month at the first run.
-- An open day in history is at most 60 minutes behind the ledger; the export reads only closed months.
+- The first history run reads the whole current month, so it backfills and covers every day of that month from its
+  first day (and, during the first `closeAfterDays` + 1 days of a month, the previous month's last
+  `closeAfterDays` + 1 days). Earlier days, and previous-month days missed while the reconciler was stopped for
+  longer than that into the next month, are never covered: the export refuses them with `history_not_covered`
+  instead of showing zero. A backfill can only hold what the workspace still keeps (AUD-C5).
+- An open day in history is at most 60 minutes behind the ledger; the export reads history only before the
+  current month, and lists any day of its range that is not yet closed in `sources[].openDays`.
 - History follows the rate card in force when the day closed; a later rate-card correction does not change it.
-- Turning history off stops writes and reads; the container and its documents stay until deleted by hand.
+- A month's coverage document is rewritten until its last day closes, so with `ttlDays` it expires up to a month
+  after the month's first days: an export of a month at the edge of `ttlDays` may report early days as covered
+  after their documents expired (AUD-C7).
 - The committed example (`infra/staged/staged.config.example.json`) shows `audit.chargebackHistory` with
   `enabled: false`, because its `reconciler.timerEnabled` is false (timers stay off until a deployment is verified)
   and enabled history without the timer is refused. Turn both on together.
+
+## Rollback
+
+Set `audit.chargebackHistory.enabled` to false (or remove the section) and rerun Stages 2, 3 and 5. Stage 5
+removes the `RECONCILER_HISTORY_*`, `ADMIN_CHARGEBACK_HISTORY_CONTAINER` and `ADMIN_LOG_RETENTION_DAYS` settings
+(the settings resource replaces the whole set), so the reconciler stops writing and the export reads Log Analytics
+only. The stage deployments are incremental and never delete, so these remain until removed by hand:
+
+- the `chargebackDaily` container with all its documents (daily totals and monthly coverage):
+  `az cosmosdb sql container delete --account-name <account> --resource-group <rg> --database-name <database>
+  --name chargebackDaily`;
+- the three Stage 3 data-plane role assignments scoped to `.../colls/chargebackDaily` (reconciler writer,
+  reconciler reader, admin reader): find them with `az cosmosdb sql role assignment list` and delete each with
+  `az cosmosdb sql role assignment delete --role-assignment-id <id>`;
+- the `ccof-chargeback-history` lease document in the reconciler lease container (harmless; it expires).
+
+Turning history on again resumes at the next run; days of the gap are covered only if that run's current month (or
+previous-month tail) still includes them.

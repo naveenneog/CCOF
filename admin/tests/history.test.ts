@@ -83,18 +83,21 @@ test("a zeroed document (its request moved to another key) adds no row", () => {
 });
 test("merging adds counts, tokens and amounts by key and empties columns history cannot fill", () => {
   const history = historyRows([doc("2026-09-30")], { project: "", group: "", developer: "", model: "", family: "", classification: "", chargeback: "" }, [], { from: "2026-09-01T00:00:00.000Z", to: "2026-10-10T00:00:00.000Z" });
-  const laColumns = ["chargebackId", "projectLabel", "person", "requests", "knownListCcu", "listCcu", "knownListUsd", "listUsd", "inputTokens", "failedRequests", "completeness"];
+  const laColumns = ["chargebackId", "projectLabel", "person", "requests", "knownListCcu", "listCcu", "knownListUsd", "listUsd", "inputTokens", "failedRequests", "completeness", "periodStart", "periodEnd"];
   const la: Doc[] = [
-    { chargebackId: "WBS-1", projectLabel: "G1", person: P1, requests: 3, knownListCcu: "1.5", listCcu: "1.5", knownListUsd: "0.015", listUsd: "0.015", inputTokens: 10, failedRequests: 1, completeness: "complete" },
-    { chargebackId: "WBS-2", projectLabel: "G1", person: P2, requests: 1, knownListCcu: null, listCcu: null, knownListUsd: null, listUsd: null, inputTokens: null, failedRequests: 0, completeness: "unpriced_usage" },
+    { chargebackId: "WBS-1", projectLabel: "G1", person: P1, requests: 3, knownListCcu: "1.5", listCcu: "1.5", knownListUsd: "0.015", listUsd: "0.015", inputTokens: 10, failedRequests: 1, completeness: "complete", periodStart: "2026-10-01T00:00:00Z", periodEnd: "2026-10-10T00:00:00Z" },
+    { chargebackId: "WBS-2", projectLabel: "G1", person: P2, requests: 1, knownListCcu: null, listCcu: null, knownListUsd: null, listUsd: null, inputTokens: null, failedRequests: 0, completeness: "unpriced_usage", periodStart: "2026-10-01T00:00:00Z", periodEnd: "2026-10-10T00:00:00Z" },
   ];
-  const merged = mergeUsageRows(la, laColumns, history);
+  const period = { from: "2026-09-01T00:00:00.000Z", to: "2026-10-10T00:00:00.000Z" };
+  const merged = mergeUsageRows(la, laColumns, history, period);
   assert.deepEqual(merged.columns, laColumns);
   const both = merged.rows.find((r) => r.chargebackId === "WBS-1");
   assert.deepEqual([both?.requests, both?.knownListCcu, both?.listCcu, both?.knownListUsd, both?.inputTokens, both?.failedRequests, both?.completeness], [5, "1.65", "1.65", "0.0165", 1010, null, "complete"]);
   const logsOnly = merged.rows.find((r) => r.chargebackId === "WBS-2");
   assert.deepEqual([logsOnly?.failedRequests, logsOnly?.completeness], [0, "unpriced_usage"]);
-  assert.deepEqual(mergeUsageRows([], null, history).columns, [...HISTORY_COLUMNS]);
+  // Every row of a split export covers the whole export period, not the Log Analytics part.
+  assert.deepEqual(merged.rows.map((r) => [r.periodStart, r.periodEnd]), [[period.from, period.to], [period.from, period.to]]);
+  assert.deepEqual(mergeUsageRows([], null, history, period).columns, [...HISTORY_COLUMNS]);
 });
 
 // ---- export/usage end to end ----
@@ -109,7 +112,9 @@ const APIM = "/subscriptions/3c1d5a0e-8f2b-4c6d-9e1a-7b2f4d8c0a11/resourceGroups
 const HISTORY_ENV = { ADMIN_WORKSPACE_ID: WS, ADMIN_GATEWAY_RESOURCE_ID: APIM, ADMIN_CHARGEBACK_HISTORY_CONTAINER: "chargebackDaily", ADMIN_LOG_RETENTION_DAYS: "30" };
 const disabled = async (): Promise<Capability> => ({ state: "disabled", observedAt: NOW.toISOString() });
 
-function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [doc("2026-09-01"), doc("2026-09-30")]) {
+const SEPTEMBER = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`2026-09-${String(i + 1).padStart(2, "0")}`, "closed"])) as Record<string, "open" | "closed">;
+
+function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [doc("2026-09-01"), doc("2026-09-30")], coverage: Record<string, Record<string, "open" | "closed">> = { "2026-09": SEPTEMBER }) {
   const timespans: string[] = [];
   const reads: Array<{ month: string; fromDay: string; toDay: string }> = [];
   const operations: Operations = {
@@ -125,6 +130,7 @@ function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [
       reads.push({ month, fromDay, toDay });
       return docs.filter((d) => d.month === month && d.day >= fromDay && d.day < toDay);
     },
+    readCoverage: async (month) => coverage[month] ?? null,
   };
   const deps: V3Dependencies = {
     authenticate: async () => ({ oid: "reader", canWrite: false }), projects: null, catalogStore: null, userTagStore: createMemoryUserTagStore(),
@@ -146,7 +152,7 @@ test("the previous month beyond the workspace window is exported from history, w
   assert.equal(header, HISTORY_COLUMNS.map((c) => `"${c === "chargebackId" ? "WBS ID" : c}"`).join(","));
   assert.match(first, /^"WBS-1","G1","00000000-0000-4000-8000-000000000001","4"/);
   const json = await call("export/usage?period=previous&format=json");
-  assert.deepEqual((json.jsonBody as Doc).sources, [{ source: "chargebackHistory", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z" }]);
+  assert.deepEqual((json.jsonBody as Doc).sources, [{ source: "chargebackHistory", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", openDays: [] }]);
 });
 
 test("a range across the boundary reads history before it and Log Analytics after it, and merges the rows", async () => {
@@ -178,4 +184,22 @@ test("filters history cannot apply, a partial-day history range and a missing st
   assert.deepEqual([missing.status, (missing.jsonBody as Doc).error], [503, "chargeback_history_not_configured"]);
   const invalid = setup({ ...HISTORY_ENV, ADMIN_LOG_RETENTION_DAYS: "x" });
   assert.equal((await invalid.call("export/usage?period=previous&format=json")).status, 503);
+});
+
+test("a history range with a day history never covered is refused naming the days; covered days still open are listed", async () => {
+  const partial = { ...SEPTEMBER };
+  for (let d = 1; d <= 14; d++) delete partial[`2026-09-${String(d).padStart(2, "0")}`];
+  const { call } = setup(HISTORY_ENV, [doc("2026-09-20")], { "2026-09": partial });
+  for (const format of ["json", "csv"]) {
+    const refused = await call(`export/usage?period=previous&format=${format}`);
+    assert.deepEqual([refused.status, (refused.jsonBody as Doc).error], [409, "history_not_covered"]);
+    assert.deepEqual((refused.jsonBody as Doc).uncoveredDays, Array.from({ length: 14 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`));
+  }
+  const narrowed = await call("export/usage?period=custom&from=2026-09-15T00:00:00Z&to=2026-10-01T00:00:00Z&format=json");
+  assert.equal(narrowed.status, 200, JSON.stringify(narrowed.jsonBody));
+  const none = setup(HISTORY_ENV, [], {});
+  assert.equal((await none.call("export/usage?period=previous&format=json")).status, 409, "no coverage document: nothing is covered");
+  const open = setup(HISTORY_ENV, undefined, { "2026-09": { ...SEPTEMBER, "2026-09-30": "open" } });
+  const json = await open.call("export/usage?period=previous&format=json");
+  assert.deepEqual((json.jsonBody as { sources: Doc[] }).sources[0].openDays, ["2026-09-30"]);
 });

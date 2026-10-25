@@ -16,6 +16,10 @@ export const OPEN_REWRITE_MINUTES = 60;
 // At most this many documents are written per run, whole days, oldest first (ADR-0044 decision 7); the rest wait for
 // the next run. A first day larger than this is still written whole.
 export const HISTORY_MAX_WRITES_PER_RUN = 1000;
+// One coverage document per month (id COVERAGE_ID, no day): the days history holds, so that a day without usage is
+// told apart from a day history never read (ADR-0044 decision 8).
+export const COVERAGE_SCHEMA = "ccof.chargeback.coverage.v1";
+export const COVERAGE_ID = "coverage";
 
 const DAY_MS = 86_400_000;
 const UTC_INSTANT = /^(\d{4}-\d{2})-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
@@ -67,6 +71,17 @@ export interface ChargebackDailyDocument extends HistoryKey {
   contentHash: string;
 }
 
+// open: written from a whole read, still changing; closed: final (every document of the day closed, or none).
+export type DayState = "open" | "closed";
+
+export interface CoverageDocument {
+  id: typeof COVERAGE_ID;
+  schema: typeof COVERAGE_SCHEMA;
+  month: string;
+  days: Record<string, DayState>;
+  computedAt: string;
+}
+
 // What the reconciler keeps of a stored document to plan the next write; etag, when known, makes the write conditional.
 export interface StoredSummary {
   key: HistoryKey;
@@ -104,6 +119,8 @@ export interface HistoryPlan {
   shrinkRefused: number;
   // Writes left for a later run by the per-run write budget.
   budgetDeferred: number;
+  // The state of each covered day once this plan's writes are done; budget-deferred days are not in it.
+  coverage: Map<string, DayState>;
 }
 
 const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
@@ -233,7 +250,7 @@ const sum = (values: Iterable<{ requests: number }>): number => [...values].redu
 // close); every new, changed or zeroed document of it is refused (closedRefused), so a key that moves after the close
 // can never be counted twice.
 export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stored: ReadonlyMap<string, StoredSummary>, options: PlanOptions): HistoryPlan {
-  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0, budgetDeferred: 0 };
+  const plan: HistoryPlan = { writes: [], loweringCount: 0, unchanged: 0, notDue: 0, closedSkipped: 0, closedRefused: 0, shrinkRefused: 0, budgetDeferred: 0, coverage: new Map() };
   const byDay = new Map<string, { lowering: ChargebackDailyDocument[]; raising: ChargebackDailyDocument[] }>();
   const days = new Map<string, { docs: ChargebackDailyDocument[]; stored: Array<[string, StoredSummary]> }>();
   const dayOf = (day: string) => days.get(day) ?? days.set(day, { docs: [], stored: [] }).get(day)!;
@@ -249,6 +266,7 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
     // Stored open with exactly these totals: only `closed` would change.
     const settled = (doc: ChargebackDailyDocument) => stored.get(doc.id)?.contentHash === totalsHash(doc, false);
     if (group.stored.some(([, s]) => s.closed)) {
+      plan.coverage.set(day, "closed");
       for (const doc of all) {
         if (stored.get(doc.id)?.closed) plan.closedSkipped += 1;
         else if (settled(doc)) raising.push(withClosed(doc, true));
@@ -258,9 +276,11 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
     }
     if (sum(all) < sum(group.stored.map(([, s]) => s))) {
       plan.shrinkRefused += all.length;
+      plan.coverage.set(day, "open");
       continue;
     }
     const closing = isDayClosed(day, options.now, options.closeAfterDays);
+    plan.coverage.set(day, closing && all.every(settled) ? "closed" : "open");
     if (closing && all.every(settled)) {
       raising.push(...all.map((doc) => withClosed(doc, true)));
       continue;
@@ -282,14 +302,29 @@ export function planHistoryWrites(docs: readonly ChargebackDailyDocument[], stor
     const writes = byDay.get(day)!;
     const n = writes.lowering.length + writes.raising.length;
     if (n === 0) continue;
-    if (plan.budgetDeferred > 0 || (count > 0 && count + n > (options.maxWrites ?? Infinity))) plan.budgetDeferred += n;
+    if (plan.budgetDeferred > 0 || (count > 0 && count + n > (options.maxWrites ?? Infinity))) {
+      plan.budgetDeferred += n;
+      plan.coverage.delete(day);
+    }
     else {
       selected.push(writes);
       count += n;
     }
   }
+  for (const day of options.coveredDays) if (!days.has(day)) plan.coverage.set(day, isDayClosed(day, options.now, options.closeAfterDays) ? "closed" : "open");
   plan.writes = selected.flatMap((w) => w.lowering);
   plan.loweringCount = plan.writes.length;
   plan.writes.push(...selected.flatMap((w) => w.raising));
   return plan;
+}
+// The stored coverage with a plan's: new days added, open days closed, a closed day never reopened. Null: no change.
+export function mergeCoverage(stored: Readonly<Record<string, DayState>> | undefined, update: ReadonlyMap<string, DayState>): Record<string, DayState> | null {
+  const days: Record<string, DayState> = { ...stored };
+  let changed = false;
+  for (const [day, state] of [...update].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (days[day] === state || days[day] === "closed") continue;
+    days[day] = state;
+    changed = true;
+  }
+  return changed ? Object.fromEntries(Object.entries(days).sort(([a], [b]) => (a < b ? -1 : 1))) : null;
 }
