@@ -48,7 +48,7 @@ function Invoke-Stage5 {
     # is recorded before anything changes, and the workbook, the console and the history export start there.
     $retentionDays = Get-StgLogRetentionDays $Cfg
     $currentRetention = if ($null -ne $Cfg.audit.workspaceRetentionDays) { (Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.OperationalInsights/workspaces/$($s1.names.logAnalyticsWorkspace)" '2023-09-01').properties.retentionInDays } else { $null }
-    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgRecordedRetentionHeldFrom)
+    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgPreviousRetentionHeldFrom -Cfg $Cfg -Names $s1.names)
     if ($heldFrom) { Write-Host "log retention: the workspace holds rows from $heldFrom (retention raised to $retentionDays days); reports flag earlier periods as retention_truncated" }
     if ($Apply) { $null = Write-StgEvidence 'stage5.retention.json' ([ordered]@{ days = $retentionDays; heldFrom = $heldFrom }) }
     $ctx.P.logRetentionHeldFrom = $heldFrom

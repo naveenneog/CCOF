@@ -80,7 +80,10 @@ come back ([data retention](https://learn.microsoft.com/en-us/azure/azure-monito
 For `now - retention` days after a raise from P to R days at time T, the workspace holds rows only from T - P. Stage 5
 therefore records, before it deploys or changes anything, the instant the workspace holds rows from
 (`Get-StgRetentionHeldFrom`: the later of T - P and an instant recorded at an earlier raise) in
-`evidence/stage5.retention.json` in the state folder, and passes it to:
+`evidence/stage5.retention.json` in the state folder, and passes it to the places below. When that file is absent (the
+state folder was lost, council round 3), Stage 5 takes the earlier instant from the deployment instead: the later of
+the admin app's `ADMIN_LOG_RETENTION_HELD_FROM` and the instant in the deployed workbook's retention cut
+(`Get-StgPreviousRetentionHeldFrom`), so a rerun does not drop it. The instant then goes to:
 
 - the workbook (`retentionHeldFrom`) and the admin app (`ADMIN_LOG_RETENTION_HELD_FROM`, with chargeback history on or off):
   `RetentionTruncated` is true for a period that starts before the later of `now - retention` and that instant
