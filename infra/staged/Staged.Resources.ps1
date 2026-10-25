@@ -442,7 +442,8 @@ function Invoke-Stage2 {
     $s1 = Get-StgStage $Cfg 1
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
-        autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin }
+        autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
+        chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }
     if (-not $Apply) { return $null }
     $actual = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName))
     $v = @()
@@ -450,6 +451,10 @@ function Invoke-Stage2 {
         $m = @($actual | Where-Object { $_.name -ceq $c.name })
         Assert-Stg ($m.Count -eq 1) "container $($c.name) missing"
         Assert-Stg (@($m[0].resource.partitionKey.paths)[0] -ceq $c.partitionKey) "container $($c.name) partition key $(@($m[0].resource.partitionKey.paths)[0])"
+        if ($c.name -ceq 'chargebackDaily') {
+            $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
+            Assert-Stg ($m[0].resource.defaultTtl -eq $(if ($null -eq $ttl) { $null } else { [long]$ttl * 86400 })) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)"
+        }
         $v += [ordered]@{ name = $c.name; partitionKey = $c.partitionKey }
     }
     $docs = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount))
@@ -467,6 +472,7 @@ function Invoke-Stage3 {
     $apim = Get-StgApimIdentity $Cfg
     $params = @{ names = $s1.names; principals = $s1.principals; databaseName = $Cfg.cosmos.databaseName; roleNames = $Cfg.cosmos.roleNames
         syncMode = $Cfg.sync.mode; apimPrincipalId = $apim.principalId; apimResourceId = $apim.id
+        chargebackHistoryEnabled = ($null -ne (Get-StgChargebackHistory $Cfg))
         backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; subscriptionId = $_.subscriptionId; resourceGroup = $_.resourceGroup; accountName = $_.accountName; assignCognitiveServicesUser = ($_.assignCognitiveServicesUser -ne $false) } }) }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage3-grants.bicep' -Name 'stage3-grants' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }

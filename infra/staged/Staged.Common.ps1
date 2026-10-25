@@ -188,6 +188,8 @@ function Get-StgStageInput {
         8 { $input += @{ stage1=$Cfg.stage1; acceptance=$Cfg.acceptance; gateway=$Cfg.gateway; admin=$Cfg.admin } }
         default { throw "invalid stage number $Number" }
     }
+    # ADR-0044: only when configured, so a configuration without it keeps its earlier hashes.
+    if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
     $canonical = ConvertTo-StgCanonical $input | ConvertTo-Json -Depth 100 -Compress
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
 }
@@ -205,6 +207,8 @@ function Get-StgStageDependencies {
         8 { @(1,4,5,7) }
         default { throw "invalid stage number $Number" }
     }
+    # ADR-0044: only when configured, so a configuration without it keeps its earlier hashes.
+    if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
 }
 function Get-StgAllowedFunctionsSubnets {
     <# Subnets the Function Apps may be integrated with at Stage 1 read-back. With a Stage 6 record: its subnet.

@@ -26,6 +26,8 @@ param sync object
 param syncLimitsContainer string = ''
 param reconciler object
 param budgetState object
+@description('audit.chargebackHistory (ADR-0044): enabled and closeAfterDays. Empty: no history settings.')
+param chargebackHistory object = {}
 
 @description('false until the sync identity holds its Graph permission (or delegated-snapshot mode is used); D3 enables the timer in the staged path.')
 param syncTimerEnabled bool
@@ -130,6 +132,12 @@ var reconcilerGuardSettings = reconcilerGuard == null ? {} : {
   RECONCILER_PROJECTION_MINUTES: string(reconcilerGuard.projectionMinutes)
 }
 
+// ADR-0044: chargeback history, written only when audit.chargebackHistory.enabled (both settings or neither).
+var reconcilerHistorySettings = (chargebackHistory.?enabled ?? false) ? {
+  RECONCILER_HISTORY_CONTAINER: 'chargebackDaily'
+  RECONCILER_HISTORY_CLOSE_AFTER_DAYS: string(chargebackHistory.closeAfterDays)
+} : {}
+
 resource resolverSite 'Microsoft.Web/sites@2024-04-01' existing = {
   name: names.apps.resolver.functionApp
 }
@@ -157,7 +165,7 @@ resource syncAppSettings 'Microsoft.Web/sites/config@2024-04-01' = {
 resource reconcilerAppSettings 'Microsoft.Web/sites/config@2024-04-01' = {
   parent: reconcilerSite
   name: 'appsettings'
-  properties: union(reconcilerSettings, reconcilerGuardSettings)
+  properties: union(reconcilerSettings, reconcilerGuardSettings, reconcilerHistorySettings)
 }
 
 // infra/poc/resolver-auth.ps1, New-ResolverAuthSettingsBody: v2 issuer, the resolver API audience,

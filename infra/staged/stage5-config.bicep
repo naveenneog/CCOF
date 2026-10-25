@@ -36,6 +36,8 @@ param sync object
 param reconciler object
 param budgetState object = { graceSeconds: 900, hardLimitSeconds: 3600 }
 param syncTimerEnabled bool = false
+@description('audit.chargebackHistory (ADR-0044): enabled, closeAfterDays, ttlDays, logRetentionDays. Empty: off.')
+param chargebackHistory object = {}
 
 param resolverApiAppId string
 param apimIdentityAppId string
@@ -85,6 +87,7 @@ module settings '../quickstart/modules/app-settings.bicep' = {
     reconciler: reconciler
     budgetState: budgetState
     syncTimerEnabled: syncTimerEnabled
+    chargebackHistory: chargebackHistory
     resolverApiAppId: resolverApiAppId
     apimIdentityAppId: apimIdentityAppId
     apimPrincipalId: apimPrincipalId
@@ -136,10 +139,15 @@ resource adminInsights 'Microsoft.Insights/components@2020-02-02' existing = if 
 // Admin app settings (docs/ADMIN-V3.md Settings, docs/archive/ADMIN-QUICK-STAGES.md 4g). One shared
 // workspace: the reconciler logs through its diagnostic setting (site id), the admin audit through its
 // Application Insights component.
+// Chargeback history (ADR-0044): the export reads months before the workspace retention from chargebackDaily.
+var adminHistorySettings = (chargebackHistory.?enabled ?? false) ? {
+  ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'
+  ADMIN_LOG_RETENTION_DAYS: string(chargebackHistory.logRetentionDays)
+} : {}
 resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnabled) {
   parent: adminSite
   name: 'appsettings'
-  properties: {
+  properties: union({
     AzureWebJobsStorage__accountName: names.apps.?admin.?storageAccount ?? ''
     AzureWebJobsStorage__credential: 'managedidentity'
     APPLICATIONINSIGHTS_CONNECTION_STRING: adminInsights!.properties.ConnectionString
@@ -168,7 +176,7 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     ADMIN_CLIENT_ID: admin.?clientId ?? ''
     ADMIN_GATEWAY_URL: admin.?gatewayUrl ?? ''
     ADMIN_PROJECT_HEADER: admin.?projectHeader ?? 'x-ccof-project'
-  }
+  }, adminHistorySettings)
 }
 
 output gatewayUrl string = '${api.outputs.gatewayUrl}/${apim.apiPath}'

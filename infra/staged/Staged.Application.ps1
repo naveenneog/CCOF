@@ -68,6 +68,7 @@ function Invoke-Stage5 {
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
+        chargebackHistory = (Get-StgChargebackHistory $Cfg) ?? @{}
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
