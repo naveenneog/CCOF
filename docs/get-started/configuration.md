@@ -19,7 +19,7 @@ invalid ones before anything is created. All values on these pages are hypotheti
 | [Foundry, network, API Management, Cosmos DB](configuration-resources.md) | Create new and reuse existing, as JSON |
 | [Reference: target, Stage 1, network, Cosmos DB, API Management, backends](configuration-reference.md) | Every key: required, template value, allowed values, reader |
 | [Reference: Entra, groups, client](configuration-reference-2.md) | Same, for these sections |
-| [Reference: resolver, sync, reconciler, gateway, reports](configuration-reference-3.md) | Same, for these sections |
+| [Reference: resolver, sync, reconciler, gateway, reports, audit](configuration-reference-3.md) | Same, for these sections |
 
 ## Choices
 

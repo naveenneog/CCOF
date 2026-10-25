@@ -1,4 +1,4 @@
-# Configuration reference: resolver, sync, reconciler, gateway, reports
+# Configuration reference: resolver, sync, reconciler, gateway, reports, audit
 
 Part of the [configuration reference](configuration.md). Every key of these sections in
 [staged.config.example.json](../../infra/staged/staged.config.example.json), with the columns of the
@@ -81,6 +81,24 @@ Read by [infra/gateway/config.ts](../../infra/gateway/config.ts) (schema: `gatew
 | `rateCard.path` | No | `config/rate-card.json` | Price list, relative to the repository | `Staged.Common.ps1` |
 | `rateCard.contractSchedulePath` | No | `config/contract-schedule.json` | Contract schedule file | `Staged.Common.ps1` |
 
+## Audit archive
+
+Long-term copy of every gateway request log ([ADR-0043](../adr/0043-long-term-audit-archive.md),
+[operate: audit archive](../operate/audit-archive.md)). Read by [Staged.Audit.ps1](../../infra/staged/Staged.Audit.ps1)
+and deployed by Stage 5. An absent `audit` section, or `audit.archive.enabled: false`, deploys nothing; other keys
+under `audit` belong to other features and are not checked here.
+
+| Key | Req | Template | Allowed values and effect | Read by |
+| --- | --- | --- | --- | --- |
+| `audit.archive.enabled` | No | `true` | JSON boolean; `true` creates the archive account and the diagnostic setting `ccof-gateway-archive` | `Staged.Audit.ps1` |
+| `audit.archive.retentionDays` | No | `2555` | Whole number 1-36500: a lifecycle rule deletes log blobs that many days after their last write; `null` keeps them | `stage5-audit-archive.bicep` |
+| `audit.archive.immutabilityDays` | No | `null` | Whole number 1-146000, at most `retentionDays`: an unlocked time-based retention policy on both log containers; `null` sets none | `stage5-audit-archive.bicep` |
+| `audit.archive.storageSku` | No | `Standard_LRS` | `Standard_LRS`, `Standard_ZRS`, `Standard_GRS`, `Standard_RAGRS`, `Standard_GZRS` or `Standard_RAGZRS` | `stage5-audit-archive.bicep` |
+| `audit.workspaceRetentionDays` | No | absent | Whole number 30-730: Stage 5 sets the Log Analytics workspace retention; absent leaves it at `stage1.retentionInDays` | `Staged.Audit.ps1` |
+
+`audit.archive.coolAfterDays` and `audit.archive.archiveAfterDays` are refused: the logs are append blobs, which
+lifecycle management cannot move to Cool or Archive ([UNKNOWNS](../UNKNOWNS.md) AUD-A5). Changing any `audit` key
+changes the Stage 5 configuration hash, so Stage 5 runs again; Stage 1 is not affected.
 ## Reports, admin and acceptance
 
 | Key | Req | Template | Allowed values and effect | Read by |
