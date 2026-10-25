@@ -6,6 +6,9 @@ import { readFileSync } from "node:fs";
 import type { LeaseDocument, LeaseStore } from "../../src/reconciler/lease.ts";
 import { LEDGER_COLUMNS } from "../../src/reconciler/ledger.ts";
 import type { AggregateBudgetStateDocument, BudgetStateDocument } from "../../src/reconciler/documents.ts";
+import { storedSummaryOf } from "../../src/reconciler/history.ts";
+import type { ChargebackDailyDocument } from "../../src/reconciler/history.ts";
+import type { HistoryStore } from "../../src/reconciler/history-run.ts";
 import type { RunDependencies } from "../../src/reconciler/run.ts";
 
 let etagCounter = 0;
@@ -79,6 +82,28 @@ export interface FakeAzureOptions {
   // Fail the nth state write (1-based) with this error.
   failWrite?: { at: number; error: unknown };
   failProjects?: unknown;
+  // Chargeback history (ADR-0044); absent: the dependency is not wired.
+  history?: MemoryHistory;
+}
+
+// An in-memory chargeback history container, partitioned by month.
+export class MemoryHistory implements HistoryStore {
+  readonly docs = new Map<string, ChargebackDailyDocument>();
+  readonly reads: string[] = [];
+  readonly writes: ChargebackDailyDocument[] = [];
+  failWrite: unknown;
+
+  async readSummaries(month: string) {
+    this.reads.push(month);
+    const docs = [...this.docs.values()].filter((d) => d.month === month);
+    return new Map(docs.map((d) => [d.id, storedSummaryOf(d)]));
+  }
+
+  async write(doc: ChargebackDailyDocument) {
+    if (this.failWrite !== undefined) throw this.failWrite;
+    this.writes.push(structuredClone(doc));
+    this.docs.set(doc.id, structuredClone(doc));
+  }
 }
 
 export class FakeAzure {
@@ -88,7 +113,7 @@ export class FakeAzure {
   readonly budgetStates: BudgetStateDocument[] = [];
   readonly aggregateStates: AggregateBudgetStateDocument[] = [];
   private writes = 0;
-  private readonly options: FakeAzureOptions;
+  readonly options: FakeAzureOptions;
 
   constructor(options: FakeAzureOptions) {
     this.options = options;
@@ -119,6 +144,7 @@ export class FakeAzure {
       },
       writeBudgetState: async (doc) => this.write(() => this.budgetStates.push(structuredClone(doc))),
       writeAggregateState: async (doc) => this.write(() => this.aggregateStates.push(structuredClone(doc))),
+      ...(this.options.history ? { history: this.options.history } : {}),
     };
   }
 

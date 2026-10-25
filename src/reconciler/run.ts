@@ -13,6 +13,9 @@ import { LedgerReadError, buildLedgerQuery, parseLedgerResponse } from "./ledger
 import type { LedgerAnswer } from "./ledger.ts";
 import { budgetPeriodAt } from "./period.ts";
 import type { BudgetPeriod } from "./period.ts";
+import type { HistoryRow } from "./history.ts";
+import { runHistoryStep } from "./history-run.ts";
+import type { HistoryLine, HistoryStore } from "./history-run.ts";
 import { classifyRow } from "./price-rows.ts";
 import { reconcile } from "./reconcile.ts";
 import type { ReconcileResult } from "./reconcile.ts";
@@ -30,6 +33,8 @@ export interface RunDependencies {
   queryLedger(query: string, timespan: string): Promise<LedgerAnswer>;
   writeBudgetState(doc: BudgetStateDocument): Promise<void>;
   writeAggregateState(doc: AggregateBudgetStateDocument): Promise<void>;
+  // Chargeback history (ADR-0044); used only with the history settings.
+  history?: HistoryStore;
 }
 
 export interface RunContext {
@@ -97,6 +102,7 @@ export function settingsFailure(problems: readonly SettingProblem[], context: Ru
 interface Planned {
   registry: Registry;
   result: ReconcileResult;
+  historyRows: HistoryRow[];
 }
 
 interface RunClock {
@@ -112,16 +118,17 @@ async function readAndCompute(settings: ReconcilerSettings, assets: RunAssets, d
   const t1 = now().getTime();
   const query = await step("ledger_query_invalid", async () => buildLedgerQuery(assets.ledgerKql, period, settings.gatewayResourceId));
   const answer = await step("ledger_read_failed", () => deps.queryLedger(query, `${period.start.toISOString()}/${period.end.toISOString()}`));
-  const rows = await step("ledger_read_failed", async () =>
-    parseLedgerResponse(answer.body, settings.ledgerMaxRows).map((row) => classifyRow(row, period, assets.rateCard, assets.schedule)),
+  const historyRows = await step("ledger_read_failed", async () =>
+    parseLedgerResponse(answer.body, settings.ledgerMaxRows).map((row) => ({ row, classified: classifyRow(row, period, assets.rateCard, assets.schedule) })),
   );
+  const rows = historyRows.map((h) => h.classified);
   timings.registryReadMs = t1 - t0;
   timings.ledgerReadMs = now().getTime() - t1;
   // Null: a fresh answer. A number: the query API served a cached answer that many seconds old (WP-E2E G6).
   timings.ledgerResponseAgeSeconds = answer.responseAgeSeconds;
   const registry = readRegistry(projects, entitlements);
   const result = reconcile({ registry, rows, rateCard: assets.rateCard, contractScheduleVersion: assets.schedule.version, period, computedAt, validUntil, ...(settings.guard ? { guard: settings.guard } : {}) });
-  return { registry, result };
+  return { registry, result, historyRows };
 }
 
 // Writes every state with bounded concurrency; the lease is checked before
@@ -194,6 +201,7 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
   let summary: RunLine;
   let planned: Planned | undefined;
   let written = 0;
+  let history: HistoryLine = {};
   try {
     planned = await readAndCompute(settings, assets, deps, { period, computedAt, validUntil }, timings, context.now);
     const { result } = planned;
@@ -208,6 +216,7 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
     } finally {
       timings.writeMs = context.now().getTime() - writeStart;
     }
+    if (settings.history) history = await runHistoryStep(historyInput(settings, settings.history.closeAfterDays, assets, deps, planned, period, lease, context.now()));
     summary = { runId, outcome: "written", reason: null };
   } catch (error) {
     const failure = error instanceof Failure ? error : new Failure("run_failed", error);
@@ -215,7 +224,15 @@ export async function runReconciler(settings: ReconcilerSettings, assets: RunAss
   } finally {
     await lease.release().catch(() => false);
   }
-  return finish({ ...summary, ...(planned ? describe(planned) : {}), statesWritten: written });
+  return finish({ ...summary, ...(planned ? describe(planned) : {}), statesWritten: written, ...history });
+}
+
+function historyInput(settings: ReconcilerSettings, closeAfterDays: number, assets: RunAssets, deps: RunDependencies, planned: Planned, period: BudgetPeriod, lease: Lease, now: Date) {
+  return {
+    closeAfterDays, rows: planned.historyRows, period, now, rateCard: assets.rateCard, schedule: assets.schedule, ledgerKql: assets.ledgerKql,
+    gatewayResourceId: settings.gatewayResourceId, ledgerMaxRows: settings.ledgerMaxRows, writeConcurrency: settings.writeConcurrency,
+    store: deps.history, lease, queryLedger: (query: string, timespan: string) => deps.queryLedger(query, timespan),
+  };
 }
 
 function describe({ result }: Planned): Record<string, unknown> {
