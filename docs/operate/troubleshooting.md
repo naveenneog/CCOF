@@ -57,6 +57,7 @@ Export responses ([admin/src/export.ts](../../admin/src/export.ts), [admin/src/h
 | `400` `backend_filter_not_in_history` | A `backend` filter on a range with a history part; history has no backend | Remove `backend`, or keep the range inside the months Log Analytics holds |
 | `400` `unknown_parameter` | A parameter the export does not take, such as `tags`, `offset` or `limit` (all exports) | Remove it |
 | `409` `history_not_covered` with `uncoveredDays` | Days the reconciler never recorded: before the month history was turned on, while the reconciler was stopped, or not yet written because of the write limit | Narrow the range to covered days. Days left by the write limit are covered by a later run: retry then |
+| `409` `history_expired` with `expiredDays` and `expiresAt` | With `audit.chargebackHistory.ttlDays`, a month's documents expire `ttlDays` days after the month ends; the export refuses its days from one day before `expiresAt` | Narrow the range to later months. The expired totals cannot be recovered; the [audit archive](audit-archive.md), if it was on, still holds the request log |
 | `503` `chargeback_history_not_configured` | The admin app has the history container setting but no Cosmos DB connection | Rerun Stage 5, then Stage 7, from the deployment's checkout |
 | `503` `chargeback_history_settings_invalid` | `ADMIN_CHARGEBACK_HISTORY_CONTAINER` is not a valid container name, or `ADMIN_LOG_RETENTION_DAYS` is not a whole number 1-4383 | Rerun Stage 5; it writes both. Do not edit them by hand |
 

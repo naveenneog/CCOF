@@ -26,7 +26,7 @@ param sync object
 param syncLimitsContainer string = ''
 param reconciler object
 param budgetState object
-@description('audit.chargebackHistory (ADR-0044): enabled and closeAfterDays. Empty: no history settings.')
+@description('audit.chargebackHistory (ADR-0044): enabled, closeAfterDays and ttlDays. Empty: no history settings.')
 param chargebackHistory object = {}
 
 @description('false until the sync identity holds its Graph permission (or delegated-snapshot mode is used); D3 enables the timer in the staged path.')
@@ -132,11 +132,12 @@ var reconcilerGuardSettings = reconcilerGuard == null ? {} : {
   RECONCILER_PROJECTION_MINUTES: string(reconcilerGuard.projectionMinutes)
 }
 
-// ADR-0044: chargeback history, written only when audit.chargebackHistory.enabled (both settings or neither).
-var reconcilerHistorySettings = (chargebackHistory.?enabled ?? false) ? {
+// ADR-0044: chargeback history, written only when audit.chargebackHistory.enabled (both settings or neither); with
+// ttlDays, its time to live, which the reconciler counts from the end of each document's month (decision 9).
+var reconcilerHistorySettings = (chargebackHistory.?enabled ?? false) ? union({
   RECONCILER_HISTORY_CONTAINER: 'chargebackDaily'
   RECONCILER_HISTORY_CLOSE_AFTER_DAYS: string(chargebackHistory.closeAfterDays)
-} : {}
+}, chargebackHistory.?ttlDays == null ? {} : { RECONCILER_HISTORY_TTL_DAYS: string(chargebackHistory.ttlDays) }) : {}
 
 resource resolverSite 'Microsoft.Web/sites@2024-04-01' existing = {
   name: names.apps.resolver.functionApp

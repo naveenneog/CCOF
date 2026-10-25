@@ -37,10 +37,12 @@ retention**: `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays
   with `history_not_covered`, not shown as zero. The same applies to days the reconciler never read because it was
   stopped. The first run holds only what the workspace still keeps: with the minimum 30-day retention, a first run
   on the 31st of a 31-day month may find part of day 1 already deleted.
-- **How long.** `ttlDays: null` keeps documents until someone deletes them; a number deletes each day's document
-  that many days after its last write. A month's coverage record (below) is rewritten until the month's last day
-  closes, so it can outlive its first days by up to a month: keep `ttlDays` about a month longer than the oldest
-  period you export.
+- **How long.** `ttlDays: null` keeps documents until someone deletes them. With a number, every document of a month
+  expires at one instant, `ttlDays` days after the month ends (each document carries its own `ttl` counted to that
+  instant), and the month's coverage record keeps that instant in `expiresAt`
+  ([ADR-0044 decision 9](../adr/0044-chargeback-history-in-cosmos.md)). From one day before it, the export refuses
+  the month's days with `history_expired` (below). A changed `ttlDays` applies to documents written after the
+  change; a closed month keeps the expiry it was written with.
 
 ## Which export uses it
 
@@ -72,6 +74,9 @@ closed day never becomes open again. Before reading, the export checks every day
   returned. Choose a range of covered days (`period=custom` with whole UTC days). The only other record of older
   days is the gateway request log in the [audit archive](audit-archive.md), if it was on. Other export errors:
   [troubleshooting](troubleshooting.md#chargeback-history).
+- **A covered day whose documents expired**, or expire within one day, refuses the whole request with HTTP 409, for
+  example `{ "error": "history_expired", "expiredDays": ["2026-07-01"], "expiresAt": "2027-09-05T00:00:00.000Z" }`
+  (a hypothetical `ttlDays` of 400). This happens only with `ttlDays`. Choose later months.
 - **A covered day not yet closed** is exported, and the JSON lists it in the `openDays` of the `chargebackHistory`
   entry in `sources`, for example
   `"sources": [{ "source": "chargebackHistory", "from": "2026-09-01T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z", "openDays": [] }, ...]`.

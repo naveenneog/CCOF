@@ -26,6 +26,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 1. **Container** `chargebackDaily`, partition key `/month` (`YYYY-MM`), created by Stage 2 only when
    `audit.chargebackHistory.enabled` is true. It indexes only `day`, `chargebackId`, `projectId`, `classification`,
    `personId` and `model`. `ttlDays` sets the container's `defaultTtl` (days x 86,400); null means no expiry.
+   With `ttlDays`, each document carries its own `ttl` so that a whole month expires at one instant (decision 9).
 2. **Document**: one per UTC day, chargeback ID, project (group), classification, person and model. `id` is the
    SHA-256 of those six values. Fields: request counts (priced, partial, unpriced, unattributed), token sums and
    known-request counts per category, `listCcu` (list price, as the report) and `contractCcu` (the budget basis),
@@ -65,7 +66,7 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    for both (a slow Cosmos holds the next budget run) and a separate timer function (a second schedule and
    identity to deploy for the same rows the run already read).
 4. **Settings**: reconciler `RECONCILER_HISTORY_CONTAINER` and `RECONCILER_HISTORY_CLOSE_AFTER_DAYS` (both or
-   neither; absent: off). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
+   neither; absent: off), and `RECONCILER_HISTORY_TTL_DAYS` (`ttlDays`, only when set; decision 9). Admin `ADMIN_CHARGEBACK_HISTORY_CONTAINER` (absent: off) and `ADMIN_LOG_RETENTION_DAYS`.
    Configuration `audit.chargebackHistory { enabled, closeAfterDays, ttlDays }`, validated by the staged driver.
    An absent section, or `{ "enabled": false }` with no other key, leaves every stage hash unchanged; any other
    present value (including `enabled: false` beside other keys) is part of the Stage 2, 3 and 5 hashes.
@@ -95,6 +96,23 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
    run line counts `historyCoverageWritten`. The export reads the coverage of each month of its history part and
    refuses the request with HTTP 409 `{ "error": "history_not_covered", "uncoveredDays": [...] }` (JSON and CSV
    alike) when any day is not covered; covered days still open are listed in the JSON `sources[].openDays`.
+9. **Expiry** (council round 2, 2026-10-26). Cosmos DB expires an item `ttl` seconds after its last write
+   ([time to live](https://learn.microsoft.com/en-us/azure/cosmos-db/time-to-live), retrieved 2026-10-26). With
+   `defaultTtl` alone, each document of a day expired `ttlDays` after its own last write, while the coverage record
+   was rewritten later, so the coverage could list a day whose documents had expired and the export would return
+   incomplete totals as covered. Chosen: one expiry per month. Every document written with `ttlDays` carries
+   `ttl` = the seconds from the run's time to the first instant of the next month plus `ttlDays` days (capped at
+   2,147,483,647, the largest `ttl`), so all documents of a month, whenever written, expire together. The coverage
+   record carries `ttl: -1` (never expires) and `expiresAt`, the earliest instant a document of the month can
+   expire: the minimum of what every write set, so a lowered `ttlDays` lowers it and a raised one does not raise
+   it; for documents written while `ttlDays` was null (they take `defaultTtl` from their last write) it assumes the
+   month's start plus `ttlDays`; with `ttlDays` null it is null (Stage 2 then removes `defaultTtl`, and nothing
+   expires). The export refuses, before reading, every day of its history part whose month's `expiresAt` is
+   within one day of now (`HISTORY_EXPIRY_MARGIN_MS`; items stop being returned as soon as they expire) with HTTP
+   409 `{ "error": "history_expired", "expiredDays": [...], "expiresAt": "..." }`. Rejected: per-day closing times
+   in the coverage with the expiry computed from `defaultTtl` (open days are rewritten at different times, and a
+   changed `defaultTtl` applies at once to every document, so the admin app would need the current value and every
+   document's last write); per-document expiry checks at read time (an expired document is simply absent).
 
 ## Consequences
 
@@ -108,9 +126,10 @@ Option 3 is chosen for reports; ADR-0043 is the raw audit trail. They are indepe
 - An open day in history is at most 60 minutes behind the ledger; the export reads history only before the
   current month, and lists any day of its range that is not yet closed in `sources[].openDays`.
 - History follows the rate card in force when the day closed; a later rate-card correction does not change it.
-- A month's coverage document is rewritten until its last day closes, so with `ttlDays` it expires up to a month
-  after the month's first days: an export of a month at the edge of `ttlDays` may report early days as covered
-  after their documents expired (AUD-C7).
+- With `ttlDays`, a month is kept `ttlDays` days after it ends (decision 9), then refused as `history_expired` from
+  one day before that. A changed `ttlDays` applies to documents written after the change: a closed month is never
+  written again, so it keeps the expiry it was written with; to delete older history sooner, delete it by hand
+  (AUD-C7).
 - The committed example (`infra/staged/staged.config.example.json`) shows `audit.chargebackHistory` with
   `enabled: false`, because its `reconciler.timerEnabled` is false (timers stay off until a deployment is verified)
   and enabled history without the timer is refused. Turn both on together.

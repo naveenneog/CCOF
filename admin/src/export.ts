@@ -97,7 +97,11 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   const filters = { ...readChargebackFilters(rest, deps.now(), cfg.ok ? cfg.value.maxQueryDays : 62), offset: 0, limit: EXPORT_ROWS_MAX };
   const split = historySplit(filters.period, filters.backend, deps);
   // ADR-0044 decision 8: a day history never covered is refused, never exported as zero usage.
-  const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history) : null;
+  const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history, deps.now()) : null;
+  // ADR-0044 decision 9: a day whose documents may have expired is refused, never exported with what is left.
+  if (coverage && coverage.expired.length) {
+    return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_expired", expiredDays: coverage.expired, expiresAt: coverage.expiresAt } };
+  }
   if (coverage && coverage.uncovered.length) {
     return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_not_covered", uncoveredDays: coverage.uncovered } };
   }

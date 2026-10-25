@@ -163,7 +163,20 @@ test("without the history settings there is no history; with both it is read", (
   assert.ok(without.ok && without.settings.history === undefined);
   const withHistory = readReconcilerSettings(validSettings(HISTORY));
   assert.ok(withHistory.ok);
-  if (withHistory.ok) assert.deepEqual(withHistory.settings.history, { container: "chargebackDaily", closeAfterDays: 2 });
+  if (withHistory.ok) assert.deepEqual(withHistory.settings.history, { container: "chargebackDaily", closeAfterDays: 2, ttlDays: null });
+  const withTtl = readReconcilerSettings(validSettings({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "400" }));
+  assert.ok(withTtl.ok && withTtl.settings.history?.ttlDays === 400);
+});
+
+test("the history time to live is optional, 1-24855 whole days, and only with the history settings", () => {
+  const problems = (overrides: Record<string, string>) => {
+    const result = readReconcilerSettings(validSettings(overrides));
+    return result.ok ? [] : result.problems;
+  };
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24855" }), []);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "0" }), [{ setting: "RECONCILER_HISTORY_TTL_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24856" }), [{ setting: "RECONCILER_HISTORY_TTL_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ RECONCILER_HISTORY_TTL_DAYS: "400" }).map((p) => p.setting).sort(), ["RECONCILER_HISTORY_CLOSE_AFTER_DAYS", "RECONCILER_HISTORY_CONTAINER"]);
 });
 
 test("history settings are refused half-set, out of range, or naming another reconciler container", () => {

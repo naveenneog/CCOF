@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { HISTORY_COLUMNS, historyBoundary, historyRows, mergeUsageRows, readHistorySettings, splitRange } from "../src/history.ts";
+import type { Container } from "@azure/cosmos";
+import { HISTORY_COLUMNS, createCosmosHistoryStore, historyBoundary, historyRows, mergeUsageRows, readHistorySettings, splitRange } from "../src/history.ts";
 import type { HistoryDoc, HistoryStore } from "../src/history.ts";
 import { handleV3Request } from "../src/v3.ts";
 import type { V3Dependencies } from "../src/v3.ts";
@@ -114,7 +115,7 @@ const disabled = async (): Promise<Capability> => ({ state: "disabled", observed
 
 const SEPTEMBER = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`2026-09-${String(i + 1).padStart(2, "0")}`, "closed"])) as Record<string, "open" | "closed">;
 
-function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [doc("2026-09-01"), doc("2026-09-30")], coverage: Record<string, Record<string, "open" | "closed">> = { "2026-09": SEPTEMBER }) {
+function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [doc("2026-09-01"), doc("2026-09-30")], coverage: Record<string, Record<string, "open" | "closed">> = { "2026-09": SEPTEMBER }, expires: Record<string, string> = {}) {
   const timespans: string[] = [];
   const reads: Array<{ month: string; fromDay: string; toDay: string }> = [];
   const operations: Operations = {
@@ -130,7 +131,7 @@ function setup(env: Record<string, string> = HISTORY_ENV, docs: HistoryDoc[] = [
       reads.push({ month, fromDay, toDay });
       return docs.filter((d) => d.month === month && d.day >= fromDay && d.day < toDay);
     },
-    readCoverage: async (month) => coverage[month] ?? null,
+    readCoverage: async (month) => (coverage[month] ? { days: coverage[month], expiresAt: expires[month] ?? null } : null),
   };
   const deps: V3Dependencies = {
     authenticate: async () => ({ oid: "reader", canWrite: false }), projects: null, catalogStore: null, userTagStore: createMemoryUserTagStore(),
@@ -202,4 +203,27 @@ test("a history range with a day history never covered is refused naming the day
   const open = setup(HISTORY_ENV, undefined, { "2026-09": { ...SEPTEMBER, "2026-09-30": "open" } });
   const json = await open.call("export/usage?period=previous&format=json");
   assert.deepEqual((json.jsonBody as { sources: Doc[] }).sources[0].openDays, ["2026-09-30"]);
+});
+
+test("a history range with a day whose documents expired, or expire within a day, is refused naming the days", async () => {
+  const september = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
+  for (const expiresAt of ["2026-10-19T00:00:00.000Z", "2026-10-20T06:00:00.000Z"]) {
+    const { call } = setup(HISTORY_ENV, undefined, { "2026-09": SEPTEMBER }, { "2026-09": expiresAt });
+    for (const format of ["json", "csv"]) {
+      const refused = await call(`export/usage?period=previous&format=${format}`);
+      assert.deepEqual([refused.status, (refused.jsonBody as Doc).error, (refused.jsonBody as Doc).expiresAt], [409, "history_expired", expiresAt], expiresAt);
+      assert.deepEqual((refused.jsonBody as Doc).expiredDays, september);
+    }
+  }
+  const later = setup(HISTORY_ENV, undefined, { "2026-09": SEPTEMBER }, { "2026-09": "2026-10-20T12:00:01.000Z" });
+  assert.equal((await later.call("export/usage?period=previous&format=json")).status, 200, "more than a day before expiry");
+});
+
+test("the Cosmos store reads the coverage's days and expiry; a coverage written before expiry was recorded has none", async () => {
+  const stored: Record<string, unknown> = { "2026-09": { days: SEPTEMBER, expiresAt: "2027-10-06T00:00:00.000Z" }, "2026-08": { days: SEPTEMBER } };
+  const container = { item: (id: string, month: string) => ({ read: async () => ({ resource: id === "coverage" ? stored[month] : undefined }) }) } as unknown as Container;
+  const store = createCosmosHistoryStore(container);
+  assert.deepEqual(await store.readCoverage("2026-09"), { days: SEPTEMBER, expiresAt: "2027-10-06T00:00:00.000Z" });
+  assert.deepEqual(await store.readCoverage("2026-08"), { days: SEPTEMBER, expiresAt: null });
+  assert.equal(await store.readCoverage("2026-07"), null);
 });

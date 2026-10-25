@@ -274,3 +274,58 @@ test("coverage is not written when a history write fails", async () => {
   await run(pilot({ history }), "2026-10-11T13:00:00Z");
   assert.equal(history.coverage.size, 0);
 });
+
+// ---- expiry (ADR-0044 decision 9): a month's documents expire together, and the coverage says when ----
+const TTL = { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "400" };
+const OCTOBER_EXPIRES = Date.parse("2026-11-01T00:00:00Z") + 400 * 86_400_000;
+const expiryOf = (writtenAt: string, ttl: number | undefined) => Date.parse(writtenAt) + (ttl ?? NaN) * 1000;
+
+test("with ttlDays every document of a month expires ttlDays after the month ends, whenever it is written", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  azure.options.ledger = ledgerBody([charged("2026-10-11T12:00:00.0000000Z"), charged("2026-10-11T12:30:00.0000000Z"), charged("2026-10-10T12:00:00.0000000Z")]);
+  await run(azure, "2026-10-11T14:30:00Z", TTL);
+  assert.deepEqual(history.writes.map((d) => d.ttl), [Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T13:00:00Z")) / 1000), Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T13:00:00Z")) / 1000), Math.round((OCTOBER_EXPIRES - Date.parse("2026-10-11T14:30:00Z")) / 1000)]);
+  assert.deepEqual([expiryOf("2026-10-11T13:00:00Z", history.writes[0].ttl), expiryOf("2026-10-11T14:30:00Z", history.writes[2].ttl)], [OCTOBER_EXPIRES, OCTOBER_EXPIRES]);
+  const coverage = history.coverage.get("2026-10");
+  assert.deepEqual([coverage?.expiresAt, coverage?.ttl], [new Date(OCTOBER_EXPIRES).toISOString(), -1], "the coverage records the expiry and never expires itself");
+});
+
+test("without ttlDays no document carries a time to live and the coverage has no expiry", async () => {
+  const history = new MemoryHistory();
+  await run(pilot({ history }), "2026-10-11T13:00:00Z");
+  assert.deepEqual([history.writes.every((d) => d.ttl === undefined), history.coverage.get("2026-10")?.expiresAt, history.coverage.get("2026-10")?.ttl], [true, null, undefined]);
+});
+
+test("the coverage keeps the earliest expiry of any write: a lower ttlDays lowers it, a higher one does not raise it", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  await run(azure, "2026-10-11T13:01:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "500" });
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, new Date(OCTOBER_EXPIRES).toISOString());
+  const lowered = await run(azure, "2026-10-11T13:02:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "300" });
+  assert.deepEqual([history.coverage.get("2026-10")?.expiresAt, lowered.runLine.historyCoverageWritten], [new Date(OCTOBER_EXPIRES - 100 * 86_400_000).toISOString(), 1], "rewritten although no day changed");
+});
+
+test("ttlDays set after documents were written without one: the coverage assumes they expire ttlDays after the month starts", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z");
+  await run(azure, "2026-10-11T13:01:00Z", TTL);
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, new Date(Date.parse("2026-10-01T00:00:00Z") + 400 * 86_400_000).toISOString());
+});
+
+test("ttlDays removed (the container no longer expires anything): the coverage expiry is cleared", async () => {
+  const history = new MemoryHistory();
+  const azure = pilot({ history });
+  await run(azure, "2026-10-11T13:00:00Z", TTL);
+  await run(azure, "2026-10-11T13:01:00Z");
+  assert.equal(history.coverage.get("2026-10")?.expiresAt, null);
+});
+
+test("a time to live longer than Cosmos DB holds is capped, and the coverage records the capped expiry", async () => {
+  const history = new MemoryHistory();
+  await run(pilot({ history }), "2026-10-11T13:00:00Z", { ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24855" });
+  assert.deepEqual([history.writes[0].ttl, history.coverage.get("2026-10")?.expiresAt], [2_147_483_647, new Date(Date.parse("2026-10-11T13:00:00Z") + 2_147_483_647_000).toISOString()]);
+});

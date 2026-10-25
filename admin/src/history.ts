@@ -25,10 +25,16 @@ export interface HistoryDoc {
 export interface HistoryStore {
   // The documents of one month (the partition) with fromDay <= day < toDay.
   listDays(month: string, fromDay: string, toDay: string): Promise<HistoryDoc[]>;
-  // The month's coverage (src/reconciler/history.ts CoverageDocument.days): the days history holds, open or closed.
-  // Null: the reconciler never covered the month.
-  readCoverage(month: string): Promise<Readonly<Record<string, "open" | "closed">> | null>;
+  // The month's coverage (src/reconciler/history.ts CoverageDocument): the days history holds, open or closed, and
+  // the earliest instant a document of the month can expire (null: never). Null: the reconciler never covered it.
+  readCoverage(month: string): Promise<Coverage | null>;
 }
+
+export interface Coverage { days: Readonly<Record<string, "open" | "closed">>; expiresAt: string | null }
+
+// A day whose documents expire within this margin is refused as expired: Cosmos DB stops returning a document once
+// its time to live has passed, and the export's reads take time (ADR-0044 decision 9).
+export const HISTORY_EXPIRY_MARGIN_MS = 86_400_000;
 
 export interface HistorySettings { container: string; retentionDays: number }
 export interface Range { from: string; to: string }
@@ -110,16 +116,22 @@ function completenessOf(row: Doc): string {
   return "complete";
 }
 
-// The days of a history range the reconciler never covered (refused: no data there is not zero usage) and the
-// covered days not yet closed (at most an hour behind the ledger). One point read per month.
-export async function historyCoverage(store: HistoryStore, range: Range): Promise<{ uncovered: string[]; open: string[] }> {
-  const result = { uncovered: [] as string[], open: [] as string[] };
-  const months = new Map<string, Readonly<Record<string, string>> | null>();
+// The days of a history range the reconciler never covered (refused: no data there is not zero usage), the covered
+// days whose documents expired or expire within HISTORY_EXPIRY_MARGIN_MS (refused: some of their documents may be
+// gone), and the covered days not yet closed (at most an hour behind the ledger). One point read per month.
+export async function historyCoverage(store: HistoryStore, range: Range, now: Date): Promise<{ uncovered: string[]; expired: string[]; expiresAt: string | null; open: string[] }> {
+  const result = { uncovered: [] as string[], expired: [] as string[], expiresAt: null as string | null, open: [] as string[] };
+  const months = new Map<string, Coverage | null>();
   for (let at = Date.parse(range.from); at < Date.parse(range.to); at += DAY_MS) {
     const d = day(at);
     if (!months.has(d.slice(0, 7))) months.set(d.slice(0, 7), await store.readCoverage(d.slice(0, 7)));
-    const state = months.get(d.slice(0, 7))?.[d];
+    const coverage = months.get(d.slice(0, 7));
+    const state = coverage?.days[d];
     if (state === undefined) result.uncovered.push(d);
+    else if (coverage?.expiresAt && Date.parse(coverage.expiresAt) - HISTORY_EXPIRY_MARGIN_MS <= now.getTime()) {
+      result.expired.push(d);
+      if (result.expiresAt === null || coverage.expiresAt < result.expiresAt) result.expiresAt = coverage.expiresAt;
+    }
     else if (state !== "closed") result.open.push(d);
   }
   return result;
@@ -216,8 +228,8 @@ export function createCosmosHistoryStore(container: Container): HistoryStore {
     },
     async readCoverage(month) {
       try {
-        const { resource } = await container.item("coverage", month).read<{ days?: Record<string, "open" | "closed"> }>();
-        return resource?.days ?? null;
+        const { resource } = await container.item("coverage", month).read<{ days?: Record<string, "open" | "closed">; expiresAt?: string | null }>();
+        return resource?.days ? { days: resource.days, expiresAt: resource.expiresAt ?? null } : null;
       } catch (error) {
         if ((error as { code?: unknown }).code === 404) return null;
         throw error;
