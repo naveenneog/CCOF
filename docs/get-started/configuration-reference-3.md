@@ -104,3 +104,14 @@ Read by [infra/gateway/config.ts](../../infra/gateway/config.ts) (schema: `gatew
 | `acceptance.denied[].expectedStatus` | Yes | `403` | HTTP status expected | Stage 8 |
 | `acceptance.denied[].reason` | No | text | Comment | none |
 | `acceptance.expectedGroup` | If several groups | absent | `groupDisplayName` or `groupId` charged for the requests | [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file) |
+
+## Chargeback history
+
+Daily chargeback totals kept in Cosmos DB beyond the Log Analytics retention ([ADR-0044](../adr/0044-chargeback-history-in-cosmos.md), [chargeback history](../operate/chargeback-and-tags.md#history-beyond-log-analytics-retention)). Absent or `enabled: false`: no container, no grants, no settings, and the stage hashes are unchanged.
+
+| Key | Req | Template | Allowed values and effect | Read by |
+| --- | --- | --- | --- | --- |
+| `audit.chargebackHistory` | No | see below | Absent: off | `Staged.Cosmos.ps1` |
+| `audit.chargebackHistory.enabled` | Yes, in the section | `true` | JSON `true` or `false`. `true`: Stage 2 creates `chargebackDaily`, Stage 3 grants it, Stage 5 writes the settings | `Staged.Cosmos.ps1` |
+| `audit.chargebackHistory.closeAfterDays` | If enabled | `2` | Whole number 1-7: whole days after a UTC day ends before its totals are final (`RECONCILER_HISTORY_CLOSE_AFTER_DAYS`) | `app-settings.bicep` |
+| `audit.chargebackHistory.ttlDays` | If enabled | `null` | `null`: kept until deleted. A whole number above `stage1.retentionInDays`, at most 36500: the container's time to live, counted from each day's last write | `stage2-schema.bicep` |

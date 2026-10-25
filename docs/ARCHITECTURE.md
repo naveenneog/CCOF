@@ -397,6 +397,13 @@ realtime ceiling is kept tight enough to hit the ±2-3% target. `docs/MARKETPLAC
 is resolved from Marketplace CCU billing, including prompt-cache tokens, and how per-project figures
 are tied to the invoice.
 
+Chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md), optional): after it writes the budget
+states, the same reconciler run turns the ledger rows it already priced into daily totals per day, chargeback ID,
+group, person and model, and writes the changed ones to the Cosmos container `chargebackDaily` (partition key
+`/month`). Early in a month it reads the previous month's last days with one extra ledger query, so their late rows
+are counted before the days close. The admin usage export reads months older than the Log Analytics retention from
+that container and later ones from Log Analytics.
+
 ## 7. Why this reuses, rather than replaces, the reference repository's infrastructure
 
 | Component | Reused as-is | Extended |

@@ -272,6 +272,9 @@ stays valid. Stage 0 additionally needs the account, its deployments and the app
     "groupSearchEnabled": false,
     "userNamesEnabled": false
   },
+  "audit": {
+    "chargebackHistory": { "enabled": true, "closeAfterDays": 2, "ttlDays": null }
+  },
   "acceptance": {
     "allowed": [{ "model": "claude-haiku-5-5" }],
     "denied": [
