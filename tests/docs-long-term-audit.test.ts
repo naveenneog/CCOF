@@ -102,3 +102,9 @@ test("the configuration reference keeps both audit features under one Audit head
   assert.match(audit, /Other keys inside `audit\.archive` are refused/);
   assert.match(audit, /Other keys inside\s+`audit\.chargebackHistory` are refused/);
 });
+
+test("the audit reader pages use plain terms, not unknown-register IDs", () => {
+  const pages = ["docs/operate/audit-archive.md", "docs/operate/chargeback-history.md", "docs/operate/chargeback-and-tags.md", "docs/get-started/configuration-reference-3.md"];
+  const found = pages.flatMap((p) => [...read(p).matchAll(/\bAUD-[AC]\d+\b|configuration hash/g)].map((m) => `${p}: ${m[0]}`));
+  assert.deepEqual(found, []);
+});

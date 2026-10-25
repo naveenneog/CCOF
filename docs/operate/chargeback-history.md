@@ -35,7 +35,7 @@ The console tabs, their **Export CSV** button and the workbook show only what Lo
 For a period that starts before the first whole month Log Analytics still holds, the export reads that part from
 `chargebackDaily` and the rest from Log Analytics, one row per tag value, group and person. The current month
 always comes from Log Analytics. The history part must start and end at 00:00 UTC. The JSON lists the parts in
-`sources` (`chargebackHistory`, `logAnalytics`).
+`sources` (`chargebackHistory`, `logAnalytics`); the CSV header uses the tag field name set in **User tags**.
 
 <!-- CODE-NOTE: incomplete coverage. Name the JSON field and the CSV column (or the refusal error) that report days
 history does not cover, and what a reader should do. -->
@@ -109,8 +109,8 @@ union isfuzzy=true FunctionAppLogs, AppTraces
 
   Expected: `historyOutcome` is `written` after requests have been made. Empty `historyOutcome` means the reconciler
   has no history settings: rerun Stages 5 and 7. `failed` gives a `historyReason`; the run retries on its next tick.
-- **Documents.** The Cosmos DB account has public network access disabled in the template, so Data Explorer in the
-  Portal shows `chargebackDaily` only from a machine on the VNet.
+- **Documents.** The template sets `stage1.cosmosPublicNetworkAccess: Disabled`, so Data Explorer in the Portal
+  shows `chargebackDaily` only from a machine on the VNet.
 - **Export.** Once the first month is older than the effective retention, download it as above; the JSON
   (`format=json`) lists `chargebackHistory` in `sources`.
 

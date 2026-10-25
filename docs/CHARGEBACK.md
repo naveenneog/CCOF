@@ -266,7 +266,7 @@ All arithmetic uses decimals, not floating point. Unknown values are never repla
   concept), and marks a period that starts earlier as `retention_truncated`. It archives nothing. The admin
   usage export can read older months from daily chargeback history in Cosmos DB when
   `audit.chargebackHistory` is enabled ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md),
-  [history beyond retention](operate/chargeback-and-tags.md#history-beyond-log-analytics-retention)).
+  [chargeback history](operate/chargeback-history.md): how to turn it on, download an old month and check it).
 - **Names.** People are shown by Entra object id. There is no directory lookup.
 - **Scale.** Grids show at most `maxRows` rows and the top `topUsers` people. Filter by project for
   large fleets. Behaviour with 500,000 developers has not been measured.
