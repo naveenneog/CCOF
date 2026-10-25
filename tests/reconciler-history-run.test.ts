@@ -135,6 +135,8 @@ test("the cached store reads a month's summaries once per 60 minutes, writes con
       writes.push([doc.id, etag]);
       return `e-${writes.length}`;
     },
+    readCoverage: async () => null,
+    writeCoverage: async () => "e-c",
   };
   const clock = new ManualClock("2026-10-11T13:00:00Z");
   const store = createCachedHistoryStore(container, clock.now);
@@ -157,6 +159,8 @@ test("a write conflict (another instance wrote first) drops the month's cache an
   const container: HistoryContainer = {
     querySummaries: async () => { queries += 1; return []; },
     write: async () => { throw new HistoryConflictError(); },
+    readCoverage: async () => null,
+    writeCoverage: async () => "e-c",
   };
   const store = createCachedHistoryStore(container, new ManualClock("2026-10-11T13:00:00Z").now);
   await store.readSummaries("2026-10");
@@ -170,7 +174,7 @@ test("a write conflict (another instance wrote first) drops the month's cache an
 });
 
 test("a failed write leaves the cached summary unchanged", async () => {
-  const container: HistoryContainer = { querySummaries: async () => [], write: async () => { throw new Error("503"); } };
+  const container: HistoryContainer = { querySummaries: async () => [], write: async () => { throw new Error("503"); }, readCoverage: async () => null, writeCoverage: async () => "e-c" };
   const store = createCachedHistoryStore(container, new ManualClock("2026-10-11T13:00:00Z").now);
   await store.readSummaries("2026-10");
   await assert.rejects(store.write(await firstDocument()));
