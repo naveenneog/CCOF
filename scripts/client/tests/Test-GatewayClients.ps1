@@ -586,6 +586,7 @@ echo eyJ.mock.token
 exit /b 0
 :needlogin
 >&2 echo AADSTS50076 interaction required.
+>&2 echo Please run 'az login' to setup account.
 exit /b 1
 :show
 if not exist "%~dp0session" goto needlogin
@@ -658,7 +659,9 @@ exit /b 0
         $silent = Invoke-AzHelper $helper 'silent-token'
         $calls = @(Read-AzCalls)
         Assert ($silent.exitCode -eq 4 -and -not $silent.stdout -and $calls.Count -eq 1 -and $calls[0] -match ' account get-access-token ') "silent-token while signed out: $($silent | ConvertTo-Json -Compress) calls: $($calls -join ' | ')"
-        Assert ($silent.stderr -match 'AADSTS50076' -and $silent.stderr -match 'login') "silent-token must pass the Entra code and name login: $($silent.stderr)"
+        Assert ($silent.stderr -match 'Not signed in to the Claude gateway.*login' -and $silent.stderr -notmatch 'AADSTS|az login') "silent-token must print only CCOF's sign-in remedy: $($silent.stderr)"
+        $status = Invoke-AzHelper $helper 'status'
+        Assert ($status.exitCode -eq 4 -and -not $status.stdout -and $status.stderr -match 'Not signed in.*login' -and $status.stderr -notmatch 'AADSTS|az login') "status must print only CCOF's sign-in remedy: $($status.stderr)"
         $gone = Join-Path $work 'az-helper3/ccof-token.cmd'
         Write-ClientText $gone (New-ClientAzureCliTokenShim -TenantId $config.tenantId -Scope $config.scope -AzureConfigDir (Join-Path $work 'az-p3') -AzureCliPath (Join-Path $work 'uninstalled/az.cmd'))
         $missing = Invoke-AzHelper $gone 'token'

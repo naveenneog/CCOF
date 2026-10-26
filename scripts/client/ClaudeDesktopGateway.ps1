@@ -52,10 +52,12 @@ function New-CcofDesktopProfile {
 
 function Set-CcofClaudeDesktop {
     param([string]$ConfigPath, [string]$LibraryPath, [string]$BackupRoot, $Inventory, $Schema,
-        [string]$NodePath, [string]$TokenEntryPath, [switch]$Confirmed)
+        [string]$NodePath, [string]$TokenEntryPath, [switch]$Confirmed, [string]$InstalledConfigPath)
     Assert-ClientConfirmation -Confirmed:$Confirmed
     if (-not $Inventory.DesktopVersion) { return (@{ event = 'not_installed'; component = 'claude-desktop' } | ConvertTo-Json -Compress) }
     $config = Read-ClientConfiguration $ConfigPath
+    $sourceConfigPath = $ConfigPath
+    if ($InstalledConfigPath) { $ConfigPath = $InstalledConfigPath }
     $id = $config.desktop.profileId
     $metaPath = Join-Path $LibraryPath '_meta.json'
     $profilePath = Join-Path $LibraryPath "$id.json"
@@ -82,11 +84,13 @@ function Set-CcofClaudeDesktop {
     $meta.appliedId = $id
     $paths = @($metaPath, $profilePath)
     if ($profile.inferenceCredentialKind -ceq 'helper-script') { $paths += $helperPath }
-    $snapshot = New-ClientSnapshot 'claude-desktop' $paths $BackupRoot
-    if ($profile.inferenceCredentialKind -ceq 'helper-script') { Write-ClientText $helperPath $shim }
-    Write-ClientJson $profilePath $profile
-    Write-ClientJson $metaPath $meta
-    Complete-ClientSnapshot $snapshot
+    if ($InstalledConfigPath) { $paths += $ConfigPath }
+    $snapshot = Invoke-ClientSetupTransaction 'claude-desktop' $paths $BackupRoot {
+        if ($profile.inferenceCredentialKind -ceq 'helper-script') { Write-ClientText $helperPath $shim }
+        Write-ClientJson $profilePath $profile
+        Write-ClientJson $metaPath $meta
+        if ($InstalledConfigPath) { $null = Install-ClientConfiguration $sourceConfigPath -Destination $ConfigPath -Configuration $config }
+    }
     $result = [ordered]@{ event = 'configured'; component = 'claude-desktop'; changeId = $snapshot.Manifest.changeId
         credentialKind = $profile.inferenceCredentialKind; signInMethod = $(if ($config.signInMethod -ceq 'azure-cli') { 'azure-cli' } else { 'msal' }) }
     # external-idp: Claude Desktop runs the Entra sign-in itself; otherwise the developer signs in once through the helper.

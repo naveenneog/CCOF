@@ -4,7 +4,7 @@
 // OWASP "CSV Injection" (https://owasp.org/www-community/attacks/CSV_Injection) lists = + - @, tab, carriage
 // return, line feed and their full-width variants (＝ ＋ － ＠) as formula triggers. A trigger after leading
 // whitespace is treated the same, because spreadsheets may trim the space before reading the cell.
-const FORMULA_START = /^[\s\u3000]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/;
+const FORMULA_START = /^[\s\p{Cf}]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/u;
 
 // Prefixes a risky value with an apostrophe so it is read as text.
 export function neutraliseFormula(text: string): string {
@@ -12,6 +12,7 @@ export function neutraliseFormula(text: string): string {
 }
 
 // A name shown in reports and CSV files (ADMIN-5): visible text, no control characters or line breaks
-// (C0, DEL, C1, U+2028/9), at most `max` characters.
+// (C0, DEL, C1, U+2028/9) or bidi overrides/isolates, at most `max` characters.
+// Format characters do not count as visible text; contextual joiners in real names remain allowed.
 export const isDisplayName = (v: unknown, max: number): v is string =>
-  typeof v === "string" && v.length <= max && /\S/.test(v) && !/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(v);
+  typeof v === "string" && v.length <= max && /[^\s\p{Cf}]/u.test(v) && !/[\u0000-\u001F\u007F-\u009F\u2028-\u202E\u2066-\u2069]/.test(v);

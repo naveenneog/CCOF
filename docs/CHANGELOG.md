@@ -21,6 +21,28 @@
 - N4 / novice docs: Stage 3 estimate is 6–15 minutes; BACKENDS links the existing regional recovery
   guidance instead of the missing availability page.
 
+## Bug bash 5 client fixes (2026-10-27)
+
+- Review follow-up: configuration publication now follows all setup preflight checks, shares
+  the client snapshot, rolls back on failure and is recovered by Restore. Missing clients change nothing.
+- AO-7: complete the export documentation's interrupted sentence about JSON errors.
+- DG-7: record restart-confounded versus clean budget-change evidence; no reproducible
+  independent cache issue established, so no speculative code change.
+- DG-6: retain pacing debt on revisiting an earlier monthly budget amount (ADR-0051);
+  guides and the refusal no longer promise that every budget edit resets it.
+- DG-8: unattended token and status probes hide Azure CLI's default-profile sign-in message;
+  CCOF's own helper-specific login instruction remains on stderr.
+- AO-6: server and console reject invisible-only names and bidi overrides/isolates; CSV
+  formula protection also covers leading invisible format characters.
+- DG-5: usage and the status line show budget pacing below the warning threshold, using the
+  stored ceiling, without claiming to know the gateway's live wait.
+- DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic
+  backend failures get an Anthropic envelope without exposing backend details.
+- DG-3: explicit chunked requests are refused before body parsing or forwarding; absence
+  of Content-Length alone is allowed for HTTP/2 compatibility (BB5-H2).
+- DG-1/2: setup imports the downloaded configuration into the per-user configuration folder;
+  a missing or invalid configuration names the file and `-ConfigPath`.
+
 ## 2026-10-26 — Release 17
 
 - Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash

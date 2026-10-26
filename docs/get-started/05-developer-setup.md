@@ -44,6 +44,8 @@ pwsh -NoProfile -File ./scripts/client/Set-ClaudeCodeGateway.ps1 -Confirmed
 
 Add `-UsageStatusLine` to show the budget continuously in Claude Code's status line.
 
+After preflight, setup publishes the JSON in the [per-user configuration folder](../CLIENTS.md#macos-and-linux) (`%LOCALAPPDATA%\ClaudeGateway` on Windows); helpers/cache use that copy, so the download can be deleted. Failure rolls back; Restore also restores the previous configuration ([ADR-0050](../adr/0050-import-client-configuration.md)).
+
 **Expected:** one JSON line with `"event":"configured"`, `"usageSkill":true`, `"statusLine":"set"` (with
 `-UsageStatusLine`), a `changeId`, the configuration's `"signInMethod"` and `"signIn"`, the sign-in command for
 step 2, and `"models"`: the deployment each Claude Code model alias runs. The previous settings are backed up under that `changeId`; to undo, see
@@ -130,6 +132,7 @@ What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current
 | `403 Model … is not available in group …` | Choose one of the models the message lists (`/model`) |
 | `403 … budget … used up` or `has reached your Claude budget` | Budget reached; the second clears within minutes. Ask the budget owner |
 | `429 … slowed by the budget guard` | Spending is paced to stay within the budget; wait, or ask for a higher budget |
+| `429 … shared Foundry deployment limit` | Everyone using that deployment shares its capacity; follow `Retry-After`, or ask the platform team about capacity. This is not your personal budget or token limit ([gateway](../GATEWAY.md)) |
 | `429` | A limit is reached; Claude Code retries |
 
 More: [troubleshooting](../operate/troubleshooting.md).

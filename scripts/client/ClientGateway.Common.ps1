@@ -54,8 +54,8 @@ function Write-ClientJson {
 
 function Get-ClientDefaultConfigPath {
     <# Off Windows: $XDG_CONFIG_HOME/ClaudeGateway (when absolute), else ~/.config/ClaudeGateway (ADR-0048, XDG Base Directory). #>
-    param([bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME)
-    if ($env:CCOF_CONFIG_FILE) { return $env:CCOF_CONFIG_FILE }
+    param([bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME, [switch]$IgnoreEnvironment)
+    if (-not $IgnoreEnvironment -and $env:CCOF_CONFIG_FILE) { return $env:CCOF_CONFIG_FILE }
     if (-not $OnWindows) {
         $base = if ($env:XDG_CONFIG_HOME -and [IO.Path]::IsPathFullyQualified($env:XDG_CONFIG_HOME)) { $env:XDG_CONFIG_HOME } else { Join-Path $HomePath '.config' }
         return Join-Path $base 'ClaudeGateway/config.json'
@@ -71,9 +71,23 @@ function Read-ClientConfiguration {
     if (-not $node) { throw 'Node.js is missing. Ask the coordinator before installing it.' }
     $value = & $node.Source (Join-Path $script:ClientRepoRoot 'client\bin\validate-config.mjs') $Path 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $value) {
-        throw 'Client configuration is missing or invalid. Review docs/CLIENTS.md and the administrator answers.'
+        throw "Client configuration is missing or invalid at '$Path'. Supply the administrator-provided file with -ConfigPath '<absolute path to client-config.json>'. Review docs/CLIENTS.md."
     }
     return ($value | ConvertFrom-Json -AsHashtable)
+}
+
+function Install-ClientConfiguration {
+    param([Parameter(Mandatory)][string]$Path, [bool]$OnWindows = $IsWindows,
+        [string]$Destination, [Collections.IDictionary]$Configuration)
+    $config = if ($Configuration) { $Configuration } else { Read-ClientConfiguration $Path }
+    if (-not $OnWindows -and $config.signInMethod -cne 'azure-cli') {
+        throw 'unsupported_sign_in_method: on macOS and Linux Claude Code setup supports signInMethod azure-cli only; nothing was changed.'
+    }
+    if (-not $Destination) { $Destination = Get-ClientDefaultConfigPath -OnWindows $OnWindows -IgnoreEnvironment }
+    if (-not [string]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetFullPath($destination), $(if ($IsWindows) { 'OrdinalIgnoreCase' } else { 'Ordinal' }))) {
+        Write-ClientJson $destination $config
+    }
+    return $destination
 }
 
 function Assert-ClientConfirmation {
@@ -117,6 +131,21 @@ function Complete-ClientSnapshot {
     foreach ($record in $Snapshot.Manifest.files) { $record.afterSha256 = Get-ClientFileHash $record.path }
     $Snapshot.Manifest.complete = $true
     Write-ClientJson (Join-Path $Snapshot.Directory 'snapshot.json') $Snapshot.Manifest
+}
+
+function Invoke-ClientSetupTransaction {
+    param([string]$Kind, [string[]]$Paths, [string]$BackupRoot, [scriptblock]$Write)
+    $snapshot = New-ClientSnapshot $Kind $Paths $BackupRoot
+    try {
+        & $Write
+        Complete-ClientSnapshot $snapshot
+    } catch {
+        $failure = $_
+        try { Restore-ClientSnapshot -BackupPath $snapshot.Directory -Kind $Kind -Confirmed -AllowChangedFiles | Out-Null }
+        catch { throw "Setup failed and rollback could not finish. Review backup '$($snapshot.Directory)' before retrying. Setup: $($failure.Exception.Message). Rollback: $($_.Exception.Message)" }
+        throw $failure
+    }
+    return $snapshot
 }
 
 function Restore-ClientSnapshot {
@@ -246,7 +275,7 @@ function New-ClientAzureCliPosixTokenShim {
         '    echo "No gateway token after sign-in. Run: ''$0'' status, and contact the platform team." >&2'
         '    exit 4 ;;'
         '  silent-token)'
-        '    gettoken && exit 0'
+        '    gettoken 2>/dev/null && exit 0'
         '    echo "Not signed in to the Claude gateway. Run: ''$0'' login" >&2'
         '    exit 4 ;;'
         '  login)'
@@ -254,7 +283,7 @@ function New-ClientAzureCliPosixTokenShim {
         '    echo "Signed in. Claude Code now uses this sign-in." >&2'
         '    exit 0 ;;'
         '  status)'
-        '    "$AZ" account show --query user.name --output tsv --only-show-errors && exit 0'
+        '    "$AZ" account show --query user.name --output tsv --only-show-errors 2>/dev/null && exit 0'
         '    echo "Not signed in. Run: ''$0'' login" >&2'
         '    exit 4 ;;'
         '  logout)'
@@ -315,7 +344,7 @@ function New-ClientAzureCliTokenShim {
         '>&2 echo No gateway token after sign-in. Run "%~f0" status and contact the platform team.'
         'exit /b 4'
         ':silenttoken'
-        'call :gettoken && exit /b 0'
+        'call :gettoken 2>nul && exit /b 0'
         '>&2 echo Not signed in to the Claude gateway. Run: "%~f0" login'
         'exit /b 4'
         ':login'

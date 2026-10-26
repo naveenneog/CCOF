@@ -285,7 +285,7 @@ function parseUsageBody(body: unknown): { personId: string; requestId?: string }
 export async function handleMyUsageRequest(request: ResolverRequestContext, runtime: ResolverRuntime): Promise<HandlerResponse> {
   const gate = openGate(request, runtime);
   if (!gate.open) return refuseByGuard(gate.failure, runtime);
-  const { reads, requestDeadlineMs, usageGroupTotals } = gate.readiness;
+  const { reads, requestDeadlineMs, usageGroupTotals, budgetEnforcement } = gate.readiness;
   const input = parseUsageBody(request.body);
   if (!input) {
     logEvent(runtime, { event: "refused", route: "me/usage", reason: "invalid_request", httpStatus: 400 });
@@ -294,7 +294,7 @@ export async function handleMyUsageRequest(request: ResolverRequestContext, runt
   try {
     const now = runtime.now();
     const usage = await withinDeadline(
-      (signal) => readMyUsage(input.personId, reads, { now, showGroupTotals: usageGroupTotals === true, signal }),
+      (signal) => readMyUsage(input.personId, reads, { now, showGroupTotals: usageGroupTotals === true, budgetEnforcement: budgetEnforcement.mode, signal }),
       requestDeadlineMs,
     );
     return { status: 200, jsonBody: { ...usage } };

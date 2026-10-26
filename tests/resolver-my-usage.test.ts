@@ -44,6 +44,21 @@ function reads(memberships: unknown[], states: Record<string, unknown>, aggregat
 
 const run = (deps: ResolveDependencies, showGroupTotals = false) => readMyUsage(PERSON, deps, { now: RESOLVE_NOW, showGroupTotals });
 
+test("budget-state usage reports pacing below the warning threshold, but token-only usage does not", async () => {
+  const deps = reads([group(G1)], { [G1]: state(G1, { spentCcu: "0", projectedCcu: "0", warning: false, realtimeCeilingTokensPerMinute: 3 }) });
+  const options = { now: RESOLVE_NOW, showGroupTotals: false, budgetEnforcement: "budget-state" as const };
+  const paced = await readMyUsage(PERSON, deps, options);
+  assert.equal(paced.scopes[0].pacingTokensPerMinute, 3);
+  assert.equal(paced.scopes[0].warning, false);
+  assert.equal((await run(deps)).scopes[0].pacingTokensPerMinute, undefined);
+  for (const ceiling of [-1, "3", null, 1.5, 2147483648]) {
+    const malformed = reads([group(G1)], { [G1]: state(G1, { realtimeCeilingTokensPerMinute: ceiling }) });
+    assert.equal((await readMyUsage(PERSON, malformed, options)).scopes[0].pacingTokensPerMinute, undefined);
+  }
+  const zero = reads([group(G1)], { [G1]: state(G1, { realtimeCeilingTokensPerMinute: 0 }) });
+  assert.equal((await readMyUsage(PERSON, zero, options)).scopes[0].pacingTokensPerMinute, 0);
+});
+
 test("one scope: spent, budget and remaining in CCU and USD, percent used, as of computedAt", async () => {
   const usage = await run(reads([group(G1)], { [G1]: state(G1) }));
   assert.equal(usage.schema, "ccof.usage.v1");

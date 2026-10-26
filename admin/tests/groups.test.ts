@@ -256,7 +256,8 @@ test("members are listed only for an active onboarded group, never for any other
 
 test("a display name must have visible text and no control characters, on create and edit (ADMIN-5)", async () => {
   const { call } = setup();
-  for (const displayName of [" ", "\u3000", "\t=1+1", "a\r\n=1+1", "a\u0000b", "a\u0085b"]) {
+  const bidi = [..."\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069"];
+  for (const displayName of [" ", "\u3000", "\t=1+1", "a\r\n=1+1", "a\u0000b", "a\u0085b", "\u200B", " \u200B\u200C\u200D\u2060 ", ...bidi.map((c) => `Eng${c}team`)]) {
     const res = await call("POST", "/api/groups", { body: groupBody({ displayName }) });
     assert.equal(res.status, 422, JSON.stringify(displayName));
     assert.deepEqual((res.jsonBody as Doc).problems, ["displayName:invalid"], JSON.stringify(displayName));
@@ -265,6 +266,12 @@ test("a display name must have visible text and no control characters, on create
   assert.equal(created.status, 201);
   const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName: "x\ty" }, ifMatch: created.headers!.etag });
   assert.deepEqual([edit.status, (edit.jsonBody as Doc).problems], [422, ["displayName:invalid"]]);
+  for (const displayName of ["\u200B", ...bidi.map((c) => `Eng${c}team`)]) {
+    const edited = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName }, ifMatch: created.headers!.etag });
+    assert.deepEqual([edited.status, (edited.jsonBody as Doc).problems], [422, ["displayName:invalid"]], JSON.stringify(displayName));
+  }
+  const valid = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName: "فريق العربية – 東京 – تیم\u200Cها" }, ifMatch: created.headers!.etag });
+  assert.equal(valid.status, 200, "ordinary RTL text and contextual joiners are not bidi overrides");
 });
 
 test("a group link that is not a group ID is group_not_found, not route_not_found (ADMIN-7)", async () => {

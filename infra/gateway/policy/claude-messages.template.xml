@@ -101,6 +101,7 @@
     <set-variable name="ccofRequestRefusal" value="@{
         var media = context.Request.Headers.GetValueOrDefault("Content-Type", "").Split(';')[0].Trim();
         if (!string.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)) { return "request_content_type"; }
+        if (System.Text.RegularExpressions.Regex.IsMatch(context.Request.Headers.GetValueOrDefault("Transfer-Encoding", ""), "(^|,)\\s*chunked\\s*(,|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { return "request_length_required"; }
         long length;
         return long.TryParse(context.Request.Headers.GetValueOrDefault("Content-Length", ""), out length) && length > 33554432 ? "request_too_large" : "";
     }" />
@@ -759,6 +760,7 @@
                 case "project_header_invalid": case "request_body_invalid": case "request_model_missing": case "project_selection_required": return 400;
                 case "request_content_type": return 415;
                 case "request_too_large": return 413;
+                case "request_length_required": return 411;
                 default: return 503;
             }
         }" />
@@ -799,6 +801,10 @@
                 case "request_too_large":
                     type = "request_too_large";
                     message = "The request body is larger than 32 MB, the Messages API limit. Send less content, for example fewer or smaller images or documents.";
+                    break;
+                case "request_length_required":
+                    type = "invalid_request_error";
+                    message = "Send a Content-Length header with the JSON body size. This gateway does not accept chunked request bodies.";
                     break;
                 case "request_body_invalid":
                     type = "invalid_request_error";
@@ -895,6 +901,7 @@
                       case 401: return "Unauthorized";
                       case 403: return "Forbidden";
                       case 413: return "Content Too Large";
+                      case 411: return "Length Required";
                       case 415: return "Unsupported Media Type";
                       default: return "Service Unavailable";
                   }
@@ -1055,6 +1062,37 @@
           </when>
         </choose>
         <choose>
+          <when condition="@(context.Response.StatusCode >= 400)">
+            <!-- Error replies are finite, including for a streamed request. Keep successful SSE outside
+                 every policy that mentions Response.Body, so its first byte is never buffered here. -->
+            <set-variable name="ccofBackendErrorJson" value="@(context.Response.Body.As<string>(preserveContent: true))" />
+            <set-variable name="ccofBackendErrorBody" value="@{
+                var status = context.Response.StatusCode;
+                if (status != 429) {
+                    try {
+                        var body = JObject.Parse((string)context.Variables["ccofBackendErrorJson"]);
+                        var error = body["error"] as JObject;
+                        if ((string)body["type"] == "error" && error != null && error["type"] != null && error["type"].Type == JTokenType.String && !string.IsNullOrWhiteSpace((string)error["type"]) && error["message"] != null && error["message"].Type == JTokenType.String) { return ""; }
+                    } catch { }
+                }
+                var type = status == 429 ? "rate_limit_error" : (status == 413 ? "request_too_large" : (status == 404 ? "not_found_error" : (status < 500 ? "invalid_request_error" : "api_error")));
+                var message = status == 429
+                    ? "The shared Foundry deployment limit was reached. This is not your personal token or budget limit. Retry after the time in Retry-After; if this continues, ask your platform team about deployment capacity."
+                    : "The model service refused the request (HTTP " + status.ToString() + "). Retry or contact your platform team with the request id.";
+                return new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(
+                    new JProperty("type", type), new JProperty("message", message + " Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None);
+            }" />
+            <choose>
+              <when condition="@((string)context.Variables["ccofBackendErrorBody"] != "")">
+                <set-header name="Content-Type" exists-action="override">
+                  <value>application/json</value>
+                </set-header>
+                <set-body>@((string)context.Variables["ccofBackendErrorBody"])</set-body>
+              </when>
+            </choose>
+          </when>
+        </choose>
+        <choose>
           <when condition="@((string)context.Variables["ccofEntitlementSource"] == "last-known-good")">
             <set-header name="x-ccof-entitlement" exists-action="override">
               <value>degraded</value>
@@ -1170,7 +1208,7 @@
                 break;
             case "budget_pacing":
                 type = "rate_limit_error";
-                message = "Your requests in " + scope + " are slowed by the budget guard: recent spending is high for your Claude budget, so new requests wait. This is not the configured tokens-per-minute limit. Retry after the time in the Retry-After header; raising the budget lifts the wait within a few minutes.";
+                message = "Your requests in " + scope + " are slowed by the budget guard: recent spending is high for your Claude budget, so new requests wait. This is not the configured tokens-per-minute limit. Retry after the time in the Retry-After header; raising the budget to an amount not yet used this month lifts the wait within a few minutes. Returning to an earlier amount can resume its previous wait.";
                 break;
             case "person_quota":
                 type = "permission_error";

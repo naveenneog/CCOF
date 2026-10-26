@@ -66,20 +66,41 @@ test("an unserved path is answered 404 not_found_error before the token check, w
 
 test("a body that is not JSON, or larger than 32 MB, is refused from its headers", () => {
   const vector = (label: string, headers: Record<string, string>, expected: string): Vector => ({ label, method: "RequestRefusal", headers, expected });
-  const json = { "Content-Type": "application/json" };
+  const json = { "Content-Type": "application/json", "Content-Length": "300" };
   const vectors = [
     vector("json", json, ""),
-    vector("json with charset", { "Content-Type": "application/json; charset=utf-8" }, ""),
-    vector("upper case", { "Content-Type": "Application/JSON" }, ""),
+    vector("json with charset", { ...json, "Content-Type": "application/json; charset=utf-8" }, ""),
+    vector("upper case", { ...json, "Content-Type": "Application/JSON" }, ""),
     vector("text/plain", { "Content-Type": "text/plain" }, "request_content_type"),
     vector("none", {}, "request_content_type"),
     vector("json-like", { "Content-Type": "application/jsonx" }, "request_content_type"),
     vector("32 MB exactly", { ...json, "Content-Length": "33554432" }, ""),
     vector("one byte over", { ...json, "Content-Length": "33554433" }, "request_too_large"),
     vector("40 MB", { ...json, "Content-Length": "40000000" }, "request_too_large"),
-    vector("no length", json, ""),
+    vector("no length can be HTTP/2", { "Content-Type": "application/json" }, ""),
+    vector("chunked", { "Content-Type": "application/json", "Transfer-Encoding": "chunked" }, "request_length_required"),
+    vector("chunked with length", { ...json, "Transfer-Encoding": "chunked" }, "request_length_required"),
+    vector("comma-separated chunked", { "Content-Type": "application/json", "Transfer-Encoding": "gzip, Chunked " }, "request_length_required"),
+    vector("mixed-case chunked", { "Content-Type": "application/json", "Transfer-Encoding": " CHUNKED " }, "request_length_required"),
+    vector("not chunked token", { ...json, "Transfer-Encoding": "unchunked" }, ""),
+    vector("negative length is not evidence of chunking", { ...json, "Content-Length": "-1" }, ""),
+    vector("invalid length is not evidence of chunking", { ...json, "Content-Length": "invalid" }, ""),
   ];
   assert.deepEqual(runExpressions(methods(), vectors), vectors.map((v) => v.expected));
+});
+
+test("an explicitly chunked body is refused 411 before reading it", () => {
+  const [facts, status, body] = runExpressions(methods(), [
+    { label: "skip chunked body", method: "RequestFacts", vars: { ccofRefusal: "request_length_required" }, body: "not-json", expected: "" },
+    { label: "length status", method: "RefusalStatus", vars: { ccofRefusal: "request_length_required" }, expected: 411 },
+    { label: "length body", method: "RefusalBody", vars: { ccofRefusal: "request_length_required", ccofSelector: "", ccofModel: "" }, json: true, expected: null },
+  ]) as [string, number, { type: string; error: { type: string; message: string } }];
+  assert.equal(facts, "");
+  assert.equal(status, 411);
+  assert.equal(body.type, "error");
+  assert.equal(body.error.type, "invalid_request_error");
+  assert.match(body.error.message, /Content-Length/);
+  assert.match(body.error.message, /chunked/i);
 });
 
 test("a header refusal skips reading the body, and is answered 415 or 413 in Anthropic's error shape", () => {

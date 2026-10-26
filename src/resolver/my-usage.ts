@@ -14,7 +14,7 @@ import type { Decimal } from "decimal.js";
 import { ccuToUsd } from "../cost/budget-units.ts";
 import { Money } from "../cost/money.ts";
 import type { ProjectMembership, ResolveDependencies } from "./decide.ts";
-import { checkEntitlementRecord } from "./freshness.ts";
+import { checkEntitlementRecord, MAX_TOKENS_PER_MINUTE, type BudgetEnforcement } from "./freshness.ts";
 
 export const USAGE_SCHEMA = "ccof.usage.v1";
 // A person is in a handful of scopes; the bound keeps one request to a known number of reads.
@@ -46,6 +46,8 @@ export interface UsageScope {
   // spend (recorded plus the recent rate over the reporting lag) as a percent of the budget.
   warning?: boolean;
   projectedPercent?: number | null;
+  // The configured budget ceiling, not APIM's live token-bucket debt or a retry countdown.
+  pacingTokensPerMinute?: number;
   // Present only when the deployment shows group totals; null when allowed but not available this month.
   group?: GroupRemaining | null;
 }
@@ -61,6 +63,7 @@ export interface MyUsage {
 export interface MyUsageOptions {
   now: Date;
   showGroupTotals: boolean;
+  budgetEnforcement?: BudgetEnforcement["mode"];
   signal?: AbortSignal;
 }
 
@@ -85,7 +88,7 @@ const percent = (spent: Decimal, budget: Decimal): number | null =>
   budget.isZero() ? null : Number(spent.dividedBy(budget).times(100).toDecimalPlaces(1).toFixed());
 const remainingOf = (spent: Decimal, budget: Decimal): Decimal => (spent.greaterThan(budget) ? new Money(0) : budget.minus(spent));
 
-function personFigures(doc: unknown, personId: string, m: ProjectMembership, period: string): Omit<UsageScope, "projectId" | "classification" | "group"> {
+function personFigures(doc: unknown, personId: string, m: ProjectMembership, period: string, budgetPacing: boolean): Omit<UsageScope, "projectId" | "classification" | "group"> {
   const empty = { spent: null, budget: null, remaining: null, percentUsed: null, exhausted: null, period, asOf: null, completeness: null };
   if (doc === null || doc === undefined) return { status: "not_computed", ...empty };
   // The document must be this person's, for this scope: a state left from another classification of the
@@ -100,6 +103,8 @@ function personFigures(doc: unknown, personId: string, m: ProjectMembership, per
   const guarded = "warning" in doc || "projectedCcu" in doc;
   const projected = decimalOf(doc.projectedCcu);
   if (guarded && (typeof doc.warning !== "boolean" || !projected)) return { status: "invalid", ...empty };
+  const ceiling = doc.realtimeCeilingTokensPerMinute;
+  const pacing = budgetPacing && typeof ceiling === "number" && Number.isSafeInteger(ceiling) && ceiling >= 0 && ceiling <= MAX_TOKENS_PER_MINUTE;
   return {
     status: "current",
     spent: amount(spent),
@@ -111,6 +116,7 @@ function personFigures(doc: unknown, personId: string, m: ProjectMembership, per
     asOf,
     completeness,
     ...(guarded ? { warning: doc.warning as boolean, projectedPercent: percent(projected as Decimal, budget) } : {}),
+    ...(pacing ? { pacingTokensPerMinute: ceiling as number } : {}),
   };
 }
 
@@ -160,7 +166,7 @@ export async function readMyUsage(personId: string, deps: ResolveDependencies, o
     const scope: UsageScope = {
       projectId: m.projectId,
       classification: m.classification,
-      ...personFigures(state, personId, m, period),
+      ...personFigures(state, personId, m, period, options.budgetEnforcement === "budget-state"),
     };
     if (showGroupTotals) scope.group = groupRemaining(aggregate, scopeId, period);
     return scope;

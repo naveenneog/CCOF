@@ -11,7 +11,8 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 `personCeilingTokensPerMinute` and applies it on a counter of its own, the budget-pacing counter
 `pb:{projectId}:{oid}:{personCeilingKey}` ([ADR-0047](adr/0047-budget-pacing-counter.md)); the configured person TPM
 keeps its counter. `personCeilingKey` is the budget month and amount (for example `2026-10_10000`), so raising the
-budget or a new month starts a new pacing counter, while a ceiling that moves with spend keeps it. A pacing refusal is
+budget to a previously unused amount or a new month starts a new pacing counter; returning to an earlier amount
+can resume its remaining debt ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md)). A ceiling that moves with spend keeps it. A pacing refusal is
 `429 rate_limit_error` naming the budget guard; its `Retry-After` is at most the time to the end of the month. A zero
 ceiling refuses the request (`403`, "has reached your Claude budget … until recorded spend catches up"); old cached
 decisions without the mode and ceiling must be refreshed. Group and family token quotas still apply independently.
@@ -112,8 +113,10 @@ non-empty path segments ending exactly in `/v1/messages` are served.
 **Request size.** After the token and admission checks, and before the body is read, a request whose `Content-Type`
 is not `application/json` is answered `415`, and one whose `Content-Length` is above 32 MB (33,554,432 bytes)
 `413 request_too_large`. 32 MB is the Messages API limit ([Claude API errors](https://platform.claude.com/docs/en/api/errors),
-"Request size limits"); Foundry enforces the same limit with its own `413`. A request without `Content-Length` is
-checked by Foundry only.
+"Request size limits"); Foundry enforces the same limit with its own `413`. Explicit `Transfer-Encoding: chunked`
+is answered `411 invalid_request_error` before reading the body. Missing `Content-Length` alone is not refused:
+HTTP/2 need not send it, and APIM exposure is not proven ([BB5-H2](UNKNOWNS.md#bug-bash-5-review-follow-up)).
+Without a usable length, size is checked by the backend rather than before buffering.
 
 ## Backends
 
@@ -158,9 +161,11 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
 | `Content-Type` other than `application/json` | 415 | `invalid_request_error` |
 | `Content-Length` above 32 MB | 413 | `request_too_large` |
+| Explicit `Transfer-Encoding: chunked` | 411 | `invalid_request_error` |
 | A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500), or a variant of `/v1/messages` such as a trailing slash | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
+| Foundry deployment capacity reached (shared by callers of that deployment, not a personal limit) | Backend 429 and `Retry-After` preserved | `rate_limit_error` |
 | Person or group token quota used up (the message names which, and when it resets) | 403 | `permission_error` |
 | Person's or group's budget used up (C-7; the message names which), or reached by recorded plus recent spend | 403 | `permission_error` |
 | Access cannot be confirmed (resolver unavailable, no last-known-good) or budget state stale | 503 + `Retry-After` | `api_error` |

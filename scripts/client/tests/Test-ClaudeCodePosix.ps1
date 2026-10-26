@@ -148,6 +148,8 @@ exit 99
         Assert (-not (Test-Path -LiteralPath (Join-Path $claudeHome 'ccof-token.cmd'))) 'A cmd.exe helper was written off Windows'
         $shim = [IO.File]::ReadAllText($helper)
         Assert ($shim.StartsWith('#!/bin/sh') -and $shim.Contains("AZ='$mockAz'") -and $shim -notmatch '\bnode\b') 'Helper is not the sh Azure CLI helper pinned to az'
+        Assert ($shim -match '(?s)silent-token\)\n\s+gettoken 2>/dev/null && exit 0') 'silent-token lets the Azure CLI sign-in error through'
+        Assert ($shim.Contains('"$AZ" account show --query user.name --output tsv --only-show-errors 2>/dev/null && exit 0')) 'status lets the Azure CLI sign-in error through'
         Assert ($shim.Contains("AZURE_CONFIG_DIR='" + (Join-Path (Split-Path $configPath -Parent) 'az') + "'")) 'Profile folder is not beside the configuration'
         $settings = Read-ClientJson (Join-Path $claudeHome 'settings.json')
         Assert ($settings.apiKeyHelper -ceq "$q token") "apiKeyHelper: $($settings.apiKeyHelper)"
@@ -220,7 +222,9 @@ exit 99
             $silent = Invoke-Helper $helper @('silent-token')
             $calls = @(Read-AzCalls)
             Assert ($silent.exitCode -eq 4 -and -not $silent.stdout -and $calls.Count -eq 1 -and $calls[0] -match ' account get-access-token ') "silent-token while signed out: $($silent | ConvertTo-Json -Compress) calls: $($calls -join ' | ')"
-            Assert ($silent.stderr -match 'AADSTS50076' -and $silent.stderr -match 'login') "silent-token must pass the Entra code and name login: $($silent.stderr)"
+            Assert ($silent.stderr -match 'Not signed in to the Claude gateway.*login' -and $silent.stderr -notmatch 'AADSTS|az login') "silent-token must print only CCOF's sign-in remedy: $($silent.stderr)"
+            $status = Invoke-Helper $helper @('status')
+            Assert ($status.exitCode -eq 4 -and -not $status.stdout -and $status.stderr -match 'Not signed in.*login' -and $status.stderr -notmatch 'AADSTS|az login') "status must print only CCOF's sign-in remedy: $($status.stderr)"
             $values = $good.Clone(); $values.AzureCliPath = Join-Path $work 'uninstalled/az'
             $gone = Join-Path $work 'h3/ccof-token'
             Write-ClientText $gone (New-ClientAzureCliPosixTokenShim @values) -UnixMode 448

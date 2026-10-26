@@ -27,6 +27,37 @@ regressions plus six mutations; UX PASS — restart/redeployment disclosed; SECU
 dependency or credential exposure. The external Coder/QA BLOCK is addressed by withdrawal, not by claiming
 the former read-back can certify drift; coordinator owns independent re-review.
 
+## Bug bash 5 client packet (2026-10-27)
+
+**Active packet:** G-BB5-CLIENT — DG-1–DG-8 and AO-6/7, branch `fix/r18-client`.
+Acceptance: downloaded config can be deleted after setup; setup errors name the path and option;
+gateway refuses explicit chunking and normalizes backend errors; usage states pacing accurately;
+budget-key semantics are explicit; sign-in probes are quiet; admin names are visible and safe.
+No live changes. [ADR-0050](adr/0050-import-client-configuration.md).
+
+**State:** review follow-up implemented and offline-green, ready for coordinator re-review;
+no push or live deployment.
+DG-1/2 `4f9c987` (safety `bf833c6`, entrypoint proof `bbc8d2b`); DG-3 `70e5b65`;
+DG-4 `5c903a5` (SSE contract `8fdb210`); DG-5 `3cd182b` (zero ceiling `9a6329a`);
+DG-6 `36b72a4` ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md));
+DG-7 `1a417c0` (triage only); DG-8 `dd164f3`; AO-6 `9603675`; AO-7 `21594db`.
+
+Validation: root/admin `npm ci`; full `npm test` through the packet gate; admin tests 203/203;
+`npx tsc -p tsconfig.typecheck.json --noEmit`; `npm run build`; packet gate **PASS**
+(23 passed, two pre-existing warning groups: file size and unrelated open unknowns).
+25/25 targeted guard mutations caught; added-line leak scan zero matches.
+All commands used the isolated Azure CLI profile; no live lab was contacted.
+Native macOS was not exercised. Dependency installation reports two existing high-severity
+audit findings in each package tree; this packet changes no dependencies.
+
+Review follow-up: `85cf4f8` moves publication after preflight, includes the shared configuration
+in client snapshots, rolls back failed writes/completion, and makes Restore recover it.
+Public failed/not-installed paths and both Code/Desktop success/rollback/Restore cases pass.
+`326019f` refuses explicit chunked transfer tokens only; absent Content-Length alone is allowed.
+[BB5-H2](UNKNOWNS.md#bug-bash-5-review-follow-up) records SDK/loopback evidence and the unproven
+APIM HTTP/2 exposure. Nine further guard mutants caught. Fresh root/admin installs, admin tests
+(203/203), CI typecheck, build and full packet gate PASS; the gate's `npm test` took 344.6 seconds.
+
 ## Release 17 (2026-10-26)
 
 **Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an
