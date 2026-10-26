@@ -68,10 +68,10 @@ test("a stored group fills the edit form, and the form round-trips", () => {
 });
 
 test("the console refuses the names the server refuses, and its CSV neutralises the same formula triggers (ADMIN-5)", () => {
-  for (const displayName of [" ", "\t=1+1", "a\r\n=1+1"]) assert.ok(formProblems({ ...filled(), displayName }).displayName, JSON.stringify(displayName));
+  for (const displayName of [" ", "\t=1+1", "a\r\n=1+1", "\u200B", "Eng\u202EgnE", "x\u2066y"]) assert.ok(formProblems({ ...filled(), displayName }).displayName, JSON.stringify(displayName));
   assert.equal(formProblems({ ...filled(), displayName: "Payments – Zürich" }).displayName, undefined);
-  const csv = toCsv(["v"], [{ v: " =1+1" }, { v: "\uFF1D1" }, { v: "plain" }], {});
-  assert.equal(csv, "\nv\n' =1+1\n'\uFF1D1\nplain\n");
+  const csv = toCsv(["v"], [{ v: " =1+1" }, { v: "\uFF1D1" }, { v: "\u200B=1+1" }, { v: "plain" }], {});
+  assert.equal(csv, "\nv\n' =1+1\n'\uFF1D1\n'\u200B=1+1\nplain\n");
 });
 
 test("a malformed group link gets a plain explanation, not a retry of route_not_found (ADMIN-7)", async () => {

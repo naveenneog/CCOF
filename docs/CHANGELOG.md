@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- AO-6: server and console reject invisible-only names and bidi overrides/isolates; CSV
+  formula protection also covers leading invisible format characters.
 - DG-5: usage and the status line show budget pacing below the warning threshold, using the
   stored ceiling, without claiming to know the gateway's live wait.
 - DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic

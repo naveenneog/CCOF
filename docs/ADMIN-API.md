@@ -133,7 +133,9 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 - **Validation:** the same contract the sync and reconciler read
   ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)); problems are
   returned as field paths (`422 invalid_group`). The admin also refuses a `displayName` with no visible text
-  or with control characters such as tabs or line breaks (`displayName:invalid`; 1-256 characters).
+  or with control characters such as tabs or line breaks, or bidi overrides/isolates U+202A–U+202E and
+  U+2066–U+2069 (`displayName:invalid`; 1-256 characters). Format characters such as zero-width space
+  do not count as visible text ([shared server/console rules](../admin/src/text-rules.ts)).
 - **Change record:** each write is recorded in `adminConfig` before it is applied, as for projects.
 - **Directory lookup:** enabled with `ADMIN_GROUP_SEARCH_ENABLED=true`. The admin managed identity
   needs Microsoft Graph application permissions `Group.ReadBasic.All` (search and read) and
