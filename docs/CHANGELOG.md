@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-26 — Claude Code setup on macOS and Linux (branch fix/macos-client)
+
+- `Set-ClaudeCodeGateway.ps1`, `Restore-ClaudeCodeGateway.ps1` and `Test-ClientGatewayAccess.ps1` run in PowerShell
+  7.4+ on macOS and Linux with `signInMethod: azure-cli` ([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md)):
+  `~/.claude/settings.json`, an `sh` token helper `~/.claude/ccof-token` with its own Azure CLI profile, and `/usage`
+  and the status line through `pwsh`. Files are created owner-only.
+- Any other sign-in method stops there with `unsupported_sign_in_method`; Claude Desktop setup stays Windows-only.
+- `/usage` and the Node helper name the macOS/Linux install route and helper in their messages.
+- Windows behaviour is unchanged.
 ## 2026-10-26 — Admin bug-bash fixes (fix/bugbash-admin)
 
 - Groups may use only a backend in `ADMIN_BACKENDS` (written by Stage 5) and models deployed on it; the console

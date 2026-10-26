@@ -7,7 +7,7 @@ Two sign-in methods are available, set by `signInMethod` in the client configura
 | `signInMethod` | Token source | Needs |
 | --- | --- | --- |
 | `msal` (default) | `ccof-token` Node helper: WAM or browser sign-in, MSAL encrypted cache | Node.js 22 |
-| `azure-cli` | Generated `ccof-token.cmd`: one interactive `az login` in its own Azure CLI profile, then `az account get-access-token` | Azure CLI on PATH; the deployment set `entra.allowAzureCliClient` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)) |
+| `azure-cli` | Generated `ccof-token.cmd` (Windows) or `ccof-token` (`sh`, macOS and Linux): one interactive `az login` in its own Azure CLI profile, then `az account get-access-token` | Azure CLI on PATH; the deployment set `entra.allowAzureCliClient` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)) |
 
 An ordinary Azure CLI login on its own is not accepted: the gateway app must preauthorize the Azure CLI and APIM
 must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. The
@@ -15,22 +15,28 @@ must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. 
 remains available for testing.
 The standalone `client/` Node package contains
 `ccof-token`. Its dependencies are separate from the gateway's server dependencies.
-The PowerShell workstation scripts target Windows ([macOS and Linux](#macos-and-linux)).
+The PowerShell workstation scripts target Windows; the Claude Code setup also runs on macOS and Linux
+([macOS and Linux](#macos-and-linux)).
 
 ## macOS and Linux
 
-What a developer on macOS (or Linux) can use today:
+The Claude Code setup runs in PowerShell 7.4 or later (`pwsh`) on macOS and Linux with `signInMethod: azure-cli`
+([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md)). Steps: [developer setup](get-started/05-developer-setup.md).
 
-| Part | macOS and Linux today |
-| --- | --- |
-| `Set-ClaudeCodeGateway.ps1`, `Set-ClaudeDesktopGateway.ps1`, `Restore-*`, `Test-InstalledClients.ps1`, `Test-ClientGatewayAccess.ps1` | **Not supported.** They write Windows `.cmd` helpers and use Windows folders. They stop first with `{"event":"unsupported_platform",…}` and exit code 2, and change nothing |
-| `signInMethod: azure-cli` (helper `ccof-token.cmd`) | **Not supported** (a `cmd.exe` script) |
-| `/usage` skill and status line | **Not supported** (installed only by the Windows setup script) |
-| Claude Desktop setup | **Not supported** (Windows configuration library only) |
-| `ccof-token` helper, `signInMethod: msal` | The code handles macOS (configuration in `~/Library/Application Support/ClaudeGateway/config.json`, token cache in the Keychain, sign-in in the default browser) and Linux (libsecret). Its offline tests pass on Linux. A sign-in on a real Mac has not been tested |
+| Part | Windows | macOS and Linux |
+| --- | --- | --- |
+| `Set-ClaudeCodeGateway.ps1`, `Restore-ClaudeCodeGateway.ps1`, `Test-ClientGatewayAccess.ps1` | Supported | Supported with `signInMethod: azure-cli`. Any other method stops with `unsupported_sign_in_method` and changes nothing |
+| Token helper Claude Code runs (`apiKeyHelper`) | `%USERPROFILE%\.claude\ccof-token.cmd` | `~/.claude/ccof-token`, an `sh` script (mode 700); Claude Code runs `apiKeyHelper` through `/bin/sh` there ([Claude Code settings reference](https://code.claude.com/docs/en/settings-reference#apikeyhelper)) |
+| Configuration folder (setup's default) | `%LOCALAPPDATA%\ClaudeGateway` | `$XDG_CONFIG_HOME/ClaudeGateway` if set, else `~/.config/ClaudeGateway` |
+| The helper's own Azure CLI profile (`AZURE_CONFIG_DIR`) | `az` in the configuration folder | `az` in the configuration folder (mode 700) |
+| `/usage` skill and status line | `powershell -File` (Git Bash) or `& '<wrapper>'` | `pwsh -NoProfile -File "<home>/.claude/ccof-usage.ps1"` through the Bash tool, pre-approved by the skill |
+| Claude Desktop setup, `Test-InstalledClients.ps1` | Supported | **Not supported**: stops with `{"event":"unsupported_platform",…}`, exit code 2, changes nothing |
+| `ccof-token` Node helper, `signInMethod: msal` | Supported | Not set up by the scripts. The code handles macOS (Keychain cache, default browser) and Linux (libsecret) and its offline tests pass on Linux; no sign-in on a Mac has been tested |
 
-There is no supported way yet to point Claude Code on macOS at the gateway with these scripts. Developers use a
-Windows machine for now. macOS setup is planned (roadmap item G-MACOS-CLIENT).
+Files setup writes on macOS and Linux are created readable by the owner only (600; the helper and new folders
+700). Setup pins the configuration path into Claude Code's settings (`CCOF_CONFIG_FILE`), so the Node helper's own
+per-platform default ([section 2](#2-prepare-the-helper-and-configuration)) is not used. Proved on Linux pwsh with Claude
+Code 2.1.272; not yet run on a Mac ([UNKNOWNS MAC-8](UNKNOWNS.md)).
 
 The **deployment** (Stages 0-8, the admin's commands) runs in PowerShell 7 on macOS:
 [prerequisites](get-started/02-prerequisites.md#install-the-tools).

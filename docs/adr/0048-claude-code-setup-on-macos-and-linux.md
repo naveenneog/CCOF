@@ -44,6 +44,10 @@ Option 3.
 - **Configuration folder.** The default configuration path is `$XDG_CONFIG_HOME/ClaudeGateway/config.json`
   (when absolute), else `~/.config/ClaudeGateway/config.json`; `-ConfigPath` and `CCOF_CONFIG_FILE` still win. The
   helper's Azure CLI profile is `az` beside the configuration, as on Windows, kept at mode 700.
+  Reconciled difference: the Node helper's own default (used by `msal`) is `~/Library/Application Support/ClaudeGateway`
+  on macOS and `claude-gateway` under the XDG folder on Linux (CLIENTS.md section 2). Setup does not use that default:
+  it pins the chosen path into `settings.json` (`CCOF_CONFIG_FILE`) and the `/usage` wrapper, and `msal` is not set
+  up off Windows. One folder for macOS and Linux, without a space, keeps the documented commands identical.
 - **`/usage` and the status line** run the same `ccof-usage.ps1` wrapper with
   `pwsh -NoProfile -File "<home>/.claude/ccof-usage.ps1"`; the skill pre-approves exactly
   `Bash(<that command>)`. The home path may not hold `` ` ``, `$` or `"`, which bash would expand inside the double

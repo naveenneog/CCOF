@@ -24,7 +24,9 @@
 - [ ] G-NOVICE3: first-time-reader deployment of main with the long-term audit on, then a bug bash on that lab.
 - [ ] G-AUDIT-FU: mark a month while a per-person history deletion runs and refuse exports until it completes; show in exports that history was redacted.
 - [ ] G-MACOS: the deployer runs PowerShell 7 on macOS: Stages 0-8, docs with the macOS install route, offline suites under Linux pwsh (branch `fix/macos`; proved on Linux pwsh, not on a real Mac).
-- [ ] G-MACOS-CLIENT: developer setup on macOS: Claude Code settings with a POSIX `ccof-token` helper (`msal` with the Keychain, and `azure-cli`), `/usage`, Desktop; today the setup scripts stop with `unsupported_platform` (UNKNOWNS MAC-1).
+- [ ] G-MACOS-CLIENT: Claude Code setup on macOS and Linux with `signInMethod: azure-cli`: `sh` helper, `~/.claude/settings.json`, `/usage` and the status line through `pwsh` ([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md); branch `fix/macos-client`; proved on Linux pwsh, not on a real Mac, UNKNOWNS MAC-8).
+- [ ] G-MACOS-MSAL: `signInMethod: msal` on macOS and Linux (POSIX shim for the Node helper, Keychain/libsecret cache, browser sign-in tested on a Mac); refused today with `unsupported_sign_in_method`.
+- [ ] G-MACOS-DESKTOP: Claude Desktop on macOS (its configuration library location, the helper-script profile with the `sh` helper, the macOS broker redirect); `Set-ClaudeDesktopGateway.ps1` stops with `unsupported_platform` today.
 - [ ] G-GUARD-COUNTER (High, pending analysis): a guard `429` with a multi-hour `Retry-After` outlives a raised budget (bug bash DEV-3, UNKNOWNS DEV-3).
 | Packet | Status | Acceptance |
 | --- | --- | --- |

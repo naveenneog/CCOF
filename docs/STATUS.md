@@ -37,6 +37,30 @@
 - Follow-up (non-blocking): a per-person history deletion that stops part-way is not yet marked as in progress, and
   exports do not yet show that a person's history was deleted.
 
+### G-MACOS-CLIENT — Claude Code setup on macOS and Linux (branch `fix/macos-client`, 2026-10-26)
+
+- Acceptance: given a client configuration with `signInMethod: azure-cli`, `pwsh ./scripts/client/Set-ClaudeCodeGateway.ps1
+  -Confirmed` on macOS or Linux writes `~/.claude/settings.json` (gateway `env` as on Windows) and an `sh` helper
+  `~/.claude/ccof-token` (700) pinned to the `az` found at setup, with its own `AZURE_CONFIG_DIR` (700) and the verbs
+  `token`/`silent-token`/`login`/`status`/`logout`, printing only the token; `/usage` and the status line run through
+  `pwsh -NoProfile -File`, pre-approved by the skill; another sign-in method stops with `unsupported_sign_in_method`
+  before writing; Windows output unchanged ([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md), UNKNOWNS
+  MAC-4..MAC-9).
+- Tests: `tests/Test-ClaudeCodePosix.ps1` (6 cases on Windows with the platform simulated, 12 on Linux pwsh: `sh` helper
+  against a mock `az`, file modes, a quote and space in the home path under `/bin/sh`, entrypoints end to end with
+  restore); Test-CrossPlatform (Claude Code entrypoints carry no `unsupported_platform` guard); client Node tests for the
+  `sh` helper and messages. 18 mutations caught (2 only catchable off Windows).
+- Live, Linux pwsh 7.6.9 in WSL, Azure CLI 2.91.0, Claude Code 2.1.272, lab `ccof-nov3-rg` (sign-in replaced by a copy
+  of a signed-in Linux Azure CLI profile in the helper's own folder, deleted afterwards): `silent-token` before sign-in
+  exit 4 with nothing on stdout; after: a JWT, and the same token from `apiKeyHelper` under `/bin/sh`; gateway
+  `POST /v1/messages` `429` "tokens-per-minute limit" (the test account's known guard block, UNKNOWNS DEV-3; a bad token
+  gets `401`), so the helper's token was accepted; `claude -p` "API Error: Request rejected (429) … tokens-per-minute
+  limit"; the `/usage` wrapper and the status line command read `GET /anthropic/ccof/me/usage`
+  (`CCOF $0.01/$100.00 (0%)`); the generated skill command and grant ran under Claude Code's Bash tool and its lines
+  reached the model (a copy without the grant: "permission check failed"); the verifier: token verified, `429`.
+- Not verified on a Mac: the browser `az login` from the helper, Homebrew paths, the Azure CLI cask's broker sign-in,
+  APFS modes (UNKNOWNS MAC-8). Not supported: `msal` and Claude Desktop on macOS (ROADMAP G-MACOS-MSAL, G-MACOS-DESKTOP).
+
 ### G-MACOS — the deployer on macOS (branch `fix/macos`, 2026-10-26)
 
 - Acceptance: a deployer runs Stages 0-8 from PowerShell 7 on macOS by following the pages; the docs give the macOS
