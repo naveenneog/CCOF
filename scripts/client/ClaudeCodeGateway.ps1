@@ -76,7 +76,8 @@ function New-CcofUsageSkill {
     #>
     param([Parameter(Mandatory)][string]$WrapperPath, [ValidateSet('bash', 'powershell')][string]$Shell = 'bash')
     if ($WrapperPath -match "[`r`n```$`"]") { throw 'The usage wrapper path cannot hold a line break, backtick, dollar sign or quote.' }
-    $command = if ($Shell -ceq 'bash') { Get-CcofUsageCommand $WrapperPath } else { "& '$($WrapperPath.Replace('\', '/').Replace("'", "''"))'" }
+    # PowerShell closes a single-quoted string at ' and at U+2018-U+201B; doubling any of them keeps it literal.
+    $command = if ($Shell -ceq 'bash') { Get-CcofUsageCommand $WrapperPath } else { "& '" + ($WrapperPath.Replace('\', '/') -replace "(['\u2018-\u201B])", '$1$1') + "'" }
     $tool = if ($Shell -ceq 'bash') { 'Bash' } else { 'PowerShell' }
     $lines = @(
         '---'

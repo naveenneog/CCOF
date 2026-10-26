@@ -153,6 +153,13 @@ try {
         Assert ($skill -notmatch '(?m)^!`powershell ') 'The skill spawns a nested powershell, which the PowerShell tool refuses'
         Assert ($skill.Contains("  - '" + "PowerShell($command)".Replace("'", "''") + "'")) "The skill does not pre-approve exactly its command for the PowerShell tool: $skill"
         Refuses { New-CcofUsageSkill -WrapperPath (Join-Path $work 'a$b/ccof-usage.ps1') -Shell powershell } 'dollar sign'
+        # PowerShell also closes a single-quoted string at U+2018-U+201B (a home folder such as O’Brien).
+        $curly = "C:/Users/O$([char]0x2019)Brien x$([char]0x2018)/.claude/ccof-usage.ps1"
+        $curlyCommand = [regex]::Match((New-CcofUsageSkill -WrapperPath $curly -Shell powershell), '(?m)^!`(.+)`\r?$').Groups[1].Value
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseInput($curlyCommand, [ref]$tokens, [ref]$errors)
+        $element = $ast.EndBlock.Statements[0].PipelineElements[0].CommandElements[0]
+        Assert ($errors.Count -eq 0 -and $element.Value -ceq $curly) "A typographic quote in the path breaks the PowerShell-form command: $curlyCommand"
         $real = [regex]::Match([IO.File]::ReadAllText((Join-Path $claudeHome 'skills/usage/SKILL.md')), '-File "([^"]+)"').Groups[1].Value
         $ps = & pwsh -NoProfile -Command ("& '" + $real.Replace("'", "''") + "' --bogus-argument") 2>&1 | Out-String
         Assert ($ps -match 'Usage: ccof-usage \[--statusline\]') "The direct wrapper call did not reach ccof-usage ($real): $ps"
