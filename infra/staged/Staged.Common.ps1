@@ -450,6 +450,19 @@ function Invoke-StgBicep {
         Write-Host "verify-only: Stage $StageNumber inputs and prerequisites match; reading back without redeploying. If verification fails, inspect drift; use -ForceRedeploy -Apply to repair from config."
         return (Read-StgState $Cfg).stages["$StageNumber"].outputs
     }
+    $appliedFile = Join-Path $script:StateDir "$Name.applied.parameters.json"
+    if (-not $Apply -and $StageNumber -in 2, 5) {
+        $previousFile = if (Test-Path -LiteralPath $appliedFile) { $appliedFile } else { Join-Path $script:StateDir "$Name.parameters.json" }
+        if (Test-Path -LiteralPath $previousFile) {
+            $previous = (Get-Content -LiteralPath $previousFile -Raw | ConvertFrom-Json -AsHashtable -Depth 100).parameters
+            $changedParameters = @(@($previous.Keys) + @($Parameters.Keys) | Sort-Object -Unique | Where-Object {
+                (ConvertTo-StgCanonical $previous[$_].value | ConvertTo-Json -Depth 100 -Compress) -cne
+                (ConvertTo-StgCanonical $Parameters[$_] | ConvertTo-Json -Depth 100 -Compress)
+            })
+            if ($changedParameters.Count) { Write-Host "preview: changed parameters: $($changedParameters -join ', ') (compared with $(Split-Path $previousFile -Leaf); values are not printed)." }
+            if ($previousFile -cne $appliedFile) { Write-Host 'preview: no applied-parameter snapshot exists yet; comparison uses the last generated parameters, which may be from a preview.' }
+        } else { Write-Host 'preview: no previous parameters available; compare with your saved config before applying.' }
+    }
     $file = Write-StgParameters $Cfg $Name $Parameters
     $common = @('--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--name', $Name, '--template-file', (Join-Path $script:StagedDir $Template), '--parameters', "@$file")
     if (-not $Apply) {
@@ -464,6 +477,7 @@ function Invoke-StgBicep {
     $started = [DateTime]::UtcNow
     $result = Invoke-QsAz (@('deployment', 'group', 'create', '--mode', 'Incremental') + $common + @('--output', 'json'))
     Assert-Stg ($result.properties.provisioningState -ceq 'Succeeded') "$Name provisioning state is $($result.properties.provisioningState)"
+    if ($StageNumber -in 2, 5) { Copy-Item -LiteralPath $file -Destination $appliedFile -Force }
     $out = @{}; foreach ($k in $result.properties.outputs.Keys) { $out[$k] = $result.properties.outputs[$k].value }
     $null = Write-StgEvidence "$Name.deployment.json" ([ordered]@{ name = $Name; startedAt = $started.ToString('o'); completedAt = [DateTime]::UtcNow.ToString('o'); duration = $result.properties.duration; state = $result.properties.provisioningState; outputs = $out })
     Write-Host "deployed $Name ($($result.properties.duration))"

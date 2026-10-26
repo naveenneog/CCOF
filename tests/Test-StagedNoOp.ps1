@@ -32,6 +32,17 @@ function Invoke-QsAz { param([string[]]$Arguments)
     } } }
 }
 try {
+    $null = Write-StgParameters $cfg 'stage5-config' @{ reconciler = @{ budgetGuard = @{ warnPercent = 80 } }; tenantId = 't' }
+    $changed = $cfg.Clone(); $changed.reconciler = @{ budgetGuard = @{ warnPercent = 79 } }
+    $preview = Invoke-StgBicep -Cfg $changed -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{
+        reconciler = $changed.reconciler; tenantId = 't'
+    } 6>&1 | Out-String
+    Assert-Contract ($preview -match 'changed parameters: reconciler' -and $preview -notmatch 'changed parameters:[^\r\n]*tenantId') 'AO-4: changed Stage 5 preview must name reconciler, not unchanged parameters or their values.'
+    $null = Invoke-StgBicep -Cfg $cfg -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{ reconciler = $cfg.reconciler; tenantId = 't' } -Apply -ForceRedeploy
+    foreach ($attempt in 1, 2) {
+        $preview = Invoke-StgBicep -Cfg $changed -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{ reconciler = $changed.reconciler; tenantId = 't' } 6>&1 | Out-String
+        Assert-Contract ($preview -match 'changed parameters: reconciler' -and $preview -match 'stage5-config.applied.parameters.json') 'AO-4: repeated previews must compare with the applied snapshot, not overwrite the comparison baseline.'
+    }
     foreach ($n in 2, 5) {
         $script:deploys = 0
         $out = Invoke-StgBicep -Cfg $cfg -Template 'unused.bicep' -Name "stage$n" -StageNumber $n -Parameters @{} -Apply

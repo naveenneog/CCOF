@@ -7,6 +7,8 @@
   Stage 2 verifies existing grants remain unchanged. The troubleshooting row covers Stages 0–8.
 - AO-3: unchanged Stage 2/5 applies verify without redeploying; `-ForceRedeploy` explicitly previews or applies
   a repair. Stage 5 no-op verifies retention instead of rewriting it.
+- AO-4: changed previews list parameter names (never values), comparing with the last successful
+  deployment snapshot; older state explicitly labels its last-generated-file fallback.
 
 ## 2026-10-26 — Release 17
 
