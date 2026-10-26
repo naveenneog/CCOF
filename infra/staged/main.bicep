@@ -156,7 +156,7 @@ module foundryAccount 'foundry-account.bicep' = if (foundry.?create ?? false) {
   name: 'stage1-foundry'
   params: {
     name: foundry.accountName
-    location: location
+    location: foundry.?location ?? location
     tags: tags
     publicNetworkAccess: foundry.?publicNetworkAccess ?? 'Disabled'
     deployments: foundry.deployments

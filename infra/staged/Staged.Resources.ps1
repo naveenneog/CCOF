@@ -37,10 +37,10 @@ function Invoke-Stage0 {
             $planned = @($fd.deployments | ForEach-Object { $_.name })
             $missing = @($b.deploymentInferenceGeo.Keys | Where-Object { $planned -cnotcontains $_ })
             Assert-Stg (-not $missing.Count) "backend $($b.id) names deployments that stage1.foundry does not create: $($missing -join ', ')"
-            $models = @(Invoke-StgAzJson @('cognitiveservices', 'model', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+            $models = @(Invoke-StgAzJson @('cognitiveservices', 'model', 'list', '--subscription', $Cfg.subscriptionId, '--location', (Get-StgFoundryLocation $Cfg)))
             foreach ($d in $fd.deployments) {
                 $ok = @($models | Where-Object { $_.model.format -ceq 'Anthropic' -and $_.model.name -ceq $d.model -and $_.model.version -ceq "$($d.version)" -and @($_.model.skus | ForEach-Object name) -contains ($d.sku ?? 'GlobalStandard') })
-                Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $($Cfg.location) for this subscription"
+                Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $(Get-StgFoundryLocation $Cfg) for this subscription. Claude is offered only in some regions: set stage1.foundry.location to one that offers it (az cognitiveservices model list -l <region>), or reuse an existing account with stage1.foundry.create false"
             }
             Assert-StgFoundryQuota -Cfg $Cfg -Deployments @($fd.deployments)
             $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
@@ -73,11 +73,19 @@ function Get-StgFoundryDeployments {
     return @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value)
 }
 
+function Get-StgFoundryLocation {
+    # A new Foundry account may sit in a Claude region other than the deployment location (no Claude in Central India).
+    param($Cfg)
+    if ($Cfg.stage1.foundry.location) { return [string]$Cfg.stage1.foundry.location }
+    return [string]$Cfg.location
+}
+
 function Assert-StgFoundryQuota {
     # Each quota line is AIServices.<sku>.<model>.Azure; deployments sharing a line add up. A missing line is not
     # refused: the model list already confirmed the offer, and Stage 1 reports any remaining quota error.
     param($Cfg, [object[]]$Deployments)
-    $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+    $foundryRegion = Get-StgFoundryLocation $Cfg
+    $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $foundryRegion))
     $existing = @(Get-StgFoundryDeployments $Cfg)
     $needed = [ordered]@{}
     foreach ($d in $Deployments) {
@@ -98,10 +106,10 @@ function Assert-StgFoundryQuota {
         if ($needed[$line].capacity -gt $free) { "deployment $($needed[$line].names -join ' + ') needs $($needed[$line].capacity)$more of $line; $free free ($($u.currentValue) of $($u.limit) used)" }
     }
     if (-not @($short).Count) { return }
-    $region = $Cfg.location.Replace(' ', '').ToLowerInvariant()
+    $region = $foundryRegion.Replace(' ', '').ToLowerInvariant()
     $deleted = @(Invoke-StgAzJson @('cognitiveservices', 'account', 'list-deleted', '--subscription', $Cfg.subscriptionId) | Where-Object { ([string]$_.location).Replace(' ', '').ToLowerInvariant() -ceq $region } | ForEach-Object { $_.name })
-    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $($Cfg.location) keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
-    Assert-Stg $false "model quota in $($Cfg.location): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
+    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $foundryRegion keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
+    Assert-Stg $false "model quota in $($foundryRegion): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
 }
 
 # ---------------------------------------------------------------- stage 1: resources only
