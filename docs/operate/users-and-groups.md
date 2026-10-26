@@ -47,9 +47,9 @@ $settingsFile = Join-Path $private 'snapshot-settings.json'
 $snapshot = Join-Path $private ('.env.sync-snapshot-' + [guid]::NewGuid().ToString('N') + '.json')
 npm run build
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-node .\dist\sync\cli.js snapshot --credential azure-cli --groups $groupsFile --settings $settingsFile --out $snapshot
+node ./dist/sync/cli.js snapshot --credential azure-cli --groups $groupsFile --settings $settingsFile --out $snapshot
 if ($LASTEXITCODE -ne 0) { throw 'Snapshot failed; nothing applied' }
-pwsh -File .\infra\sync\Invoke-SnapshotApplyThroughFunction.ps1 `
+pwsh -File ./infra/sync/Invoke-SnapshotApplyThroughFunction.ps1 `
     -Subscription $deployment.subscriptionId -ResourceGroup $deployment.resourceGroup `
     -FunctionApp '<sync-app-name>' -AppInsights '<sync-app-insights-name>' `
     -SnapshotPath $snapshot -ExpectedSnapshotSha256 '<SHA-256 printed by the snapshot command>'

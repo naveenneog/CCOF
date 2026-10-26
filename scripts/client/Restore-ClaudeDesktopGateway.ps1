@@ -3,5 +3,6 @@
 param([Parameter(Mandatory)][string]$BackupPath, [switch]$Confirmed, [switch]$AllowChangedFiles)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClientGateway.Common.ps1')
+Assert-ClientWindows -Script 'Restore-ClaudeDesktopGateway.ps1'
 Restore-ClientSnapshot -BackupPath $BackupPath -Kind 'claude-desktop' `
     -Confirmed:$Confirmed -AllowChangedFiles:$AllowChangedFiles

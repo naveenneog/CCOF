@@ -37,9 +37,31 @@ The [demo evidence](../evidence/2026-10-24-demo/README.md) records which directo
 - [ ] **Network team**, unless a lab creates its own network (`network.mode: create`).
 - [ ] **Cost approval** for API Management Standard v2, Function Apps, Cosmos DB, Log Analytics and model usage.
 
-## Tools (Azure Cloud Shell has them all)
+## Install the tools
 
-- [ ] PowerShell 7.2 or later, Azure CLI with Bicep, Node.js 22 and npm, Git.
+- [ ] PowerShell 7.2 or later, Azure CLI with Bicep, Node.js 22 or later and npm, Git.
+
+Azure Cloud Shell (PowerShell) has them all and is already signed in. On your own computer, install them once:
+
+**macOS** (Terminal, with [Homebrew](https://brew.sh)):
+
+```bash
+brew update
+brew install powershell azure-cli node@22 git
+echo 'export PATH="$(brew --prefix node@22)/bin:$PATH"' >> ~/.zprofile
+```
+
+Then open a **new** Terminal window and start PowerShell with `pwsh`. Every command in these pages runs in
+`pwsh`. Check: `pwsh --version`, `az version`, `node --version` (v22 or later) and `git --version`. Bicep needs no
+separate install: the Azure CLI installs it on the first deployment ([Install Bicep tools](https://learn.microsoft.com/azure/azure-resource-manager/bicep/install));
+`az bicep install` installs it now. Sources:
+[Azure CLI on macOS](https://learn.microsoft.com/cli/azure/install-azure-cli-macos) (`brew install azure-cli`, macOS 13 or later);
+[PowerShell on macOS](https://learn.microsoft.com/powershell/scripting/install/install-powershell-on-macos)
+(Microsoft's preferred route is the signed `.pkg` from that page; `brew install powershell` is the Homebrew
+community formula, [alternate methods](https://learn.microsoft.com/powershell/scripting/install/alternate-install-methods#install-on-macos-using-homebrew));
+[node@22](https://formulae.brew.sh/formula/node@22) is keg-only, hence the `PATH` line, and Homebrew marks it
+deprecated from 2026-10-30 (it still installs, with a warning, until 2027-10-30); the Node.js 22 LTS installer from
+[nodejs.org](https://nodejs.org/) works too.
 
 ## Microsoft Foundry models
 

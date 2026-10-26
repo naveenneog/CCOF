@@ -61,4 +61,36 @@ $noForce = foreach ($file in $deployer) {
 }
 Assert-Contract (-not @($noForce).Count) "Remove-Item without -Force leaves dot-files on macOS/Linux: $(@($noForce) -join ', ')"
 
-"Cross-platform: $passed checks passed (Windows-only cmd.exe guards, hidden-file removal). No Azure calls."
+# 3. The workstation setup scripts generate cmd.exe helpers and use Windows folders (APPDATA, LOCALAPPDATA,
+#    registry policies). On macOS and Linux each stops first with one JSON line and exit code 2, before it reads
+#    or writes anything, instead of failing half-way with a null-path error.
+$clientDir = Join-Path $root 'scripts/client'
+$probe = "`$ErrorActionPreference = 'Stop'; . '$((Join-Path $clientDir 'ClientGateway.Common.ps1').Replace("'", "''"))'; Assert-ClientWindows -Script 'Set-ClaudeCodeGateway.ps1' -OnWindows:`$false; 'continued'"
+$lines = @(pwsh -NoProfile -Command $probe 2>&1 | ForEach-Object { "$_" })
+$code = $LASTEXITCODE
+$event = try { $lines[0] | ConvertFrom-Json -AsHashtable } catch { @{} }
+Assert-Contract ($code -eq 2 -and $lines.Count -eq 1 -and $event.event -ceq 'unsupported_platform' -and $event.script -ceq 'Set-ClaudeCodeGateway.ps1' -and $event.docs -ceq 'docs/CLIENTS.md#macos-and-linux') "Off Windows the client scripts must stop with unsupported_platform and exit 2 (exit $code): $($lines -join ' | ')"
+$lines = @(pwsh -NoProfile -Command ($probe -replace '-OnWindows:\$false', '-OnWindows:$true') 2>&1 | ForEach-Object { "$_" })
+Assert-Contract ($LASTEXITCODE -eq 0 -and ($lines -join '') -ceq 'continued') "On Windows the client scripts must continue: $($lines -join ' | ')"
+foreach ($name in 'Set-ClaudeCodeGateway.ps1', 'Set-ClaudeDesktopGateway.ps1', 'Restore-ClaudeCodeGateway.ps1', 'Restore-ClaudeDesktopGateway.ps1', 'Test-InstalledClients.ps1', 'Test-ClientGatewayAccess.ps1') {
+    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $clientDir $name), [ref]$null, [ref]$null)
+    $first = @($ast.EndBlock.Statements | Where-Object { $_.Extent.Text -notmatch '^\$ErrorActionPreference|^\. \(Join-Path \$PSScriptRoot' })[0]
+    Assert-Contract ($first.Extent.Text -ceq "Assert-ClientWindows -Script '$name'") "$name must call Assert-ClientWindows -Script '$name' before anything else (first: $($first.Extent.Text))"
+}
+
+# 4. The deployer's pages are followed in pwsh on macOS too. A native command (node, npm, az) gets its arguments
+#    unchanged, so a .\ or backslash path fails there; Windows-only folders and drive letters do not exist.
+#    05-developer-setup.md is Windows-only by statement and excluded.
+$pages = @('README.md', 'docs/STAGED-DEPLOYMENT-GUIDE.md') + @(Get-ChildItem (Join-Path $root 'docs/get-started'), (Join-Path $root 'docs/operate') -Filter '*.md' |
+    Where-Object Name -ne '05-developer-setup.md' | ForEach-Object { $_.FullName.Substring($root.Length + 1) })
+$windowsOnly = foreach ($page in $pages) {
+    $text = Get-Content -LiteralPath (Join-Path $root $page) -Raw
+    foreach ($block in [regex]::Matches($text, '(?ms)^```(?:powershell|pwsh)\s*$(.*?)^```')) {
+        foreach ($line in ($block.Groups[1].Value -split "`r?`n")) {
+            if ($line -match '(^|[\s(''"])\.\\|\b[A-Za-z]:\\|\$env:(USERPROFILE|LOCALAPPDATA|APPDATA|TEMP|TMP|ComSpec)\b|\bcmd(\.exe)? /c\b|\.cmd\b') { "${page}: $($line.Trim())" }
+        }
+    }
+}
+Assert-Contract (-not @($windowsOnly).Count) "Deployer pages hold Windows-only commands: $(@($windowsOnly) -join ' | ')"
+
+"Cross-platform: $passed checks passed (Windows-only cmd.exe guards, hidden-file removal, client scripts stop off Windows). No Azure calls."

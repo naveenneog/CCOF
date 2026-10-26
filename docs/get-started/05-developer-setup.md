@@ -5,7 +5,11 @@
 Azure CLI sign-in, membership of an onboarded group, and the client
 configuration file that Stage 7 generated (`client-config.json`), handed over through the approved private channel.
 
-Full details, macOS and Linux paths, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
+Full details, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
+
+**Windows only.** The setup on this page runs on Windows. On a Mac it stops with `unsupported_platform` and
+changes nothing; what macOS supports today: [CLIENTS.md, macOS and Linux](../CLIENTS.md#macos-and-linux). The
+administrator's deployment (Stages 0-8) does run on a Mac.
 
 ## 0. Get the code
 

@@ -15,8 +15,25 @@ must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. 
 remains available for testing.
 The standalone `client/` Node package contains
 `ccof-token`. Its dependencies are separate from the gateway's server dependencies.
-The PowerShell workstation scripts target Windows; the token helper also supports
-macOS and Linux secure storage.
+The PowerShell workstation scripts target Windows ([macOS and Linux](#macos-and-linux)).
+
+## macOS and Linux
+
+What a developer on macOS (or Linux) can use today:
+
+| Part | macOS and Linux today |
+| --- | --- |
+| `Set-ClaudeCodeGateway.ps1`, `Set-ClaudeDesktopGateway.ps1`, `Restore-*`, `Test-InstalledClients.ps1`, `Test-ClientGatewayAccess.ps1` | **Not supported.** They write Windows `.cmd` helpers and use Windows folders. They stop first with `{"event":"unsupported_platform",…}` and exit code 2, and change nothing |
+| `signInMethod: azure-cli` (helper `ccof-token.cmd`) | **Not supported** (a `cmd.exe` script) |
+| `/usage` skill and status line | **Not supported** (installed only by the Windows setup script) |
+| Claude Desktop setup | **Not supported** (Windows configuration library only) |
+| `ccof-token` helper, `signInMethod: msal` | The code handles macOS (configuration in `~/Library/Application Support/ClaudeGateway/config.json`, token cache in the Keychain, sign-in in the default browser) and Linux (libsecret). Its offline tests pass on Linux. A sign-in on a real Mac has not been tested |
+
+There is no supported way yet to point Claude Code on macOS at the gateway with these scripts. Developers use a
+Windows machine for now. macOS setup is planned (roadmap item G-MACOS-CLIENT).
+
+The **deployment** (Stages 0-8, the admin's commands) runs in PowerShell 7 on macOS:
+[prerequisites](get-started/02-prerequisites.md#install-the-tools).
 
 ## 1. Check what is installed
 
