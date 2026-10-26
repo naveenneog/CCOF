@@ -23,6 +23,9 @@
 - [x] G-AUDIT: long-term audit — gateway log archive (ADR-0043) and chargeback history in Cosmos DB (ADR-0044), council four rounds, live on a lab; merged into main 2026-10-26 (2265e25).
 - [ ] G-NOVICE3: first-time-reader deployment of main with the long-term audit on, then a bug bash on that lab.
 - [ ] G-AUDIT-FU: mark a month while a per-person history deletion runs and refuse exports until it completes; show in exports that history was redacted.
+- [ ] G-MACOS: the deployer runs PowerShell 7 on macOS: Stages 0-8, docs with the macOS install route, offline suites under Linux pwsh (branch `fix/macos`; proved on Linux pwsh, not on a real Mac).
+- [ ] G-MACOS-CLIENT: developer setup on macOS: Claude Code settings with a POSIX `ccof-token` helper (`msal` with the Keychain, and `azure-cli`), `/usage`, Desktop; today the setup scripts stop with `unsupported_platform` (UNKNOWNS MAC-1).
+- [ ] G-GUARD-COUNTER (High, pending analysis): a guard `429` with a multi-hour `Retry-After` outlives a raised budget (bug bash DEV-3, UNKNOWNS DEV-3).
 | Packet | Status | Acceptance |
 | --- | --- | --- |
 | G0 — Baseline and contract | Complete | ADR-0033 records the baseline model; ADR-0034 records the decision; unknowns logged |
