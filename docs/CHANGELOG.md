@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic
+  backend failures get an Anthropic envelope without exposing backend details.
 - DG-3: requests without a valid length are refused before body parsing or forwarding.
 - DG-1/2: setup imports the downloaded configuration into the per-user configuration folder;
   a missing or invalid configuration names the file and `-ConfigPath`.

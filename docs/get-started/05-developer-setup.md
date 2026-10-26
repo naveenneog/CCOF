@@ -132,6 +132,7 @@ What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current
 | `403 Model … is not available in group …` | Choose one of the models the message lists (`/model`) |
 | `403 … budget … used up` or `has reached your Claude budget` | Budget reached; the second clears within minutes. Ask the budget owner |
 | `429 … slowed by the budget guard` | Spending is paced to stay within the budget; wait, or ask for a higher budget |
+| `429 … shared Foundry deployment limit` | Everyone using that deployment shares its capacity; follow `Retry-After`, or ask the platform team about capacity. This is not your personal budget or token limit ([gateway](../GATEWAY.md)) |
 | `429` | A limit is reached; Claude Code retries |
 
 More: [troubleshooting](../operate/troubleshooting.md).

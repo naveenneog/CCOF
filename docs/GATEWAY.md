@@ -162,6 +162,7 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500), or a variant of `/v1/messages` such as a trailing slash | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
+| Foundry deployment capacity reached (shared by callers of that deployment, not a personal limit) | Backend 429 and `Retry-After` preserved | `rate_limit_error` |
 | Person or group token quota used up (the message names which, and when it resets) | 403 | `permission_error` |
 | Person's or group's budget used up (C-7; the message names which), or reached by recorded plus recent spend | 403 | `permission_error` |
 | Access cannot be confirmed (resolver unavailable, no last-known-good) or budget state stale | 503 + `Retry-After` | `api_error` |

@@ -1062,6 +1062,37 @@
           </when>
         </choose>
         <choose>
+          <when condition="@(context.Response.StatusCode >= 400)">
+            <!-- Error replies are finite, including for a streamed request. Keep successful SSE outside
+                 every policy that mentions Response.Body, so its first byte is never buffered here. -->
+            <set-variable name="ccofBackendErrorJson" value="@(context.Response.Body.As<string>(preserveContent: true))" />
+            <set-variable name="ccofBackendErrorBody" value="@{
+                var status = context.Response.StatusCode;
+                if (status != 429) {
+                    try {
+                        var body = JObject.Parse((string)context.Variables["ccofBackendErrorJson"]);
+                        var error = body["error"] as JObject;
+                        if ((string)body["type"] == "error" && error != null && error["type"] != null && error["type"].Type == JTokenType.String && !string.IsNullOrWhiteSpace((string)error["type"]) && error["message"] != null && error["message"].Type == JTokenType.String) { return ""; }
+                    } catch { }
+                }
+                var type = status == 429 ? "rate_limit_error" : (status == 413 ? "request_too_large" : (status == 404 ? "not_found_error" : (status < 500 ? "invalid_request_error" : "api_error")));
+                var message = status == 429
+                    ? "The shared Foundry deployment limit was reached. This is not your personal token or budget limit. Retry after the time in Retry-After; if this continues, ask your platform team about deployment capacity."
+                    : "The model service refused the request (HTTP " + status.ToString() + "). Retry or contact your platform team with the request id.";
+                return new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(
+                    new JProperty("type", type), new JProperty("message", message + " Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None);
+            }" />
+            <choose>
+              <when condition="@((string)context.Variables["ccofBackendErrorBody"] != "")">
+                <set-header name="Content-Type" exists-action="override">
+                  <value>application/json</value>
+                </set-header>
+                <set-body>@((string)context.Variables["ccofBackendErrorBody"])</set-body>
+              </when>
+            </choose>
+          </when>
+        </choose>
+        <choose>
           <when condition="@((string)context.Variables["ccofEntitlementSource"] == "last-known-good")">
             <set-header name="x-ccof-entitlement" exists-action="override">
               <value>degraded</value>
