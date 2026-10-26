@@ -132,6 +132,16 @@ test("from and to are refused with period=month or previous, never ignored (ADMI
   assert.equal((view.jsonBody as Doc).error, "from_to_require_custom_period", "the chargeback views share the rule");
 });
 
+test("one future rule: a custom range must start before now and end at most 31 days ahead (ADMIN-4)", async () => {
+  const { call } = setup();
+  for (const [from, to] of [["2026-11-01T00:00:00Z", "2026-11-20T00:00:00Z"], ["2026-10-19T12:00:00Z", "2026-10-20T00:00:00Z"], ["2026-10-01T00:00:00Z", "2026-12-01T00:00:00Z"]]) {
+    const res = await call(`export/usage?period=custom&from=${from}&to=${to}`);
+    assert.equal(res.status, 400, `${from}/${to}`);
+    assert.equal((res.jsonBody as Doc).error, "range_out_of_bounds", `${from}/${to}`);
+  }
+  assert.equal((await call("export/usage?period=custom&from=2026-10-01T00:00:00Z&to=2026-11-19T00:00:00Z")).status, 200, "an end in the future is allowed");
+});
+
 test("a truncated export says so in both formats", async () => {
   const rows = Array.from({ length: 2 }, (_, i) => [`WBS-${i}`, GROUP, "p", "1", 5001, true]);
   const { call } = setup(() => ({

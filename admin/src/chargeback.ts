@@ -97,7 +97,9 @@ function readPeriod(params: URLSearchParams, now: Date, maxDays: number): Period
   const a = Date.parse(from), b = Date.parse(to);
   if (!Number.isFinite(a) || !Number.isFinite(b) || a >= b) throw new ApiError(400, "invalid_custom_range");
   if (b - a > maxDays * 86_400_000) throw new ApiError(400, "range_exceeds_max_query_days");
-  if (b > now.getTime() + 31 * 86_400_000 || a < now.getTime() - 4383 * 86_400_000) throw new ApiError(400, "range_out_of_bounds");
+  // One rule for the future (ADMIN-4): no data can exist after now, so a range that starts there is refused rather than
+  // answered as zero usage; the end may run up to 31 days ahead so the current month always fits.
+  if (a >= now.getTime() || b > now.getTime() + 31 * 86_400_000 || a < now.getTime() - 4383 * 86_400_000) throw new ApiError(400, "range_out_of_bounds");
   return { mode, from: new Date(a).toISOString(), to: new Date(b).toISOString() };
 }
 

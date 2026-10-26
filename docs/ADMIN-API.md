@@ -195,7 +195,11 @@ with `=`, `+`, `-`, `@`, tab or carriage return with an apostrophe
 
 Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, and `from`
 or `to` without `period=custom` with `400 from_to_require_custom_period`, so an export is never broader than its
-request. The JSON echoes every applied filter. Both formats return
+request. The JSON echoes every applied filter.
+
+A custom range (`from` and `to` as UTC timestamps, `to` excluded) must start before the current time and
+end at most 31 days after it, so the current month always fits and a range in the future is refused with
+`400 range_out_of_bounds` rather than answered as zero usage. The same rule applies to the chargeback views. Both formats return
 `x-ccof-truncated` (`true` when more than 5,000 rows matched; the JSON also has `truncated`) and
 `x-ccof-row-limit`. A truncated export understates totals: narrow the period or filters.
 
