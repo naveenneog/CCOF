@@ -8,6 +8,20 @@ gateway refuses missing lengths and normalizes backend errors; usage states paci
 budget-key semantics are explicit; sign-in probes are quiet; admin names are visible and safe.
 No live changes. [ADR-0050](adr/0050-import-client-configuration.md).
 
+**State:** complete offline, ready for the coordinator to merge; no push or live deployment.
+DG-1/2 `4f9c987` (safety `bf833c6`, entrypoint proof `bbc8d2b`); DG-3 `70e5b65`;
+DG-4 `5c903a5` (SSE contract `8fdb210`); DG-5 `3cd182b` (zero ceiling `9a6329a`);
+DG-6 `36b72a4` ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md));
+DG-7 `1a417c0` (triage only); DG-8 `dd164f3`; AO-6 `9603675`; AO-7 `21594db`.
+
+Validation: root/admin `npm ci`; full `npm test` through the packet gate; admin tests 203/203;
+`npx tsc -p tsconfig.typecheck.json --noEmit`; `npm run build`; packet gate **PASS**
+(23 passed, two pre-existing warning groups: file size and unrelated open unknowns).
+25/25 targeted guard mutations caught; added-line leak scan zero matches.
+All commands used the isolated Azure CLI profile; no live lab was contacted.
+Native macOS was not exercised. Dependency installation reports two existing high-severity
+audit findings in each package tree; this packet changes no dependencies.
+
 ## Release 17 (2026-10-26)
 
 **Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an
