@@ -1,0 +1,6 @@
+PS /home/alex/repo> audit-archive.md, Check it works, step 3
+PS> $accountId = az storage account show -g $rg -n $account --query id -o tsv
+PS> $m = az monitor metrics list --resource "$accountId/blobServices/default" --metric Transactions --interval PT1H --aggregation Total --offset 24h --filter "ApiName eq '*' and Authentication eq 'OAuth' and ResponseType eq 'Success'" -o json | ConvertFrom-Json
+PS> $m.value[0].timeseries | ForEach-Object { ... }
+10/26/2026 05:34:00 PutBlob 2
+10/26/2026 05:34:00 AppendBlock 2

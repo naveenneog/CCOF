@@ -1,0 +1,7 @@
+PS /home/alex/repo> cd ccof   # 05-developer-setup, step 1
+PS> npm ci --prefix .\client --no-audit --no-fund
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+PS> pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -UsageStatusLine -Confirmed
+{"signIn":"\"$HOME/devhome\\.claude\\ccof-token.cmd\" login","signInMethod":"azure-cli","changeId":"20261026T063150129Z-398d665be58243a89b287d0464e4a657","statusLine":"set","component":"claude-code","event":"configured","usageSkill":true}
+exit 0

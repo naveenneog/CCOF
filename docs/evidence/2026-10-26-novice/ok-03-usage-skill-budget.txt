@@ -1,0 +1,5 @@
+PS /home/alex/repo> claude -p "How much of my CCOF budget is used? Use the usage skill."
+PS> claude -p "How much of my CCOF budget is used? Use the usage skill." --model claude-haiku-5-5 --allowedTools Skill Bash
+CCOF budget, group 0b65c63f-4d92-4e52-a492-c5455d71cfda: $0.00 of $100.00 used (0%), $100.00 left, as of 06:34 UTC.
+Some requests in this period are not yet priced.
+Figures are from the last cost run; requests not yet priced are not included.
