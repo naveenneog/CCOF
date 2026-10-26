@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- DG-6: retain pacing debt on revisiting an earlier monthly budget amount (ADR-0051);
+  guides and the refusal no longer promise that every budget edit resets it.
 - DG-8: unattended token and status probes hide Azure CLI's default-profile sign-in message;
   CCOF's own helper-specific login instruction remains on stderr.
 - AO-6: server and console reject invisible-only names and bidi overrides/isolates; CSV

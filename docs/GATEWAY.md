@@ -11,7 +11,8 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 `personCeilingTokensPerMinute` and applies it on a counter of its own, the budget-pacing counter
 `pb:{projectId}:{oid}:{personCeilingKey}` ([ADR-0047](adr/0047-budget-pacing-counter.md)); the configured person TPM
 keeps its counter. `personCeilingKey` is the budget month and amount (for example `2026-10_10000`), so raising the
-budget or a new month starts a new pacing counter, while a ceiling that moves with spend keeps it. A pacing refusal is
+budget to a previously unused amount or a new month starts a new pacing counter; returning to an earlier amount
+can resume its remaining debt ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md)). A ceiling that moves with spend keeps it. A pacing refusal is
 `429 rate_limit_error` naming the budget guard; its `Retry-After` is at most the time to the end of the month. A zero
 ceiling refuses the request (`403`, "has reached your Claude budget … until recorded spend catches up"); old cached
 decisions without the mode and ceiling must be refreshed. Group and family token quotas still apply independently.

@@ -1208,7 +1208,7 @@
                 break;
             case "budget_pacing":
                 type = "rate_limit_error";
-                message = "Your requests in " + scope + " are slowed by the budget guard: recent spending is high for your Claude budget, so new requests wait. This is not the configured tokens-per-minute limit. Retry after the time in the Retry-After header; raising the budget lifts the wait within a few minutes.";
+                message = "Your requests in " + scope + " are slowed by the budget guard: recent spending is high for your Claude budget, so new requests wait. This is not the configured tokens-per-minute limit. Retry after the time in the Retry-After header; raising the budget to an amount not yet used this month lifts the wait within a few minutes. Returning to an earlier amount can resume its previous wait.";
                 break;
             case "person_quota":
                 type = "permission_error";

@@ -35,8 +35,10 @@ The guard controls a rate, not an atomic dollar reservation. Delayed telemetry, 
 requests can still cause overshoot; `overshootPercent` is not a guaranteed maximum.
 
 The gateway applies the guard's rate on its own counter, separate from the configured tokens per minute, keyed by the
-budget's month and amount ([ADR-0047](../adr/0047-budget-pacing-counter.md)). Raising the budget, or a new month,
-starts a new counter, so the wait ends after the next reconciler run and the gateway's cache (a few minutes). The rate
+budget's month and amount ([ADR-0047](../adr/0047-budget-pacing-counter.md)). Raising to an amount not yet used
+this month starts a new counter, so the wait ends after the next reconciler run and the gateway's cache (a few minutes).
+Returning to an earlier amount can resume its remaining wait; this is intentional, not a reset command
+([ADR-0051](../adr/0051-retain-pacing-debt-for-reused-budgets.md)). A new month uses a new key. The rate
 is counted in tokens at the most expensive admitted output price, so with a very small budget one large request can
 make the next requests wait for hours (bug bash 2026-10-26: about 7 hours after one 8,100-token request at USD 0.01).
 
