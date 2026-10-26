@@ -63,25 +63,44 @@ function Invoke-Stage0 {
     return $report
 }
 
+function Get-StgFoundryDeployments {
+    # Deployments of the configured Foundry account, read as the existing-account branch does; none when absent.
+    param($Cfg)
+    $fd = $Cfg.stage1.foundry
+    try { $acct = Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($fd.accountName)" '2024-10-01' }
+    catch { if ("$($_.Exception.Message)" -match 'ResourceNotFound|ResourceGroupNotFound') { return @() } throw }
+    return @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value)
+}
+
 function Assert-StgFoundryQuota {
     # Each quota line is AIServices.<sku>.<model>.Azure; deployments sharing a line add up. A missing line is not
     # refused: the model list already confirmed the offer, and Stage 1 reports any remaining quota error.
     param($Cfg, [object[]]$Deployments)
     $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+    $existing = @(Get-StgFoundryDeployments $Cfg)
     $needed = [ordered]@{}
     foreach ($d in $Deployments) {
         $line = "AIServices.$($d.sku ?? 'GlobalStandard').$($d.model).Azure"
-        if (-not $needed.Contains($line)) { $needed[$line] = [ordered]@{ capacity = 0; names = @() } }
-        $needed[$line].capacity += [double]$d.capacity
+        if (-not $needed.Contains($line)) { $needed[$line] = [ordered]@{ capacity = 0; names = @(); credited = $false } }
+        # The usage already counts this lab's own deployments (a rerun after Stage 1); only added capacity needs quota.
+        $same = @($existing | Where-Object { $_.name -ceq $d.name -and "AIServices.$($_.sku.name).$($_.properties.model.name).Azure" -ceq $line }) | Select-Object -First 1
+        $extra = if ($same) { [Math]::Max(0, [double]$d.capacity - [double]$same.sku.capacity) } else { [double]$d.capacity }
+        if ($same) { $needed[$line].credited = $true }
+        $needed[$line].capacity += $extra
         $needed[$line].names += $d.name
     }
     $short = foreach ($line in $needed.Keys) {
         $u = $usages | Where-Object { $_.name.value -ceq $line } | Select-Object -First 1
         if (-not $u) { continue }
         $free = [double]$u.limit - [double]$u.currentValue
-        if ($needed[$line].capacity -gt $free) { "deployment $($needed[$line].names -join ' + ') needs $($needed[$line].capacity) of $line; $free free ($($u.currentValue) of $($u.limit) used)" }
+        $more = if ($needed[$line].credited) { ' more' } else { '' }
+        if ($needed[$line].capacity -gt $free) { "deployment $($needed[$line].names -join ' + ') needs $($needed[$line].capacity)$more of $line; $free free ($($u.currentValue) of $($u.limit) used)" }
     }
-    Assert-Stg (-not @($short).Count) "model quota in $($Cfg.location): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1. A deleted Foundry account keeps its quota until purged: az cognitiveservices account list-deleted, then az cognitiveservices account purge"
+    if (-not @($short).Count) { return }
+    $region = $Cfg.location.Replace(' ', '').ToLowerInvariant()
+    $deleted = @(Invoke-StgAzJson @('cognitiveservices', 'account', 'list-deleted', '--subscription', $Cfg.subscriptionId) | Where-Object { ([string]$_.location).Replace(' ', '').ToLowerInvariant() -ceq $region } | ForEach-Object { $_.name })
+    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $($Cfg.location) keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
+    Assert-Stg $false "model quota in $($Cfg.location): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
 }
 
 # ---------------------------------------------------------------- stage 1: resources only

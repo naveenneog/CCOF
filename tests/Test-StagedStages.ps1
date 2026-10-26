@@ -695,9 +695,16 @@ Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inboun
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 # Stage 0 refuses planned Foundry deployments that exceed the free model quota (novice run 3, 2026-10-26: Stage 0
 # passed with 7 of 27 DataZoneStandard units free for a capacity of 20; soft-deleted accounts of deleted labs held them).
-$quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence} }
+$quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence}; arm = ${function:Get-StgArm} }
 try {
-    $script:quotaUsages = @()
+    $script:quotaUsages = @(); $script:quotaDeleted = @(); $script:quotaAccount = $null; $script:quotaArmError = $null
+    function Get-StgArm { param([string]$Path, [string]$ApiVersion)
+        if ($script:quotaArmError) { throw $script:quotaArmError }
+        if ($Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct' -and $Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct/deployments') { throw "unexpected ARM read in the Stage 0 quota test: $Path" }
+        if (-not $script:quotaAccount) { throw "az rest failed: (ResourceNotFound) The Resource 'Microsoft.CognitiveServices/accounts/acct' under resource group 'rg' was not found." }
+        if ($Path -like '*/deployments') { return @{ value = @($script:quotaAccount.deployments) } }
+        return @{ id = '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct'; name = 'acct' } }
+    function New-QuotaExisting([string]$Name, [string]$Model, [string]$Sku, [double]$Capacity) { @{ name = $Name; sku = @{ name = $Sku; capacity = $Capacity }; properties = @{ model = @{ format = 'Anthropic'; name = $Model; version = '2' } } } }
     function Invoke-StgAzJson { param([string[]]$Arguments)
         $a = $Arguments -join ' '
         if ($a -like 'account show*') { return @{ id = 's'; name = 'sub'; tenantId = 't'; user = @{ name = 'u' } } }
@@ -707,6 +714,7 @@ try {
             @{ model = @{ format = 'Anthropic'; name = 'claude-haiku-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }, @{ name = 'GlobalStandard' }) } },
             @{ model = @{ format = 'Anthropic'; name = 'claude-sonnet-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }) } }) }
         if ($a -like 'cognitiveservices usage list*') { return $script:quotaUsages }
+        if ($a -like 'cognitiveservices account list-deleted*') { return $script:quotaDeleted }
         throw "unexpected az call in the Stage 0 quota test: $a" }
     function Invoke-QsAz { param([string[]]$Arguments) 'false' }
     function Get-StgGraph { param([string]$Path) @{ id = 'o'; userPrincipalName = 'u' } }
@@ -720,8 +728,30 @@ try {
     $haiku = @{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 20 }
     $sonnet = @{ name = 'claude-sonnet-5-5'; model = 'claude-sonnet-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 20 }
     $script:quotaUsages = @((New-QuotaLine 'AIServices.DataZoneStandard.claude-haiku-5-5.Azure' 20 27), (New-QuotaLine 'AIServices.DataZoneStandard.claude-sonnet-5-5.Azure' 20 80))
+    $script:quotaDeleted = @(@{ name = 'old-lab-foundry'; location = 'East US 2' }, @{ name = 'elsewhere'; location = 'westus' })
     $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($haiku, $sonnet)) 6>$null } catch { $message = $_.Exception.Message }
-    Assert-Contract ($message -match 'quota' -and $message -match 'claude-haiku-5-5' -and $message -match 'needs 20' -and $message -match '7 free' -and $message -match 'list-deleted' -and $message -notmatch 'claude-sonnet-5-5') "Stage 0 must refuse a deployment above the free quota, naming it, the free units and soft-deleted accounts (got: $message)."
+    Assert-Contract ($message -match 'quota' -and $message -match 'claude-haiku-5-5' -and $message -match 'needs 20' -and $message -match '7 free' -and $message -match 'list-deleted' -and $message -match 'old-lab-foundry' -and $message -notmatch 'elsewhere' -and $message -notmatch 'claude-sonnet-5-5') "Stage 0 must refuse a deployment above the free quota, naming it, the free units and the soft-deleted accounts in the region (got: $message)."
+    $script:quotaDeleted = @(@{ name = 'elsewhere'; location = 'westus' })
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'needs 20' -and $message -notmatch 'purge') "Stage 0 must not advise purging when no soft-deleted account holds quota in the region (got: $message)."
+    # Council finding (2026-10-26): after Stage 1 the usage already counts this lab's own deployments; a rerun counts only added capacity.
+    $script:quotaAccount = @{ deployments = @((New-QuotaExisting 'claude-haiku-5-5' 'claude-haiku-5-5' 'DataZoneStandard' 20)) }
+    $rerun = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null
+    Assert-Contract ($rerun.backends.Count -eq 1) 'A Stage 0 rerun must pass when the planned deployment already exists with the same capacity.'
+    $raised = @{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 30 }
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($raised)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'needs 10 more' -and $message -match '7 free' -and $message -notmatch 'needs 30' -and $message -notmatch 'purge') "A raised capacity on an existing deployment must be refused naming only the extra units (got: $message)."
+    $lowered = @{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 5 }
+    $added = @{ name = 'haiku-b'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 10 }
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($lowered, $added)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'needs 10 more' -and $message -match '7 free') "A lowered capacity must not offset another deployment on the same quota line (got: $message)."
+    $script:quotaAccount = @{ deployments = @((New-QuotaExisting 'claude-haiku-5-5' 'claude-haiku-5-5' 'GlobalStandard' 20)) }
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'needs 20' -and $message -match '7 free') "An existing deployment on another quota line must not reduce the planned need (got: $message)."
+    $script:quotaAccount = $null; $script:quotaArmError = 'az rest failed: (AuthorizationFailed) no read access'
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'AuthorizationFailed') "Stage 0 must not treat an unreadable Foundry account as absent (got: $message)."
+    $script:quotaArmError = $null
     $okReport = Invoke-Stage0 (New-QuotaCfg @($sonnet)) 6>$null
     Assert-Contract ($okReport.backends.Count -eq 1) 'Stage 0 must pass a deployment within the free quota.'
     $half = @{ name = 'haiku-a'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 5 }
@@ -736,7 +766,7 @@ try {
     $noLine = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null
     Assert-Contract ($noLine.backends.Count -eq 1) 'A missing quota line is not a refusal (the model list already confirmed the offer).'
 } finally {
-    ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph; ${function:Write-StgEvidence} = $quotaSaved.ev
+    ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph;     ${function:Write-StgEvidence} = $quotaSaved.ev; ${function:Get-StgArm} = $quotaSaved.arm
 }
 # The Stage 4 preview names what the apply would change on each reused registration, and writes nothing (novice run 3:
 # the preview of three shared registrations printed only the generic plan, so the Entra owner could not tell that
