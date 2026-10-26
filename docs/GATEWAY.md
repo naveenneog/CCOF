@@ -21,7 +21,9 @@ separate entitled groups have separate budgets. `resolver.requireCompleteUsage: 
 sets `RESOLVER_REQUIRE_COMPLETE_USAGE=true`: missing or partial personal accounting, or partial accounting in a strict
 group, gives a classified 503 instead of renewing permission based on a known lower bound. The setting defaults false
 for compatibility and requires `budget-state`. It can block usage after streamed requests because the current trace
-does not capture their cache categories. It does not fix ingestion delay or implement atomic reservations.
+does not capture their cache categories. A request Foundry refuses before inference (`4xx` other than `429`) counts
+as zero tokens and does not make the month partial ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)); a
+Foundry `429` still has unknown tokens. It does not fix ingestion delay or implement atomic reservations.
 
 Contract, tradeoffs and sources: [ADR-0038](adr/0038-budget-admission-acceptance.md).
 

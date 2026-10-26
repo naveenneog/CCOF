@@ -13,6 +13,9 @@
 - The `x-ccof-project` header compares a group Object ID in lower case. The not-entitled message tells no membership,
   an unknown group ID and a value that is not a group ID apart, and no longer asks a member to join their own group.
   A model refusal lists the group's allowed models. CLIENTS.md's multiple-group section matches the group selection rule.
+- The ledger prices a request Foundry refused before inference (`4xx` other than `429`) at zero tokens, so a typo no
+  longer makes the month's usage partial or, with `resolver.requireCompleteUsage`, blocks the person. Workbook and
+  admin queries change with the ledger (Stages 5 and 7 redeploy them).
 
 ## 2026-10-26 — Long-term audit (feature branch)
 

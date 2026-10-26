@@ -42,7 +42,7 @@ Each row was met in a live deployment or test; the evidence column links to wher
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Developer row shows "unpriced usage" while Foundry throttled | A request Foundry refused with `429` is counted with unknown tokens (an open question recorded in [UNKNOWNS](../UNKNOWNS.md): whether Foundry bills such requests) | None needed for budgets (spend is a lower bound) |
+| Developer row shows "unpriced usage" | A request Foundry answered `429` has unknown tokens (billing open, [UNKNOWNS](../UNKNOWNS.md)); other `4xx` answers count as zero ([ADR-0048](../adr/0048-request-checks-and-backend-refusals.md)) | None for budgets (spend is a lower bound) |
 | Spend stays at zero for groups | Older ledger query: group IDs are typed `guid` in Log Analytics | Update the checkout and rerun Stages 5 and 7 ([CHANGELOG](../CHANGELOG.md)) |
 
 ## Chargeback history
