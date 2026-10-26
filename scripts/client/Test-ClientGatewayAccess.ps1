@@ -5,7 +5,6 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClientGateway.Common.ps1')
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
 . (Join-Path $PSScriptRoot 'ClientProcess.ps1')
-Assert-ClientWindows -Script 'Test-ClientGatewayAccess.ps1'
 Assert-ClientConfirmation -Confirmed:$Confirmed
 if (-not $ConfigPath) { $ConfigPath = Get-ClientDefaultConfigPath }
 $config = Read-ClientConfiguration $ConfigPath

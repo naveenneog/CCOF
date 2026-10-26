@@ -61,21 +61,25 @@ $noForce = foreach ($file in $deployer) {
 }
 Assert-Contract (-not @($noForce).Count) "Remove-Item without -Force leaves dot-files on macOS/Linux: $(@($noForce) -join ', ')"
 
-# 3. The workstation setup scripts generate cmd.exe helpers and use Windows folders (APPDATA, LOCALAPPDATA,
-#    registry policies). On macOS and Linux each stops first with one JSON line and exit code 2, before it reads
-#    or writes anything, instead of failing half-way with a null-path error.
+# 3. Claude Desktop setup and the installed-client inventory generate cmd.exe helpers and use Windows folders
+#    (APPDATA, LOCALAPPDATA, registry policies). On macOS and Linux each stops first with one JSON line and exit
+#    code 2, before it reads or writes anything, instead of failing half-way with a null-path error. The Claude Code
+#    scripts run on macOS and Linux too (ADR-0048) and carry no such guard.
 $clientDir = Join-Path $root 'scripts/client'
-$probe = "`$ErrorActionPreference = 'Stop'; . '$((Join-Path $clientDir 'ClientGateway.Common.ps1').Replace("'", "''"))'; Assert-ClientWindows -Script 'Set-ClaudeCodeGateway.ps1' -OnWindows:`$false; 'continued'"
+$probe = "`$ErrorActionPreference = 'Stop'; . '$((Join-Path $clientDir 'ClientGateway.Common.ps1').Replace("'", "''"))'; Assert-ClientWindows -Script 'Set-ClaudeDesktopGateway.ps1' -OnWindows:`$false; 'continued'"
 $lines = @(pwsh -NoProfile -Command $probe 2>&1 | ForEach-Object { "$_" })
 $code = $LASTEXITCODE
 $event = try { $lines[0] | ConvertFrom-Json -AsHashtable } catch { @{} }
-Assert-Contract ($code -eq 2 -and $lines.Count -eq 1 -and $event.event -ceq 'unsupported_platform' -and $event.script -ceq 'Set-ClaudeCodeGateway.ps1' -and $event.docs -ceq 'docs/CLIENTS.md#macos-and-linux') "Off Windows the client scripts must stop with unsupported_platform and exit 2 (exit $code): $($lines -join ' | ')"
+Assert-Contract ($code -eq 2 -and $lines.Count -eq 1 -and $event.event -ceq 'unsupported_platform' -and $event.script -ceq 'Set-ClaudeDesktopGateway.ps1' -and $event.docs -ceq 'docs/CLIENTS.md#macos-and-linux') "Off Windows the client scripts must stop with unsupported_platform and exit 2 (exit $code): $($lines -join ' | ')"
 $lines = @(pwsh -NoProfile -Command ($probe -replace '-OnWindows:\$false', '-OnWindows:$true') 2>&1 | ForEach-Object { "$_" })
 Assert-Contract ($LASTEXITCODE -eq 0 -and ($lines -join '') -ceq 'continued') "On Windows the client scripts must continue: $($lines -join ' | ')"
-foreach ($name in 'Set-ClaudeCodeGateway.ps1', 'Set-ClaudeDesktopGateway.ps1', 'Restore-ClaudeCodeGateway.ps1', 'Restore-ClaudeDesktopGateway.ps1', 'Test-InstalledClients.ps1', 'Test-ClientGatewayAccess.ps1') {
+foreach ($name in 'Set-ClaudeDesktopGateway.ps1', 'Restore-ClaudeDesktopGateway.ps1', 'Test-InstalledClients.ps1') {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $clientDir $name), [ref]$null, [ref]$null)
     $first = @($ast.EndBlock.Statements | Where-Object { $_.Extent.Text -notmatch '^\$ErrorActionPreference|^\. \(Join-Path \$PSScriptRoot' })[0]
     Assert-Contract ($first.Extent.Text -ceq "Assert-ClientWindows -Script '$name'") "$name must call Assert-ClientWindows -Script '$name' before anything else (first: $($first.Extent.Text))"
+}
+foreach ($name in 'Set-ClaudeCodeGateway.ps1', 'Restore-ClaudeCodeGateway.ps1', 'Test-ClientGatewayAccess.ps1') {
+    Assert-Contract ((Get-Content -LiteralPath (Join-Path $clientDir $name) -Raw) -notmatch 'Assert-ClientWindows') "$name runs on macOS and Linux (ADR-0048) and must not stop with unsupported_platform"
 }
 
 # 4. The deployer's pages are followed in pwsh on macOS too. A native command (node, npm, az) gets its arguments
