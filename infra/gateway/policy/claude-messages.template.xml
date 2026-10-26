@@ -91,7 +91,11 @@
     </choose>
     <!-- 4. The request: the optional project selector (C-1) and the body's model and stream fields.
          The body stays readable for forwarding (preserveContent). -->
-    <set-variable name="ccofSelector" value="@(context.Request.Headers.GetValueOrDefault("%%PROJECT_HEADER%%", ""))" />
+    <!-- A group's Object ID compares in lower case (Entra shows it in either case); other selectors as sent. -->
+    <set-variable name="ccofSelector" value="@{
+        var selector = context.Request.Headers.GetValueOrDefault("%%PROJECT_HEADER%%", "");
+        return System.Text.RegularExpressions.Regex.IsMatch(selector, "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z") ? selector.ToLowerInvariant() : selector;
+    }" />
     <!-- Content type and size from the headers, before the body is read (ADR-0048): a body that is not JSON, or is
          larger than the Messages API's 32 MB, is refused without parsing it. -->
     <set-variable name="ccofRequestRefusal" value="@{
@@ -579,6 +583,17 @@
             return matches == 1 ? admitted : "";
         }" />
         <set-variable name="ccofModelAllowed" value="@((string)context.Variables["ccofModelFamily"] != "")" />
+        <!-- The models a refusal lists: every admitted family's models, restricted families only when approved. -->
+        <set-variable name="ccofAllowedModels" value="@{
+            var classification = (string)context.Variables["ccofClassification"];
+            var models = new System.Collections.Generic.List<string>();
+            foreach (var family in ((JObject)JObject.Parse((string)context.Variables["ccofFamilyPolicy"])["families"]).Properties()) {
+                if ((family.Name == "fable" || family.Name == "mythos") && classification != "CYB" && !(classification == "group" && context.Variables.GetValueOrDefault<bool>("ccofRestrictedFamiliesApproved", false))) { continue; }
+                foreach (var allowed in (JArray)family.Value["models"]) { if (allowed.Type == JTokenType.String) { models.Add((string)allowed); } }
+            }
+            models.Sort(StringComparer.Ordinal);
+            return string.Join(", ", models);
+        }" />
         <set-variable name="ccofSurfaceAllowed" value="@{
             var enforced = %%SURFACE_ENFORCED%%;
             if (!enforced) { return true; }
@@ -795,7 +810,13 @@
                     break;
                 case "not_authorized":
                     type = "permission_error";
-                    message = "You are not entitled to use Claude through this gateway" + (selector == "" ? "" : " for project " + selector) + ". Ask your platform team to add you to your project's Claude group.";
+                    if (selector == "") {
+                        message = "You are not a member of a Claude group on this gateway, or a new membership has not reached it yet (the sync runs every few minutes). Ask your platform team to add you to a Claude group.";
+                    } else if (System.Text.RegularExpressions.Regex.IsMatch(selector, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\z")) {
+                        message = "You are not an active member of Claude group " + selector + " on this gateway, or that group is not onboarded. Check the Object ID in the %%PROJECT_HEADER%% header, or remove the header to use your default group.";
+                    } else {
+                        message = "No Claude group or project with ID " + selector + " is available to you. Set the %%PROJECT_HEADER%% header to the Object ID of one of your Claude groups (a GUID), not its name or chargeback ID, or remove the header.";
+                    }
                     break;
                 case "project_selection_required":
                     type = "invalid_request_error";
@@ -815,7 +836,8 @@
                     break;
                 case "model_family_not_allowed":
                     type = "permission_error";
-                    message = "The requested model family is not available to your project classification. Ask your platform team for an approved model.";
+                    var allowedModels = context.Variables.GetValueOrDefault<string>("ccofAllowedModels", "");
+                    message = (System.Text.RegularExpressions.Regex.IsMatch(model, "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\z") ? "Model " + model + " is" : "The requested model is") + " not available" + (scope == "" ? "" : " in " + scope) + "." + (allowedModels == "" ? " Ask your platform team which models your group admits." : " Allowed models: " + allowedModels + ". Choose one of them (in Claude Code: /model), or ask your platform team to admit the model.");
                     break;
                 case "surface_not_allowed":
                     var surfaceName = context.Variables.GetValueOrDefault<string>("ccofSurface", "");

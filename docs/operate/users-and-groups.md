@@ -67,6 +67,8 @@ Transport limits and trust boundary: [SYNC.md](../SYNC.md#apply-through-the-sync
 Each onboarded group gives a separate budget. A request without a group selector uses the group where the person
 has **spent the most this month** (then the lower priority number). If that group's budget is used up, the request
 is refused; it does not move to another group by itself. A developer chooses another group by sending its Object ID
-in the `x-ccof-project` header, for example through a separate client profile ([CLIENTS.md](../CLIENTS.md)).
+in the `x-ccof-project` header (upper or lower case), for example through a separate client profile
+([CLIENTS.md, multiple groups](../CLIENTS.md#multiple-groups-and-projects)). A name or chargeback ID is refused with a message
+asking for the Object ID.
 
 ![A group's page: budget, models, and Retire group](../evidence/2026-10-24-demo/console-07-group-detail.png)

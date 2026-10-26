@@ -354,7 +354,7 @@ test("actual C# rejects invalid v3 policies, admits only exact IDs, scopes keys 
   vectors.push({ label: "model refusal status", method: "RefusalStatus", vars: { ccofRefusal: "model_family_not_allowed" }, expected: 403 });
   vectors.push({ label: "model refusal body", method: "RefusalBody", vars: {
     ccofRefusal: "model_family_not_allowed", ccofSelector: "", ccofModel: "claude-haiku-unknown",
-  }, json: true, expected: "The requested model family is not available to your project classification. Ask your platform team for an approved model." });
+  }, json: true, expected: "Model claude-haiku-unknown is not available. Ask your platform team which models your group admits." });
   for (const scope of ["group", "person"]) {
     for (const mode of ["rate-quota", "rate", "quota"]) {
       for (const status of mode === "rate-quota" ? [429, 403] : [mode === "rate" ? 429 : 403]) {

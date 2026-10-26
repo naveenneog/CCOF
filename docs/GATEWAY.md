@@ -150,7 +150,7 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 |---|---|---|
 | No token, invalid, expired, other audience or tenant | 401 | `authentication_error` |
 | Token without the scope; a person's token from a client application not in `entra.delegatedClientAppIds`; an application token that is not a test identity or lacks the app role | 403 | `permission_error` |
-| Not entitled (no active membership for the project) | 403 | `permission_error` |
+| Not entitled (no active membership for the project); the message tells no selector, a group Object ID (compared in lower case) and a value that is not one apart | 403 | `permission_error` |
 | Model not in the person's allow-list (the message lists the allowed models) | 403 | `permission_error` |
 | Group request from a client application whose surface the group does not allow, or that `entra.surfaceClients` does not map (only when the list is non-empty) | 403 | `permission_error` |
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
@@ -160,7 +160,7 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group token quota used up (the message names which, and when it resets) | 403 | `permission_error` |
-| Person's or classification's CCU budget used up (C-7; the message names which) | 403 | `permission_error` |
+| Person's or group's budget used up (C-7; the message names which), or reached by recorded plus recent spend | 403 | `permission_error` |
 | Access cannot be confirmed (resolver unavailable, no last-known-good) or budget state stale | 503 + `Retry-After` | `api_error` |
 | Backend credential unavailable; backend not configured; backend unreachable or slow | 503 / 502 / 504 | `api_error` |
 

@@ -88,9 +88,10 @@ What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current
 | `azure_cli_missing` | Setup or `/usage` did not find the Azure CLI. Install it ([aka.ms/installazurecliwindows](https://aka.ms/installazurecliwindows)), open a new terminal, run step 1 again |
 | `sign_in_required … AADSTSnnnnn` | Microsoft Entra refused the Azure CLI sign-in, for example `AADSTS53003` (Conditional Access). Give the code to the admin |
 | `403 … surface_not_allowed` | The gateway enforces surfaces and the Azure CLI is not mapped; ask the admin ([guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in)) |
-| `403 … not entitled` | Not (yet) a member of an onboarded group; ask the admin |
-| `403 … model family is not available` | Choose an allowed model (`/model`) |
-| `403 … budget … used up` | Budget reached; ask the budget owner |
-| `429` | A limit is reached; Claude Code retries; `/usage` shows whether the budget warning applies |
+| `403 … not a member of a Claude group` or `not an active member of Claude group <ID>` | Not (yet) a member of an onboarded group, or the `x-ccof-project` header names another group; ask the admin |
+| `403 Model … is not available in group …` | Choose one of the models the message lists (`/model`) |
+| `403 … budget … used up` or `has reached your Claude budget` | Budget reached; the second clears within minutes. Ask the budget owner |
+| `429 … slowed by the budget guard` | Spending is paced to stay within the budget; wait, or ask for a higher budget |
+| `429` | A limit is reached; Claude Code retries |
 
 More: [troubleshooting](../operate/troubleshooting.md).

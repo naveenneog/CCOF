@@ -10,6 +10,9 @@
 - Variants of `/v1/messages` (trailing slash, `.`, `//`, upper case) are answered 404 by the gateway, before the token
   check, instead of being forwarded and counted. A body that is not `application/json` is answered `415`, one above
   32 MB `413 request_too_large`, both from the headers before the body is read ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)).
+- The `x-ccof-project` header compares a group Object ID in lower case. The not-entitled message tells no membership,
+  an unknown group ID and a value that is not a group ID apart, and no longer asks a member to join their own group.
+  A model refusal lists the group's allowed models. CLIENTS.md's multiple-group section matches the group selection rule.
 
 ## 2026-10-26 — Long-term audit (feature branch)
 
