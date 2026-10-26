@@ -61,7 +61,9 @@ needs confidence before saving.
   - **Signed in but not an admin:** a clear refusal.
   - **Registry unreachable:** "Can't reach the project registry", with the request ID and a retry.
   - **Empty registry:** what you need before creating the first project.
-  - Loading skeletons while data loads; mobile layout below 820px.
+  - Loading skeletons while data loads, marked `aria-busy` for screen readers; mobile layout below 820px.
+- **Errors in a form:** when Continue or Save finds a problem, focus moves to the first field that needs
+  attention, or to the error summary ("N fields need attention") when the problem has no single field.
 - **Security headers:**
   - Strict Content-Security-Policy (`default-src 'none'`, scripts only from the app,
     `frame-ancestors 'none'`).

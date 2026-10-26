@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { focusFirstInvalidSoon } from "../lib/focus.ts";
 import { api, errorMessage, useQuery } from "../lib/api.ts";
 import { href, navigate } from "../lib/router.ts";
 import { clearErrors, deploymentProblems, emptyGroupForm, formProblems, formToBody } from "../lib/groups.ts";
@@ -74,6 +75,7 @@ export function GroupOnboard() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   if (!session.canWrite) return <div className="page"><PageHeader title="Onboard a group" /><Empty title="Read-only access">Onboarding groups needs the CCOF.Projects.Write role.</Empty></div>;
   const set = (patch: Partial<GroupForm>) => { setForm((f) => ({ ...f, ...patch })); setErrors((e) => clearErrors(e, patch)); };
   // undefined while loading; null when the deployment's list is not configured (the server then refuses onboarding).
@@ -85,12 +87,13 @@ export function GroupOnboard() {
     const all = problems();
     const here = Object.fromEntries(Object.entries(all).filter(([k]) => STEP_FIELDS[step].includes(k)));
     setErrors(here);
-    if (!Object.keys(here).length) setStep(step + 1);
+    if (Object.keys(here).length) focusFirstInvalidSoon(() => pageRef.current);
+    else setStep(step + 1);
   };
   const body = formToBody(form);
   const create = async () => {
     const all = problems();
-    if (Object.keys(all).length) { setErrors(all); return; }
+    if (Object.keys(all).length) { setErrors(all); focusFirstInvalidSoon(() => pageRef.current); return; }
     setBusy(true); setSaveError(null);
     try {
       await api("/api/groups", { method: "POST", body });
@@ -99,7 +102,7 @@ export function GroupOnboard() {
     } catch (e) { setSaveError(e); } finally { setBusy(false); }
   };
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <PageHeader title="Onboard a group" subtitle="Four steps. Nothing is saved until you onboard the group on the last step." />
       <ol className="stepper" aria-label="Steps">
         {STEPS.map((s, i) => (
@@ -153,7 +156,7 @@ export function GroupOnboard() {
         {step < 3 && <Button variant="primary" onClick={next}>Continue</Button>}
         {step === 3 && <Button variant="primary" onClick={create} busy={busy}>Onboard group</Button>}
         <a className="btn btn-quiet" href={href("/groups")}>Cancel</a>
-        {Object.keys(errors).length > 0 && <span className="field-error" role="alert">{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
+        {Object.keys(errors).length > 0 && <span className="field-error" role="alert" tabIndex={-1} data-error-summary>{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
       </div>
       {saveError && (saveError as any).problems?.length ? <p className="hint">{errorMessage(saveError)}</p> : null}
     </div>

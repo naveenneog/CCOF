@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { focusFirstInvalidSoon } from "../lib/focus.ts";
 import { api, errorMessage, useQuery } from "../lib/api.ts";
 import { href, navigate } from "../lib/router.ts";
 import { clearErrors, formFromDoc, formProblems, formToBody, groupLinkProblem } from "../lib/groups.ts";
@@ -18,6 +19,7 @@ export function GroupDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [confirm, setConfirm] = useState("");
+  const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (doc.data) setForm(formFromDoc(doc.data)); }, [doc.data]);
   if (linkProblem) {
     return (
@@ -36,7 +38,7 @@ export function GroupDetail({ id }: { id: string }) {
   const save = async () => {
     const problems = formProblems(form);
     setErrors(problems);
-    if (Object.keys(problems).length) return;
+    if (Object.keys(problems).length) { focusFirstInvalidSoon(() => pageRef.current); return; }
     const { groupId: _id, ...changes } = formToBody(form);
     setBusy(true); setSaveError(null);
     try {
@@ -54,7 +56,7 @@ export function GroupDetail({ id }: { id: string }) {
     } catch (e) { setSaveError(e); } finally { setBusy(false); }
   };
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <PageHeader title={String(doc.data.displayName)} subtitle={<span className="mono">{id}</span>}
         actions={<StatePill state={retired ? "disabled" : "available"} label={String(doc.data.status)} />} />
       {retired && <p className="notice" role="status">This group was retired on {String(doc.data.retiredAt)}. It is read-only.</p>}
@@ -74,7 +76,7 @@ export function GroupDetail({ id }: { id: string }) {
           <div className="form-actions">
             <Button variant="primary" onClick={save} busy={busy}>Save changes</Button>
             <a className="btn btn-quiet" href={href("/groups")}>Back to groups</a>
-            {Object.keys(errors).length > 0 && <span className="field-error" role="alert">{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
+            {Object.keys(errors).length > 0 && <span className="field-error" role="alert" tabIndex={-1} data-error-summary>{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
           </div>
           <Section title="Retire this group" description="One way. The next entitlement sync removes access for every member; the Entra group itself is not changed.">
             <Field label="Type the group's Object ID to confirm">{(fid) => <input id={fid} className="input mono" value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} autoComplete="off" spellCheck={false} />}</Field>
