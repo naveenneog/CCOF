@@ -1,5 +1,18 @@
 # Current work
 
+## Existing API Management
+
+**Active packet:** G-EXAPIM — a first-time reader deploys CCOF into an existing API Management instance (branch
+`feature/existing-apim`, [ADR-0045](adr/0045-existing-api-management.md)).
+
+- Acceptance: (1) Stage 0 checks the named instance (readable, identity, tier, API ID/path, backend names,
+  diagnostic-setting room, network route) and refuses with a next step before anything is created; the global policy
+  is printed, never changed; (2) Stage 5 sends GatewayLogs and GatewayLlmLogs to CCOF's workspace through
+  `ccof-gateway-logs` (or reuses an equivalent setting) and reads it back; (3) the owner's other APIs, global policy,
+  logger and own diagnostic settings are unchanged after Stages 0–8; (4) Stage 8 telemetry passes on an existing
+  instance; (5) a reader page "Use an existing API Management" linked from prerequisites and deploy.
+- State: in progress.
+
 ## Group-centric onboarding
 
 **Active packet:** G-AUDIT — long-term audit: gateway log archive and chargeback history (feature branch
