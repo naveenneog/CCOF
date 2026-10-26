@@ -9,6 +9,10 @@ AO-2: empty-state recovery records only Stages 1/2 as explicitly run, unlocks St
 compares role assignment IDs before/after schema apply instead of requiring none.
 AO-3: unchanged Stage 2/5 applies return saved deployment outputs to their normal read-back, without ARM
 redeployment. Explicit force and changed inputs/prerequisites still deploy; drift fails closed.
+AO-4/5/8 and novice Low fixes are implemented: named parameter diffs, actionable private-Cosmos warning,
+outage/manual-write-and-read drill guidance, separate Foundry regions, seed creation evidence, timing and links.
+Offline guard mutations: 22/22 killed with loaded suites and targeted failure messages. Root/admin installs,
+admin 203 tests and explicit TypeScript typecheck passed; full root tests/build/packet gate pending.
 
 ## Release 17 (2026-10-26)
 

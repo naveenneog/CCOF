@@ -22,6 +22,8 @@ test("regional outage guidance includes a reversible Cosmos drill and single-reg
   assert.match(regions, /writeLocations/);
   assert.match(regions, /Stage 8/);
   assert.match(regions, /does not prove.*South India/i);
+  assert.match(regions, /COSMOS_PREFERRED_REGIONS.*southindia,centralindia/);
+  assert.match(regions, /restore.*saved value/i);
   assert.match(regions, /new Cosmos.*account/i);
 });
 

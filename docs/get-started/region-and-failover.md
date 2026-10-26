@@ -131,4 +131,8 @@ Cosmos DB's **Total Requests**, filtered by region and operation, during an isol
 ([monitoring](https://learn.microsoft.com/azure/cosmos-db/monitor-reference)); unrelated traffic can share those
 metrics. A healthy manual writer switch is not a simulation of losing the gateway's region.
 
+For a **read-route drill**, save the resolver app's `COSMOS_PREFERRED_REGIONS`, set it to `southindia,centralindia`
+in Function App Configuration (restarts the app), then run Stage 8 and check regional read metrics. Afterwards
+restore the saved value, wait for the restart, and repeat Stage 8. This tests a preference change, not an outage.
+
 Next: [deploy](03-deploy.md).

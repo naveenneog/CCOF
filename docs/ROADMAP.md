@@ -1,5 +1,13 @@
 # Deployment packets
 
+## Bug bash 5 staged driver
+
+- [x] G-R18-STAGED: reproduce and fix Stage 1 reruns/lost-state recovery; unchanged Stage 2/5 applies must
+  read back without redeploying, with explicit force for repairs; name changed inputs and operator next steps.
+- [x] Reader guidance: regional outage and reversible Cosmos drills; Foundry region previews, seed outcomes,
+  Stage 3 duration and backend recovery link. No live applies in this packet.
+- [ ] Coordinator integration/publication after the final packet gate and review record.
+
 ## Group-centric onboarding (ADR-0034)
 
 - [x] G-LIMIT-offline: reproduce budget bypasses, retain the monetary TPM ceiling, add complete-accounting admission,
