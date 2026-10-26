@@ -88,6 +88,9 @@ try {
     }
     $null = Invoke-Stage2 $cfg
     Assert-Contract ($script:previewCalls -eq 1) 'AO-2: recovered Stage 1 must unlock Stage 2 preview.'
+    # Initial deployment verification must retain its no-later-resources checks.
+    $message = ''; try { $null = Test-Stage1 -Cfg $cfg -Out $script:fixtureOut } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'Cosmos database exists before Stage 2') 'AO-2: a fresh deployment still rejects unexpected later resources.'
     function Invoke-StgBicep { param($Cfg, $Template, $Name, $Parameters, [switch]$Apply, $StageNumber)
         @{ databaseName = 'ccof'; containers = @() }
     }
@@ -101,9 +104,6 @@ try {
     $message = ''; try { $null = Invoke-Stage2 $cfg -Apply } catch { $message = $_.Exception.Message }
     Assert-Contract ($message -match 'Stage 2 changed Cosmos data-role assignments') 'AO-2: Stage 2 must still detect an added grant during schema deployment.'
     $null = Invoke-Stage1 $cfg -Apply
-    # Initial deployment verification must retain its no-later-resources checks.
-    $message = ''; try { $null = Test-Stage1 -Cfg $cfg -Out $script:fixtureOut } catch { $message = $_.Exception.Message }
-    Assert-Contract ($message -match 'Cosmos database exists before Stage 2') 'AO-2: a fresh deployment still rejects unexpected later resources.'
 } finally {
     Remove-Item -LiteralPath $script:StateDir -Recurse -Force
 }
