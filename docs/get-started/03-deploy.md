@@ -1,6 +1,7 @@
 # 3. Deploy: Stages 0–8
 
-Nine stages, run in order from Azure Cloud Shell (PowerShell). Every stage first **previews** and changes nothing;
+Nine stages, run in order from Azure Cloud Shell (PowerShell) or from PowerShell 7 (`pwsh`) on your own Windows
+or macOS computer ([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
 the same command with `-Apply` makes the change and then reads it back. A stage that fails its read-back stops
 with `verify_failed: <reason>` and records nothing, so it can be run again.
 
@@ -9,6 +10,9 @@ The captures on this page come from one demo deployment on 2026-10-24
 real ones, in the same format. Every setting and the Portal way of each stage: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
 
 ## Before Stage 0: get the code and write the configuration
+
+On your own computer, start `pwsh` and sign in first with `az login --tenant '<tenant-id>'` (a browser window
+opens). Cloud Shell is already signed in.
 
 ```powershell
 cd $HOME; git clone https://github.com/naveenneog/CCOF.git ccof; cd ccof
@@ -20,6 +24,9 @@ code $HOME/ccof-private/staged.config.json
 $cfg = "$HOME/ccof-private/staged.config.json"
 $run = "infra/staged/Invoke-StagedDeployment.ps1"
 ```
+
+`code` opens the file in Cloud Shell's editor or in VS Code. On a Mac without VS Code, use
+`nano $HOME/ccof-private/staged.config.json` instead (save with Ctrl+O, exit with Ctrl+X).
 
 Set the main deployment values first:
 

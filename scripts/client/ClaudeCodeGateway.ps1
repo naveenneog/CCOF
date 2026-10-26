@@ -49,6 +49,16 @@ function Get-CcofUsageCommand {
     return "powershell -NoProfile -ExecutionPolicy Bypass -File `"$($WrapperPath.Replace('\', '/'))`""
 }
 
+function Test-CcofGitBash {
+    <# Whether Claude Code finds Git Bash and therefore runs a skill's injected command with its Bash tool. #>
+    if ($env:CLAUDE_CODE_GIT_BASH_PATH -and (Test-Path -LiteralPath $env:CLAUDE_CODE_GIT_BASH_PATH -PathType Leaf)) { return $true }
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $candidates = @(
+        $(if ($git) { Join-Path (Split-Path (Split-Path $git.Source -Parent) -Parent) 'bin\bash.exe' })
+        $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Git\bin\bash.exe' }))
+    return [bool]@($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }).Count
+}
+
 function New-CcofUsageSkill {
     <#
     .SYNOPSIS
@@ -56,14 +66,28 @@ function New-CcofUsageSkill {
         /usage in a local terminal session; /cost and /stats still run the built-in (Claude Code docs, "Extend
         Claude with skills", skills that share a name). The !`command` line runs the wrapper before the skill
         reaches Claude, so the figures come from the gateway, not from the model.
+        Claude Code checks that command against the permission rules and aborts the skill unless they allow it
+        ("Shell command permission check failed ... requires approval", DEV-1), so allowed-tools pre-approves
+        exactly this one command (Claude Code docs, "Permission checks on injected commands"; deny and ask rules
+        still win). With Git Bash the Bash tool runs it: `powershell -File <wrapper>`. Without Git Bash the
+        PowerShell tool runs it, and that tool refuses a nested PowerShell process ("Command spawns a nested
+        PowerShell process which cannot be validated", Claude Code 2.1.272), so the skill sets `shell: powershell`
+        and calls the wrapper directly.
     #>
-    param([Parameter(Mandatory)][string]$UsageCommand)
+    param([Parameter(Mandatory)][string]$WrapperPath, [ValidateSet('bash', 'powershell')][string]$Shell = 'bash')
+    if ($WrapperPath -match "[`r`n```$`"]") { throw 'The usage wrapper path cannot hold a line break, backtick, dollar sign or quote.' }
+    # PowerShell closes a single-quoted string at ' and at U+2018-U+201B; doubling any of them keeps it literal.
+    $command = if ($Shell -ceq 'bash') { Get-CcofUsageCommand $WrapperPath } else { "& '" + ($WrapperPath.Replace('\', '/') -replace "(['\u2018-\u201B])", '$1$1') + "'" }
+    $tool = if ($Shell -ceq 'bash') { 'Bash' } else { 'PowerShell' }
     $lines = @(
         '---'
         'name: usage'
         'description: Show the CCOF budget for Claude on this gateway - spent, budget and remaining this month in USD, as of the last cost run. Use when asked how much budget is used or left.'
+        $(if ($Shell -ceq 'powershell') { 'shell: powershell' })
+        'allowed-tools:'
+        ("  - '" + "$tool($command)".Replace("'", "''") + "'")
         '---'
-        "!``$UsageCommand``"
+        "!``$command``"
         ''
         'Show the lines above to the user exactly as written, as plain text. Do not recalculate, round, convert or estimate any figure, and do not add figures that are not above.'
         'If a line asks the user to sign in or retry, repeat that instruction. For this session''s own cost estimate, the user can run /cost.'
@@ -73,7 +97,8 @@ function New-CcofUsageSkill {
 
 function Set-CcofClaudeCode {
     param([string]$ConfigPath, [string]$ClaudeHome, [string]$VSCodeSettingsPath, [string]$BackupRoot,
-        $Inventory, [string]$NodePath, [string]$TokenEntryPath, [string]$UsageEntryPath, [switch]$UsageStatusLine, [switch]$Confirmed)
+        $Inventory, [string]$NodePath, [string]$TokenEntryPath, [string]$UsageEntryPath, [switch]$UsageStatusLine, [switch]$Confirmed,
+        [ValidateSet('bash', 'powershell')][string]$SkillShell)
     Assert-ClientConfirmation -Confirmed:$Confirmed
     if (-not $Inventory.CliVersion -and -not $Inventory.VSCodeVersion) {
         return (@{ event = 'not_installed'; component = 'claude-code' } | ConvertTo-Json -Compress)
@@ -121,7 +146,8 @@ function Set-CcofClaudeCode {
         if ($usageShimPath -match '[`$"]') { throw 'The Claude home path holds a backtick, dollar sign or quote, which the /usage skill command cannot carry; nothing was changed.' }
         $usageShim = New-CcofUsageWrapper $ConfigPath $NodePath $UsageEntryPath $(if ($azureCli) { $helper } else { '' })
         $usageCommand = Get-CcofUsageCommand $usageShimPath
-        $usageSkill = New-CcofUsageSkill $usageCommand
+        $skillShellUsed = if ($SkillShell) { $SkillShell } elseif (Test-CcofGitBash) { 'bash' } else { 'powershell' }
+        $usageSkill = New-CcofUsageSkill -WrapperPath $usageShimPath -Shell $skillShellUsed
         $paths += @($usageShimPath, $skillPath)
         if ($UsageStatusLine) {
             # Only when the person has no status line of their own; an existing one is never replaced.
@@ -144,6 +170,6 @@ function Set-CcofClaudeCode {
     Write-ClientJson $path $settings
     if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
     Complete-ClientSnapshot $snapshot
-    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; statusLine = $statusLineResult
+    return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; usageSkillShell = $skillShellUsed; statusLine = $statusLineResult
         signInMethod = $(if ($azureCli) { 'azure-cli' } else { 'msal' }); signIn = "`"$helper`" login" } | ConvertTo-Json -Compress)
 }

@@ -5,7 +5,11 @@
 Azure CLI sign-in, membership of an onboarded group, and the client
 configuration file that Stage 7 generated (`client-config.json`), handed over through the approved private channel.
 
-Full details, macOS and Linux paths, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
+Full details, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
+
+**Windows only.** The setup on this page runs on Windows. On a Mac it stops with `unsupported_platform` and
+changes nothing; what macOS supports today: [CLIENTS.md, macOS and Linux](../CLIENTS.md#macos-and-linux). The
+administrator's deployment (Stages 0-8) does run on a Mac.
 
 ## 0. Get the code
 
@@ -63,9 +67,13 @@ Start `claude` as usual. Requests go through the gateway with the models the gro
 
 ## 4. Check your own budget: `/usage`
 
-In Claude Code, `/usage` prints each of your budgets, as of the last cost run (about a minute old):
+In an interactive Claude Code session, type `/usage` and press Enter. The `/` menu shows two `/usage` entries:
+the built-in one ("Show session cost, plan usage, and activity stats") and the CCOF one ("Show the CCOF budget
+…"); typing `/usage` runs the CCOF one. It prints each of your budgets, as of the last cost run (about a minute old):
 
 ![Expected /usage output: well within the budget](../evidence/2026-10-24-demo/usage-01-normal.png)
+
+`claude -p "/usage"` (a non-interactive run) shows Claude Code's built-in usage instead, not the CCOF budget.
 
 With the example guard, from 80% of projected spend the line adds a warning and requests are slowed to reduce
 overshoot. The threshold is configurable; reporting lag means this is not a strict dollar cap.
@@ -75,7 +83,13 @@ overshoot. The threshold is configurable; reporting lag means this is not a stri
 When recorded spend reaches the budget, new requests through that group are refused until next month or until the
 budget is raised. Projected-spend refusal can clear earlier if the estimated in-flight spend falls.
 
-![Expected /usage output when the budget is reached](../evidence/2026-10-24-demo/usage-03-refused.png)
+**Once requests are refused, `/usage` cannot show it**: Claude Code sends the skill's figures to the model through
+the same gateway, and that request is refused too (`403 … budget … used up`, after Claude Code's retries). Read
+the budget without the model instead:
+
+- the status line, if step 1 used `-UsageStatusLine`: `CCOF $0.01/$0.01 (107%) - budget used up, requests refused`;
+- or, in PowerShell: `& "$HOME/.claude/ccof-usage.ps1"`, which prints the same lines as `/usage`, for example
+  `Budget used up: new requests are refused until next month.`
 
 What each figure means: [USAGE.md](../USAGE.md). `/cost` still shows the current session's own estimate.
 

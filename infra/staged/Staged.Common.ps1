@@ -73,7 +73,8 @@ function Read-StgConfig {
     $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
     foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
     foreach ($p in @(Get-StgStage7Problems $c)) { $problems.Add($p) }
-    if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
+    # The state folder next to the config reaches az as @<file> arguments; only az.cmd re-parses them.
+    if (($script:StgOnWindows ?? $IsWindows) -and $full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
     $entraNames = @(
@@ -458,7 +459,7 @@ function Send-StgGraph {
     try {
         $Body | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $f -Encoding utf8NoBOM
         Invoke-QsAz @('rest', '--method', $Method, '--url', "https://graph.microsoft.com/v1.0/$Path", '--headers', 'Content-Type=application/json', '--body', "@$f")
-    } finally { Remove-Item -LiteralPath $f -ErrorAction SilentlyContinue }
+    } finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
 }
 
 # The quickstart parameter object (infra/quickstart/main.bicepparam shape) assembled from the config

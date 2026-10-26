@@ -4,6 +4,7 @@ param([string]$ConfigPath, [string]$BackupRoot, [switch]$UsageStatusLine, [switc
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClaudeCodeGateway.ps1')
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
+Assert-ClientWindows -Script 'Set-ClaudeCodeGateway.ps1'
 Assert-ClientConfirmation -Confirmed:$Confirmed
 if (-not $ConfigPath) { $ConfigPath = Get-ClientDefaultConfigPath }
 if (-not $BackupRoot) { $BackupRoot = Join-Path (Split-Path $ConfigPath -Parent) 'backups' }

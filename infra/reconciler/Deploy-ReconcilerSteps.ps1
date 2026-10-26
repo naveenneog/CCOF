@@ -31,7 +31,7 @@ function Invoke-ReconcilerResources {
         Write-ReconcilerAudit -Path $AuditPath -Record ([ordered]@{ action = 'resources'; outcome = 'succeeded'; functionAppId = $outputs.functionAppId.value; principalId = $outputs.principalId.value; storageAccountId = $outputs.storageAccountId.value })
         Write-Output "Created $($outputs.functionAppName.value) (identity principal $($outputs.principalId.value)). Next: -Action LeaseContainer, then Permissions."
     }
-    finally { Remove-Item -LiteralPath $paramsFile -ErrorAction SilentlyContinue }
+    finally { Remove-Item -LiteralPath $paramsFile -Force -ErrorAction SilentlyContinue }
 }
 
 function Invoke-ReconcilerLeaseContainer {
@@ -86,7 +86,7 @@ function Invoke-ReconcilerPermissions {
                 ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $bodyFile -Encoding utf8NoBOM
             Invoke-Az (@('cosmosdb', 'sql', 'role', 'definition', 'create') + $account + @('--body', "@$bodyFile", '-o', 'none')) | Out-Null
         }
-        finally { Remove-Item -LiteralPath $bodyFile -ErrorAction SilentlyContinue }
+        finally { Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue }
         $definitionIds[$definition.key] = $id
         Write-ReconcilerAudit -Path $AuditPath -Record ([ordered]@{ action = 'permissions'; outcome = 'created'; item = "cosmos-role-definition:$($definition.key)"; id = $id })
     }
@@ -130,7 +130,7 @@ function Invoke-ReconcilerSettings {
         $values | ConvertTo-Json | Set-Content -LiteralPath $settingsFile -Encoding utf8NoBOM
         Invoke-Az @('functionapp', 'config', 'appsettings', 'set', '--subscription', $sub, '--resource-group', $rg, '--name', $Answers.functionAppName, '--settings', "@$settingsFile", '-o', 'none') | Out-Null
     }
-    finally { Remove-Item -LiteralPath $settingsFile -ErrorAction SilentlyContinue }
+    finally { Remove-Item -LiteralPath $settingsFile -Force -ErrorAction SilentlyContinue }
     Write-ReconcilerAudit -Path $AuditPath -Record ([ordered]@{ action = 'settings'; outcome = 'succeeded'; functionAppName = $Answers.functionAppName; timerEnabled = $Answers.timerEnabled; schedule = $Answers.reconcilerSettings.RECONCILER_SCHEDULE; validitySeconds = $Answers.reconcilerSettings.RECONCILER_VALIDITY_SECONDS })
 }
 

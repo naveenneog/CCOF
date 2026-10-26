@@ -13,8 +13,10 @@ documents, which existed before but were read by nothing except the resolver's b
 
 ## How a request flows
 
-1. Claude Code runs the skill. Its `` !`command` `` line runs `powershell -NoProfile -ExecutionPolicy Bypass -File "<home>/.claude/ccof-usage.ps1"` before
-   anything reaches the model ([Claude Code skills, dynamic context](https://code.claude.com/docs/en/skills#inject-dynamic-context)).
+1. Claude Code runs the skill. Its `` !`command` `` line runs the wrapper `<home>/.claude/ccof-usage.ps1` before
+   anything reaches the model ([Claude Code skills, dynamic context](https://code.claude.com/docs/en/skills#inject-dynamic-context)):
+   with Git Bash as `powershell -NoProfile -ExecutionPolicy Bypass -File "<home>/.claude/ccof-usage.ps1"`, without
+   it as `& '<home>/.claude/ccof-usage.ps1'` (see [Claude Code](#claude-code)).
 2. `ccof-usage` takes a token from the existing helper's token service (the same token Claude Code's
    `apiKeyHelper` uses) and calls `GET <gatewayUrl>/ccof/me/usage`.
 3. The gateway checks the token exactly as for `/v1/messages`: the same `validate-jwt` (tenant, issuers,
@@ -84,7 +86,8 @@ The line then ends, for example:
 
 and the status line reads `CCOF $11.25/$14.00 (80%) - warning: about 80% used, slowed`. When projected spend reaches the budget the gateway refuses new requests; the line then says so (`budget reached, requests refused`). When recorded spend reaches the budget, it reads `budget used up, requests refused`. A state without the
 guard fields has neither field. Claude Code does not show gateway response headers, so `/usage` and the
-status line are where a person sees the warning.
+status line are where a person sees the warning. Once requests are refused, only the status line and the wrapper
+show it: `/usage` needs a model request through the gateway ([Claude Code](#claude-code)).
 
 ## How current the figures are
 
@@ -125,6 +128,30 @@ status line are where a person sees the warning.
   aliases `/cost` and `/stats` still run the built-in command, which shows the session's own estimate
   ([Claude Code skills, skills that share a name](https://code.claude.com/docs/en/skills)). The documentation
   states this for local terminal sessions; the VS Code extension's behaviour is not verified here.
+- **Interactive only.** The `/` menu lists two `/usage` entries: the built-in ("Show session cost, plan usage,
+  and activity stats") and the CCOF skill ("Show the CCOF budget …"); typing `/usage` and Enter runs the CCOF
+  skill. `claude -p "/usage"` (headless) runs the built-in instead (`"local_command":"usage"`, empty result), so
+  scripts read the figures with the wrapper or `GET /ccof/me/usage`, not with `claude -p`.
+- **Permission.** Claude Code checks a skill's `!` command against the permission rules before it runs it, and
+  stops the skill unless they allow it: `Shell command permission check failed … This command requires
+  approval` (bug bash DEV-1). The skill's `allowed-tools` therefore pre-approves exactly its own command and
+  nothing else ([permission checks on injected commands](https://code.claude.com/docs/en/skills#permission-checks-on-injected-commands)).
+  With Git Bash, Claude Code runs it with its Bash tool: `powershell -NoProfile -ExecutionPolicy Bypass -File
+  "<home>/.claude/ccof-usage.ps1"`. Without Git Bash it runs it with its PowerShell tool, which refuses a nested
+  PowerShell (`Command spawns a nested PowerShell process which cannot be validated`), so the skill sets
+  `shell: powershell` and calls `& '<home>/.claude/ccof-usage.ps1'`. Setup picks the form (`"usageSkillShell"` in
+  its output); rerun setup after installing or removing Git for Windows. A `deny` or `ask` rule in the person's or
+  the organisation's settings, `allowManagedPermissionRulesOnly`, or `disableSkillShellExecution` still stops the
+  skill; the status line and the direct command below still work then. Checked with Claude Code 2.1.272 on
+  Windows (both forms) and, for the PowerShell form, on Linux with `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`.
+- **When the budget is used up, `/usage` cannot show it.** The skill computes the figures on the machine, but
+  Claude Code then sends them to the model through the same gateway and group, and that request is refused like
+  any other: `Failed to authenticate. API Error: 403 Your CCU budget … is used up …`, after Claude Code's
+  retries (bug bash DEV-2). The same applies whenever the gateway refuses the person's requests (projected-spend
+  refusal, guard `429`, not entitled). Then read the figures without the model:
+  - the status line (`-UsageStatusLine`), for example `CCOF $0.01/$0.01 (107%) - budget used up, requests refused`;
+  - the wrapper itself, in PowerShell: `& "$HOME/.claude/ccof-usage.ps1"` (one line per budget, the same text the
+    skill would show).
 - Status line, opt in: `Set-ClaudeCodeGateway.ps1 -UsageStatusLine -Confirmed` sets `statusLine` to
   `powershell -NoProfile -ExecutionPolicy Bypass -File "<home>/.claude/ccof-usage.ps1" --statusline` only when the person has no status line; an existing one is kept and reported
   as `kept_existing`. It shows the scope with the highest spend, for example `CCOF $42.10/$100.00 (42%)`, and

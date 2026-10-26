@@ -2,6 +2,7 @@
 param()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
+Assert-ClientWindows -Script 'Test-InstalledClients.ps1'
 $inventory = Get-CcofClientInventory
 $result = @{ cliVersion = $inventory.CliVersion; vscodeExtensionVersion = $inventory.VSCodeVersion
     desktopVersion = $inventory.DesktopVersion; softwareInstalled = $false }

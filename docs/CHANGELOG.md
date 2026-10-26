@@ -14,6 +14,18 @@
 - Docs: version 3.4.0 in ADMIN-V3.md (checked by a test), role changes apply at the next token, chargeback-history
   errors confirmed live.
 
+## 2026-10-26 — macOS deployer (branch fix/macos)
+
+- The deployment (Stages 0-8) runs from PowerShell 7 on macOS: prerequisites give the Homebrew install route, the
+  deploy page signs in with `az login` first, and a config folder with `(` or `)` is no longer refused off Windows.
+- Temporary files the deployer writes, such as `.env.client-config.pending.json`, are removed on macOS and Linux too.
+- The developer setup scripts are Windows-only and now say so on macOS and Linux (`unsupported_platform`, nothing
+  changed); macOS developer setup is planned (G-MACOS-CLIENT).
+- `/usage` in Claude Code no longer stops with "Shell command permission check failed": the skill pre-approves its
+  own command, for Git Bash and for Claude Code's PowerShell tool. The developer page explains that `/usage` is
+  interactive only and cannot show a refused budget; the status line and the wrapper can.
+- The offline test suites run under PowerShell 7 on Linux as well as Windows.
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated

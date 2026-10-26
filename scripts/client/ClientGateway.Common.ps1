@@ -1,6 +1,16 @@
 #Requires -Version 7.0
 $script:ClientRepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
+function Assert-ClientWindows {
+    <# The setup scripts write cmd.exe helpers and use Windows folders; elsewhere they stop before reading or writing anything. #>
+    param([Parameter(Mandatory)][string]$Script, [bool]$OnWindows = $IsWindows)
+    if ($OnWindows) { return }
+    [ordered]@{ event = 'unsupported_platform'; platform = $(if ($IsMacOS) { 'macOS' } elseif ($IsLinux) { 'Linux' } else { 'other' }); script = $Script
+        reason = 'The workstation setup scripts support Windows only; nothing was changed. See the docs for what macOS and Linux support today.'
+        docs = 'docs/CLIENTS.md#macos-and-linux' } | ConvertTo-Json -Compress
+    exit 2
+}
+
 function Read-ClientJson {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @{} }
