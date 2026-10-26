@@ -13,6 +13,7 @@ import type { ApiResponse, ProjectStore, StoredProject } from "./api.ts";
 import { beginChange } from "./change-log.ts";
 import type { ChangeEntry, ChangeLog } from "./change-log.ts";
 import { ValidationError, isObject, stripSystem } from "./validation.ts";
+import { isDisplayName } from "./text-rules.ts";
 import type { Doc } from "./validation.ts";
 import { readGroupRegistration, SURFACES } from "../../src/contracts/group-registration.ts";
 import type { Surface } from "../../src/contracts/group-registration.ts";
@@ -84,9 +85,13 @@ function route(method: string, path: string): Route | "method_not_allowed" | nul
   return null;
 }
 
-function assertValidGroup(doc: Doc): Doc {
+// The shared contract only bounds the length; the admin also refuses a name with no visible text or with
+// control characters (ADMIN-5), checked when the name is set so an older stored name never blocks other edits.
+function assertValidGroup(doc: Doc, nameSet: boolean): Doc {
   const read = readGroupRegistration(doc);
-  if (!read.ok) throw new ValidationError(read.problems);
+  const problems = read.ok ? [] : [...read.problems];
+  if (nameSet && !problems.includes("displayName:invalid") && !isDisplayName(doc.displayName, 256)) problems.push("displayName:invalid");
+  if (problems.length > 0) throw new ValidationError(problems);
   return doc;
 }
 
@@ -178,7 +183,7 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
         const body = parseBody(request);
         if (!isObject(body) || Object.keys(body).some((k) => !CREATE_KEYS.includes(k))) throw new ValidationError(["document:unexpected_key"]);
         const id = typeof body.groupId === "string" ? body.groupId.toLowerCase() : "";
-        const doc = assertValidGroup({ ...body, id, kind: "group", groupId: id, projectId: id, status: "active", retiredAt: null });
+        const doc = assertValidGroup({ ...body, id, kind: "group", groupId: id, projectId: id, status: "active", retiredAt: null }, true);
         groupId = id;
         const pending = await begin(changes({}, doc, "", []));
         const written = await recorded(pending, () => store.create(doc));
@@ -205,7 +210,7 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
         const after = matched.op === "retire"
           ? { ...structuredClone(before), status: "retired", retiredAt: deps.now().toISOString() }
           : { ...structuredClone(before), ...structuredClone(body as Doc) };
-        assertValidGroup(after);
+        assertValidGroup(after, matched.op === "update" && Object.hasOwn(body as Doc, "displayName"));
         const changed = changes(before, after, "", []);
         if (changed.length === 0) return json(200, { changed: false, group: before }, { etag });
         const pending = await begin(changed, { etagBefore: etag });

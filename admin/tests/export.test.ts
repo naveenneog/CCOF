@@ -193,3 +193,10 @@ test("every export and custom-range error code is documented in ADMIN-API.md (AD
   const section = docs.slice(docs.indexOf("### Export for Power BI"), docs.indexOf("## Sign-in"));
   assert.deepEqual(codes.filter((c) => !section.includes(`\`${c}\``) && !section.includes(` ${c}\``)), []);
 });
+
+test("CSV also neutralises formulas after leading whitespace, full-width triggers and line feeds (ADMIN-5, OWASP)", () => {
+  const risky = [" =1+1", "  +1", "\u3000=1", "\uFF1D1+1", "\uFF0B1", "\uFF0D2", "\uFF20SUM(1)", "\n=1", " \t-3", "\nnote", "\rnote"];
+  const csv = toCsv(["v"], risky.map((v) => [v]));
+  assert.deepEqual(csv.split("\r\n").slice(1, -1), risky.map((v) => `"'${v}"`));
+  assert.equal(toCsv(["v"], [[" plain"], ["a-b"], ["x=1"]]), '"v"\r\n" plain"\r\n"a-b"\r\n"x=1"\r\n');
+});

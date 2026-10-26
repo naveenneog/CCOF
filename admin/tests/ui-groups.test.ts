@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clearErrors, emptyGroupForm, formFromDoc, formProblems, formToBody, groupEstimate } from "../ui-v3/lib/groups.ts";
 import { readGroupRegistration } from "../../src/contracts/group-registration.ts";
+import { toCsv } from "../ui-v3/lib/format.ts";
 
 const GROUP = "abcdef01-2345-4678-9abc-def012345678";
 const unlimited = { tokensPerMinute: null, tokenQuota: null, tokenQuotaPeriod: null };
@@ -63,4 +64,11 @@ test("a stored group fills the edit form, and the form round-trips", () => {
   const body = formToBody(filled());
   const doc = { ...body, id: GROUP, kind: "group", projectId: GROUP, status: "active", retiredAt: null };
   assert.deepEqual(formToBody(formFromDoc(doc)), body);
+});
+
+test("the console refuses the names the server refuses, and its CSV neutralises the same formula triggers (ADMIN-5)", () => {
+  for (const displayName of [" ", "\t=1+1", "a\r\n=1+1"]) assert.ok(formProblems({ ...filled(), displayName }).displayName, JSON.stringify(displayName));
+  assert.equal(formProblems({ ...filled(), displayName: "Payments – Zürich" }).displayName, undefined);
+  const csv = toCsv(["v"], [{ v: " =1+1" }, { v: "\uFF1D1" }, { v: "plain" }], {});
+  assert.equal(csv, "\nv\n' =1+1\n'\uFF1D1\nplain\n");
 });

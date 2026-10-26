@@ -121,7 +121,8 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 
 - **Validation:** the same contract the sync and reconciler read
   ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)); problems are
-  returned as field paths (`422 invalid_group`).
+  returned as field paths (`422 invalid_group`). The admin also refuses a `displayName` with no visible text
+  or with control characters such as tabs or line breaks (`displayName:invalid`; 1-256 characters).
 - **Change record:** each write is recorded in `adminConfig` before it is applied, as for projects.
 - **Directory lookup:** enabled with `ADMIN_GROUP_SEARCH_ENABLED=true`. The admin managed identity
   needs Microsoft Graph application permissions `Group.ReadBasic.All` (search and read) and
@@ -184,9 +185,11 @@ one `userTagCatalog` with the saved tags, at most 2,000).
 ### Export for Power BI ([admin/src/export.ts](../admin/src/export.ts))
 
 Two datasets join on the group ID (`groupId` = usage `projectLabel`). Both need the Reader role and
-accept `format=json` (default) or `format=csv`. CSV quotes every field and prefixes values starting
-with `=`, `+`, `-`, `@`, tab or carriage return with an apostrophe
-([OWASP CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection)).
+accept `format=json` (default) or `format=csv`. CSV quotes every field and prefixes with an apostrophe any
+value that starts with `=`, `+`, `-`, `@` or their full-width forms `＝ ＋ － ＠` (also after leading spaces),
+or with a tab, carriage return or line feed
+([OWASP CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection)). A line break inside a quoted
+value is kept, so read the file with a CSV parser rather than line by line.
 
 | Request | Rows |
 |---|---|

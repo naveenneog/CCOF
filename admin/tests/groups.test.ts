@@ -248,3 +248,16 @@ test("members are listed only for an active onboarded group, never for any other
   await h.call("POST", `/api/groups/${GROUP}/retire`, { body: { confirmGroupId: GROUP }, ifMatch: created.headers.etag });
   assert.equal((await h.call("GET", `/api/groups/directory/${GROUP}/members`, { oid: READER })).status, 404, "retired");
 });
+
+test("a display name must have visible text and no control characters, on create and edit (ADMIN-5)", async () => {
+  const { call } = setup();
+  for (const displayName of [" ", "\u3000", "\t=1+1", "a\r\n=1+1", "a\u0000b", "a\u0085b"]) {
+    const res = await call("POST", "/api/groups", { body: groupBody({ displayName }) });
+    assert.equal(res.status, 422, JSON.stringify(displayName));
+    assert.deepEqual((res.jsonBody as Doc).problems, ["displayName:invalid"], JSON.stringify(displayName));
+  }
+  const created = await call("POST", "/api/groups", { body: groupBody({ displayName: "Payments – Zürich team" }) });
+  assert.equal(created.status, 201);
+  const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName: "x\ty" }, ifMatch: created.headers!.etag });
+  assert.deepEqual([edit.status, (edit.jsonBody as Doc).problems], [422, ["displayName:invalid"]]);
+});

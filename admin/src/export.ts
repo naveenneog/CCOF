@@ -6,6 +6,7 @@
 // formula are prefixed with an apostrophe (OWASP "CSV Injection").
 
 import { ApiError } from "./auth.ts";
+import { neutraliseFormula } from "./text-rules.ts";
 import type { ApiResponse } from "./api.ts";
 import { buildChargebackQuery, prepareRateCard, readChargebackFilters, readChargebackSettings, shapeRows, tableRows } from "./chargeback.ts";
 import type { Configured } from "./chargeback.ts";
@@ -38,9 +39,8 @@ const refusal = (status: number, body: Doc, requestId: string): ApiResponse =>
   ({ status, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { ...body, requestId } });
 
 function csvCell(value: unknown): string {
-  let text = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return `"${text.replace(/"/g, '""')}"`;
+  const text = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+  return `"${neutraliseFormula(text).replace(/"/g, '""')}"`;
 }
 
 export function toCsv(columns: string[], rows: unknown[][]): string {
