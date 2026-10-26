@@ -85,7 +85,7 @@ function Invoke-Stage5 {
         chargebackHistory = $history ?? @{}
         logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -StageNumber 5 -Parameters $params
     if (-not $Apply) { return $null }
     $v = [ordered]@{ settings = [ordered]@{} }
     foreach ($k in @($s1.names.apps.Keys | Sort-Object)) {
@@ -126,14 +126,25 @@ function Invoke-Stage7 {
     $docs = New-QsSeedDocuments -P $ctx.P -ClassificationGroupDisplayNames $ctx.State.completed['1'].outputs.classificationGroupDisplayNames
     $groupDocs = @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups)
     Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
+    $groupDrift = @(Get-StgGroupSeedDrift -Endpoint $s1.cosmosEndpoint -DatabaseName $Cfg.cosmos.databaseName -Documents $groupDocs)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
         Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function; a group document edited in the admin console $(if ($Cfg.stage7.keepDifferingGroups -eq $true) { 'is kept (stage7.keepDifferingGroups)' } else { 'stops the stage' })"
+        if ($groupDrift.Count) {
+            $details = Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs
+            if ($Cfg.stage7.keepDifferingGroups -eq $true) { Write-Host "preview: group seed drift will be kept (stage7.keepDifferingGroups): $details" -ForegroundColor Yellow }
+            else { Write-Host "preview: group seed drift would be refused (seed_documents_differ): $details" -ForegroundColor Yellow }
+        }
         Write-Host "preview: delegated snapshot of $(@($entra.groups.Values).Count) groups, applied through the sync app's snapshotApply function"
         Write-Host "preview: write the client config.json for $(if ($Cfg.client.Contains('group')) { "group $($Cfg.client.group)" } else { 'client.projectId/classification' })"
         return $null
     }
     Assert-StgGroupsExist $groupDocs
+    if ($groupDrift.Count -and $Cfg.stage7.keepDifferingGroups -ne $true) {
+        $details = Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs
+        throw "seed_documents_differ: these group documents differ from the configuration and were left unchanged: $details. After the first seed the admin console owns a group: change it there (groups[] is not applied to an existing group). To keep the console's version and continue, set stage7.keepDifferingGroups to true and rerun Stage 7."
+    }
+    if ($groupDrift.Count) { Write-Host "kept $($groupDrift.Count) console-edited group(s): $(Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs)" -ForegroundColor Yellow }
     $code = Invoke-QsCode $ctx
     $result = @{ code = $code }
     if ($Cfg.stage1.includeAdmin) {

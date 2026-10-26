@@ -13,7 +13,7 @@ function Invoke-Stage0 {
     if ($exists) {
         $items = @(Invoke-StgAzJson @('resource', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup))
         $report.resourceGroup.resourceCount = $items.Count
-        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here; Stage 1 refuses a non-empty RG." -ForegroundColor Yellow }
+        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here. Stage 1 can verify without writing only if a succeeded stage1-services deployment matches this config; otherwise it refuses a non-empty RG. Later stages still need their own recovered state and are not assumed complete." -ForegroundColor Yellow }
     }
     $providers = 'Microsoft.Web', 'Microsoft.DocumentDB', 'Microsoft.Storage', 'Microsoft.Network', 'Microsoft.OperationalInsights', 'Microsoft.Insights', 'Microsoft.ManagedIdentity', 'Microsoft.ApiManagement', 'Microsoft.AlertsManagement'
     $report.providers = [ordered]@{}
@@ -168,6 +168,23 @@ function New-StgStage1Result {
         foundryAccountId = $Out.foundryAccountId; foundryAnthropicUrl = $Out.foundryAnthropicUrl; verify = $verify }
 }
 
+function Assert-StgStage1AppSettings {
+    param($Settings, [string]$AppKey, $Stage5Record, $Stage7Record)
+    # Stage 5 is the only app-settings writer. Without its state, Stage 1 can verify its own ARM
+    # deployment but cannot infer a settings set from later stages or a lost state folder.
+    if (-not $Stage5Record) { return }
+    $settingNames = @($Settings | ForEach-Object { $_.name } | Sort-Object)
+    $expectedSettings = @($Stage5Record.outputs.verify.settings[$AppKey] | Sort-Object)
+    if ($AppKey -ceq 'sync' -and $Stage7Record) {
+        $snapshotToggle = @($Settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
+        Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
+        # Older Stage 5 records predate the setting; Stage 7 added it during snapshot cleanup.
+        if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
+        $expectedSettings = @($expectedSettings | Sort-Object)
+    }
+    Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"
+}
+
 function Invoke-Stage1 {
     param($Cfg, [switch]$Apply)
     $exists = (Invoke-QsAz @('group', 'exists', '--subscription', $Cfg.subscriptionId, '--name', $Cfg.resourceGroup)) -eq 'true'
@@ -248,16 +265,7 @@ function Test-Stage1 {
         Assert-Stg ($site.httpsOnly -eq $true) "$($a.service.name) does not require HTTPS"
         Assert-Stg ($site.runtimeName -ceq 'node' -and $site.runtimeVersion -ceq '22') "$($a.service.name) runtime is $($site.runtimeName) $($site.runtimeVersion), expected Node 22"
         Assert-Stg ($site.ftpsState -ceq 'Disabled') "$($a.service.name) FTPS state is $($site.ftpsState)"
-        $settingNames = @($settings | ForEach-Object { $_.name } | Sort-Object)
-        $expectedSettings = if ($config) { @($config.verify.settings[$a.key] | Sort-Object) } else { @() }
-        if ($a.key -ceq 'sync' -and $code) {
-            $snapshotToggle = @($settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
-            Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
-            # Stage 5 writes it since council round 2 (app-settings.bicep); an older Stage 5 record lacks it.
-            if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
-            $expectedSettings = @($expectedSettings | Sort-Object)
-        }
-        Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "$($a.service.name) application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"
+        Assert-StgStage1AppSettings -Settings $settings -AppKey $a.key -Stage5Record $config -Stage7Record $code
         Assert-Stg ($a.service.principalId -match $script:Guid) "$($a.service.name) has no principal"
         $v.apps += [ordered]@{ app = $a.key; name = $a.service.name; publicNetworkAccess = $site.publicNetworkAccess; subnet = $site.virtualNetworkSubnetId; settings = $settings.Count; principalId = $a.service.principalId }
     }
@@ -488,7 +496,7 @@ function Invoke-Stage2 {
         $before = try { & $listContainers } catch { if ("$_" -match 'NotFound') { @() } else { throw } }
         if ($problem = Get-StgChargebackTtlTransitionProblem -Cfg $Cfg -Containers $before) { throw $problem }
     }
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -Parameters @{
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -StageNumber 2 -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
         autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
         chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }

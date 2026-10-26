@@ -183,8 +183,9 @@ pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 
 **Expected:** a JSON line with the policy digests; one `audit archive: <account> in <region>, blobs …;
 diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention …` line, or
-`audit archive: off; workspace retention unchanged` when the archive is off (`<region>` as API Management reports
-it, for example `East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
+`audit archive: off; an existing ccof-gateway-archive diagnostic setting keeps exporting` when the archive is off
+(the off preview also prints the manual deletion command; `<region>` is as API Management reports it, for example
+`East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
 <account> network public-enabled (…), trusted services allowed` (or `public-disabled` when a storage policy turned
 public network access off); and `stage 5 completed and verified in … s`. The demo capture below predates the archive and has no `audit archive:`
 line. Checks for the archive: [audit archive](../operate/audit-archive.md#check-it-works).
@@ -215,6 +216,11 @@ pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 **Who:** platform engineer · **Time:** about 25 minutes · **Publishes** the four Function App packages, **seeds**
 the backend and the groups in the configuration, **applies** a membership snapshot, and writes the developer
 client file. One Stage 7 at a time per checkout.
+
+Before building or publishing, preview and apply try a bounded, read-only lookup of configured group documents in the
+`projects` container. When the operator can reach Cosmos DB, drift output names each group and differing field; without
+`stage7.keepDifferingGroups: true` an apply refuses before publishing. If the private endpoint is unreachable or the
+read is denied, Stage 7 warns and continues; the seed step still checks for drift after publishing.
 
 ```powershell
 pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview

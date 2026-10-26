@@ -100,7 +100,8 @@ Assert-Contract ($p.retentionDays -eq 2555 -and $p.immutabilityDays -eq 365) 'Th
 Assert-Contract ((@($p.lockedContainers) -join ',') -ceq 'insights-logs-gatewaylogs') 'Locked containers must be passed so Stage 5 never rewrites a locked policy.'
 Assert-Contract ($null -eq (Get-StgAuditDeployment -Cfg @{} -Names $names -ApimLocation 'eastus2')) 'With the archive off there are no deployment parameters.'
 Assert-Contract ((Format-StgAuditPreview -Deployment $p -WorkspaceRetentionDays 365) -match "audit archive: $name in westeurope.*2555.*365.*Standard_ZRS.*ccof-gateway-archive.*workspace retention 365") 'The Stage 5 preview must name the account, retention, immutability, SKU, setting and workspace retention.'
-Assert-Contract ((Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDays $null) -match 'audit archive: off.*workspace retention unchanged') 'The Stage 5 preview must say when the archive is off.'
+$archiveOff = Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDays $null
+Assert-Contract ($archiveOff -match 'audit archive: off.*existing.*ccof-gateway-archive.*keeps exporting.*az monitor diagnostic-settings delete --name ccof-gateway-archive --resource.*workspace retention unchanged') 'The Stage 5 preview must warn that an existing setting still exports and give the manual deletion command.'
 # ARM returns the gateway region as its display name, which the preview prints as is (live: "in East US 2").
 $pDisplay = Get-StgAuditDeployment -Cfg $cfgOn -Names $names -ApimLocation 'East US 2'
 Assert-Contract ((Format-StgAuditPreview -Deployment $pDisplay -WorkspaceRetentionDays $null) -clike "audit archive: $name in East US 2, blobs deleted after 2555 days, *") 'The preview prints the API Management region as ARM returns it.'

@@ -91,7 +91,7 @@ function Get-StgAuditDeployment {
 function Format-StgAuditPreview {
     param($Deployment, $WorkspaceRetentionDays)
     $ws = if ($null -ne $WorkspaceRetentionDays) { "workspace retention $WorkspaceRetentionDays days" } else { 'workspace retention unchanged' }
-    if (-not $Deployment) { return "audit archive: off; $ws" }
+    if (-not $Deployment) { return "audit archive: off; an existing ccof-gateway-archive diagnostic setting keeps exporting. Stop exports with: az monitor diagnostic-settings delete --name ccof-gateway-archive --resource <API Management resource ID>; this does not delete the archive account; $ws" }
     $keep = if ($null -ne $Deployment.retentionDays) { "deleted after $($Deployment.retentionDays) days" } else { 'kept (no deletion rule)' }
     $lock = if ($null -ne $Deployment.immutabilityDays) { "immutable $($Deployment.immutabilityDays) days" } else { 'no immutability' }
     return "audit archive: $($Deployment.accountName) in $($Deployment.location), blobs $keep, $lock, $($Deployment.storageSku); diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); $ws"
