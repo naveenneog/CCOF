@@ -19,6 +19,7 @@ GREEN: redeployment 23 checks; recovery 11; reader links/output/page budgets 3; 
 with loaded suites and expected test failures. Root/admin `npm ci`, admin 203 tests, explicit typecheck/build,
 and full packet gate passed (including `npm test`, 360.8 seconds). Gate: 23 passed, 2 existing warning
 categories (oversized files/open unknowns), 0 failed. No live applies or pushes.
+Withdrawal implementation: `a5a9dd6`.
 
 Self-review, not independent council approval: ARCHITECT PASS — release-17 apply contract restored;
 CODER PASS — no completion-record shortcut on apply; QA PASS — wording, current inputs and failed-B-to-A
