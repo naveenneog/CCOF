@@ -3,7 +3,7 @@
 ## Group-centric onboarding
 
 **Active packet:** G-AUDIT — long-term audit: gateway log archive and chargeback history (feature branch
-`feature/long-term-audit`, awaiting the owner's merge decision; [ADR-0043](adr/0043-long-term-audit-archive.md),
+`feature/long-term-audit`, merged into main on 2026-10-26 with the owner's approval, merge commit 2265e25; [ADR-0043](adr/0043-long-term-audit-archive.md),
 [ADR-0044](adr/0044-chargeback-history-in-cosmos.md)).
 
 ### G-AUDIT — long-term audit (feature branch, 2026-10-26)
