@@ -53,11 +53,15 @@ test("operator recovery docs match Stage 0/1 and Stage 7 behavior", () => {
   assert.match(stage0, /no Stage 1 state[\s\S]*succeeded stage1-services deployment matches this config[\s\S]*recovered state/);
   const troubleshooting = read("docs/operate/troubleshooting.md");
   assert.match(troubleshooting, /stage7_busy/);
-  assert.match(read("docs/STAGED-DEPLOYMENT-GUIDE.md"), /group_drift_check_forbidden/);
+  const stage7Guide = section(read("docs/STAGED-DEPLOYMENT-GUIDE.md"), "### Stage 7: code and initial data");
+  assert.match(stage7Guide, /When the operator can reach[\s\S]*private Cosmos endpoint/);
+  assert.match(stage7Guide, /warns and\s+continues/);
+  assert.doesNotMatch(stage7Guide, /Built-in Data Reader/);
   assert.doesNotMatch(troubleshooting, /Stage 7: `npm ci` EPERM in `admin\/node_modules`/);
   const stage7 = section(read("docs/get-started/03-deploy.md"), "## Stage 7 ");
-  assert.match(stage7, /Cosmos DB Built-in Data Reader/);
-  assert.match(stage7, /before publishing/);
+  assert.match(stage7, /When the operator can reach Cosmos DB/);
+  assert.match(stage7, /the seed step still checks for drift after publishing/);
+  assert.doesNotMatch(stage7, /Built-in Data Reader/);
 });
 
 test("archive-off guidance names the surviving export and exact manual deletion command", () => {

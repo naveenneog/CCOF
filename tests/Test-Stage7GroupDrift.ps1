@@ -55,6 +55,8 @@ $evidence = @{ seed = $seed } | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsH
 Assert-Contract ($evidence.seed.kept[0].document -ceq "projects/$g1" -and (@($evidence.seed.kept[0].fields) -join ',') -ceq 'budget,displayName') 'The Stage 7 evidence must record the kept groups and their differing fields.'
 $stage7 = (Get-Command Invoke-Stage7).ScriptBlock.ToString()
 Assert-Contract ($stage7 -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs -KeepDifferingGroups \(\$Cfg\.stage7\.keepDifferingGroups -eq \$true\)') 'Stage 7 must pass stage7.keepDifferingGroups to the seed.'
+$publishAt = $stage7.IndexOf('$code = Invoke-QsCode'); $seedAt = $stage7.IndexOf('$result.seed = Invoke-StgSeed')
+Assert-Contract ($publishAt -ge 0 -and $seedAt -gt $publishAt) 'The post-publish seed check must remain after package publishing.'
 $evidenceAt = $stage7.IndexOf("Write-StgEvidence 'stage7.verify.json' `$result"); $summaryAt = $stage7.IndexOf('Format-StgKeptGroups -Kept $result.seed.kept')
 Assert-Contract ($evidenceAt -ge 0 -and $summaryAt -gt $evidenceAt) 'Stage 7 must write its evidence (with the kept groups) and print the kept line at the end.'
 
@@ -65,20 +67,44 @@ Assert-Contract (-not (@($script:SeedCalls | ForEach-Object { $_.keep } | Where-
 $script:restReads = [Collections.Generic.List[object]]::new()
 $script:storedGroup = $groupDocs[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
 $script:storedGroup.displayName = 'Edited team'
+$script:readMode = 'success'
+$script:tokenFailure = $false
 $savedAzForDrift = ${function:Invoke-QsAz}
 $savedRestForDrift = if (Test-Path function:Invoke-RestMethod) { (Get-Item function:Invoke-RestMethod).ScriptBlock } else { $null }
 try {
-    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) if ($Arguments -join ' ' -match 'get-access-token') { return 'fake-cosmos-token' }; throw 'unexpected az write' }
+    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) if ($Arguments -join ' ' -match 'get-access-token') { if ($script:tokenFailure) { throw 'CLI token unavailable' }; return 'fake-cosmos-token' }; throw 'unexpected az write' }
     Set-Item function:Invoke-RestMethod {
-        param($Method, $Uri, $Headers)
-        $script:restReads.Add(@{ method = $Method; uri = $Uri; headers = $Headers })
+        param($Method, $Uri, $Headers, $TimeoutSec)
+        $script:restReads.Add(@{ method = $Method; uri = $Uri; headers = $Headers; timeoutSec = $TimeoutSec })
+        if ($script:readMode -ceq 'http403') { throw [Exception]::new('HTTP 403') }
+        if ($script:readMode -ceq 'http404') { throw [Exception]::new('HTTP 404') }
+        if ($script:readMode -ceq 'network') { throw [Net.WebException]::new('network unreachable') }
+        if ($script:readMode -ceq 'timeout') { throw [TimeoutException]::new('request timed out') }
         return $script:storedGroup
     }
     $drift = @(Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com:443/' -DatabaseName 'ccof' -Documents @($groupDocs[0]))
     Assert-Contract ($drift.Count -eq 1 -and $drift[0].document -ceq "projects/$g1" -and (@($drift[0].fields) -join ',') -ceq 'displayName') 'Read-only preflight must name the existing group and differing seeded fields.'
-    Assert-Contract ($script:restReads.Count -eq 1 -and $script:restReads[0].method -ceq 'Get' -and $script:restReads[0].headers.Authorization -match '^type=aad&ver=1\.0&sig=fake-cosmos-token$' -and $script:restReads[0].headers.'x-ms-documentdb-partitionkey' -ceq "[`"$g1`"]") 'Preflight must use an authenticated Cosmos point-read with the group ID partition key.'
+    Assert-Contract ($script:restReads.Count -eq 1 -and $script:restReads[0].method -ceq 'Get' -and $script:restReads[0].headers.Authorization -match '^type=aad&ver=1\.0&sig=fake-cosmos-token$' -and $script:restReads[0].headers.'x-ms-documentdb-partitionkey' -ceq "[`"$g1`"]" -and $script:restReads[0].timeoutSec -eq 10) 'Preflight must use a bounded authenticated Cosmos point-read with the group ID partition key.'
     $script:storedGroup = $groupDocs[0]
     Assert-Contract (-not @(Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0])).Count) 'An equal stored group document is not drift.'
+    $warningCases = @(
+        @{ mode = 'http403'; reason = 'HTTP 403' },
+        @{ mode = 'network'; reason = 'network error' },
+        @{ mode = 'timeout'; reason = 'timeout' })
+    foreach ($case in $warningCases) {
+        $script:readMode = $case.mode
+        $before = $script:restReads.Count
+        $warning = Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0]) *>&1 | Out-String
+        $warningLines = @($warning -split "`r?`n" | Where-Object { $_ -match '^preview/preflight:' })
+        Assert-Contract ($warningLines.Count -eq 1 -and $warningLines[0].Contains("($($case.reason)); the seed step checks them after publishing") -and $script:restReads.Count -eq ($before + 1) -and $script:restReads[-1].timeoutSec -eq 10) "A $($case.mode) read failure must warn once and continue without drift."
+    }
+    $script:readMode = 'http404'
+    $before = $script:restReads.Count
+    $notFound = Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0]) *>&1 | Out-String
+    Assert-Contract (-not $notFound.Contains('preview/preflight:') -and $script:restReads.Count -eq ($before + 1)) 'A missing group document remains no drift and does not warn.'
+    $script:readMode = 'success'; $script:tokenFailure = $true
+    $tokenWarning = Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0]) *>&1 | Out-String
+    Assert-Contract ($tokenWarning.Contains('preview/preflight: could not read group documents before publishing (token unavailable); the seed step checks them after publishing')) 'A missing token must warn and continue rather than block Stage 7.'
 } finally {
     ${function:Invoke-QsAz} = $savedAzForDrift
     if ($savedRestForDrift) { Set-Item function:Invoke-RestMethod $savedRestForDrift } else { Remove-Item function:Invoke-RestMethod -ErrorAction SilentlyContinue }
@@ -86,7 +112,7 @@ try {
 
 # Drift refusal must precede any package build/publish; keepDifferingGroups may pass the same guard.
 $savedFunctions = @{}
-foreach ($name in 'Get-StgStage', 'New-StgQsContext', 'New-StgGroupDocuments', 'Assert-StgClientSignInMethod', 'Assert-StgGroupsExist', 'Get-StgGroupSeedDrift', 'Invoke-QsCode') {
+foreach ($name in 'Get-StgStage', 'New-StgQsContext', 'New-StgGroupDocuments', 'Assert-StgClientSignInMethod', 'Assert-StgGroupsExist', 'Get-StgGroupSeedDrift', 'Invoke-QsCode', 'Invoke-QsAz') {
     $savedFunctions[$name] = (Get-Item "function:$name").ScriptBlock
 }
 $script:preflightDrift = @([ordered]@{ document = "projects/$g1"; fields = @('budget', 'displayName') })
@@ -109,6 +135,13 @@ try {
     Assert-Contract ($preview.Contains('will be kept') -and $preview.Contains('Research team') -and $preview.Contains('budget, displayName') -and $script:publishCalls -eq 0) 'Opt-in preview must identify which group/fields will be kept without publishing.'
     $kept = try { $null = Invoke-Stage7 -Cfg $stage7Cfg -Apply; '' } catch { $_.Exception.Message }
     Assert-Contract ($kept -ceq 'test_stop_after_publish' -and $script:publishCalls -eq 1) 'keepDifferingGroups must allow the Stage 7 apply to continue after read-only drift detection.'
+    Set-Item function:Get-StgGroupSeedDrift $savedFunctions['Get-StgGroupSeedDrift']
+    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) throw 'missing private Cosmos route' }
+    $stage7Cfg.stage7.keepDifferingGroups = $false
+    $fallbackLines = [Collections.Generic.List[string]]::new()
+    $script:publishCalls = 0
+    $fallback = try { Invoke-Stage7 -Cfg $stage7Cfg -Apply *>&1 | ForEach-Object { $fallbackLines.Add("$_") }; '' } catch { $_.Exception.Message }
+    Assert-Contract ($fallback -ceq 'test_stop_after_publish' -and $script:publishCalls -eq 1 -and @($fallbackLines | Where-Object { $_ -match '^preview/preflight: could not read group documents before publishing \(token unavailable\); the seed step checks them after publishing$' }).Count -eq 1) 'A failed preflight token lookup must warn once and still reach the post-publish seed step.'
 } finally {
     foreach ($name in $savedFunctions.Keys) { Set-Item "function:$name" $savedFunctions[$name] }
 }

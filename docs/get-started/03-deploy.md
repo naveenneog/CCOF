@@ -205,9 +205,10 @@ pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 the backend and the groups in the configuration, **applies** a membership snapshot, and writes the developer
 client file. One Stage 7 at a time per checkout.
 
-Before any build or publish, both preview and apply read the configured group documents from the `projects` container.
-The operator needs **Cosmos DB Built-in Data Reader** on the configured database for this read-only check. Drift output
-names each group and differing field; without `stage7.keepDifferingGroups: true` an apply refuses before publishing.
+Before building or publishing, preview and apply try a bounded, read-only lookup of configured group documents in the
+`projects` container. When the operator can reach Cosmos DB, drift output names each group and differing field; without
+`stage7.keepDifferingGroups: true` an apply refuses before publishing. If the private endpoint is unreachable or the
+read is denied, Stage 7 warns and continues; the seed step still checks for drift after publishing.
 
 ```powershell
 pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview
