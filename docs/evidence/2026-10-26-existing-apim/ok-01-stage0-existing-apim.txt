@@ -1,0 +1,19 @@
+PS ~/ccof> pwsh -File infra/staged/Invoke-StagedDeployment.ps1 -Stage 0 -ConfigPath $HOME/ccof-private/staged.config.json
+== stage 0 (preview) subscription ebf7ae8f-e8b3-4f44-9395-85b2b1ad6db8 RG ccof-nov4-rg; state $HOME/ccof-private/.staged-state
+WARNING: the global (all APIs) policy of contoso-apim also runs for the CCOF API (its inbound section starts with <base />). Review it below; Stage 5 does not change it.
+global policy of contoso-apim:
+<policies>
+	<inbound>
+		<set-header name="X-Contoso-Gateway" exists-action="override">
+			<value>customer-global</value>
+		</set-header>
+	</inbound>
+	<backend>
+		<forward-request />
+	</backend>
+	<outbound />
+	<on-error />
+</policies>
+existing API Management contoso-apim: StandardV2, system-assigned identity on, 1 APIs, 1 diagnostic settings; CCOF adds API claude-messages at /anthropic
+stage 0 completed and verified in 51 s; outputs in $HOME/ccof-private/.staged-state/state.json
+== exit 0 elapsed 52 s log $HOME/logs/stage0-preview-075010.log

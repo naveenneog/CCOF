@@ -11,7 +11,18 @@
   `ccof-gateway-logs` (or reuses an equivalent setting) and reads it back; (3) the owner's other APIs, global policy,
   logger and own diagnostic settings are unchanged after Stages 0–8; (4) Stage 8 telemetry passes on an existing
   instance; (5) a reader page "Use an existing API Management" linked from prerequisites and deploy.
-- State: in progress.
+- Live, lab, 2026-10-26 ([evidence](evidence/2026-10-26-existing-apim/README.md)): a simulated customer instance
+  (Standard v2, its own API, global policy and diagnostic setting, created outside CCOF); the deployer on Linux
+  PowerShell (WSL, standing in for a Mac). Stages 0–8 passed: 52, 302, 229, 426, 44, 109, 697, 822, 278 s. Stage 5
+  what-if was `Create` only on the instance; Stage 8 telemetry came through `ccof-gateway-logs`; the ledger
+  attributed both requests to the group; `claude -p` through the instance answered. The owner's tier, identity,
+  networking, other API and its policy, global policy, logger and own diagnostic setting read back unchanged. A
+  private Foundry was refused live at Stage 0 (`apim_existing_no_private_route`).
+- Checks: new suite `tests/Test-StagedApimExisting.ps1` (54 checks), mutations 29/29 caught; `npm test`, CI
+  typecheck, build, admin tests, `node .ironclad/gate.mjs --stage packet`.
+- Open: manual removal from the instance; a private Foundry behind a VNet-integrated instance not run live; create
+  mode still adds an unused API Management subnet.
+- State: complete on the branch; not merged (needs the owner's approval).
 
 ## Group-centric onboarding
 

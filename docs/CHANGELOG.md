@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-10-26 — Deploy into an existing API Management (feature branch)
+
+- Stage 0 checks an `apim.existing` instance before anything is created: readable, system-assigned identity, a v2
+  tier, API ID, path and backend names free, room for CCOF's diagnostic settings, and a network route when Foundry or
+  the Function Apps are private. Each refusal names the next step; the global policy is printed for review.
+- Stage 5 sends the instance's gateway logs to CCOF's workspace (`ccof-gateway-logs`), so budgets, `/usage`,
+  chargeback and the Stage 8 telemetry check work; it reuses the instance's `azuremonitor` logger.
+- A new instance and `apim.existing` together are refused.
+- New page: [Use an existing API Management](get-started/existing-api-management.md).
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated

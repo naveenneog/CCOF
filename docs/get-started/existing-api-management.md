@@ -5,7 +5,8 @@ a new one. Everything else in [Deploy, Stages 0–8](03-deploy.md) stays the sam
 
 CCOF adds one API to the instance and sends the instance's gateway logs to CCOF's Log Analytics workspace. It does
 not change the instance's tier, identity, networking, global policy, other APIs or the owner's diagnostic settings
-([ADR-0045](../adr/0045-existing-api-management.md)).
+([ADR-0045](../adr/0045-existing-api-management.md); a live run with the output of every stage:
+[evidence](../evidence/2026-10-26-existing-apim/README.md)).
 
 ## 1. What the instance needs
 

@@ -22,6 +22,7 @@
 - [x] G-RESUME: Stage 1 read-back after lost local state accepts the configured Functions subnet when Stage 6 has no record; troubleshooting rows for Cloud Shell timeout and lost `$HOME`.
 - [x] G-AUDIT: long-term audit — gateway log archive (ADR-0043) and chargeback history in Cosmos DB (ADR-0044), council four rounds, live on a lab; merged into main 2026-10-26 (2265e25).
 - [ ] G-NOVICE3: first-time-reader deployment of main with the long-term audit on, then a bug bash on that lab.
+- [x] G-EXAPIM: deploy into an existing API Management (ADR-0045): Stage 0 checks the instance, Stage 5 adds `ccof-gateway-logs`, reader page; live with a simulated customer instance on 2026-10-26 (branch feature/existing-apim, not merged).
 - [ ] G-AUDIT-FU: mark a month while a per-person history deletion runs and refuse exports until it completes; show in exports that history was redacted.
 | Packet | Status | Acceptance |
 | --- | --- | --- |
