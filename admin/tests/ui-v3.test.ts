@@ -96,3 +96,37 @@ test("the sidebar names the pre-group project list Legacy projects, after Groups
   const page = await readFile(new URL("../ui-v3/pages/projects.tsx", import.meta.url), "utf8");
   assert.match(page, /PageHeader title="Legacy projects"/);
 });
+
+test("group-facing console text uses group wording, without project-era names or STD/PRM/CYB (ADMIN-6)", async () => {
+  const src = (p: string) => readFile(new URL(`../ui-v3/${p}`, import.meta.url), "utf8");
+  const main = await src("main.tsx");
+  assert.doesNotMatch(main, /Manage CCOF projects|Projects, limits, budgets/);
+  assert.match(main, /Groups, limits, budgets and chargeback/);
+  const breakdown = await src("components/cost-breakdown.tsx");
+  for (const old of [/STD|PRM|CYB/, /"All projects"|>All projects</, /"By project"/, /"Cost by project"/, /label="Project"/, /The top 7 projects/]) assert.doesNotMatch(breakdown, old);
+  assert.match(breakdown, /href\(group \? `\/groups\/\$\{encodeURIComponent\(project\)\}`/, "a group slice links to its group page");
+  const { HELP } = await import("../ui-v3/help.ts");
+  const overview = HELP.overview.figures!.map(([, text]: [string, string]) => text).join(" ");
+  assert.doesNotMatch(overview, /STD|PRM|CYB|by project/);
+  const limits = await src("components/limits.tsx");
+  assert.match(limits, /classification === "group" \? "Fable and Mythos can be admitted only when restricted families are approved for this group\."/);
+});
+
+test("a failed Continue or Save moves focus to the first invalid field, else the error summary; loading is aria-busy (ADMIN-8)", async () => {
+  const { focusFirstInvalid } = await import("../ui-v3/lib/focus.ts");
+  const focused: string[] = [];
+  const el = (name: string) => ({ focus: () => { focused.push(name); } });
+  const root = (matches: Record<string, ReturnType<typeof el> | null>) => ({ querySelector: (sel: string) => matches[sel] ?? null });
+  assert.equal(focusFirstInvalid(root({ '[aria-invalid="true"], [data-invalid="true"]': el("displayName"), "[data-error-summary]": el("summary") })), true);
+  assert.equal(focusFirstInvalid(root({ "[data-error-summary]": el("summary") })), true);
+  assert.equal(focusFirstInvalid(root({})), false);
+  assert.deepEqual(focused, ["displayName", "summary"]);
+  const src = (p: string) => readFile(new URL(`../ui-v3/${p}`, import.meta.url), "utf8");
+  for (const page of ["pages/group-onboard.tsx", "pages/group-detail.tsx"]) {
+    const text = await src(page);
+    assert.equal((text.match(/focusFirstInvalidSoon\(\(\) => pageRef\.current\)/g) ?? []).length, page.includes("onboard") ? 2 : 1, `${page}: Continue and Save focus the first problem`);
+    assert.match(text, /data-error-summary/, page);
+  }
+  assert.match(await src("components/ui.tsx"), /<div role="status" aria-live="polite" aria-busy="true">/, "Loading regions are busy");
+  assert.equal(((await src("main.tsx")).match(/role="status" aria-busy="true"/g) ?? []).length, 2, "start-up states are busy");
+});

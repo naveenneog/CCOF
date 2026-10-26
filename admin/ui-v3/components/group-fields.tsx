@@ -65,7 +65,7 @@ export function AccessFields({ form, set, errors }: { form: GroupForm; set: Set;
   const toggle = (s: Surface) => set({ surfaces: form.surfaces.includes(s) ? form.surfaces.filter((x) => x !== s) : [...form.surfaces, s] });
   return (
     <Section title="Access" description="Which applications the group may use, its chargeback ID and its precedence.">
-      <fieldset className="fieldset" aria-describedby={errors.surfaces ? "surfaces-error" : undefined}>
+      <fieldset className="fieldset" aria-describedby={errors.surfaces ? "surfaces-error" : undefined} data-invalid={errors.surfaces ? "true" : undefined} tabIndex={errors.surfaces ? -1 : undefined}>
         <legend>Allowed surfaces</legend>
         {SURFACE_OPTIONS.map((o) => (
           <label key={o.value} className="check"><input type="checkbox" checked={form.surfaces.includes(o.value)} onChange={() => toggle(o.value)} /> {o.label}{o.note ? <span className="muted"> · {o.note}</span> : null}</label>
@@ -89,7 +89,7 @@ export function ModelFields({ form, set, errors }: { form: GroupForm; set: Set; 
   return (
     <Section title="Models and rate limits">
       <label className="check"><input type="checkbox" checked={form.restrictedFamiliesApproved} onChange={(e) => set({ restrictedFamiliesApproved: e.target.checked })} /> Restricted families (Fable, Mythos) are approved for this group</label>
-      {errors.families && <p className="field-error" role="alert">{errors.families}</p>}
+      {errors.families && <p className="field-error" role="alert" data-invalid="true" tabIndex={-1}>{errors.families}</p>}
       <LimitsEditor policy={policy} classification="group" restrictedAllowed={form.restrictedFamiliesApproved} onChange={(p) => set({ policy: p as unknown as GroupForm["policy"] })} />
     </Section>
   );

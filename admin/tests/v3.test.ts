@@ -335,3 +335,27 @@ test("reads only: writes and unknown routes are refused", async () => {
   assert.equal(caps.canWrite, false);
   assert.equal((caps.features as Doc).chargeback, "configured");
 });
+
+test("the docs state the version the code reports (ADMIN-9)", async () => {
+  const { ADMIN_VERSION } = await import("../src/version.ts");
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.version, ADMIN_VERSION, "admin/package.json");
+  const v3 = await readFile(new URL("../../docs/ADMIN-V3.md", import.meta.url), "utf8");
+  const stated = [
+    /package version \*\*(\d+\.\d+\.\d+)\*\*/.exec(v3)?.[1],
+    /\| `GET \/api\/v3\/version`, `\/capabilities` \| The admin version \(`(\d+\.\d+\.\d+)`/.exec(v3)?.[1],
+    /`\/api\/v2\/version` and `\/api\/health` report (\d+\.\d+\.\d+)/.exec(v3)?.[1],
+  ];
+  assert.deepEqual(stated, [ADMIN_VERSION, ADMIN_VERSION, ADMIN_VERSION]);
+});
+
+test("the docs say an admin role change applies at the next token, cite Entra, and say how to get one (ADMIN-10)", async () => {
+  const api = await readFile(new URL("../../docs/ADMIN-API.md", import.meta.url), "utf8");
+  const users = await readFile(new URL("../../docs/operate/users-and-groups.md", import.meta.url), "utf8");
+  for (const [name, text] of [["ADMIN-API.md", api], ["users-and-groups.md", users]] as const) {
+    assert.match(text, /learn\.microsoft\.com\/en-us\/entra\/identity-platform\/access-tokens/, name);
+    assert.match(text, /60-90 minutes/, name);
+  }
+  assert.match(api, /az account clear/);
+  assert.match(api, /Sign out/);
+});

@@ -281,7 +281,7 @@ export async function handleV3Request(request: ApiRequest, deps: V3Dependencies)
     }
 
     const exported = /^export\/([a-z]+)$/.exec(path);
-    if (exported) return await handleExport(exported[1], url.searchParams, deps, { capability, currentRateCard, groupMetadata });
+    if (exported) return await handleExport(exported[1], url.searchParams, deps, { capability, currentRateCard, groupMetadata, requestId });
 
     const chargeback = /^chargeback\/([A-Za-z]+)$/.exec(path);
     if (chargeback) {

@@ -30,6 +30,7 @@ import type { DemoGroup } from "./demo-data.ts";
 import { handleGroupRequest } from "../src/groups.ts";
 import { createMemoryUserTagStore, handleUserTagRequest } from "../src/user-tags.ts";
 import type { GroupDirectory } from "../src/groups.ts";
+import { readBackendSettings } from "../src/backend-settings.ts";
 
 // Synthetic Entra groups for the demo; the demo never calls Microsoft Graph.
 const DEMO_ENTRA_GROUPS = [
@@ -156,6 +157,9 @@ const rateCard = JSON.parse(await readFile(new URL("../ui-dist/rate-card.json", 
 const defaultCatalog = { schemaVersion: 1, rateCard, models: rateCard.entries.map((entry: Doc) => ({
   family: String(entry.model).split("-")[1], model: entry.model, deployment: entry.model, backendId: "",
 })) };
+// As Stage 5 writes ADMIN_BACKENDS: the demo's two live backends, each with every rate-card model deployed.
+const demoBackends = readBackendSettings({ ADMIN_BACKENDS: process.env.ADMIN_BACKENDS ?? JSON.stringify(["foundry-eus2", "foundry-swc"].map((id) => ({
+  id, deployments: rateCard.entries.map((entry: Doc) => String(entry.model)) }))) });
 let catalog: { doc: Doc; etag: string } | null = null;
 const catalogStore: CatalogStore = {
   async read() { return catalog ? structuredClone(catalog) : null; },
@@ -286,7 +290,7 @@ const server = createServer(async (req, res) => {
     const r = await handleGroupRequest({
       method: req.method ?? "GET", path: url.pathname, query: (n) => url.searchParams.get(n), body,
       headers: (n: string) => { const v = req.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v ?? null; },
-    }, { authenticate, store, changeLog, directory: demoGroupDirectory, log: demoLog, now: () => new Date(), newId: randomUUID });
+    }, { authenticate, store, changeLog, directory: demoGroupDirectory, backends: demoBackends, log: demoLog, now: () => new Date(), newId: randomUUID });
     return sendJson(r.status, r.jsonBody, r.headers);
   }
   if (url.pathname.startsWith("/api/user-tags")) {

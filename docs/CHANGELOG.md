@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-10-26 — Admin bug-bash fixes (fix/bugbash-admin)
+
+- Groups may use only a backend in `ADMIN_BACKENDS` (written by Stage 5) and models deployed on it; the console
+  offers only those ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)).
+- Exports and chargeback views refuse `from`/`to` without `period=custom`, and a custom range that starts in the
+  future (`range_out_of_bounds`); every export error code is listed in ADMIN-API.md, and 409/503 bodies carry
+  `requestId`.
+- Display names need visible text and no control characters; CSV also neutralises full-width formula characters
+  and formulas after leading spaces.
+- Console: group wording instead of projects and STD/PRM/CYB; a malformed group link is explained; focus moves to
+  the first problem after a failed Continue or Save; loading regions are `aria-busy`.
+- Docs: version 3.4.0 in ADMIN-V3.md (checked by a test), role changes apply at the next token, chargeback-history
+  errors confirmed live.
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated
