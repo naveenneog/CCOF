@@ -288,3 +288,19 @@ test("the existing API Management page is on the reader's route and quotes lines
     assert.ok(scripts.includes(text), `a staged script prints "${text}"`);
   }
 });
+
+test("a region without Claude, provisioned Cosmos DB cost and the failover region are on the reader's route (novice run 5)", () => {
+  const page = read("docs/get-started/region-and-failover.md");
+  assert.match(read("docs/get-started/02-prerequisites.md").split("## Decide before you start")[1], /\]\(region-and-failover\.md\)/, "linked from Decide before you start");
+  assert.match(read("README.md"), /\]\(docs\/get-started\/region-and-failover\.md\)/, "linked from the README");
+  assert.match(page, /stage1\.foundry\.location/, "names the key that places the Foundry account");
+  assert.match(page, /Data Zone/, "explains where inference data is processed");
+  assert.match(page, /privateEndpoint/, "explains private endpoint or public Foundry across regions");
+  assert.match(page, /regions-paired/, "cites the Azure region pairs");
+  assert.match(page, /South India/, "gives the Central India example");
+  assert.match(page, /isZoneRedundant: false/, "a region without availability zones");
+  assert.match(page, /prices\.azure\.com[^)]*Cosmos/, "provisioned Cosmos DB cost with its source");
+  const guide = read("docs/STAGED-DEPLOYMENT-GUIDE.md").split("### 2.6")[1].split("\n## ")[0];
+  assert.match(guide, /paired region|region pair/i, "guide 2.6 names the paired region");
+  assert.match(guide, /residency/i, "guide 2.6 names data residency");
+});

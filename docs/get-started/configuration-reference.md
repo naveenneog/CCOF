@@ -43,6 +43,7 @@ Stage 1 keys are create-only ([deploy](03-deploy.md#before-stage-0-get-the-code-
 | `stage1.apimUnits` | No | `1` | 1 or more | `main.bicep` |
 | `stage1.foundry.create` | Yes | `false` | `true` creates the account | `Read-StgConfig` |
 | `stage1.foundry.accountName` | If create | `REPLACE-...` | 3-64 lowercase letters, digits, `-`; equals `backends[].accountName` | `Read-StgConfig` |
+| `stage1.foundry.location` | No | absent (`location`) | ARM region name of the new account, for example `eastus2` when `location` offers no Claude models (Central India); Stage 0 checks models, quota and soft-deleted accounts there | `Read-StgConfig`, Stage 0, `main.bicep` |
 | `stage1.foundry.publicNetworkAccess` | If create | `Disabled` | `Disabled` or `Enabled`; `Disabled` needs `backends[].privateEndpoint: true` | `Read-StgConfig` |
 | `stage1.foundry.deployments[].name` | If create | `claude-haiku-4-5` | Unique deployment name | `Read-StgConfig` |
 | `stage1.foundry.deployments[].model` | If create | `claude-haiku-4-5` | Model name from `az cognitiveservices model list` | Stage 0 |

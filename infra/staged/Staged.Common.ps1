@@ -92,6 +92,7 @@ function Read-StgConfig {
     }
     if ($fd -and $fd.create) {
         if ($fd.accountName -cnotmatch '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$') { $problems.Add('stage1.foundry.accountName must be 3-64 lowercase letters, digits or -') }
+        if ($null -ne $fd.location -and "$($fd.location)" -cnotmatch '^[a-z][a-z0-9]{2,39}$') { $problems.Add('stage1.foundry.location must be an ARM region name such as eastus2 (az account list-locations --query "[].name"), or left out to use location') }
         if (-not @($fd.deployments).Count -and -not $fd.modelDeploymentsBlocked) { $problems.Add('stage1.foundry.deployments needs at least one model deployment (or modelDeploymentsBlocked with the reason)') }
         $mpd = $fd.modelProviderData
         if (@($fd.deployments).Count -and (-not $mpd -or -not $mpd.organizationName -or "$($mpd.organizationName)" -match '^REPLACE' -or "$($mpd.countryCode)" -cnotmatch '^[A-Z]{2}$' -or -not $mpd.industry)) {
