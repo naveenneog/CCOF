@@ -36,6 +36,24 @@
   `node .ironclad/gate.mjs --stage packet` PASS; mutation checks on every new guard.
 - Follow-up (non-blocking): a per-person history deletion that stops part-way is not yet marked as in progress, and
   exports do not yet show that a person's history was deleted.
+
+### G-MACOS — the deployer on macOS (branch `fix/macos`, 2026-10-26)
+
+- Acceptance: a deployer runs Stages 0-8 from PowerShell 7 on macOS by following the pages; the docs give the macOS
+  install route; what macOS developers can and cannot use is stated, and the Windows-only setup refuses cleanly.
+- Proof on Linux pwsh 7.6 (WSL Ubuntu 24.04, the closest available to macOS; no Mac was used): full `npm test` green
+  (Node 1305 passed); Stage 0 and the previews of Stages 1-8 against the lab with a copy of its Windows-made state
+  folder (same what-if counts as Windows); resolver, sync, reconciler and admin packages built, zipped and their entry
+  points loaded under Node 22.
+- Found and fixed: config path guard for cmd.exe applied off Windows; `Remove-Item` without `-Force` left dot-files
+  on macOS/Linux; deployer page passed `.\dist\...` to node; client setup failed half-way on macOS (now
+  `unsupported_platform`); test harness tied to Windows (bicep.exe, python, az.cmd fake, CRLF hashes, skip count).
+- Bug bash DEV-1/DEV-2 (developer area): `/usage` skill pre-approves its own command (Bash or PowerShell tool), probed
+  with Claude Code 2.1.272 on Windows and Linux; docs separate interactive `/usage`, `claude -p`, and a refused budget
+  (status line, wrapper). DEV-3 (guard `429` outlives a raised budget) recorded as UNKNOWNS DEV-3, not analysed.
+- Not verified on a real Mac: everything above (UNKNOWNS MAC-2); macOS developer setup (MAC-1, G-MACOS-CLIENT).
+- Checks (Windows): `npm test` 1305/0 plus every PowerShell suite, CI typecheck, build, 41 Bicep templates, admin
+  183/0, `node .ironclad/gate.mjs --stage packet`.
 **Previous packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)
