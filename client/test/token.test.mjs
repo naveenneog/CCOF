@@ -245,8 +245,14 @@ test('in azure-cli mode the Node helper points to the Azure CLI helper instead o
       const exit = await runCli([command], { stdout: (v) => { stdout += v; }, stderr: (v) => { stderr += v; } });
       assert.equal(exit, 1, command);
       assert.equal(stdout, '');
-      assert.match(stderr, /^azure_cli_sign_in: .*\.claude\\ccof-token\.cmd" login/);
-      assert.match(stderr, /Claude-3p\\ccof-token\.cmd" login/, 'a Desktop-only developer has no .claude helper');
+      if (process.platform === 'win32') {
+        assert.match(stderr, /^azure_cli_sign_in: .*\.claude\\ccof-token\.cmd" login/);
+        assert.match(stderr, /Claude-3p\\ccof-token\.cmd" login/, 'a Desktop-only developer has no .claude helper');
+      } else {
+        // ADR-0048: macOS and Linux have only the Claude Code sh helper.
+        assert.match(stderr, /^azure_cli_sign_in: .*Run ~\/\.claude\/ccof-token login/);
+        assert.doesNotMatch(stderr, /\.cmd|%USERPROFILE%|%LOCALAPPDATA%/);
+      }
     }
   } finally {
     if (saved === undefined) delete process.env.CCOF_CONFIG_FILE; else process.env.CCOF_CONFIG_FILE = saved;
