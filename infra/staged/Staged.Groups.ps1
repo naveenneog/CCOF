@@ -65,6 +65,44 @@ function Assert-StgGroupsExist {
     }
 }
 
+# Read configured group documents before Stage 7 publishes any package. This uses only a Cosmos data-plane point read;
+# the deployment operator needs the built-in Data Reader role on the configured database, not a write role.
+function Get-StgGroupSeedDrift {
+    param([string]$Endpoint, [string]$DatabaseName, $Documents)
+    if (-not @($Documents).Count) { return @() }
+    $token = [string](Invoke-QsAz @('account', 'get-access-token', '--scope', 'https://cosmos.azure.com/.default', '--query', 'accessToken', '--output', 'tsv'))
+    if (-not $token) { throw 'group_drift_check_auth: sign in with Azure CLI and grant the Stage 7 operator Cosmos DB Built-in Data Reader on the configured database before preflight.' }
+    $headers = @{
+        Authorization = "type=aad&ver=1.0&sig=$token"
+        'x-ms-version' = '2018-12-31'
+        'x-ms-date' = [DateTime]::UtcNow.ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    $database = [uri]::EscapeDataString($DatabaseName)
+    $drift = @()
+    foreach ($document in $Documents) {
+        $id = [uri]::EscapeDataString([string]$document.id)
+        $headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json -InputObject @([string]$document.id) -Compress
+        $uri = "$($Endpoint.TrimEnd('/'))/dbs/$database/colls/projects/docs/$id"
+        try { $stored = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers }
+        catch {
+            $status = try { [int]$_.Exception.Response.StatusCode } catch { 0 }
+            if ($status -eq 404) { continue }
+            if ($status -eq 403) { throw "group_drift_check_forbidden: Cosmos denied the read of projects/$($document.id); grant Stage 7's operator Cosmos DB Built-in Data Reader on the configured database." }
+            throw "group_drift_check_failed: could not read projects/$($document.id) (HTTP $status); no package was published."
+        }
+        $stored = $stored | ConvertTo-Json -Depth 100 -Compress | ConvertFrom-Json -AsHashtable -Depth 100
+        $fields = @()
+        foreach ($key in $document.Keys) {
+            if (-not $stored.ContainsKey($key)) { $fields += $key; continue }
+            $wanted = ConvertTo-StgCanonical $document[$key] | ConvertTo-Json -Depth 100 -Compress
+            $actual = ConvertTo-StgCanonical $stored[$key] | ConvertTo-Json -Depth 100 -Compress
+            if ($actual -cne $wanted) { $fields += $key }
+        }
+        if ($fields.Count) { $drift += [ordered]@{ document = "projects/$($document.id)"; fields = @($fields | Sort-Object) } }
+    }
+    return $drift
+}
+
 # Stage 8: the group a request without a selector must land in. acceptance.expectedGroup names a group
 # entry; otherwise the configuration's single group entry. Null when the acceptance requests name a project.
 function Get-StgExpectedGroupId {

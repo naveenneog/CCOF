@@ -61,6 +61,58 @@ Assert-Contract ($evidenceAt -ge 0 -and $summaryAt -gt $evidenceAt) 'Stage 7 mus
 # Non-group documents always stop: only group documents are offered to -KeepDiffering.
 Assert-Contract (-not (@($script:SeedCalls | ForEach-Object { $_.keep } | Where-Object { $_ -notmatch '^projects/0000000[ab]-' }).Count)) 'Only group documents may be kept.'
 
+# The Stage 7 preflight is read-only and returns the same document/field shape used by seed refusal.
+$script:restReads = [Collections.Generic.List[object]]::new()
+$script:storedGroup = $groupDocs[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
+$script:storedGroup.displayName = 'Edited team'
+$savedAzForDrift = ${function:Invoke-QsAz}
+$savedRestForDrift = if (Test-Path function:Invoke-RestMethod) { (Get-Item function:Invoke-RestMethod).ScriptBlock } else { $null }
+try {
+    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) if ($Arguments -join ' ' -match 'get-access-token') { return 'fake-cosmos-token' }; throw 'unexpected az write' }
+    Set-Item function:Invoke-RestMethod {
+        param($Method, $Uri, $Headers)
+        $script:restReads.Add(@{ method = $Method; uri = $Uri; headers = $Headers })
+        return $script:storedGroup
+    }
+    $drift = @(Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com:443/' -DatabaseName 'ccof' -Documents @($groupDocs[0]))
+    Assert-Contract ($drift.Count -eq 1 -and $drift[0].document -ceq "projects/$g1" -and (@($drift[0].fields) -join ',') -ceq 'displayName') 'Read-only preflight must name the existing group and differing seeded fields.'
+    Assert-Contract ($script:restReads.Count -eq 1 -and $script:restReads[0].method -ceq 'Get' -and $script:restReads[0].headers.Authorization -match '^type=aad&ver=1\.0&sig=fake-cosmos-token$' -and $script:restReads[0].headers.'x-ms-documentdb-partitionkey' -ceq "[`"$g1`"]") 'Preflight must use an authenticated Cosmos point-read with the group ID partition key.'
+    $script:storedGroup = $groupDocs[0]
+    Assert-Contract (-not @(Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0])).Count) 'An equal stored group document is not drift.'
+} finally {
+    ${function:Invoke-QsAz} = $savedAzForDrift
+    if ($savedRestForDrift) { Set-Item function:Invoke-RestMethod $savedRestForDrift } else { Remove-Item function:Invoke-RestMethod -ErrorAction SilentlyContinue }
+}
+
+# Drift refusal must precede any package build/publish; keepDifferingGroups may pass the same guard.
+$savedFunctions = @{}
+foreach ($name in 'Get-StgStage', 'New-StgQsContext', 'New-StgGroupDocuments', 'Assert-StgClientSignInMethod', 'Assert-StgGroupsExist', 'Get-StgGroupSeedDrift', 'Invoke-QsCode') {
+    $savedFunctions[$name] = (Get-Item "function:$name").ScriptBlock
+}
+$script:preflightDrift = @([ordered]@{ document = "projects/$g1"; fields = @('budget', 'displayName') })
+$script:publishCalls = 0
+try {
+    Set-Item function:Get-StgStage { param($Cfg, [int]$Number) if ($Number -eq 4) { return @{ groups = @{}; azureCliClientAllowed = $false } }; return @{} }
+    Set-Item function:New-StgQsContext { param($Cfg) $ctx }
+    Set-Item function:New-StgGroupDocuments { param($Groups, $EntraGroups) $groupDocs }
+    Set-Item function:Assert-StgClientSignInMethod { param($Cfg, [bool]$AzureCliAllowed) }
+    Set-Item function:Assert-StgGroupsExist { param($Documents) }
+    Set-Item function:Get-StgGroupSeedDrift { param($Endpoint, $DatabaseName, $Documents) $script:preflightDrift }
+    Set-Item function:Invoke-QsCode { param($Ctx) $script:publishCalls++; throw 'test_stop_after_publish' }
+    $stage7Cfg = @{ stage1 = @{ includeAdmin = $false }; groups = @(); client = @{}; stage7 = @{} }
+    $refused = try { $null = Invoke-Stage7 -Cfg $stage7Cfg -Apply; '' } catch { $_.Exception.Message }
+    Assert-Contract ($refused -match '^seed_documents_differ' -and $refused.Contains('Research team') -and $refused.Contains('budget, displayName') -and $script:publishCalls -eq 0) 'Drift refusal must name the group/fields before build or publish.'
+    $preview = Invoke-Stage7 -Cfg $stage7Cfg *>&1 | Out-String
+    Assert-Contract ($preview.Contains('would be refused') -and $preview.Contains('Research team') -and $preview.Contains('budget, displayName') -and $script:publishCalls -eq 0) 'Preview must identify which group/fields will be refused without publishing.'
+    $stage7Cfg.stage7.keepDifferingGroups = $true
+    $preview = Invoke-Stage7 -Cfg $stage7Cfg *>&1 | Out-String
+    Assert-Contract ($preview.Contains('will be kept') -and $preview.Contains('Research team') -and $preview.Contains('budget, displayName') -and $script:publishCalls -eq 0) 'Opt-in preview must identify which group/fields will be kept without publishing.'
+    $kept = try { $null = Invoke-Stage7 -Cfg $stage7Cfg -Apply; '' } catch { $_.Exception.Message }
+    Assert-Contract ($kept -ceq 'test_stop_after_publish' -and $script:publishCalls -eq 1) 'keepDifferingGroups must allow the Stage 7 apply to continue after read-only drift detection.'
+} finally {
+    foreach ($name in $savedFunctions.Keys) { Set-Item "function:$name" $savedFunctions[$name] }
+}
+
 # Validation and hash: stage7 holds only keepDifferingGroups, a JSON boolean; present only when configured.
 Assert-Contract (-not @(Get-StgStage7Problems @{}).Count -and -not @(Get-StgStage7Problems @{ stage7 = @{ keepDifferingGroups = $true } }).Count -and -not @(Get-StgStage7Problems @{ stage7 = @{ keepDifferingGroups = $false } }).Count) 'An absent stage7 or a boolean keepDifferingGroups is valid.'
 foreach ($bad in @(@{ keepDifferingGroups = 'true' }, @{ keepDifferingGroups = $true; other = 1 }, 'yes')) {

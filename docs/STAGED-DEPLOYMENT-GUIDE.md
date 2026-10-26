@@ -484,7 +484,9 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   group's group document), loads the pilot group's members from a delegated snapshot through the
   sync app, and writes the developer client file for `client.group`.
 - **Who:** platform engineer.
-- **Cloud Shell:** `-Stage 7`, preview then `-Apply`. One Stage 7 at a time per checkout.
+- **Cloud Shell:** `-Stage 7`, preview then `-Apply`. One Stage 7 at a time per checkout. The operator needs Cosmos DB
+  Built-in Data Reader on the configured database for the read-only group-drift check; it reads the groups before any
+  package build or publish.
 - **Portal:** workbook sections 18 (Deployment Center), 21 (registry seed), 22 (client configuration).
 - **Worked when:** every app lists its functions, the seed reports each document `created` (or
   `present-equal` on a rerun), the snapshot is applied and the client file passes the validator. A
@@ -496,7 +498,10 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   groups) ([registry-seed.ts](../src/sync/registry-seed.ts), [Deploy-Quickstart.ps1](../infra/quickstart/Deploy-Quickstart.ps1)).
   A document already present is reported `present-equal`, or `present-differs` with the field names,
   and is never replaced; a pilot group that needs a change after seeding is edited in the admin
-  console. A rerun of Stage 7 after a failure seeds only what is missing.
+  console. Preview names the group and fields that an apply would refuse, or keep with
+  `stage7.keepDifferingGroups: true`. If the read-only check returns `group_drift_check_forbidden`, grant the operator
+  Cosmos DB Built-in Data Reader on the configured database. A rerun of Stage 7 after a failure seeds only what is
+  missing.
 
 ### Stage 8: acceptance
 

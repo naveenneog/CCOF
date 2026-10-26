@@ -205,6 +205,10 @@ pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 the backend and the groups in the configuration, **applies** a membership snapshot, and writes the developer
 client file. One Stage 7 at a time per checkout.
 
+Before any build or publish, both preview and apply read the configured group documents from the `projects` container.
+The operator needs **Cosmos DB Built-in Data Reader** on the configured database for this read-only check. Drift output
+names each group and differing field; without `stage7.keepDifferingGroups: true` an apply refuses before publishing.
+
 ```powershell
 pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 7 -ConfigPath $cfg -Apply
