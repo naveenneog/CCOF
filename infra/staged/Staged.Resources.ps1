@@ -167,10 +167,10 @@ function Get-StgStage1StableOutput {
 }
 
 function New-StgStage1Result {
-    param($Cfg, $Out)
+    param($Cfg, $Out, [switch]$AllowLaterStageResources)
     $principals = @{}; $clientIds = @{}
     foreach ($a in $Out.functionApps) { $principals[$a.key] = $a.service.principalId; $clientIds[$a.key] = $a.service.clientId }
-    $verify = Test-Stage1 -Cfg $Cfg -Out $Out
+    $verify = Test-Stage1 -Cfg $Cfg -Out $Out -AllowLaterStageResources:$AllowLaterStageResources
     return @{ names = $Out.names; principals = $principals; clientIds = $clientIds; cosmosEndpoint = $Out.cosmosEndpoint; cosmosAccountId = $Out.cosmosAccountId
         workspaceId = $Out.workspaceId; workspaceCustomerId = $Out.workspaceCustomerId; apimName = $Out.apimName; apimId = $Out.apimId
         apimPrincipalId = $Out.apimPrincipalId; apimGatewayUrl = $Out.apimGatewayUrl; apimStatus = $Out.apimStatus
@@ -214,7 +214,7 @@ function Invoke-Stage1 {
         Assert-StgStage1Parameters $previous $Cfg
         if (-not $Apply) { Write-Host 'preview: Stage 1 is already verified for this target and config; no resource write will occur.'; return $null }
         Write-Host 'verify-only: Stage 1 is already verified for this target and config; no resource write will occur.'
-        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous)
+        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous) -AllowLaterStageResources
     }
 
     $previous = if ($items.Count) { Get-StgStage1Deployment $Cfg } else { $null }
@@ -242,7 +242,7 @@ function Invoke-Stage1 {
         Assert-StgStage1Parameters $previous $Cfg
         if (-not $Apply) { Write-Host 'preview: matching succeeded Stage 1 deployment found; no resource write will occur.'; return $null }
         Write-Host 'verify-only: matching succeeded Stage 1 deployment found; no resource write will occur.'
-        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous)
+        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous) -AllowLaterStageResources
     }
 
     if ($items.Count -and -not $Cfg.sharedResourceGroup -and -not $previous) {
@@ -254,7 +254,7 @@ function Invoke-Stage1 {
 }
 
 function Test-Stage1 {
-    param($Cfg, $Out)
+    param($Cfg, $Out, [switch]$AllowLaterStageResources)
     $sub = $Cfg.subscriptionId; $rg = $Cfg.resourceGroup; $v = [ordered]@{ apps = @() }
     $state = Read-StgState $Cfg
     # Stage 1 is also the resource inventory recheck after later stages. Read their saved output only
@@ -297,7 +297,7 @@ function Test-Stage1 {
     $databases = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'database', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     if ($schema) {
         Assert-Stg (@($databases | Where-Object { $_.name -ceq $schema.databaseName }).Count -eq 1) "Stage 2 database $($schema.databaseName) is missing"
-    } else {
+    } elseif (-not $AllowLaterStageResources) {
         Assert-Stg ($databases.Count -eq 0) 'Cosmos database exists before Stage 2'
     }
     # Only assignments on this deployment's resources count: a shared RG has its own, inherited ones.
@@ -306,10 +306,10 @@ function Test-Stage1 {
         (Test-StgExactResourceScope $_.properties.scope $ownedResourceIds) -and (!$grantsStage -or $_.properties.principalId -ine $grantsStage.apimPrincipalId)
     })
     $expectedGrantCount = if ($grantsStage) { [int]$grantsStage.verify.rgScopedAssignments } else { 0 }
-    Assert-Stg ($grants.Count -eq $expectedGrantCount) "found $($grants.Count) Azure role assignments on this deployment's resources; completed Stage 3 records $expectedGrantCount"
+    if ($grantsStage -or -not $AllowLaterStageResources) { Assert-Stg ($grants.Count -eq $expectedGrantCount) "found $($grants.Count) Azure role assignments on this deployment's resources; completed Stage 3 records $expectedGrantCount" }
     $cosmosRoles = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     $expectedCosmosRoles = if ($grantsStage) { @($grantsStage.verify.cosmos).Count } else { 0 }
-    Assert-Stg ($cosmosRoles.Count -eq $expectedCosmosRoles) "found $($cosmosRoles.Count) Cosmos data assignments; completed Stage 3 records $expectedCosmosRoles"
+    if ($grantsStage -or -not $AllowLaterStageResources) { Assert-Stg ($cosmosRoles.Count -eq $expectedCosmosRoles) "found $($cosmosRoles.Count) Cosmos data assignments; completed Stage 3 records $expectedCosmosRoles" }
     $v.cosmos = @{ name = $cosmos.name; publicNetworkAccess = $cosmos.publicNetworkAccess; localAuthDisabled = $cosmos.disableLocalAuth
         regions = @($cosmos.locations | Sort-Object { [int]$_.failoverPriority } | ForEach-Object { "$($_.locationName)$(if ($_.isZoneRedundant) { ' (zones)' })" })
         automaticFailover = [bool]$cosmos.enableAutomaticFailover; consistency = $cosmos.consistencyPolicy.defaultConsistencyLevel }
@@ -501,6 +501,8 @@ function Invoke-Stage6 {
 function Invoke-Stage2 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1
+    $listRoles = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount) | ForEach-Object { $_.id } | Sort-Object) }
+    $rolesBefore = if ($Apply) { & $listRoles } else { @() }
     $listContainers = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName)) }
     if (Get-StgChargebackHistory $Cfg) {
         # A first run has no database yet, so no container to compare.
@@ -521,9 +523,9 @@ function Invoke-Stage2 {
         if ($c.name -ceq 'chargebackDaily') { Assert-Stg (Test-StgChargebackTtl $Cfg $m[0].resource.defaultTtl) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)" }
         $v += [ordered]@{ name = $c.name; partitionKey = $c.partitionKey }
     }
-    $docs = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount))
-    # Before the grants stage this proves Stage 2 granted nothing; a rerun after Stage 3 finds its grants.
-    if (-not (Read-StgState $Cfg).stages['3']) { Assert-Stg ($docs.Count -eq 0) 'Stage 2 found data-role assignments before Stage 3' }
+    # Existing grants can outlive local state. Stage 2 must leave them unchanged, not require none.
+    $rolesAfter = & $listRoles
+    Assert-Stg (($rolesBefore -join '|') -ceq ($rolesAfter -join '|')) 'Stage 2 changed Cosmos data-role assignments'
     $null = Write-StgEvidence 'stage2.verify.json' $v
     return @{ databaseName = $out.databaseName; containers = $v }
 }

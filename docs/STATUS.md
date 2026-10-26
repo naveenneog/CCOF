@@ -5,6 +5,8 @@
 **Active packet:** G-R18-STAGED — offline regression fixes for staged reruns, recovery and operator guidance.
 AO-1: Stage 1 retains the Stage 5 record shape; the offline rerun fixture reproduces the null-array error
 and checks both matching and mismatched saved settings. No live applies.
+AO-2: empty-state recovery records only Stages 1/2 as explicitly run, unlocks Stage 2 preview, and
+compares role assignment IDs before/after schema apply instead of requiring none.
 
 ## Release 17 (2026-10-26)
 

@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
 $passed = 0
+$realReadState = ${function:Read-StgState}
 function Assert-Contract([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }; $script:passed++
 }
@@ -32,6 +33,7 @@ function Invoke-StgAzJson { param([string[]]$Arguments)
         'storage account list*' { return @() }
         'cosmosdb list*' { return @(@{ name = 'owned-cosmos'; publicNetworkAccess = 'Disabled'; disableLocalAuth = $true }) }
         'cosmosdb sql database list*' { return $script:fixtureDatabases }
+        'cosmosdb sql container list*' { return @() }
         'cosmosdb sql role assignment list*' { return $script:fixtureCosmosRoles }
         'resource list*' { return @(@{ name = 'owned-cosmos' }) }
         default { throw "Unexpected Azure read: $($Arguments -join ' ')" }
@@ -63,5 +65,47 @@ Assert-Contract ($result.verify.apps.Count -eq 1) 'AO-1: a Stage 1 apply rerun a
 $script:fixtureSettings = @(@{ name = 'WRONG_SETTING' })
 $message = ''; try { $null = Invoke-Stage1 $cfg -Apply } catch { $message = $_.Exception.Message }
 Assert-Contract ($message -match 'application setting names differ') 'AO-1: a saved Stage 5 settings mismatch must remain a verification failure.'
+
+# Start with a genuinely empty state directory and retain the real persistence/order checks.
+$script:StateDir = Join-Path $root '.env.staged-recovery-test'
+[void][IO.Directory]::CreateDirectory($script:StateDir)
+try {
+    ${function:Read-StgState} = $realReadState
+    $script:fixtureSettings = @(@{ name = 'LATER_STAGE_SETTING' })
+    $script:fixtureDatabases = @(@{ name = 'ccof' })
+    $script:fixtureGrants = @(@{ properties = @{ scope = '/owned/resource'; principalId = 'runtime' } })
+    $script:fixtureCosmosRoles = @(@{ id = 'runtime-data-role' })
+    Assert-Contract ((Read-StgState $cfg).stages.Count -eq 0) 'AO-2: recovery must start with empty local state.'
+    $null = Invoke-Stage1 $cfg
+    $result = Invoke-Stage1 $cfg -Apply
+    Save-StgStage $cfg 1 $result
+    $recovered = Read-StgState $cfg
+    Assert-Contract ($recovered.stages.Count -eq 1 -and $recovered.stages.ContainsKey('1')) 'AO-2: Stage 1 recovery must record only Stage 1, not infer later completion.'
+    $script:previewCalls = 0
+    function Invoke-StgBicep { param($Cfg, $Template, $Name, $Parameters, [switch]$Apply, $StageNumber)
+        Assert-Contract (-not $Apply -and $StageNumber -eq 2) 'AO-2: Stage 2 recovery preview must remain read-only.'
+        $script:previewCalls++
+    }
+    $null = Invoke-Stage2 $cfg
+    Assert-Contract ($script:previewCalls -eq 1) 'AO-2: recovered Stage 1 must unlock Stage 2 preview.'
+    function Invoke-StgBicep { param($Cfg, $Template, $Name, $Parameters, [switch]$Apply, $StageNumber)
+        @{ databaseName = 'ccof'; containers = @() }
+    }
+    $schema = Invoke-Stage2 $cfg -Apply
+    Save-StgStage $cfg 2 $schema
+    Assert-Contract ((Read-StgState $cfg).stages.Count -eq 2) 'AO-2: recovering Stage 2 must not require or infer Stage 3 completion.'
+    function Invoke-StgBicep { param($Cfg, $Template, $Name, $Parameters, [switch]$Apply, $StageNumber)
+        $script:fixtureCosmosRoles += @{ id = 'unexpected-new-role' }
+        @{ databaseName = 'ccof'; containers = @() }
+    }
+    $message = ''; try { $null = Invoke-Stage2 $cfg -Apply } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'Stage 2 changed Cosmos data-role assignments') 'AO-2: Stage 2 must still detect an added grant during schema deployment.'
+    $null = Invoke-Stage1 $cfg -Apply
+    # Initial deployment verification must retain its no-later-resources checks.
+    $message = ''; try { $null = Test-Stage1 -Cfg $cfg -Out $script:fixtureOut } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'Cosmos database exists before Stage 2') 'AO-2: a fresh deployment still rejects unexpected later resources.'
+} finally {
+    Remove-Item -LiteralPath $script:StateDir -Recurse -Force
+}
 
 "Staged recovery: $passed checks passed. No Azure calls."
