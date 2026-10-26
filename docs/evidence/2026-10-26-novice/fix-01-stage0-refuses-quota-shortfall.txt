@@ -1,0 +1,9 @@
+PS /home/alex/repo> pwsh -File $run -Stage 0 -ConfigPath $cfg
+Exception: ~/ccof/infra\staged\Staged.Common.ps1:390
+Line |
+ 390 |  … ]$Message) if (-not $Condition) { throw "verify_failed: $Message" } }
+     |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | verify_failed: model quota in eastus2: deployment claude-haiku-5-5 needs 20 of
+     | AIServices.DataZoneStandard.claude-haiku-5-5.Azure; 7 free (20 of 27 used). Lower
+     | stage1.foundry.deployments[].capacity or free quota before Stage 1. A deleted Foundry account keeps its quota
+     | until purged: az cognitiveservices account list-deleted, then az cognitiveservices account purge

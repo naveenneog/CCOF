@@ -195,3 +195,19 @@ test("the audit reader pages use plain terms, not unknown-register IDs", () => {
   const found = pages.flatMap((p) => [...read(p).matchAll(/\bAUD-[AC]\d+\b|configuration hash/g)].map((m) => `${p}: ${m[0]}`));
   assert.deepEqual(found, []);
 });
+
+// Novice run 3 (2026-10-26): Azure CLI 2.91 returns `az functionapp show` in the ARM shape (properties.defaultHostName),
+// so `--query defaultHostName` printed nothing and the history download failed with "Invalid URI: The hostname could
+// not be parsed". Reader pages read the host name in a form that works for both shapes.
+test("reader pages read a Function App host name in both Azure CLI output shapes", () => {
+  const dirs = ["docs/get-started", "docs/operate"];
+  const bad: string[] = [];
+  for (const dir of dirs) {
+    for (const file of readdirSync(path.join(root, dir)).filter((f) => f.endsWith(".md"))) {
+      for (const line of read(`${dir}/${file}`).split("\n")) {
+        if (/functionapp show/.test(line) && /defaultHostName/.test(line) && !(/properties\.defaultHostName/.test(line) && /\|\|/.test(line))) bad.push(`${dir}/${file}: ${line.trim()}`);
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
+});

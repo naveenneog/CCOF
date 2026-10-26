@@ -1,0 +1,13 @@
+PS /home/alex/repo> . .\download-old-month.ps1   # chargeback-history, Download an old month
+PS> $adminApp = az functionapp list -g $rg --query "[?ends_with(name, '-admin')].name | [0]" -o tsv
+PS> $adminHost = az functionapp show -g $rg -n $adminApp --query defaultHostName -o tsv
+PS> $adminAppId = az functionapp config appsettings list -g $rg -n $adminApp --query "[?name=='ADMIN_AUDIENCE'].value | [0]" -o tsv
+adminApp=ccofnv3-x3vzhl57xkgvw-admin host= audienceSet=True
+PS> $token = az account get-access-token --scope "api://$adminAppId/Projects.Manage" --query accessToken -o tsv
+tokenLength=2020
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=month&format=json" -Headers @{ Authorization = "Bearer $token" }
+ERR Cannot bind parameter 'Uri'. Cannot convert value "https:///api/v3/export/usage?period=month&format=json" to type "System.Uri". Error: "Invalid URI: The hostname could not be parsed."
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=previous&format=json" -Headers @{ Authorization = "Bearer $token" }
+ERR Cannot bind parameter 'Uri'. Cannot convert value "https:///api/v3/export/usage?period=previous&format=json" to type "System.Uri". Error: "Invalid URI: The hostname could not be parsed."
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=previous&format=csv" -Headers @{ Authorization = "Bearer $token" }
+ERR Cannot bind parameter 'Uri'. Cannot convert value "https:///api/v3/export/usage?period=previous&format=csv" to type "System.Uri". Error: "Invalid URI: The hostname could not be parsed."
