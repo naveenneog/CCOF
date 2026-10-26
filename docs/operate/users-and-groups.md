@@ -11,6 +11,9 @@ Entra is the source of truth for who has access. CCOF never adds, removes or cha
 
 Granting the permissions: [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync).
 Managed identity tokens are cached for up to 24 hours, so a new grant can take that long to apply.
+An admin console role (CCOF Admin app role) change applies at the person's next access token, up to 60-90 minutes
+([access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens)); to apply it at once, see
+[ADMIN-API sign-in](../ADMIN-API.md#sign-in).
 
 Only **direct user members** of an onboarded group are counted; nested groups, devices and service principals are not.
 

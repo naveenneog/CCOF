@@ -291,6 +291,20 @@ other API permissions**.
 If any required value is missing, the API returns 503 and the console shows its setup screen
 (fails closed).
 
+**Role changes apply at the next token.** The roles are claims in the access token, so a role added, changed or
+removed on CCOF Admin takes effect only when the caller gets a new token. Entra gives an access token a lifetime
+of 60-90 minutes by default
+([access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens)), and clients reuse it
+until it expires. In the 2026-10-26 lab, writes kept returning `403 write_permission_required` for about 90
+minutes after the Write role was restored. To get a fresh token now:
+
+- **Console:** **Sign out**, then sign in again.
+- **Azure CLI:** `az account clear`, then `az login` and request the token again. Requesting the scope by the
+  application ID without `api://` (`<client-id>/Projects.Manage`) also returned a new token in the lab.
+
+A role **removal** also waits for the token to expire: remove the role, then expect up to 90 minutes before the
+person's console or script is refused.
+
 ## Deploy
 
 For **granular hand configuration**, follow the appended
