@@ -65,6 +65,54 @@ function Assert-StgGroupsExist {
     }
 }
 
+# Read configured group documents before Stage 7 publishes any package. This is best effort because the operator may
+# not have a route to the private Cosmos endpoint; Invoke-StgSeed remains the authoritative post-publish check.
+function Get-StgGroupSeedDrift {
+    param([string]$Endpoint, [string]$DatabaseName, $Documents)
+    if (-not @($Documents).Count) { return @() }
+    try {
+        try { $token = [string](Invoke-QsAz @('account', 'get-access-token', '--scope', 'https://cosmos.azure.com/.default', '--query', 'accessToken', '--output', 'tsv')) }
+        catch { throw 'group_preflight_failure: token unavailable' }
+        if (-not $token) { throw 'group_preflight_failure: token unavailable' }
+        $headers = @{
+            Authorization = "type=aad&ver=1.0&sig=$token"
+            'x-ms-version' = '2018-12-31'
+            'x-ms-date' = [DateTime]::UtcNow.ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+        }
+        $database = [uri]::EscapeDataString($DatabaseName)
+        $drift = @()
+        foreach ($document in $Documents) {
+            $id = [uri]::EscapeDataString([string]$document.id)
+            $headers['x-ms-documentdb-partitionkey'] = ConvertTo-Json -InputObject @([string]$document.id) -Compress
+            $uri = "$($Endpoint.TrimEnd('/'))/dbs/$database/colls/projects/docs/$id"
+            try { $stored = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 10 }
+            catch {
+                $status = try { [int]$_.Exception.Response.StatusCode } catch { 0 }
+                if (-not $status -and $_.Exception.Message -match '\bHTTP\s+(\d{3})\b') { $status = [int]$matches[1] }
+                if ($status -eq 404) { continue }
+                if ($status) { throw "group_preflight_failure: HTTP $status" }
+                if ($_.Exception.Message -match '(?i)timeout|timed out') { throw 'group_preflight_failure: timeout' }
+                throw 'group_preflight_failure: network error'
+            }
+            $stored = $stored | ConvertTo-Json -Depth 100 -Compress | ConvertFrom-Json -AsHashtable -Depth 100
+            $fields = @()
+            foreach ($key in $document.Keys) {
+                if (-not $stored.ContainsKey($key)) { $fields += $key; continue }
+                $wanted = ConvertTo-StgCanonical $document[$key] | ConvertTo-Json -Depth 100 -Compress
+                $actual = ConvertTo-StgCanonical $stored[$key] | ConvertTo-Json -Depth 100 -Compress
+                if ($actual -cne $wanted) { $fields += $key }
+            }
+            if ($fields.Count) { $drift += [ordered]@{ document = "projects/$($document.id)"; fields = @($fields | Sort-Object) } }
+        }
+        return $drift
+    } catch {
+        $message = [string]$_.Exception.Message
+        $reason = if ($message -match '^group_preflight_failure: (.+)$') { $matches[1] } else { 'read failure' }
+        Write-Host "preview/preflight: could not read group documents before publishing ($reason); the seed step checks them after publishing" -ForegroundColor Yellow
+        return @()
+    }
+}
+
 # Stage 8: the group a request without a selector must land in. acceptance.expectedGroup names a group
 # entry; otherwise the configuration's single group entry. Null when the acceptance requests name a project.
 function Get-StgExpectedGroupId {
@@ -155,7 +203,9 @@ function Invoke-StgClient {
     $doc = @(New-StgGroupDocuments -Groups $entry -EntraGroups $EntraGroups)[0]
     $restricted = @($doc.familyPolicy.families.Keys | Where-Object { $_ -in 'fable', 'mythos' })
     if ($restricted.Count -and -not $doc.restrictedFamiliesApproved) { throw 'client_selection_invalid: Fable and Mythos need restrictedFamiliesApproved on the group.' }
-    return New-QsClientFiles -Ctx $Ctx -ProjectId $doc.id -FamilyPolicy $doc.familyPolicy -BackendId $doc.backendId -Aliases $sel.models
+    # The Desktop profile names the group (bug bash DEV-16), not the quick-start.
+    $name = ([string]$entry[0].groupDisplayName -replace '[\r\n]+', ' ').Trim()
+    return New-QsClientFiles -Ctx $Ctx -ProjectId $doc.id -FamilyPolicy $doc.familyPolicy -BackendId $doc.backendId -Aliases $sel.models -ProfileName $(if ($name) { "Claude gateway ($name)" } else { 'Claude gateway' })
 }
 
 # ADR-0041: client.signInMethod 'azure-cli' makes the client helper sign in through the Azure CLI. Allowed only

@@ -74,7 +74,7 @@ function App() {
     api("/api/v3/capabilities").then((r) => setSession({ canWrite: Boolean(r.data.canWrite), features: r.data.features ?? {} }), setError);
   }, [auth]);
   if (error) return <Center><h1>The admin console couldn't start</h1><ErrorNote error={error} retry={() => location.reload()} /></Center>;
-  if (!auth) return <Center><p className="muted" role="status">Loading the admin console…</p></Center>;
+  if (!auth) return <Center><p className="muted" role="status" aria-busy="true">Loading the admin console…</p></Center>;
   if (auth.mode === "setup") {
     return (
       <Center>
@@ -92,13 +92,13 @@ function App() {
   if (auth.mode === "msal" && !auth.account) {
     return (
       <Center>
-        <h1>Manage CCOF projects</h1>
-        <p>Projects, limits, budgets and chargeback in one place. Sign in with your work account.</p>
+        <h1>Manage CCOF groups</h1>
+        <p>Groups, limits, budgets and chargeback in one place. Sign in with your work account.</p>
         <Button variant="primary" onClick={() => signIn()}>Sign in with Microsoft</Button>
       </Center>
     );
   }
-  if (!session) return <Center><p className="muted" role="status">Checking your access…</p></Center>;
+  if (!session) return <Center><p className="muted" role="status" aria-busy="true">Checking your access…</p></Center>;
   return <SessionContext.Provider value={session}><UserDirectoryProvider><ToastHost><Page /></ToastHost></UserDirectoryProvider></SessionContext.Provider>;
 }
 

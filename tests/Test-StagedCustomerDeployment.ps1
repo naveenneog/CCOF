@@ -6,7 +6,7 @@ $root = Split-Path $PSScriptRoot -Parent
 if (-not $BicepPath) {
     $command = Get-Command bicep -ErrorAction SilentlyContinue
     if ($command) { $BicepPath = $command.Source }
-    elseif (Test-Path (Join-Path $HOME '.azure\bin\bicep.exe')) { $BicepPath = Join-Path $HOME '.azure\bin\bicep.exe' }
+    elseif ($installed = @('bicep.exe', 'bicep' | ForEach-Object { Join-Path $HOME '.azure' 'bin' $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]) { $BicepPath = $installed }
     else { throw 'Offline Bicep CLI required. Supply -BicepPath; this test does not install tools or call Azure.' }
 }
 

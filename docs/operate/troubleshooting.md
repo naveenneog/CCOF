@@ -6,21 +6,21 @@ Each row was met in a live deployment or test; the evidence column links to wher
 
 | Symptom | Cause | Fix | Evidence |
 | --- | --- | --- | --- |
-| Stage 0 or 1: `InsufficientQuota` for a Claude deployment | The subscription's Claude quota in the region is used by other deployments | Check free quota with the command in [prerequisites](../get-started/02-prerequisites.md#microsoft-foundry-models); lower `capacity`, use another model, `sku` or region, or free quota | [guide](../STAGED-DEPLOYMENT-GUIDE.md#walkthrough-evidence-2026-10-24) |
+| Stage 0: `model quota`, or Stage 1: `InsufficientQuota` | Claude quota used by other or deleted (unpurged) Foundry accounts | Check free quota with the command in [prerequisites](../get-started/02-prerequisites.md#microsoft-foundry-models); lower `capacity`, another model, `sku` or region, or purge deleted accounts (`account list-deleted`) | [novice run 3](../evidence/2026-10-26-novice/README.md) |
 | Stage 0: "no API Management: set stage1.approveNewPublicApimBootstrap to true … or name an existing one in apim.existing" | The configuration creates no gateway and names none | For a lab set `approveNewPublicApimBootstrap: true` with `apimPublisherEmail` and `apimPublisherName`; otherwise fill `apim.existing` | [novice run](../evidence/2026-10-25-novice/README.md) |
 | Stage 1: `ServiceUnavailable`, "high demand … zonal redundant" for Cosmos DB | No zone-redundant Cosmos capacity in that region for the subscription | Request region access at <https://aka.ms/cosmosdbquota>, or another region or `isZoneRedundant: false`. The failed account blocks a rerun ("is in a failed provisioning state … delete the previous instance"): delete it first with `az cosmosdb delete -g <resource-group> -n <account> --yes` (several minutes), then rerun Stage 1 | [guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy), [novice run](../evidence/2026-10-25-novice/README.md) |
 | `stage_config_changed: stage1 values changed after Stage 1 was verified`, or `stage1_parameters_changed` | Stage 1 is create-only: it never redeploys over a verified Stage 1 | Restore the `stage1` values it ran with, or deploy to a new resource group with a new prefix and its own state folder. Deleting the old resource group stops its charges; a deleted Foundry account keeps its model quota until it is purged (`az cognitiveservices account purge`) | [novice run](../evidence/2026-10-25-novice/README.md) |
 | Stage 0: "stage1.foundry.publicNetworkAccess is Disabled, so the gateway reaches … only through a private endpoint" | The new Foundry account is private but its `backends` entry asks for no private endpoint | Set `privateEndpoint: true` on that backend; Stage 6 then creates the endpoint and its DNS zones | [novice run](../evidence/2026-10-25-novice/README.md) |
 | Stage 6: `ParentResourceNotFound … privateDnsZones/privatelink.cognitiveservices.azure.com` | Older code read Foundry DNS zones that were never created (no Foundry private endpoint requested) | Update the checkout and rerun Stage 6; it redeploys its own network after a failed read-back | [novice run](../evidence/2026-10-25-novice/README.md) |
 | Azure Cloud Shell closed during Stage 6 or 7 (the API Management wait takes up to 45 minutes) | Cloud Shell ends a session after 20 minutes without keyboard input ([Cloud Shell FAQ](https://learn.microsoft.com/azure/cloud-shell/faq-troubleshooting)); the Azure operations continue | Reopen the shell; wait until the `stage6-network` deployment and API Management show `Succeeded`, then preview and rerun the stage. Run Stages 6 and 7 from a workstation, or press a key every 10-15 minutes | Live run 2026-10-25 |
-| Cloud Shell without persistent storage lost the checkout, the configuration and `.staged-state` | Without a storage account, `$HOME` is not kept between sessions | Clone again; use the saved configuration (or copy `location`, `tags` and `stage1` from the `stage1-services` deployment parameters, and `workbook.resourceName` from `stage5-config`); run Stage 0, then each stage in order. Stage 1 prints `verify-only: matching succeeded Stage 1 deployment found`; later stages find their resources and finish | Live run 2026-10-25 |
+| Cloud Shell lost checkout, config and `.staged-state` | Without storage, `$HOME` is ephemeral | Clone; restore config (or `stage1-services` parameters and `workbook.resourceName` from `stage5-config`); run Stages 0 and 1. Stage 1 verifies read-only only if a succeeded `stage1-services` deployment matches; otherwise a non-empty RG is refused. Restore `.staged-state` if backed up; if lost, Stage 1 records only itself and each later stage must be previewed/applied in order | Live run 2026-10-25 |
 | Stage 1 after lost state: `verify_failed: … VNet subnet is '…/snet-functions', expected '' for completed stages` | Older code: Stage 6 had integrated the apps before the state was lost, and the read-back accepted only no integration | Update the checkout (`git pull`) and rerun Stage 1; it now also accepts the Functions subnet the configuration names | Live run 2026-10-25 |
 | Stage 4: "The directory object quota limit for the Principal has been exceeded" | The operator owns the maximum number of directory objects (deleted ones count until purged) | Use existing apps (`entra.existing`) and existing groups (`groupId`), or an Entra administrator creates them | [guide](../STAGED-DEPLOYMENT-GUIDE.md#walkthrough-evidence-2026-10-24) |
 | Stage 5: "Policy size exceeds allowed limit of 16 KB" | Older code: the API policy was one document | Current code deploys policy fragments; update the checkout | [ADR-0039](../adr/0039-gateway-policy-fragments.md) |
 | Stage 2: `chargeback_history_ttl_transition` | `ttlDays` changed between `null` and a number on an existing `chargebackDaily` | Restore it, or follow the [procedure](chargeback-history-changes.md) | [Test-ChargebackHistory.ps1](../../tests/Test-ChargebackHistory.ps1) |
 | Stage 0: "audit.chargebackHistory.enabled is true but reconciler.timerEnabled is not …" | Chargeback history is written only by the reconciler's timer run; the template leaves the timer off | Set `reconciler.timerEnabled: true` with history, or `audit.chargebackHistory.enabled: false` ([chargeback history](chargeback-history.md)) | [Test-ChargebackHistory.ps1](../../tests/Test-ChargebackHistory.ps1) |
 | Stage 7: package upload `403 (This request is not authorized to perform this operation.)` | Private endpoints and VNet integration from Stage 6 are minutes old | Wait about five minutes and rerun Stage 7 | [guide](../STAGED-DEPLOYMENT-GUIDE.md#walkthrough-evidence-2026-10-24) |
-| Stage 7: `npm ci` EPERM in `admin/node_modules` | Two Stage 7 runs from one checkout at the same time | One Stage 7 at a time per checkout | [runs](../archive/STAGED-STDV2-RUNS-2026-10-20.md) |
+| Stage 7: `stage7_busy` (checkout lock) | Another Stage 7 apply holds the lock | Wait for it, then retry; one Stage 7 apply per checkout | [driver](../../infra/staged/Invoke-StagedDeployment.ps1) |
 | Stage 7: `seed_documents_differ: these group documents differ from the configuration …` | A group was edited in the admin console after the first seed; `groups[]` seeds a group once | Change groups in the console. To keep the console's version, set `stage7.keepDifferingGroups: true` and rerun Stage 7 | [Test-Stage7GroupDrift.ps1](../../tests/Test-Stage7GroupDrift.ps1) |
 | Stage 7: `seed_documents_differ: these existing documents differ from the parameters …` | A backend or baseline document differs from the configuration | Correct the configuration; Stage 7 never replaces a document | [Test-QuickstartSeed.ps1](../../tests/Test-QuickstartSeed.ps1) |
 | Graph grant script: `app_role_missing` | Older script under `pwsh -File` passed `-Permissions A,B,C` as one string | Update the checkout | [CHANGELOG](../CHANGELOG.md) |
@@ -31,10 +31,10 @@ Each row was met in a live deployment or test; the evidence column links to wher
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `401 authentication_error` | No token, an expired token, or a token for another audience | Sign in again with the CCOF helper ([CLIENTS.md](../CLIENTS.md)) |
-| `403` "You are not entitled …" | The person is not a direct member of an onboarded group, or the sync has not run since they were added | Add them to the Entra group; wait for the sync (timer) or apply a snapshot |
-| `403` "The requested model family is not available …" | The model is not in the group's admitted models | Use an admitted model, or add the family in the group's **Access and models** |
-| `403` "Your CCU budget … is used up" | Recorded or projected spend reached the person's budget | Raise the budget in the admin console, or wait for the next month |
-| `429` with `Retry-After` | A token limit (per person, group or family) or the budget guard's rate limit | Wait; check `/usage` for a warning; raise the limit or `overshootPercent` if appropriate |
+| `403` "not a member of a Claude group" or "not an active member of Claude group <ID>" | Not in an onboarded group, the sync has not run since, or the header names another group | Add them to the Entra group; wait for the sync or apply a snapshot; check the `x-ccof-project` ID |
+| `403` "Model … is not available in group …" | Not an admitted model; the message lists the admitted ones | Use one, or add the family in **Access and models** |
+| `403` "Your Claude budget … is used up" or "… has reached your Claude budget" | Recorded (or recorded plus recent) spend reached the budget | Raise the budget, or wait (the second clears in minutes) |
+| `429` with `Retry-After` | A token limit, or "slowed by the budget guard" | Wait; a higher budget ends the guard's wait in minutes |
 | A new user tag does not appear on requests | With `sync.mode: delegated-snapshot` the tag reaches requests when a snapshot is applied | Apply a [fresh complete snapshot](users-and-groups.md#snapshot-mode-after-console-changes), or turn on the sync timer after the Graph grants |
 | `/usage` shows "no figures for this month yet" | The reconciler has not run for this person this month, or its timer is off | Set `reconciler.timerEnabled: true` and rerun Stage 5 |
 
@@ -42,15 +42,15 @@ Each row was met in a live deployment or test; the evidence column links to wher
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Developer row shows "unpriced usage" while Foundry throttled | A request Foundry refused with `429` is counted with unknown tokens (an open question recorded in [UNKNOWNS](../UNKNOWNS.md): whether Foundry bills such requests) | None needed for budgets (spend is a lower bound) |
+| Developer row shows "unpriced usage" | A request Foundry answered `429` has unknown tokens (billing open, [UNKNOWNS](../UNKNOWNS.md)); other `4xx` answers count as zero ([ADR-0048](../adr/0048-request-checks-and-backend-refusals.md)) | None for budgets (spend is a lower bound) |
 | Spend stays at zero for groups | Older ledger query: group IDs are typed `guid` in Log Analytics | Update the checkout and rerun Stages 5 and 7 ([CHANGELOG](../CHANGELOG.md)) |
 
 ## Chargeback history
 
-Usage export of an old month and the reconciler's history step ([chargeback history](chargeback-history.md)). These
-rows come from the code and its tests ([admin/tests/history.test.ts](../../admin/tests/history.test.ts),
-[tests/reconciler-history-run.test.ts](../../tests/reconciler-history-run.test.ts),
-[tests/reconciler-history.test.ts](../../tests/reconciler-history.test.ts)), not yet from a live deployment.
+Usage export of an old month and the reconciler's history step ([chargeback history](chargeback-history.md)). The
+`409 history_not_covered`, `400 history_range_not_whole_days` and `400 backend_filter_not_in_history` rows were
+confirmed live on 2026-10-26; the others come from the tests
+([admin/tests/history.test.ts](../../admin/tests/history.test.ts)).
 
 Export responses ([admin/src/export.ts](../../admin/src/export.ts), [admin/src/history.ts](../../admin/src/history.ts)):
 
@@ -58,7 +58,7 @@ Export responses ([admin/src/export.ts](../../admin/src/export.ts), [admin/src/h
 | --- | --- | --- |
 | `400` `history_range_not_whole_days` | The part of the range before the first whole month Log Analytics holds does not start and end at 00:00 UTC | Use `period=previous`, or `from` and `to` at 00:00 UTC |
 | `400` `backend_filter_not_in_history` | A `backend` filter on a range with a history part; history has no backend | Remove `backend`, or keep the range inside the months Log Analytics holds |
-| `400` `unknown_parameter` | A parameter the export does not take, such as `tags`, `offset` or `limit` (all exports) | Remove it |
+| Another `400` code | A parameter or date the export refuses | [Export errors](../ADMIN-API.md#export-for-power-bi-adminsrcexportts) |
 | `409` `history_not_covered` after a [deletion](chargeback-history-changes.md#delete-history) | The month was deleted | Expected |
 | `409` `history_not_covered` with `uncoveredDays` | Days the reconciler never recorded: before the month history was turned on, while the reconciler was stopped, or not yet written because of the write limit | Narrow the range to covered days. Days left by the write limit are covered by a later run: retry then |
 | `409` `history_expired` with `expiredDays` and `expiresAt` | With `audit.chargebackHistory.ttlDays`, a month's documents expire `ttlDays` days after the month ends; the export refuses its days from one day before `expiresAt` | Narrow the range to later months. The expired totals cannot be recovered; the [audit archive](audit-archive.md), if it was on, still holds the request log |

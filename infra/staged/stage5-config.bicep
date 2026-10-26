@@ -7,7 +7,8 @@
 //   - infra/workbook/main.bicep: the chargeback workbook, only when content is supplied;
 //   - the API-level Azure Monitor logger and diagnostic of infra/poc/phase4-apim-telemetry.bicep. Stage 1
 //     already created the APIM and Function resource-log diagnostic settings; a second setting with the
-//     same categories and workspace would be refused, so they are not repeated;
+//     same categories and workspace would be refused, so they are not repeated. For an existing API Management
+//     (apim.existing) Stage 5 creates the gateway's setting, ccof-gateway-logs, or reuses an equivalent one (ADR-0045);
 //   - optional long-term audit archive (ADR-0043): a storage account and the gateway's second diagnostic
 //     setting, ccof-gateway-archive, with a storage destination only.
 // A sites/config appsettings resource replaces the whole set: this stage is the only settings writer.
@@ -57,6 +58,11 @@ param workbookContentTags object = {}
 
 @description('Long-term audit archive (ADR-0043): Staged.Audit.ps1 Get-StgAuditDeployment; {} deploys nothing.')
 param auditArchive object = {}
+
+@description('Existing API Management only (ADR-0045): { name, workspaceId } of the gateway-log diagnostic setting to create; {} creates none (Stage 1 created it, or an equivalent setting is reused).')
+param gatewayLogs object = {}
+@description('Existing API Management only (ADR-0045): reference its azuremonitor logger instead of redeploying it.')
+param reuseMonitorLogger bool = false
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: names.logAnalyticsWorkspace
@@ -119,8 +125,14 @@ module api '../quickstart/modules/apim-api.bicep' = {
 module apiTelemetry 'stage5-api-telemetry.bicep' = {
   name: '${names.deploymentPrefix}-stage5-api-telemetry'
   scope: resourceGroup(apim.subscriptionId, apim.resourceGroup)
-  params: { apimName: apim.name, apiId: apim.apiId }
+  params: { apimName: apim.name, apiId: apim.apiId, reuseLogger: reuseMonitorLogger }
   dependsOn: [api]
+}
+
+module gatewayLogsSetting 'stage5-gateway-logs.bicep' = if (!empty(gatewayLogs)) {
+  name: '${names.deploymentPrefix}-stage5-gateway-logs'
+  scope: resourceGroup(apim.subscriptionId, apim.resourceGroup)
+  params: { apimName: apim.name, settingName: gatewayLogs.name, workspaceId: gatewayLogs.workspaceId }
 }
 
 module auditStorage 'stage5-audit-archive.bicep' = if (!empty(auditArchive)) {
@@ -198,6 +210,8 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     // Entra group search for onboarding (ADR-0034); needs Graph Group.ReadBasic.All and GroupMember.ReadBasic.All.
     ADMIN_GROUP_SEARCH_ENABLED: (admin.?groupSearchEnabled ?? false) ? 'true' : 'false'
     ADMIN_USER_NAMES_ENABLED: (admin.?userNamesEnabled ?? false) ? 'true' : 'false'
+    // The backends a group may route to and the models deployed on each (ADR-0046); the admin refuses others.
+    ADMIN_BACKENDS: string(map(backends, b => { id: b.id, deployments: b.?deployments ?? [] }))
     ADMIN_WORKSPACE_ID: workspace.properties.customerId
     ADMIN_GATEWAY_RESOURCE_ID: apimService.id
     ADMIN_LOG_RESOURCE_IDS: join([reconcilerSite.id, adminInsights!.id, adminSite!.id], ',')

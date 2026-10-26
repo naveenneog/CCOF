@@ -768,7 +768,7 @@ function Invoke-QsClient {
 
 function New-QsClientFiles {
     <# The client configuration for one selection: the project selector value, its family policy, its backend and the explicit aliases. Also used by the staged deployment for a group (infra/staged/Staged.Groups.ps1). #>
-    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] [string]$ProjectId, [Parameter(Mandatory)] $FamilyPolicy, [Parameter(Mandatory)] [string]$BackendId, $Aliases)
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] [string]$ProjectId, [Parameter(Mandatory)] $FamilyPolicy, [Parameter(Mandatory)] [string]$BackendId, $Aliases, [string]$ProfileName = 'Claude gateway (quick-start)')
     $p = $Ctx.P; $r = $p.registrations
     $backend=@($p.backends | Where-Object {$_.id -ceq $BackendId})[0]
     $admitted=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -792,7 +792,7 @@ function New-QsClientFiles {
         scope = Get-CoreDeveloperScope -Registrations $r -GatewayIdentifierUri $Ctx.State.completed['1'].outputs.gatewayIdentifierUri; gatewayUrl = $Ctx.State.completed['3'].outputs.gatewayUrl
         helperTtlSeconds = 300; minimumTokenLifetimeSeconds = 360; loginTimeoutSeconds = 120; tokenTimeoutSeconds = 30; disableNonessentialTraffic = $true
         models = [ordered]@{ default = $aliases.default; opus = $aliases.opus; sonnet = $aliases.sonnet; haiku = $aliases.haiku; available = @($admitted | Sort-Object -CaseSensitive) }
-        desktop = [ordered]@{ profileId = [guid]::NewGuid().ToString(); profileName = 'Claude gateway (quick-start)' }
+        desktop = [ordered]@{ profileId = [guid]::NewGuid().ToString(); profileName = $ProfileName }
         project = [ordered]@{ id = $ProjectId; selectorHeader = $p.gateway.projectHeaderName }
     }
     $candidate=Join-Path $Ctx.GeneratedDir '.env.client-config.pending.json'
@@ -801,7 +801,7 @@ function New-QsClientFiles {
         $validated=& node (Join-Path $script:RepoRoot 'client\bin\validate-config.mjs') $candidate 2>$null
         if($LASTEXITCODE -ne 0 -or -not $validated) {throw 'client_configuration_invalid: export failed the workstation client schema; existing exports unchanged.'}
         $config=$validated | ConvertFrom-Json -AsHashtable
-    } finally {Remove-Item -LiteralPath $candidate -ErrorAction SilentlyContinue}
+    } finally {Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue}
     $file = Join-Path $Ctx.GeneratedDir 'client-config.json'
     $onboarding=Join-Path $Ctx.GeneratedDir 'onboarding.json'
     $text=$config | ConvertTo-Json -Depth 10

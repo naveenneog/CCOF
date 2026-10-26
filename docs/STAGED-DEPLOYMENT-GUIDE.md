@@ -484,7 +484,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   group's group document), loads the pilot group's members from a delegated snapshot through the
   sync app, and writes the developer client file for `client.group`.
 - **Who:** platform engineer.
-- **Cloud Shell:** `-Stage 7`, preview then `-Apply`. One Stage 7 at a time per checkout.
+- **Cloud Shell:** `-Stage 7`, preview then `-Apply`. One Stage 7 at a time per checkout. When the operator can reach
+  the private Cosmos endpoint, the bounded read-only group-drift check runs before any package build or publish.
 - **Portal:** workbook sections 18 (Deployment Center), 21 (registry seed), 22 (client configuration).
 - **Worked when:** every app lists its functions, the seed reports each document `created` (or
   `present-equal` on a rerun), the snapshot is applied and the client file passes the validator. A
@@ -496,7 +497,10 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   groups) ([registry-seed.ts](../src/sync/registry-seed.ts), [Deploy-Quickstart.ps1](../infra/quickstart/Deploy-Quickstart.ps1)).
   A document already present is reported `present-equal`, or `present-differs` with the field names,
   and is never replaced; a pilot group that needs a change after seeding is edited in the admin
-  console. A rerun of Stage 7 after a failure seeds only what is missing.
+  console. Preview names the group and fields that an apply would refuse, or keep with
+  `stage7.keepDifferingGroups: true`. If the operator cannot reach Cosmos DB or the read is denied, Stage 7 warns and
+  continues; the registry seed step remains the authoritative drift check after publishing. A rerun of Stage 7 after a
+  failure seeds only what is missing.
 
 ### Stage 8: acceptance
 
@@ -690,8 +694,9 @@ figures need `reconciler.timerEnabled: true`; whether a person also sees their g
 this mode is not a dollar-spend cap.** Select the enforcement mode explicitly before onboarding.
 
 With `budgetEnforcement: budget-state`, APIM retains the resolver's mode and
-`personCeilingTokensPerMinute` and uses the smaller of the static aggregate person TPM and the
-monetary ceiling. A zero ceiling is refused as `budget_exhausted`. Old cached decisions without the
+`personCeilingTokensPerMinute` and applies the monetary ceiling on its own budget-pacing counter, keyed by the budget
+month and amount; the static aggregate person TPM keeps its own counter ([ADR-0047](adr/0047-budget-pacing-counter.md)).
+A zero ceiling is refused (`budget_projected`, or `budget_exhausted` from the resolver). Old cached decisions without the
 new fields are rejected, not silently treated as unconstrained decisions. Deploy the matching
 resolver and gateway policy before claiming this behavior on an existing installation; a local
 source/test pass does not update a deployed policy.

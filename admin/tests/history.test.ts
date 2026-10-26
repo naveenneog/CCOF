@@ -196,7 +196,7 @@ test("a history range with a day history never covered is refused naming the day
   const { call } = setup(HISTORY_ENV, [doc("2026-09-20")], { "2026-09": partial });
   for (const format of ["json", "csv"]) {
     const refused = await call(`export/usage?period=previous&format=${format}`);
-    assert.deepEqual([refused.status, (refused.jsonBody as Doc).error], [409, "history_not_covered"]);
+    assert.deepEqual([refused.status, (refused.jsonBody as Doc).error, (refused.jsonBody as Doc).requestId], [409, "history_not_covered", "req-1"], "ADMIN-3: requestId as on every error");
     assert.deepEqual((refused.jsonBody as Doc).uncoveredDays, Array.from({ length: 14 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`));
   }
   const narrowed = await call("export/usage?period=custom&from=2026-09-15T00:00:00Z&to=2026-10-01T00:00:00Z&format=json");
@@ -221,7 +221,7 @@ test("a history range with a day whose documents expired, or expire within a day
     const { call } = setup(HISTORY_ENV, undefined, { "2026-09": SEPTEMBER }, { "2026-09": expiresAt });
     for (const format of ["json", "csv"]) {
       const refused = await call(`export/usage?period=previous&format=${format}`);
-      assert.deepEqual([refused.status, (refused.jsonBody as Doc).error, (refused.jsonBody as Doc).expiresAt], [409, "history_expired", expiresAt], expiresAt);
+      assert.deepEqual([refused.status, (refused.jsonBody as Doc).error, (refused.jsonBody as Doc).expiresAt, (refused.jsonBody as Doc).requestId], [409, "history_expired", expiresAt, "req-1"], expiresAt);
       assert.deepEqual((refused.jsonBody as Doc).expiredDays, september);
     }
   }
@@ -253,4 +253,11 @@ test("after retention is raised, the months the workspace never held are exporte
   const json = await call("export/usage?period=previous&format=json");
   assert.equal(json.status, 200, JSON.stringify(json.jsonBody));
   assert.deepEqual([timespans, reads.map((r) => r.month)], [[], ["2026-09"]]);
+});
+
+test("troubleshooting says the chargeback-history export errors were confirmed live (ADMIN-11)", async () => {
+  const page = await readFile(new URL("../../docs/operate/troubleshooting.md", import.meta.url), "utf8");
+  const section = page.slice(page.indexOf("## Chargeback history"));
+  assert.doesNotMatch(section, /not yet from a live deployment/);
+  assert.match(section, /confirmed live on 2026-10-26/);
 });

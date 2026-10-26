@@ -1,6 +1,7 @@
 # 3. Deploy: Stages 0–8
 
-Nine stages, run in order from Azure Cloud Shell (PowerShell). Every stage first **previews** and changes nothing;
+Nine stages, run in order from Azure Cloud Shell or from PowerShell 7 (`pwsh`) on Windows or macOS
+([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
 the same command with `-Apply` makes the change and then reads it back. A stage that fails its read-back stops
 with `verify_failed: <reason>` and records nothing, so it can be run again.
 
@@ -9,6 +10,8 @@ The captures on this page come from one demo deployment on 2026-10-24
 real ones, in the same format. Every setting and the Portal way of each stage: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
 
 ## Before Stage 0: get the code and write the configuration
+
+On your own computer, sign in first in `pwsh`: `az login --tenant '<tenant-id>'`. Cloud Shell is already signed in.
 
 ```powershell
 cd $HOME; git clone https://github.com/naveenneog/CCOF.git ccof; cd ccof
@@ -20,6 +23,8 @@ code $HOME/ccof-private/staged.config.json
 $cfg = "$HOME/ccof-private/staged.config.json"
 $run = "infra/staged/Invoke-StagedDeployment.ps1"
 ```
+
+Without VS Code on a Mac, use `nano $HOME/ccof-private/staged.config.json` (Ctrl+O saves, Ctrl+X exits).
 
 Set the main deployment values first:
 
@@ -52,7 +57,7 @@ a different value means a new resource group. Check these before the first `-App
 
 | Setting | Template | Lab (2026-10-24 and 2026-10-25 runs) | Why |
 | --- | --- | --- | --- |
-| `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one. Stage 0 refuses a configuration with neither |
+| `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one ([existing API Management](existing-api-management.md)). Stage 0 refuses neither or both |
 | `stage1.functionsPublicNetworkAccess` | `Disabled` | `Enabled` | `Disabled` closes the apps and their deployment (SCM) endpoint to the internet ([App Service access restrictions](https://learn.microsoft.com/azure/app-service/overview-access-restrictions)): Stage 7 publishing and the admin console then need a machine on the VNet ([network](../NETWORK.md)) |
 | `stage1.cosmosLocations` | `eastus2` + `centralus`, zone-redundant | `isZoneRedundant: false`, or one region with `cosmosCapacityMode: serverless` | Zone-redundant Cosmos DB capacity was refused in East US 2 ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)) |
 | `stage1.foundry.deployments` | Claude 4.5 and 5 | Deployments that match free quota ([prerequisites](02-prerequisites.md#microsoft-foundry-models)) | Quota differs per subscription |
@@ -155,6 +160,9 @@ pwsh -File $run -Stage 4 -ConfigPath $cfg -Apply
 ```
 
 **Expected:** one line per application (`reuse existing …` or `created …`) and `stage 4 completed and verified in … s`.
+For each reused application the preview lists what the apply changes (redirect URIs, rewritten scopes,
+`create service principal`, `require user assignment`) or prints `no change`. Review it with the application's owner
+before `-Apply`; Stage 4 never removes entries.
 
 ![Expected Stage 4 output](../evidence/2026-10-24-demo/terminal-stage4.png)
 
@@ -171,8 +179,9 @@ pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 
 **Expected:** a JSON line with the policy digests; one `audit archive: <account> in <region>, blobs …;
 diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention …` line, or
-`audit archive: off; workspace retention unchanged` when the archive is off (`<region>` as API Management reports
-it, for example `East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
+`audit archive: off; an existing ccof-gateway-archive diagnostic setting keeps exporting` when the archive is off
+(the off preview also prints the manual deletion command; `<region>` is as API Management reports it, for example
+`East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
 <account> network public-enabled (…), trusted services allowed` (or `public-disabled` when a storage policy turned
 public network access off); and `stage 5 completed and verified in … s`. The demo capture below predates the archive and has no `audit archive:`
 line. Checks for the archive: [audit archive](../operate/audit-archive.md#check-it-works).
@@ -203,6 +212,10 @@ pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 **Who:** platform engineer · **Time:** about 25 minutes · **Publishes** the four Function App packages, **seeds**
 the backend and the groups in the configuration, **applies** a membership snapshot, and writes the developer
 client file. One Stage 7 at a time per checkout.
+
+Before publishing, Stage 7 tries a short read-only check of the group documents. When the operator can reach Cosmos DB
+and a group differs, the apply stops before publishing unless `stage7.keepDifferingGroups: true`. Otherwise it warns
+and continues; the seed step still checks for drift after publishing.
 
 ```powershell
 pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview

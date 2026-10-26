@@ -1,0 +1,7 @@
+PS /home/alex/repo> pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
+== stage 5 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-nov3-rg; state $HOME/ccof-private/.staged-state
+{"configurationId":"ccof-staged-gateway-1","apiId":"claude-messages","policySha256":"a70b007de3cbf6b3499c9dd6fa1ae37870e186556f762720d27b1cecfac2700f","configSha256":"c58dad4ee6b992383b80fa6fb51728ad845661f2295e8450d9164a31befe2eab","templateSha256":"3a6b52f43b8fee12951d668973870935b555c20ef5ff7cdb692e1ae5e0d581a4","usagePolicySha256":"7cd2a54a57424c44aa85341bcc4ecc44da737b534976765bcfea74ab9600603e","usageTemplateSha256":"ac6f8459355586cbed80f1d9eef196b66f32db951e01a7ea472b3d316aa90191","policyPath":"$HOME/ccof-private/.staged-state\\generated\\gateway\\claude-messages.policy.xml","usagePolicyPath":"$HOME/ccof-private/.staged-state\\generated\\gateway\\claude-messages.usage.policy.xml","deploymentPath":"$HOME/ccof-private/.staged-state\\generated\\gateway\\claude-messages.policy.deployment.json","manifestPath":"$HOME/ccof-private/.staged-state\\generated\\gateway\\render.json"}
+audit archive: ccofnv3x3vzhl57xkgvwaud in East US 2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention unchanged
+deployed stage5-config (PT39.8274559S)
+audit archive: ccofnv3x3vzhl57xkgvwaud network public-disabled (policy or private), trusted services allowed
+stage 5 completed and verified in 124 s; outputs in $HOME/ccof-private/.staged-state\state.json

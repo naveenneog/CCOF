@@ -1,0 +1,17 @@
+PS /home/alex/repo> . .\download-old-month.ps1   # with the corrected host query
+PS> $adminHost = az functionapp show -g $rg -n $adminApp --query "properties.defaultHostName || defaultHostName" -o tsv
+adminHost=ccofnv3-x3vzhl57xkgvw-admin.azurewebsites.net
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=month&format=json" -Headers @{ Authorization = "Bearer $token" } -SkipHttpErrorCheck
+HTTP 200
+{"dataset":"usage","period":{"mode":"month","from":"2026-10-01T00:00:00.000Z","to":"2026-11-01T00:00:00.000Z"},"truncated":false,"rowLimit":5000,"rateCardVersion":"2026-10-11","basis":"List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.","filters":{"project":"","group":"","developer":"","model":"","backend":"","family":"","classification":"","chargeback":""},"columns":["chargebackId","projectLabel","person","requests","pricedRequests","partialRequests","unpricedRequests
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=month&format=csv" -Headers @{ Authorization = "Bearer $token" } -SkipHttpErrorCheck
+HTTP 200
+"User tag","projectLabel","person","requests","pricedRequests","partialRequests","unpricedRequests","unattributedRequests","failedRequests","duplicateLlmCopies","duplicateTraceCopies","traceMismatchRequests","llmMismatchRequests","familyMismatchRequests","cacheHitRequests","cacheReadObservedRequests","cacheSavingsKnownRequests","inputCostKnownRequests","outputCostKnownRequests","cacheReadCostKnownRequests","cacheWrite5mCostKnownRequests","cacheWrite1hCostKnownRequests","knownCostRequests","input
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=previous&format=json" -Headers @{ Authorization = "Bearer $token" } -SkipHttpErrorCheck
+HTTP 409
+{"error":"history_not_covered","uncoveredDays":["2026-09-01","2026-09-02","2026-09-03","2026-09-04","2026-09-05","2026-09-06","2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-12","2026-09-13","2026-09-14","2026-09-15","2026-09-16","2026-09-17","2026-09-18","2026-09-19","2026-09-20","2026-09-21","2026-09-22","2026-09-23","2026-09-24","2026-09-25","2026-09-26","2026-09-27","2026-09-28","2026-09-29","2026-09-30"]}
+PS> Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=previous&format=csv" -Headers @{ Authorization = "Bearer $token" } -SkipHttpErrorCheck
+HTTP 409
+{"error":"history_not_covered","uncoveredDays":["2026-09-01","2026-09-02","2026-09-03","2026-09-04","2026-09-05","2026-09-06","2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-12","2026-09-13","2026-09-14","2026-09-15","2026-09-16","2026-09-17","2026-09-18","2026-09-19","2026-09-20","2026-09-21","2026-09-22","2026-09-23","2026-09-24","2026-09-25","2026-09-26","2026-09-27","2026-09-28","2026-09-29","2026-09-30"]}
+PS> (unauthenticated) Invoke-WebRequest "https://$adminHost/api/v3/export/usage?period=month"
+HTTP 401

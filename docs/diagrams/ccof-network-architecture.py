@@ -19,6 +19,11 @@ cells, boxes, edges = [], [], []
 BLUE, GREEN, PURPLE, ORANGE, GRAY = "#0078d4", "#107c10", "#8764b8", "#ca5010", "#687787"
 
 
+def asset_bytes(path):
+    data = path.read_bytes()
+    return data.replace(b"\r\n", b"\n") if path.suffix in (".drawio", ".svg") else data
+
+
 def box(id, x, y, w, h, title, lines=(), fill="#ffffff", stroke=BLUE, parent="1", dashed=False, boundary=False):
     boxes.append(dict(id=id, x=x, y=y, w=w, h=h, title=title, lines=list(lines),
                       fill=fill, stroke=stroke, parent=parent, dashed=dashed, boundary=boundary))
@@ -324,7 +329,8 @@ if arguments.png:
     asyncio.run(render_pngs())
     names = ("ccof-network-architecture.drawio", "ccof-architecture-overview.svg", "ccof-architecture-overview.png",
              "ccof-network-architecture.svg", "ccof-network-architecture.png")
-    manifest = {"files": {name: hashlib.sha256((HERE / name).read_bytes()).hexdigest() for name in names},
+    # Text files are hashed with LF line ends: a Windows checkout (core.autocrlf) holds CRLF, macOS and Linux LF.
+    manifest = {"files": {name: hashlib.sha256(asset_bytes(HERE / name)).hexdigest() for name in names},
                 "rendering": "Same geometry; original Microsoft SVGs embedded; local Edge at 1x device scale. Design, not live acceptance."}
     (HERE / "render-manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print("Rendered both PNGs and recorded vector/draw.io/preview hashes.")

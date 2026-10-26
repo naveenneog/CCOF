@@ -1,0 +1,11 @@
+PS ~/ccof> pwsh -File infra/staged/Invoke-StagedDeployment.ps1 -Stage 8 -ConfigPath $HOME/ccof-private/staged.config.json -Apply
+== stage 8 (apply) subscription ebf7ae8f-e8b3-4f44-9395-85b2b1ad6db8 RG ccof-nov4-rg; state ~/ccof-private/.staged-state
+anonymous request: 401
+resolver without the gateway identity: 401
+allowed claude-haiku-5-5: 200 STAGED OK
+denied claude-opus-5-5: 403 permission_error (expected 403)
+admin console: root 302 -> /api/console-v3#/overview, console 200, API without token 401
+telemetry (ApiManagementGatewayLlmLog, CCOF workspace): rows 1, requests 1, models ["claude-haiku-5-5"]
+charged to group: ["66e99a69-b9ce-47ad-b3c3-67ca073221ad"]
+stage 8 completed and verified in 277 s; outputs in ~/ccof-private/.staged-state/state.json
+== exit 0 elapsed 278 s log $HOME/logs/stage8-apply-103558.log

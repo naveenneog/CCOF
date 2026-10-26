@@ -26,6 +26,7 @@ import type { Doc } from "./validation.ts";
 import { createUserDirectory } from "./user-directory.ts";
 import { createGroupDirectory } from "./group-directory.ts";
 import { handleGroupRequest } from "./groups.ts";
+import { readBackendSettings } from "./backend-settings.ts";
 import { createCosmosUserTagStore, handleUserTagRequest } from "./user-tags.ts";
 import { createCosmosHistoryStore, readHistorySettings } from "./history.ts";
 
@@ -41,6 +42,8 @@ const cosmos = readCosmosSettings(process.env);
 const credential = new ManagedIdentityCredential(process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID ? { clientId: process.env.ADMIN_MANAGED_IDENTITY_CLIENT_ID } : {});
 const directory = createUserDirectory(process.env, credential);
 const groupDirectory = createGroupDirectory(process.env, credential);
+// The deployment's backends and model deployments (ADR-0046); read once, like the other settings.
+const backendSettings = readBackendSettings(process.env);
 const container = cosmos ? openContainer(cosmos, credential) : null;
 const store = container ? createCosmosProjectStore(container) : null;
 const catalogContainer = cosmos && process.env.ADMIN_CONFIG_CONTAINER
@@ -88,7 +91,7 @@ async function groupsHandler(request: HttpRequest, context: InvocationContext): 
   const url = new URL(request.url);
   const response = await handleGroupRequest(
     { method: request.method, path: url.pathname, query: (name) => url.searchParams.get(name), headers: (name) => request.headers.get(name), body },
-    { authenticate, store, changeLog, directory: groupDirectory, log: (line) => context.log(line), now: () => new Date(), newId: () => randomUUID() },
+    { authenticate, store, changeLog, directory: groupDirectory, backends: backendSettings, log: (line) => context.log(line), now: () => new Date(), newId: () => randomUUID() },
   );
   return { status: response.status, headers: response.headers, jsonBody: response.jsonBody };
 }

@@ -6,6 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clearErrors, emptyGroupForm, formFromDoc, formProblems, formToBody, groupEstimate } from "../ui-v3/lib/groups.ts";
 import { readGroupRegistration } from "../../src/contracts/group-registration.ts";
+import { toCsv } from "../ui-v3/lib/format.ts";
+import { readFile } from "node:fs/promises";
 
 const GROUP = "abcdef01-2345-4678-9abc-def012345678";
 const unlimited = { tokensPerMinute: null, tokenQuota: null, tokenQuotaPeriod: null };
@@ -63,4 +65,36 @@ test("a stored group fills the edit form, and the form round-trips", () => {
   const body = formToBody(filled());
   const doc = { ...body, id: GROUP, kind: "group", projectId: GROUP, status: "active", retiredAt: null };
   assert.deepEqual(formToBody(formFromDoc(doc)), body);
+});
+
+test("the console refuses the names the server refuses, and its CSV neutralises the same formula triggers (ADMIN-5)", () => {
+  for (const displayName of [" ", "\t=1+1", "a\r\n=1+1"]) assert.ok(formProblems({ ...filled(), displayName }).displayName, JSON.stringify(displayName));
+  assert.equal(formProblems({ ...filled(), displayName: "Payments – Zürich" }).displayName, undefined);
+  const csv = toCsv(["v"], [{ v: " =1+1" }, { v: "\uFF1D1" }, { v: "plain" }], {});
+  assert.equal(csv, "\nv\n' =1+1\n'\uFF1D1\nplain\n");
+});
+
+test("a malformed group link gets a plain explanation, not a retry of route_not_found (ADMIN-7)", async () => {
+  const groups = await import("../ui-v3/lib/groups.ts");
+  const { ApiFailure, errorMessage } = await import("../ui-v3/lib/api.ts");
+  assert.match(groups.groupLinkProblem("onboard") ?? "", /not a group ID/);
+  assert.equal(groups.groupLinkProblem(GROUP), null);
+  assert.equal(groups.groupLinkProblem(GROUP.toUpperCase()), null);
+  assert.match(errorMessage(new ApiFailure(404, { error: "group_not_found" })), /No onboarded group/);
+  const page = await readFile(new URL("../ui-v3/pages/group-detail.tsx", import.meta.url), "utf8");
+  assert.match(page, /groupLinkProblem\(id\)/);
+  assert.match(page, /retry=\{doc\.error\.status === 404 \? undefined : doc\.reload\}|status === 404/);
+});
+
+test("the onboarding form names the deployment's backends and the models deployed on the chosen one (ADMIN-1)", async () => {
+  const { deploymentProblems } = await import("../ui-v3/lib/groups.ts");
+  const backends = [{ id: "backend01", deployments: ["claude-haiku-4-5", "claude-sonnet-5"] }, { id: "backend02", deployments: ["claude-opus-5"] }];
+  assert.deepEqual(deploymentProblems(filled(), backends), {});
+  assert.match(deploymentProblems({ ...filled(), backendId: "nope" }, backends).backendId ?? "", /backend01, backend02/);
+  const moved = deploymentProblems({ ...filled(), backendId: "backend02" }, backends);
+  assert.match(moved.families ?? "", /claude-sonnet-5.*not deployed on backend02.*claude-opus-5/);
+  assert.match(deploymentProblems(filled(), null).backendId ?? "", /ADMIN_BACKENDS/, "no list: say why onboarding will be refused");
+  const page = await readFile(new URL("../ui-v3/pages/group-onboard.tsx", import.meta.url), "utf8");
+  assert.match(page, /useQuery[^\n]*"\/api\/groups\/backends"/);
+  assert.doesNotMatch(page, /Type the APIM backend ID/);
 });

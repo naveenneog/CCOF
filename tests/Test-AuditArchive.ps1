@@ -11,7 +11,7 @@ $root = Split-Path $PSScriptRoot -Parent
 if (-not $BicepPath) {
     $command = Get-Command bicep -ErrorAction SilentlyContinue
     if ($command) { $BicepPath = $command.Source }
-    elseif (Test-Path (Join-Path $HOME '.azure\bin\bicep.exe')) { $BicepPath = Join-Path $HOME '.azure\bin\bicep.exe' }
+    elseif ($installed = @('bicep.exe', 'bicep' | ForEach-Object { Join-Path $HOME '.azure' 'bin' $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]) { $BicepPath = $installed }
     else { throw 'Offline Bicep CLI required. Supply -BicepPath; this test does not install tools or call Azure.' }
 }
 $passed = 0
@@ -100,7 +100,8 @@ Assert-Contract ($p.retentionDays -eq 2555 -and $p.immutabilityDays -eq 365) 'Th
 Assert-Contract ((@($p.lockedContainers) -join ',') -ceq 'insights-logs-gatewaylogs') 'Locked containers must be passed so Stage 5 never rewrites a locked policy.'
 Assert-Contract ($null -eq (Get-StgAuditDeployment -Cfg @{} -Names $names -ApimLocation 'eastus2')) 'With the archive off there are no deployment parameters.'
 Assert-Contract ((Format-StgAuditPreview -Deployment $p -WorkspaceRetentionDays 365) -match "audit archive: $name in westeurope.*2555.*365.*Standard_ZRS.*ccof-gateway-archive.*workspace retention 365") 'The Stage 5 preview must name the account, retention, immutability, SKU, setting and workspace retention.'
-Assert-Contract ((Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDays $null) -match 'audit archive: off.*workspace retention unchanged') 'The Stage 5 preview must say when the archive is off.'
+$archiveOff = Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDays $null
+Assert-Contract ($archiveOff -match 'audit archive: off.*existing.*ccof-gateway-archive.*keeps exporting.*az monitor diagnostic-settings delete --name ccof-gateway-archive --resource.*workspace retention unchanged') 'The Stage 5 preview must warn that an existing setting still exports and give the manual deletion command.'
 # ARM returns the gateway region as its display name, which the preview prints as is (live: "in East US 2").
 $pDisplay = Get-StgAuditDeployment -Cfg $cfgOn -Names $names -ApimLocation 'East US 2'
 Assert-Contract ((Format-StgAuditPreview -Deployment $pDisplay -WorkspaceRetentionDays $null) -clike "audit archive: $name in East US 2, blobs deleted after 2555 days, *") 'The preview prints the API Management region as ARM returns it.'
@@ -149,8 +150,12 @@ Assert-Contract ($containers.Count -eq 1 -and "$($containers[0].copy.count)" -ma
 $immutable = @($all | Where-Object type -CEQ 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies')
 Assert-Contract ($immutable.Count -eq 1 -and $immutable[0].properties.allowProtectedAppendWrites -eq $true) 'Immutability must allow protected append writes (the logs are append blobs).'
 Assert-Contract ("$($immutable[0].condition)" -match 'lockedContainers') 'Stage 5 must not write an immutability policy the owner has locked.'
-$diag = @($all | Where-Object type -CEQ 'Microsoft.Insights/diagnosticSettings')
-Assert-Contract ($diag.Count -eq 1 -and $diag[0].name -ceq 'ccof-gateway-archive') 'Stage 5 must declare only the ccof-gateway-archive diagnostic setting.'
+$diagAll = @($all | Where-Object type -CEQ 'Microsoft.Insights/diagnosticSettings')
+# ADR-0045: besides the archive, the only other setting is ccof-gateway-logs for an existing API Management (deployed
+# only when gatewayLogs is given: tests/Test-StagedStages.ps1, tests/Test-StagedApimExisting.ps1).
+$diag = @($diagAll | Where-Object name -CEQ 'ccof-gateway-archive')
+$otherDiag = @($diagAll | Where-Object name -CNE 'ccof-gateway-archive')
+Assert-Contract ($diag.Count -eq 1 -and $otherDiag.Count -eq 1 -and "$($otherDiag[0].properties.logAnalyticsDestinationType)" -ceq 'Dedicated') 'Stage 5 must declare only the ccof-gateway-archive diagnostic setting (and, for an existing API Management, ccof-gateway-logs).'
 Assert-Contract ($diag[0].properties.ContainsKey('storageAccountId') -and -not $diag[0].properties.ContainsKey('workspaceId')) 'The archive setting must send to storage only, never repeat the workspace destination of ccof-gateway-logs.'
 Assert-Contract ((@($diag[0].properties.logs | Where-Object enabled | ForEach-Object category) -join ',') -ceq 'GatewayLogs,GatewayLlmLogs') 'The archive setting must send GatewayLogs and GatewayLlmLogs.'
 

@@ -13,7 +13,7 @@ function Invoke-Stage0 {
     if ($exists) {
         $items = @(Invoke-StgAzJson @('resource', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup))
         $report.resourceGroup.resourceCount = $items.Count
-        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here; Stage 1 refuses a non-empty RG." -ForegroundColor Yellow }
+        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here. Stage 1 can verify without writing only if a succeeded stage1-services deployment matches this config; otherwise it refuses a non-empty RG. Later stages still need their own recovered state and are not assumed complete." -ForegroundColor Yellow }
     }
     $providers = 'Microsoft.Web', 'Microsoft.DocumentDB', 'Microsoft.Storage', 'Microsoft.Network', 'Microsoft.OperationalInsights', 'Microsoft.Insights', 'Microsoft.ManagedIdentity', 'Microsoft.ApiManagement', 'Microsoft.AlertsManagement'
     $report.providers = [ordered]@{}
@@ -42,6 +42,7 @@ function Invoke-Stage0 {
                 $ok = @($models | Where-Object { $_.model.format -ceq 'Anthropic' -and $_.model.name -ceq $d.model -and $_.model.version -ceq "$($d.version)" -and @($_.model.skus | ForEach-Object name) -contains ($d.sku ?? 'GlobalStandard') })
                 Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $($Cfg.location) for this subscription"
             }
+            Assert-StgFoundryQuota -Cfg $Cfg -Deployments @($fd.deployments)
             $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
             continue
         }
@@ -51,6 +52,7 @@ function Invoke-Stage0 {
         Assert-Stg (-not $missing.Count) "backend $($b.id) lacks deployments: $($missing -join ', ')"
         $report.backends += [ordered]@{ id = $b.id; account = $acct.name; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
+    if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports $report.backends }
     $me = Get-StgGraph 'me?$select=id,userPrincipalName'
     $report.operator = @{ id = $me.id; upn = $me.userPrincipalName }
     foreach ($g in @($Cfg.groups | Where-Object { $_.groupId })) {
@@ -60,6 +62,46 @@ function Invoke-Stage0 {
     $null = Write-StgEvidence 'stage0.json' $report
     $report | ConvertTo-Json -Depth 10 | Write-Host
     return $report
+}
+
+function Get-StgFoundryDeployments {
+    # Deployments of the configured Foundry account, read as the existing-account branch does; none when absent.
+    param($Cfg)
+    $fd = $Cfg.stage1.foundry
+    try { $acct = Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($fd.accountName)" '2024-10-01' }
+    catch { if ("$($_.Exception.Message)" -match 'ResourceNotFound|ResourceGroupNotFound') { return @() } throw }
+    return @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value)
+}
+
+function Assert-StgFoundryQuota {
+    # Each quota line is AIServices.<sku>.<model>.Azure; deployments sharing a line add up. A missing line is not
+    # refused: the model list already confirmed the offer, and Stage 1 reports any remaining quota error.
+    param($Cfg, [object[]]$Deployments)
+    $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+    $existing = @(Get-StgFoundryDeployments $Cfg)
+    $needed = [ordered]@{}
+    foreach ($d in $Deployments) {
+        $line = "AIServices.$($d.sku ?? 'GlobalStandard').$($d.model).Azure"
+        if (-not $needed.Contains($line)) { $needed[$line] = [ordered]@{ capacity = 0; names = @(); credited = $false } }
+        # The usage already counts this lab's own deployments (a rerun after Stage 1); only added capacity needs quota.
+        $same = @($existing | Where-Object { $_.name -ceq $d.name -and "AIServices.$($_.sku.name).$($_.properties.model.name).Azure" -ceq $line }) | Select-Object -First 1
+        $extra = if ($same) { [Math]::Max(0, [double]$d.capacity - [double]$same.sku.capacity) } else { [double]$d.capacity }
+        if ($same) { $needed[$line].credited = $true }
+        $needed[$line].capacity += $extra
+        $needed[$line].names += $d.name
+    }
+    $short = foreach ($line in $needed.Keys) {
+        $u = $usages | Where-Object { $_.name.value -ceq $line } | Select-Object -First 1
+        if (-not $u) { continue }
+        $free = [double]$u.limit - [double]$u.currentValue
+        $more = if ($needed[$line].credited) { ' more' } else { '' }
+        if ($needed[$line].capacity -gt $free) { "deployment $($needed[$line].names -join ' + ') needs $($needed[$line].capacity)$more of $line; $free free ($($u.currentValue) of $($u.limit) used)" }
+    }
+    if (-not @($short).Count) { return }
+    $region = $Cfg.location.Replace(' ', '').ToLowerInvariant()
+    $deleted = @(Invoke-StgAzJson @('cognitiveservices', 'account', 'list-deleted', '--subscription', $Cfg.subscriptionId) | Where-Object { ([string]$_.location).Replace(' ', '').ToLowerInvariant() -ceq $region } | ForEach-Object { $_.name })
+    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $($Cfg.location) keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
+    Assert-Stg $false "model quota in $($Cfg.location): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
 }
 
 # ---------------------------------------------------------------- stage 1: resources only
@@ -125,6 +167,23 @@ function New-StgStage1Result {
         workspaceId = $Out.workspaceId; workspaceCustomerId = $Out.workspaceCustomerId; apimName = $Out.apimName; apimId = $Out.apimId
         apimPrincipalId = $Out.apimPrincipalId; apimGatewayUrl = $Out.apimGatewayUrl; apimStatus = $Out.apimStatus
         foundryAccountId = $Out.foundryAccountId; foundryAnthropicUrl = $Out.foundryAnthropicUrl; verify = $verify }
+}
+
+function Assert-StgStage1AppSettings {
+    param($Settings, [string]$AppKey, $Stage5Record, $Stage7Record)
+    # Stage 5 is the only app-settings writer. Without its state, Stage 1 can verify its own ARM
+    # deployment but cannot infer a settings set from later stages or a lost state folder.
+    if (-not $Stage5Record) { return }
+    $settingNames = @($Settings | ForEach-Object { $_.name } | Sort-Object)
+    $expectedSettings = @($Stage5Record.outputs.verify.settings[$AppKey] | Sort-Object)
+    if ($AppKey -ceq 'sync' -and $Stage7Record) {
+        $snapshotToggle = @($Settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
+        Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
+        # Older Stage 5 records predate the setting; Stage 7 added it during snapshot cleanup.
+        if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
+        $expectedSettings = @($expectedSettings | Sort-Object)
+    }
+    Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"
 }
 
 function Invoke-Stage1 {
@@ -207,16 +266,7 @@ function Test-Stage1 {
         Assert-Stg ($site.httpsOnly -eq $true) "$($a.service.name) does not require HTTPS"
         Assert-Stg ($site.runtimeName -ceq 'node' -and $site.runtimeVersion -ceq '22') "$($a.service.name) runtime is $($site.runtimeName) $($site.runtimeVersion), expected Node 22"
         Assert-Stg ($site.ftpsState -ceq 'Disabled') "$($a.service.name) FTPS state is $($site.ftpsState)"
-        $settingNames = @($settings | ForEach-Object { $_.name } | Sort-Object)
-        $expectedSettings = if ($config) { @($config.verify.settings[$a.key] | Sort-Object) } else { @() }
-        if ($a.key -ceq 'sync' -and $code) {
-            $snapshotToggle = @($settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
-            Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
-            # Stage 5 writes it since council round 2 (app-settings.bicep); an older Stage 5 record lacks it.
-            if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
-            $expectedSettings = @($expectedSettings | Sort-Object)
-        }
-        Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "$($a.service.name) application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"
+        Assert-StgStage1AppSettings -Settings $settings -AppKey $a.key -Stage5Record $config -Stage7Record $code
         Assert-Stg ($a.service.principalId -match $script:Guid) "$($a.service.name) has no principal"
         $v.apps += [ordered]@{ app = $a.key; name = $a.service.name; publicNetworkAccess = $site.publicNetworkAccess; subnet = $site.virtualNetworkSubnetId; settings = $settings.Count; principalId = $a.service.principalId }
     }
@@ -328,10 +378,11 @@ function Invoke-StgNetworkVerify {
     if (-not $Apply) {
         Write-Host "preview: network.mode verify: no network resource is created or changed."
         Write-Host "preview: -Apply runs $check (read-only) on VNet $(($arguments.VnetResourceId -split '/')[-1]): subnets $(@($arguments.FlexSubnet, $arguments.PeSubnet, $arguments.ApimSubnet | Where-Object { $_ }) -join ', '); $($arguments.FunctionAppIds.Count) Function Apps, $($arguments.StorageAccountIds.Count) storage accounts, Cosmos$(if ($arguments.ApimResourceId) { ', APIM' })$(if ($arguments.FoundryResourceId) { ", $(@($arguments.FoundryResourceId).Count) Foundry account(s)" })."
+        if (Test-StgApimExisting $Cfg) { Write-Host "API Management $($Cfg.apim.existing.name) (apim.existing) is not changed: CCOF does not change the networking of an existing API Management." }
         return $null
     }
     $resultPath = Join-Path $script:StateDir 'network-check.json'
-    Remove-Item -LiteralPath $resultPath -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue
     & $check @arguments -ResultPath $resultPath | Out-Host
     $exit = $LASTEXITCODE
     Assert-Stg (Test-Path -LiteralPath $resultPath) "network check wrote no results (exit $exit)"
@@ -377,6 +428,7 @@ function Invoke-Stage6 {
         if ($action -eq 'reuse') { Write-Host 'preview: no network deployment; -Apply verifies and reconciles the remaining Stage 6 integrations.'; return $null }
         Write-Host "then: VNet integration, one app at a time, for $($apps -join ', ') (az functionapp vnet-integration add)."
         if ($integrateApim) { Write-Host "then: APIM $($s1.apimName) outbound VNet integration on the APIM subnet (virtualNetworkType External; ingress stays public)." }
+        elseif (Test-StgApimExisting $Cfg) { Write-Host "API Management $($Cfg.apim.existing.name) (apim.existing) is not changed: CCOF does not change the networking of an existing API Management." }
         if ($foundryPrivate.Count) { Write-Host "Foundry private endpoints: $($foundryPrivate -join ', ')" }
         return $null
     }
@@ -447,7 +499,7 @@ function Invoke-Stage2 {
         $before = try { & $listContainers } catch { if ("$_" -match 'NotFound') { @() } else { throw } }
         if ($problem = Get-StgChargebackTtlTransitionProblem -Cfg $Cfg -Containers $before) { throw $problem }
     }
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -Parameters @{
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -StageNumber 2 -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
         autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
         chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }

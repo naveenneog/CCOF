@@ -189,7 +189,7 @@ Stage 6 prints, per mode: `preview: network.mode verify: no network resource is 
 "apim": { "existing": null, "apiId": "claude-messages", "apiPath": "anthropic", "apiDisplayName": "Claude Messages (staged)" }
 ```
 
-**Reuse existing**: Stage 1 creates none; Stage 3 and later use the named instance.
+**Reuse existing**: Stage 1 creates none; Stage 0 checks the named instance and Stage 3 and later use it. Requirements, the owner's approvals and what CCOF adds: [use an existing API Management](existing-api-management.md).
 
 ```json
 "stage1": { "approveNewPublicApimBootstrap": false },

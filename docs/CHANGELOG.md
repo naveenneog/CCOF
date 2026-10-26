@@ -1,5 +1,79 @@
 # Change log
 
+## 2026-10-26 — Release 17
+
+- Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash
+  fixes below (sections of 2026-10-26).
+
+## 2026-10-26 — Claude Code setup on macOS and Linux (branch fix/macos-client)
+
+- `Set-ClaudeCodeGateway.ps1`, `Restore-ClaudeCodeGateway.ps1` and `Test-ClientGatewayAccess.ps1` run in PowerShell
+  7.4+ on macOS and Linux with `signInMethod: azure-cli` ([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md)):
+  `~/.claude/settings.json`, an `sh` token helper `~/.claude/ccof-token` with its own Azure CLI profile, and `/usage`
+  and the status line through `pwsh`. Files are created owner-only.
+- Any other sign-in method stops there with `unsupported_sign_in_method`; Claude Desktop setup stays Windows-only.
+- `/usage` and the Node helper name the macOS/Linux install route and helper in their messages.
+- Windows behaviour is unchanged.
+## 2026-10-26 — Admin bug-bash fixes (fix/bugbash-admin)
+
+- Groups may use only a backend in `ADMIN_BACKENDS` (written by Stage 5) and models deployed on it; the console
+  offers only those ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)).
+- Exports and chargeback views refuse `from`/`to` without `period=custom`, and a custom range that starts in the
+  future (`range_out_of_bounds`); every export error code is listed in ADMIN-API.md, and 409/503 bodies carry
+  `requestId`.
+- Display names need visible text and no control characters; CSV also neutralises full-width formula characters
+  and formulas after leading spaces.
+- Console: group wording instead of projects and STD/PRM/CYB; a malformed group link is explained; focus moves to
+  the first problem after a failed Continue or Save; loading regions are `aria-busy`.
+- Docs: version 3.4.0 in ADMIN-V3.md (checked by a test), role changes apply at the next token, chargeback-history
+  errors confirmed live.
+
+## 2026-10-26 — macOS deployer (branch fix/macos)
+
+- The deployment (Stages 0-8) runs from PowerShell 7 on macOS: prerequisites give the Homebrew install route, the
+  deploy page signs in with `az login` first, and a config folder with `(` or `)` is no longer refused off Windows.
+- Temporary files the deployer writes, such as `.env.client-config.pending.json`, are removed on macOS and Linux too.
+- The developer setup scripts are Windows-only and now say so on macOS and Linux (`unsupported_platform`, nothing
+  changed); macOS developer setup is planned (G-MACOS-CLIENT).
+- `/usage` in Claude Code no longer stops with "Shell command permission check failed": the skill pre-approves its
+  own command, for Git Bash and for Claude Code's PowerShell tool. The developer page explains that `/usage` is
+  interactive only and cannot show a refused budget; the status line and the wrapper can.
+- The offline test suites run under PowerShell 7 on Linux as well as Windows.
+
+## 2026-10-26 — Bug bash fixes: gateway and developer (branch fix/bugbash-gateway)
+
+- Budget pacing has its own gateway counter, keyed by the budget month and amount ([ADR-0047](adr/0047-budget-pacing-counter.md)):
+  raising a budget, or a new month, lifts the guard's wait within minutes; before, a wait computed at a tiny budget
+  stayed for hours. A pacing refusal says it is the budget guard, not the tokens-per-minute limit, and its
+  `Retry-After` is at most the time to the month's end. A refusal from projected spend says it can clear within
+  minutes. Budget and limit messages name the group, not a "CCU budget for project".
+- Variants of `/v1/messages` (trailing slash, `.`, `//`, upper case) are answered 404 by the gateway, before the token
+  check, instead of being forwarded and counted. A body that is not `application/json` is answered `415`, one above
+  32 MB `413 request_too_large`, both from the headers before the body is read ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)).
+- The `x-ccof-project` header compares a group Object ID in lower case. The not-entitled message tells no membership,
+  an unknown group ID and a value that is not a group ID apart, and no longer asks a member to join their own group.
+  A model refusal lists the group's allowed models. CLIENTS.md's multiple-group section matches the group selection rule.
+- The ledger prices a request Foundry refused before inference (`4xx` other than `429`) at zero tokens, so a typo no
+  longer makes the month's usage partial or, with `resolver.requireCompleteUsage`, blocks the person. Workbook and
+  admin queries change with the ledger (Stages 5 and 7 redeploy them).
+- `/usage` and the status line show a budget under USD 1 to four decimals, and say plainly that figures are a lower
+  bound because the prompt-cache tokens of streamed replies are never priced. USAGE.md explains why, and the usage
+  endpoint's approximate limit.
+- Developer setup prints `models`, the deployment each Claude Code alias runs, so an Opus alias mapped to another model
+  is visible. The Azure CLI helper's `status` no longer prints the Azure CLI's own `Please run 'az login'`. Stage 7 names
+  the Desktop profile after the group. The developer page explains Claude Code's `Failed to authenticate` on a gateway
+  `403`.
+
+## 2026-10-26 — Deploy into an existing API Management (feature branch)
+
+- Stage 0 checks an `apim.existing` instance before anything is created: readable, system-assigned identity, a v2
+  tier, API ID, path and backend names free, room for CCOF's diagnostic settings, and a network route when Foundry or
+  the Function Apps are private. Each refusal names the next step; the global policy is printed for review.
+- Stage 5 sends the instance's gateway logs to CCOF's workspace (`ccof-gateway-logs`), so budgets, `/usage`,
+  chargeback and the Stage 8 telemetry check work; it reuses the instance's `azuremonitor` logger.
+- A new instance and `apim.existing` together are refused.
+- New page: [Use an existing API Management](get-started/existing-api-management.md).
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated

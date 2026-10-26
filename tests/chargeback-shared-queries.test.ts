@@ -18,21 +18,21 @@ test("the shared query builder leaves the chargeback and fixed-price workbooks b
   const { buildWorkbook } = await import("../analytics/workbooks/build.ts");
   const chargeback = buildChargebackWorkbook(workbookAnswers(), card, ledger, groups);
   const workbook = buildWorkbook(workbookAnswers(), card, ledger);
-  // Changes with analytics/ledger.kql, which the workbook embeds (2026-10-24: GUID-typed fields, get-my-usage).
-  assert.equal(chargeback.contentSha256, "42e734dc31aab7fee0caa55ee7842367f73f2930873f4df180879cdf757a53d2");
-  assert.equal(workbook.contentSha256, "05d286e7d53dcc17440d80bc9e1c4323c73c0d13771bf68dbc91f5fa3713ecdc");
+  // Changes with analytics/ledger.kql, which the workbook embeds (2026-10-24: GUID-typed fields, get-my-usage; 2026-10-26: backend refusals priced at zero, ADR-0048).
+  assert.equal(chargeback.contentSha256, "4c2f3e77796909ddddc628116ac7d9b6e3f681b7984e3d126429b25c2e6ecd00");
+  assert.equal(workbook.contentSha256, "dcfb9e56aec09789e39c9a625c2ed15afeeafa60d68c35a0c4a9afd6b47c77de");
   assert.deepEqual(Object.fromEntries(Object.entries(chargeback.queries).map(([k, v]) => [k, sha(v as string)])), {
-    health: "f1cc98e154a41e83a0619ae080033fa8b6eaa100b579f3fabdd50cad6f04af37",
-    developers: "0866a81270d2ebd91d8bf1e5345395e4256b93a373607cfd5bdd328527094906",
-    usage: "d635b3e97d4306c702994cc9f84189e7a7dad623d20ca5a155bc2a2286507891",
-    groups: "903b22affe38eac2d994d2f50e4e69e73d5f76b02bc05696992d87d5c7fdbd81",
-    chargebackIds: "2a603ccd08ec6ea0d8378fc63027b9b3a7c981da240b5f0b4e926da43ef74f2c",
-    models: "108cf84ab47ea3591a598a3dd5252b0deb07b8dfe8cbb8111100d28ade098523",
-    families: "5ff2a67e8c3d71f03606f3db63dd6a744829029688dd554a1061e9f5526f7b09",
-    totals: "24fdb76e56059b80f0a5cf0c664ce8077b9e75918b84521c7d16a12e0adf9929",
-    trends: "7726dd9ef542e9b3e64b7daba0263d85f25508dbe4cbf0a3d3ee5fda72cae871",
-    diagnostics: "546d89cd89ef33efb4ea34e43c21f19a8dcf438b61c661e530d57c9797e5f7e5",
-    unpriced: "caa12e461f44db0ab6f138d61260820c507516127f936477f92a6a4f62792ffb",
+    health: "dcfb89182f8e0941c94b1cd27afb77d6703c40bb1f6af1bb82920f4887282522",
+    developers: "ef474d92ece856bc53a4996d33c5e05aa912f25228826551e837bfae12816122",
+    usage: "e699bbb58515aa0b79cd4456f95ba2dd3856498970d3425c3072c469f6b9b438",
+    groups: "dc50a2fefe159de5e9f3da5e2b88e1b8412d58ad556ad0ea8edc622a0a6edaff",
+    chargebackIds: "33bc7b7288f3349afe99349c89e5c06344d6824630d7a8afc6e1dccded7873a6",
+    models: "282554f579e1c760ff9eb020dc31ff1dcf6d646aae2cb5b50644e04d16aab70a",
+    families: "89c064a9bd7b0fd82f0fb9b087dd7bd17ce7b27d02c349dc8166f636c4b00726",
+    totals: "028c894c6179867967e4665cc9a2cb62cdeeb17ae489086a055636ae50deef5f",
+    trends: "f6a7ccfe2a50c227cd91dcc50f555ec3df0788727750ca363b485c9b6a95c0f8",
+    diagnostics: "85375e97181027930bf162182cec6c82d186b1ec774b6fd472bedea0832f1276",
+    unpriced: "766fa553bc547805474dcee8c487065f103f337334e0e44e7980f6bec8d702bd",
   });
 });
 

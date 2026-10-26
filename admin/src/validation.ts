@@ -5,6 +5,7 @@
 import { readProjectDocument } from "../../src/sync/projects.ts";
 import { parseFamilyPolicy } from "../../src/contracts/model-families.ts";
 import { ApiError, isGuid } from "./auth.ts";
+import { isDisplayName } from "./text-rules.ts";
 
 export type Doc = Record<string, unknown>;
 
@@ -30,7 +31,7 @@ export function projectProblems(value: unknown): string[] {
   if (!onlyKeys(value, PROJECT_KEYS)) problems.push("document:unexpected_key");
   const read = readProjectDocument(value);
   if (!read.ok) problems.push(...read.problems);
-  if (typeof value.displayName !== "string" || !value.displayName.trim() || value.displayName.length > 200) problems.push("displayName:invalid");
+  if (!isDisplayName(value.displayName, 200)) problems.push("displayName:invalid");
   if (!isGuid(value.designatedSubscriptionId)) problems.push("designatedSubscriptionId:invalid");
   if (value.adminTags !== undefined && (!Array.isArray(value.adminTags) || value.adminTags.length > 20 ||
     value.adminTags.some((tag) => typeof tag !== "string" || !/^[A-Za-z0-9][A-Za-z0-9 .:_-]{0,59}$/.test(tag)) ||

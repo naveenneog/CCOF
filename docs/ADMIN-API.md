@@ -61,7 +61,9 @@ needs confidence before saving.
   - **Signed in but not an admin:** a clear refusal.
   - **Registry unreachable:** "Can't reach the project registry", with the request ID and a retry.
   - **Empty registry:** what you need before creating the first project.
-  - Loading skeletons while data loads; mobile layout below 820px.
+  - Loading skeletons while data loads, marked `aria-busy` for screen readers; mobile layout below 820px.
+- **Errors in a form:** when Continue or Save finds a problem, focus moves to the first field that needs
+  attention, or to the error summary ("N fields need attention") when the problem has no single field.
 - **Security headers:**
   - Strict Content-Security-Policy (`default-src 'none'`, scripts only from the app,
     `frame-ancestors 'none'`).
@@ -110,7 +112,7 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 | Request | Role | Behaviour |
 |---|---|---|
 | `GET /api/groups` | Reader | Group summaries with ETags; baseline projects are not listed |
-| `GET /api/groups/{groupId}` | Reader | The group document and its `ETag`; 404 for a baseline project |
+| `GET /api/groups/{groupId}` | Reader | The group document and its `ETag`; `404 group_not_found` for a baseline project, an unknown ID, or a value that is not a GUID (also on `PUT` and `/retire`) |
 | `POST /api/groups` | Editor | Onboard: body holds `groupId` and the editable fields; stored `active`; 409 if the ID exists as a group or a project |
 | `PUT /api/groups/{groupId}` | Editor | Change any of `displayName`, `backendId`, `priority`, `chargebackId`, `budget`, `restrictedFamiliesApproved`, `familyPolicy`, `surfaces`, `cacheProfile`; needs `If-Match`; 409 when retired |
 | `POST /api/groups/{groupId}/retire` | Editor | Body `{"confirmGroupId": "<groupId>"}`; needs `If-Match`; one way. The next sync removes every member's access |
@@ -118,10 +120,20 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 | `GET /api/groups/directory/{groupId}` | Reader | One Entra group with its direct member count |
 | `GET /api/groups/directory/{groupId}/members` | Reader | The direct user members (`id`, `displayName`, up to 999, with `truncated`) of an **active onboarded** group; `404 group_not_onboarded` for any other group |
 | `GET /api/groups/cache-suggestion?surfaces=code,chat` | Reader | Suggested cache-read share for the surfaces, with evidence class ([cache-suggestions.ts](../src/contracts/cache-suggestions.ts)) |
+| `GET /api/groups/backends` | Reader | The deployment's backends and the model deployments on each, from `ADMIN_BACKENDS` (`state` is `configured`, `not_configured` or `invalid`) |
 
+- **Backend and models** ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)): onboarding, and an edit that
+  changes the backend or adds models, must use a backend in the app setting `ADMIN_BACKENDS` and models deployed on
+  it. Stage 5 writes the setting from `backends[].id` and the keys of `backends[].deploymentInferenceGeo`, as
+  `[{"id":"<backendId>","deployments":["<deployment>"]}]`. A refusal is `422 invalid_group` with
+  `backendId:not_deployed` or `familyPolicy.families.<family>.models:not_deployed`, and `allowed` names the valid
+  `backendIds` and the chosen backend's `deployments`. Without the setting such a write is refused with
+  `503 backend_list_not_configured` (`503 backend_list_invalid` when it is malformed): rerun Stage 5. Without this
+  check, members of such a group are refused at the gateway (`backend_not_configured`) or by Foundry.
 - **Validation:** the same contract the sync and reconciler read
   ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)); problems are
-  returned as field paths (`422 invalid_group`).
+  returned as field paths (`422 invalid_group`). The admin also refuses a `displayName` with no visible text
+  or with control characters such as tabs or line breaks (`displayName:invalid`; 1-256 characters).
 - **Change record:** each write is recorded in `adminConfig` before it is applied, as for projects.
 - **Directory lookup:** enabled with `ADMIN_GROUP_SEARCH_ENABLED=true`. The admin managed identity
   needs Microsoft Graph application permissions `Group.ReadBasic.All` (search and read) and
@@ -184,17 +196,44 @@ one `userTagCatalog` with the saved tags, at most 2,000).
 ### Export for Power BI ([admin/src/export.ts](../admin/src/export.ts))
 
 Two datasets join on the group ID (`groupId` = usage `projectLabel`). Both need the Reader role and
-accept `format=json` (default) or `format=csv`. CSV quotes every field and prefixes values starting
-with `=`, `+`, `-`, `@`, tab or carriage return with an apostrophe
-([OWASP CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection)).
+accept `format=json` (default) or `format=csv`. CSV quotes every field and prefixes with an apostrophe any
+value that starts with `=`, `+`, `-`, `@` or their full-width forms `＝ ＋ － ＠` (also after leading spaces),
+or with a tab, carriage return or line feed
+([OWASP CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection)). A line break inside a quoted
+value is kept, so read the file with a CSV parser rather than line by line.
 
 | Request | Rows |
 |---|---|
 | `GET /api/v3/export/usage?period=month\|previous\|custom[&from&to][&project][&group][&developer][&model][&backend][&family][&classification][&chargeback=<id>]` | One per chargeback ID, group and person: token categories, known/complete list cost in USD and CCU, observed cache-hit request share. At most 5,000 rows. List price at the rate card, not an Azure invoice |
 | `GET /api/v3/export/groups` | One per onboarded group: chargeback ID, priority, budget mode, per-user amount, group cap, surfaces, expected cache-read share and its basis |
 
-Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, so
-an export is never broader than its request. The JSON echoes every applied filter. Both formats return
+Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, and `from`
+or `to` without `period=custom` with `400 from_to_require_custom_period`, so an export is never broader than its
+request. The JSON echoes every applied filter.
+
+A custom range (`from` and `to` as UTC timestamps, `to` excluded) must start before the current time and
+end at most 31 days after it, so the current month always fits and a range in the future is refused with
+`400 range_out_of_bounds` rather than answered as zero usage. The same rule applies to the chargeback views. Both formats return
+
+Export errors. Each error body is JSON with `error` and `requestId` (quote the request ID when asking for help):
+
+| Code | Meaning and fix |
+| --- | --- |
+| `400 invalid_format` | `format` is not `json` or `csv` (lower case) |
+| `400 invalid_period` | `period` is not `month`, `previous` or `custom` |
+| `400 from_to_require_custom_period` | `from` or `to` was sent without `period=custom` |
+| `400 custom_period_requires_utc_from_and_to` | `period=custom` needs both `from` and `to` as UTC timestamps such as `2026-10-01T00:00:00Z` (no date-only value, no offset like `+05:30`) |
+| `400 invalid_custom_range` | `from` is not before `to`, or a date does not exist (for example month 13) |
+| `400 range_exceeds_max_query_days` | The range is longer than `ADMIN_CHARGEBACK_MAX_QUERY_DAYS` (default 62): split it |
+| `400 range_out_of_bounds` | The range starts now or later, ends more than 31 days ahead, or starts more than 12 years ago |
+| `400 unknown_parameter`, `400 repeated_parameter` | A parameter the export does not apply, or one sent twice |
+| `400 invalid_project_filter`, `invalid_group_filter`, `invalid_developer_filter`, `invalid_model_filter`, `invalid_backend_filter`, `invalid_family_filter`, `invalid_classification_filter`, `invalid_chargeback_filter` | A filter value has the wrong shape: group and developer are Object IDs; family is `haiku`, `sonnet`, `opus`, `fable` or `mythos` |
+| `404 export_not_found` | The dataset is not `usage` or `groups` |
+| `503 project_store_not_configured` | `export/groups` without the registry settings |
+| `503 user_tags_not_configured`, `500 user_tag_settings_unavailable` | A CSV needs the user-tag label: set `ADMIN_CONFIG_CONTAINER`, or retry when Cosmos DB answers; JSON still works |
+| `503 export_unavailable` | The chargeback source is not configured or failed; `capability` says which |
+
+History refusals (`history_*`, `backend_filter_not_in_history`, `chargeback_history_*`) are listed below. Both formats return
 `x-ccof-truncated` (`true` when more than 5,000 rows matched; the JSON also has `truncated`) and
 `x-ccof-row-limit`. A truncated export understates totals: narrow the period or filters.
 
@@ -251,6 +290,20 @@ other API permissions**.
 
 If any required value is missing, the API returns 503 and the console shows its setup screen
 (fails closed).
+
+**Role changes apply at the next token.** The roles are claims in the access token, so a role added, changed or
+removed on CCOF Admin takes effect only when the caller gets a new token. Entra gives an access token a lifetime
+of 60-90 minutes by default
+([access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens)), and clients reuse it
+until it expires. In the 2026-10-26 lab, writes kept returning `403 write_permission_required` for about 90
+minutes after the Write role was restored. To get a fresh token now:
+
+- **Console:** **Sign out**, then sign in again.
+- **Azure CLI:** `az account clear`, then `az login` and request the token again. Requesting the scope by the
+  application ID without `api://` (`<client-id>/Projects.Manage`) also returned a new token in the lab.
+
+A role **removal** also waits for the token to expire: remove the role, then expect up to 90 minutes before the
+person's console or script is refused.
 
 ## Deploy
 

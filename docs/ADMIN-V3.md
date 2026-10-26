@@ -131,6 +131,7 @@ change.
 | `ADMIN_GATEWAY_URL` | Onboarding downloads | Gateway base URL the client calls, `https://…` without `/v1` (same value as the client's `gatewayUrl`) |
 | `ADMIN_PROJECT_HEADER` | Onboarding downloads (optional) | Project selector header, default `x-ccof-project` |
 | `ADMIN_CONFIG_CONTAINER` | Saving cost definitions (as V2); change record and removal limits (3.2.0) | Cosmos container (`adminConfig`); when a catalog is saved, chargeback and the budget assistant use its rate card. When set, a change that cannot be recorded here is refused |
+| `ADMIN_BACKENDS` | Onboarding and editing groups | JSON `[{"id","deployments"}]` written by Stage 5: the backends a group may use and the models deployed on each ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)). Without it, onboarding is refused |
 
 A missing or invalid setting disables only its feature, which then shows its capability state
 (`disabled`, `permission_required`, `unavailable`) with the reason and the permission that enables it.
@@ -163,7 +164,7 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | Route | Behavior |
 | --- | --- |
 | `POST /api/v3/directory/users` | Authenticated admin readers/editors; body `{"objectIds":["<GUID>"]}` with 1-100 GUIDs, no extra keys/parameters. Returns current display names/UPNs and object IDs; Graph batches of 20, five-minute bounded memory cache, no-store HTTP response. No directory writes or persisted names. |
-| `GET /api/v3/chargeback/{view}` | `view`: totals, groups, developers, models, families, projects, classifications (project × classification), trend, coverage, unpriced, diagnostics. Query: `period` (month, previous, custom), `from`/`to` (UTC, custom only), `project`, `group` and `developer` (Object IDs), `model`, `backend` (request-time `backendId`), `family`, `classification`, `tags` (comma-separated, ≤ 10, all must match; resolved to project IDs from the registry, refused with 400 `tag_matches_too_many_projects` above 2,000 projects; no match selects nothing), `interval` (hour, day), `limit` (1–500, default 100), `offset`. Unknown or repeated parameters return 400. |
+| `GET /api/v3/chargeback/{view}` | `view`: totals, groups, developers, models, families, projects, classifications (project × classification), trend, coverage, unpriced, diagnostics. Query: `period` (month, previous, custom), `from`/`to` (UTC, custom only; with `month` or `previous` they return 400 `from_to_require_custom_period`; a custom range must start before now and end at most 31 days ahead, otherwise 400 `range_out_of_bounds`), `project`, `group` and `developer` (Object IDs), `model`, `backend` (request-time `backendId`), `family`, `classification`, `tags` (comma-separated, ≤ 10, all must match; resolved to project IDs from the registry, refused with 400 `tag_matches_too_many_projects` above 2,000 projects; no match selects nothing), `interval` (hour, day), `limit` (1–500, default 100), `offset`. Unknown or repeated parameters return 400. |
 | `GET /api/v3/projects/{id}/client-config?classification=STD` | Reader. Returns `config` (validates with `client/src/config.mjs`: tenant, client, scope, gateway URL, the classification's models by family, a stable Desktop profile ID, `project {id, selectorHeader}`), `onboarding` (Entra group, models, install paths, steps), `missing` and `complete`. No secrets. 400 invalid classification, 404 unknown project or classification, 409 classification without models. |
 | `GET /api/v3/reconciler/runs` | Latest run per outcome and reason, with `ageMinutes` and `freshness` against the interval |
 | `GET /api/v3/reconciler/snapshots`, `/summary` | `period`, `scope` (person, group), `project`, `classification`, `person`, `state` (current, expired, historical, invalid_event), `budgetState`, `limit`, `offset`; exact USD equivalents |
@@ -175,9 +176,9 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/plan` | In-force models by family, geography multipliers, rate card version and source |
 | `POST /api/v3/plan` | Budget assistant: `monthlyBudget {amount, currency USD/CCU}`, `members`, `geography`, `sizing`, `mix`, `families[{family, model?, budgetPercent}]`, working days/hours, burst. Pure; no writes. 422 with `detail` on invalid input. |
 | `POST /api/v3/rate-card/review` | Validates a candidate rate card with the reconciler's parser and the history rules (version must change, recorded entries unchanged, new or closed entries not in the past) and returns added/closed/unchanged. Saving stays `PUT /api/v2/catalog` with If-Match. |
-| `GET /api/v3/version`, `/capabilities` | `3.2.0`; which features are configured (including `changeLog`, `removalLimits`) and the caller's role |
+| `GET /api/v3/version`, `/capabilities` | The admin version (`3.4.0`, from [version.ts](../admin/src/version.ts)); which features are configured (including `changeLog`, `removalLimits`) and the caller's role |
 
-`/api/v2/version` and `/api/health` report 3.2.0. `/api/v2/projects` accepts `tags` (comma-separated, all
+`/api/v2/version` and `/api/health` report 3.4.0. `/api/v2/projects` accepts `tags` (comma-separated, all
 must match, up to 10) and `classification`.
 
 ## Upgrade from the VDI

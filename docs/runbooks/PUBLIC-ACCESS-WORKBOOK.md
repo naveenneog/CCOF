@@ -2275,9 +2275,11 @@ async function defaultService(stderr) {
   const { config, configPath } = await loadConfig();
   if (config.signInMethod === 'azure-cli') {
     // ADR-0041: Claude Code and Desktop run the Azure CLI helper; an MSAL sign-in here would never be used.
-    throw new ClientError('azure_cli_sign_in',
-      'This configuration signs in through the Azure CLI. Run "%USERPROFILE%\\.claude\\ccof-token.cmd" login '
-      + '(Claude Code), or "%LOCALAPPDATA%\\Claude-3p\\ccof-token.cmd" login when only Claude Desktop is set up.');
+    throw new ClientError('azure_cli_sign_in', process.platform === 'win32'
+      ? 'This configuration signs in through the Azure CLI. Run "%USERPROFILE%\\.claude\\ccof-token.cmd" login '
+        + '(Claude Code), or "%LOCALAPPDATA%\\Claude-3p\\ccof-token.cmd" login when only Claude Desktop is set up.'
+      // ADR-0048: macOS and Linux have the Claude Code sh helper only.
+      : 'This configuration signs in through the Azure CLI. Run ~/.claude/ccof-token login (Claude Code).');
   }
   const { createRuntime } = await import('./msal-runtime.mjs');
   const runtime = await createRuntime(config, configPath, { report: (code) => stderr(`${code}\n`) });

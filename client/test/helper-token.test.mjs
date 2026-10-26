@@ -53,3 +53,16 @@ test('helper failures are told apart: Azure CLI missing, a Microsoft Entra refus
     await assert.rejects(helperToken(file, { timeoutMs: 500 }), (error) => error.code === 'sign_in_timeout');
   });
 });
+
+// ADR-0048: on macOS and Linux the helper is the generated sh script, run directly in its own folder.
+test('off Windows the sh helper gives the token, and its failures are told apart', { skip: windows && 'sh helper' }, async () => {
+  await withHelper('[ "$1" = silent-token ] && [ "$(pwd -P)/" = "$(cd "$(dirname "$0")" && pwd -P)/" ] && echo eyJ.helper.token && exit 0\nexit 7', async (file) => {
+    assert.equal(await helperToken(file), 'eyJ.helper.token');
+  });
+  await withHelper('echo partial-secret-output\necho "ERROR: AADSTS53003: blocked" >&2\nexit 4', async (file) => {
+    await assert.rejects(helperToken(file), (error) => error.code === 'sign_in_required' && error.message.includes('AADSTS53003') && error.message.includes(`"${file}" login`) && !error.message.includes('partial-secret'));
+  });
+  await withHelper('echo "The Azure CLI is not installed" >&2\nexit 3', async (file) => {
+    await assert.rejects(helperToken(file), (error) => error.code === 'azure_cli_missing' && /brew install azure-cli/.test(error.message) && !/installazurecliwindows/.test(error.message));
+  });
+});

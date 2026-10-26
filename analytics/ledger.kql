@@ -61,18 +61,21 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
         and gettype(payload.schemaVersion) == "long" and tolong(payload.schemaVersion) == 1
         and tolower(tostring(payload.requestId)) == gatewayRequestId
         and gettype(payload.streamed) == "bool"
-        and isnotnull(todatetime(payload.observedAt))
+        and isnotnull(todatetime(payload.observedAt)),
+        // ADR-0048: the backend answered 4xx other than 429, a refusal before inference: zero tokens, not unknown.
+        backendRefused = gatewayOutcomeKnown and not(noBackendCall)
+            and BackendResponseCode between (400 .. 499) and BackendResponseCode != 429
     // The trace's streamed flag decides: IsStreamCompletion can be false for a streamed call (docs/TELEMETRY.md).
     | extend streamed = iff(traceKnown, tobool(payload.streamed), nativeStreamed)
     | extend bodyUsageKnown = traceKnown and not(streamed) and payload.usageSource == "body" and not(noBackendCall),
         usage = payload.usage
-    | extend inputTokens = iff(bodyUsageKnown, ReadCount(usage.input_tokens),
-            iff(nativeCountsKnown and nativeInput >= 0, nativeInput, long(null))),
-        outputTokens = iff(bodyUsageKnown, ReadCount(usage.output_tokens),
-            iff(nativeCountsKnown and nativeOutput >= 0, nativeOutput, long(null))),
-        cacheWrite5mTokens = iff(bodyUsageKnown, ReadCount(usage.cache_creation.ephemeral_5m_input_tokens), long(null)),
-        cacheWrite1hTokens = iff(bodyUsageKnown, ReadCount(usage.cache_creation.ephemeral_1h_input_tokens), long(null)),
-        cacheReadTokens = iff(bodyUsageKnown, ReadCount(usage.cache_read_input_tokens), long(null)),
+    | extend inputTokens = iff(backendRefused, long(0), iff(bodyUsageKnown, ReadCount(usage.input_tokens),
+            iff(nativeCountsKnown and nativeInput >= 0, nativeInput, long(null)))),
+        outputTokens = iff(backendRefused, long(0), iff(bodyUsageKnown, ReadCount(usage.output_tokens),
+            iff(nativeCountsKnown and nativeOutput >= 0, nativeOutput, long(null)))),
+        cacheWrite5mTokens = iff(backendRefused, long(0), iff(bodyUsageKnown, ReadCount(usage.cache_creation.ephemeral_5m_input_tokens), long(null))),
+        cacheWrite1hTokens = iff(backendRefused, long(0), iff(bodyUsageKnown, ReadCount(usage.cache_creation.ephemeral_1h_input_tokens), long(null))),
+        cacheReadTokens = iff(backendRefused, long(0), iff(bodyUsageKnown, ReadCount(usage.cache_read_input_tokens), long(null))),
         personId = iff(traceKnown and isnotnull(toguid(tostring(payload.personId))), tostring(payload.personId), ""),
         projectId = iff(traceKnown and gettype(payload.projectId) in ("string", "guid"), tostring(payload.projectId), ""),
         classification = iff(traceKnown and gettype(payload.classification) == "string", tostring(payload.classification), ""),
@@ -106,7 +109,7 @@ let CcofUsageLedger = (fromTime:datetime, toTime:datetime, resourceId:string) {
         inferenceGeoKnown = inference_geo != "unknown",
         attributionKnown = traceKnown and isnotempty(personId) and isnotempty(projectId)
             and isnotempty(classification) and isnotempty(backendId)
-    | extend inputSource = iff(inputTokensKnown, iff(bodyUsageKnown, "body", "llm-log"), "unknown"),
+    | extend inputSource = iff(backendRefused, "backend-refused", iff(inputTokensKnown, iff(bodyUsageKnown, "body", "llm-log"), "unknown")),
         geoMismatch = inferenceGeoKnown and isnotempty(bodyInferenceGeo) and bodyInferenceGeo != inference_geo
     | project timestamp, ingestedAt, gatewayResourceId, gatewayRequestId, providerRequestId,
         personId, projectId, classification, backendId, deployment, model, streamed,

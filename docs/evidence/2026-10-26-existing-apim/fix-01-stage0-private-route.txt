@@ -1,0 +1,15 @@
+PS ~/ccof> pwsh -File infra/staged/Invoke-StagedDeployment.ps1 -Stage 0 -ConfigPath $HOME/ccof-private-neg/staged.config.json
+Exception: ~/ccof/infra/staged/Staged.ApimExisting.ps1:125
+Line |
+ 125 |  … s).Count) { throw "the existing API Management cannot be used yet:`n  …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | the existing API Management cannot be used yet:   -
+     | apim_existing_no_private_route: contoso-apim has no virtual
+     | network, but the gateway must reach Foundry account ccofnv4foundry1026
+     | privately. CCOF does not change the networking of an existing API
+     | Management. Either its owner connects it to a virtual network that
+     | reaches these and resolves their private DNS names (Standard v2/Premium
+     | v2: outbound virtual network integration), or keep them public
+     | (stage1.foundry.publicNetworkAccess Enabled, backends[].privateEndpoint
+     | false, stage1.functionsPublicNetworkAccess Enabled).
+== exit 1 elapsed 43 s log $HOME/logs/stage0-preview-075126.log

@@ -54,6 +54,50 @@ function Set-StgScope { param($App, [string]$Value, [string]$Type, [string]$Text
     $others = @($App.api.oauth2PermissionScopes | Where-Object { $_.value -cne $Value })
     return @{ id = $id; scopes = @($others) + @(@{ id = $id; value = $Value; type = $Type; isEnabled = $true; adminConsentDisplayName = $Text; adminConsentDescription = $Text; userConsentDisplayName = $Text; userConsentDescription = $Text }) }
 }
+# The delegated scope each application exposes, as Set-StgScope writes it (the apply and its preview share this).
+$script:StgScopes = @{
+    gateway = @{ value = 'access_as_user'; type = 'User'; text = 'Access the Claude gateway as the signed-in user' }
+    admin = @{ value = 'Projects.Manage'; type = 'Admin'; text = 'Manage CCOF projects' }
+}
+
+function Get-StgAppChanges {
+    # What the Stage 4 apply would change on a reused registration (lists are merged, never pruned), for the preview.
+    param($App, [string]$Kind, $Cfg, [string]$AdminHost)
+    $changes = [Collections.Generic.List[string]]::new()
+    if (@($App.identifierUris) -notcontains "api://$($App.appId)") { $changes.Add("add identifier URI api://$($App.appId)") }
+    if ($App.api.requestedAccessTokenVersion -ne 2) { $changes.Add('set access token version 2') }
+    $spec = $script:StgScopes[$Kind]
+    $scopeName = $spec.value
+    $clients = switch ($Kind) {
+        'gateway' { @($App.appId) + $(if ($Cfg.entra.allowAzureCliClient) { @($script:AzureCliClientId) } else { @() }) }
+        'admin' { @($App.appId) + @($Cfg.admin.extraAllowedClientIds | Where-Object { $_ -match $script:Guid }) }
+        default { @() }
+    }
+    if ($scopeName) {
+        $scope = @($App.api.oauth2PermissionScopes | Where-Object { $_.value -ceq $scopeName }) | Select-Object -First 1
+        if (-not $scope) { $changes.Add("add scope $scopeName") }
+        else {
+            if ($scope.type -cne $spec.type) { $changes.Add("set $scopeName scope type $($spec.type)") }
+            if ($scope.isEnabled -ne $true) { $changes.Add("enable scope $scopeName") }
+            if (@('adminConsentDisplayName', 'adminConsentDescription', 'userConsentDisplayName', 'userConsentDescription' | Where-Object { $scope.$_ -cne $spec.text }).Count) { $changes.Add("set $scopeName consent text '$($spec.text)'") }
+        }
+        foreach ($cid in $clients) {
+            if (-not $scope -or -not @($App.api.preAuthorizedApplications | Where-Object { $_.appId -ieq $cid -and @($_.delegatedPermissionIds) -contains $scope.id }).Count) { $changes.Add("preauthorize $cid for $scopeName") }
+        }
+    }
+    if ($Kind -ceq 'gateway') {
+        if ($App.isFallbackPublicClient -ne $true) { $changes.Add('allow public client flows') }
+        foreach ($uri in @('http://localhost', "ms-appx-web://microsoft.aad.brokerplugin/$($App.appId)")) { if (@($App.publicClient.redirectUris) -notcontains $uri) { $changes.Add("add public client redirect $uri") } }
+    }
+    if ($Kind -ceq 'admin') {
+        foreach ($role in 'CCOF.Projects.Read', 'CCOF.Projects.Write') { if (-not @($App.appRoles | Where-Object { $_.value -ceq $role }).Count) { $changes.Add("add app role $role") } }
+        foreach ($uri in @("https://$AdminHost/api/console", "https://$AdminHost/api/console-v3")) { if (@($App.spa.redirectUris) -notcontains $uri) { $changes.Add("add SPA redirect $uri") } }
+    }
+    $sp = Get-StgServicePrincipal $App.appId
+    if (-not $sp) { $changes.Add('create service principal') }
+    if ($Kind -ceq 'admin' -and $sp.appRoleAssignmentRequired -ne $true) { $changes.Add('require user assignment') }
+    return , @($changes)
+}
 
 function Invoke-Stage4 {
     param($Cfg, [switch]$Apply)
@@ -69,10 +113,16 @@ function Invoke-Stage4 {
         Write-Host 'preview: resolver app: api://<appId>, v2 tokens, no redirects or secrets'
         if ($Cfg.stage1.includeAdmin) { Write-Host ('preview: admin app: Projects.Manage scope, CCOF.Projects.Read/Write roles, SPA redirects /api/console and /api/console-v3, assignment required, self preauthorized' + $(if (@($Cfg.admin.extraAllowedClientIds).Count) { " and $(@($Cfg.admin.extraAllowedClientIds) -join ', ')" } else { '' })) }
         foreach ($g in $Cfg.groups) { Write-Host "preview: group $(Get-StgGroupKey $g): $(if ($g.groupId) { "use $($g.groupId)" } else { "create or reuse '$($g.groupDisplayName)'" }), members $(@($g.members) -join ',')" }
+        $adminHost = "$($s1.names.apps.admin.functionApp).azurewebsites.net"
+        foreach ($pair in @(@{ kind = 'gateway'; app = $gw }, @{ kind = 'resolver'; app = $res }, @{ kind = 'admin'; app = $adm })) {
+            if (-not $pair.app) { continue }
+            $changes = Get-StgAppChanges -App $pair.app -Kind $pair.kind -Cfg $Cfg -AdminHost $adminHost
+            Write-Host "preview: $($pair.kind) application '$($pair.app.displayName)' ($($pair.app.appId)): $(if ($changes.Count) { $changes -join '; ' } else { 'no change' })"
+        }
         Write-Host 'not done here: Microsoft Graph application permission for the sync identity (sync.mode delegated-snapshot needs none); a Privileged Role Administrator runs infra/quickstart/Grant-SyncGraphPermissions.ps1 if approved.'
         return $null
     }
-    $gwScope = Set-StgScope $gw 'access_as_user' 'User' 'Access the Claude gateway as the signed-in user'
+    $gwScope = Set-StgScope $gw $script:StgScopes.gateway.value $script:StgScopes.gateway.type $script:StgScopes.gateway.text
     $clients = @($gw.appId) + $(if ($e.allowAzureCliClient) { @($script:AzureCliClientId) } else { @() })
     $null = Send-StgGraph 'patch' "applications/$($gw.id)" @{
         identifierUris = (Join-StgUnique $gw.identifierUris @("api://$($gw.appId)")); isFallbackPublicClient = $true
@@ -85,7 +135,7 @@ function Invoke-Stage4 {
     $admin = @{}
     if ($adm) {
         $adm = Get-StgAppById $adm.appId
-        $scope = Set-StgScope $adm 'Projects.Manage' 'Admin' 'Manage CCOF projects'
+        $scope = Set-StgScope $adm $script:StgScopes.admin.value $script:StgScopes.admin.type $script:StgScopes.admin.text
         $roles = @($adm.appRoles)
         foreach ($r in @(@{ v = 'CCOF.Projects.Read'; n = 'CCOF project reader' }, @{ v = 'CCOF.Projects.Write'; n = 'CCOF project editor' })) {
             if (-not ($roles | Where-Object { $_.value -ceq $r.v })) { $roles += @{ id = [guid]::NewGuid().ToString(); value = $r.v; displayName = $r.n; description = $r.n; allowedMemberTypes = @('User'); isEnabled = $true } }

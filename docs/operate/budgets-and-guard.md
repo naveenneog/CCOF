@@ -34,6 +34,12 @@ minute. A budget owner who needs faster spending of a small budget raises `overs
 The guard controls a rate, not an atomic dollar reservation. Delayed telemetry, cached decisions and in-flight
 requests can still cause overshoot; `overshootPercent` is not a guaranteed maximum.
 
+The gateway applies the guard's rate on its own counter, separate from the configured tokens per minute, keyed by the
+budget's month and amount ([ADR-0047](../adr/0047-budget-pacing-counter.md)). Raising the budget, or a new month,
+starts a new counter, so the wait ends after the next reconciler run and the gateway's cache (a few minutes). The rate
+is counted in tokens at the most expensive admitted output price, so with a very small budget one large request can
+make the next requests wait for hours (bug bash 2026-10-26: about 7 hours after one 8,100-token request at USD 0.01).
+
 ## What people see
 
 | State | `/usage` | Status line |
@@ -42,6 +48,14 @@ requests can still cause overshoot; `overshootPercent` is not a guaranteed maxim
 | Warning | `… Warning: about 85% of this budget is used or in progress; requests are now slowed …` | `… - warning: about 85% used, slowed` |
 | Reached (projected) | `… Projected spend has reached this budget: new requests are refused …` | `… - budget reached, requests refused` |
 | Used up (recorded) | `… Budget used up: new requests are refused until next month.` | `… - budget used up, requests refused` |
+
+What Claude Code shows from the gateway:
+
+| State | Answer |
+| --- | --- |
+| Slowed | `429` "Your requests in group … are slowed by the budget guard … This is not the configured tokens-per-minute limit." `Retry-After` is the counter's wait, at most until the month ends |
+| Reached (projected) | `403` "Your recent spending in group … has reached your Claude budget, counting requests not yet recorded …" It clears when recorded spend catches up, usually within minutes |
+| Used up (recorded) | `403` "Your Claude budget in group … is used up for this month." |
 
 ![The admin console's budget view](../evidence/2026-10-24-demo/console-08-budgets.png)
 

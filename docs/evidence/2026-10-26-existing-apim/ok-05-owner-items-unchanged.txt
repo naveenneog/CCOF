@@ -1,0 +1,9 @@
+PS> ./compare.ps1 before.json after.json   # the owner's items, read before Stage 0 and after Stage 8
+service (sku, identity, principal, network, public access)     unchanged
+API contoso-orders (path, serviceUrl)                          unchanged
+contoso-orders API policy                                      unchanged
+global policy                                                  unchanged
+loggers (azuremonitor description, buffering)                  unchanged
+service diagnostics                                            unchanged
+diagnostic setting contoso-own-logs                            unchanged
+added by CCOF: apis=[claude-messages]; backends=[foundry-eastus2]; fragments=[claude-messages-backend-b097052b2da6, claude-messages-inbound-060bba7edf83, claude-messages-on-error-678171f3057a, claude-messages-outbound-ef52b74400f6]; diagnosticSettings=[ccof-gateway-archive, ccof-gateway-logs]

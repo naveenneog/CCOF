@@ -120,6 +120,28 @@ test("export refuses filters it cannot apply, and echoes every filter it applied
   assert.deepEqual((json.jsonBody as Doc).filters, { project: "", group: "", developer: "", model: "", backend: "foundry-eus2", family: "opus", classification: "group", chargeback: "WBS-1" });
 });
 
+test("from and to are refused with period=month or previous, never ignored (ADMIN-2)", async () => {
+  const { call } = setup();
+  for (const query of ["period=month&from=2026-10-01T00:00:00Z", "period=previous&to=2026-10-01T00:00:00Z", "from=2026-10-05T00:00:00Z"]) {
+    const res = await call(`export/usage?${query}`);
+    assert.equal(res.status, 400, query);
+    assert.equal((res.jsonBody as Doc).error, "from_to_require_custom_period", query);
+    assert.equal((res.jsonBody as Doc).requestId, "req-1", query);
+  }
+  const view = await call("chargeback/totals?period=month&from=2026-10-01T00:00:00Z");
+  assert.equal((view.jsonBody as Doc).error, "from_to_require_custom_period", "the chargeback views share the rule");
+});
+
+test("one future rule: a custom range must start before now and end at most 31 days ahead (ADMIN-4)", async () => {
+  const { call } = setup();
+  for (const [from, to] of [["2026-11-01T00:00:00Z", "2026-11-20T00:00:00Z"], ["2026-10-19T12:00:00Z", "2026-10-20T00:00:00Z"], ["2026-10-01T00:00:00Z", "2026-12-01T00:00:00Z"]]) {
+    const res = await call(`export/usage?period=custom&from=${from}&to=${to}`);
+    assert.equal(res.status, 400, `${from}/${to}`);
+    assert.equal((res.jsonBody as Doc).error, "range_out_of_bounds", `${from}/${to}`);
+  }
+  assert.equal((await call("export/usage?period=custom&from=2026-10-01T00:00:00Z&to=2026-11-19T00:00:00Z")).status, 200, "an end in the future is allowed");
+});
+
 test("a truncated export says so in both formats", async () => {
   const rows = Array.from({ length: 2 }, (_, i) => [`WBS-${i}`, GROUP, "p", "1", 5001, true]);
   const { call } = setup(() => ({
@@ -142,6 +164,7 @@ test("a missing rate card is reported as export_unavailable with the capability"
   const res = await call("export/usage?period=month&format=csv");
   assert.equal(res.status, 503);
   assert.equal((res.jsonBody as Doc).error, "export_unavailable");
+  assert.equal((res.jsonBody as Doc).requestId, "req-1", "ADMIN-3: requestId as on every error");
 });
 
 test("export refuses an unknown format or view, and reports an unavailable source as 503", async () => {
@@ -153,4 +176,27 @@ test("export refuses an unknown format or view, and reports an unavailable sourc
   assert.equal(unavailable.status, 503);
   assert.equal((unavailable.jsonBody as Doc).error, "export_unavailable");
   assert.equal(((unavailable.jsonBody as Doc).capability as Doc).state, "unavailable");
+});
+
+// ADMIN-3: every code export/usage or export/groups can return is documented with the export, so a novice who
+// mistypes a date finds the code. Filters the export refuses as unknown_parameter (paging, interval, tags) never
+// reach their own checks.
+test("every export and custom-range error code is documented in ADMIN-API.md (ADMIN-3)", async () => {
+  const source = (name: string) => readFile(new URL(`../src/${name}`, import.meta.url), "utf8");
+  const chargeback = await source("chargeback.ts");
+  const periodAndFilters = chargeback.slice(chargeback.indexOf("function readPeriod"), chargeback.indexOf("const renderParams"));
+  const text = [await source("export.ts"), await source("history.ts"), periodAndFilters].join("\n");
+  const unreachable = new Set(["invalid_page", "invalid_interval", "invalid_tags_filter"]);
+  const codes = [...new Set([...text.matchAll(/(?:ApiError\(\d{3}, |error: )["`]([a-z_]+)["`]|"(invalid_[a-z_]+_filter)"/g)].map((m) => m[1] ?? m[2]))].filter((c) => !unreachable.has(c));
+  assert.ok(codes.length >= 25, codes.join(", "));
+  const docs = await readFile(new URL("../../docs/ADMIN-API.md", import.meta.url), "utf8");
+  const section = docs.slice(docs.indexOf("### Export for Power BI"), docs.indexOf("## Sign-in"));
+  assert.deepEqual(codes.filter((c) => !section.includes(`\`${c}\``) && !section.includes(` ${c}\``)), []);
+});
+
+test("CSV also neutralises formulas after leading whitespace, full-width triggers and line feeds (ADMIN-5, OWASP)", () => {
+  const risky = [" =1+1", "  +1", "\u3000=1", "\uFF1D1+1", "\uFF0B1", "\uFF0D2", "\uFF20SUM(1)", "\n=1", " \t-3", "\nnote", "\rnote"];
+  const csv = toCsv(["v"], risky.map((v) => [v]));
+  assert.deepEqual(csv.split("\r\n").slice(1, -1), risky.map((v) => `"'${v}"`));
+  assert.equal(toCsv(["v"], [[" plain"], ["a-b"], ["x=1"]]), '"v"\r\n" plain"\r\n"a-b"\r\n"x=1"\r\n');
 });

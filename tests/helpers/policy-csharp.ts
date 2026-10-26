@@ -14,6 +14,10 @@ export interface Vector {
   expected: unknown;
   json?: boolean;
   property?: string;
+  // context.Request: the original URL's path and the request headers.
+  path?: string;
+  headers?: Record<string, string>;
+  body?: string;
 }
 
 // Compile and execute the actual rendered C# expressions, not a TypeScript imitation.
@@ -30,14 +34,21 @@ using Newtonsoft.Json.Linq;
 public class Bag : Dictionary<string, object> {
   public T GetValueOrDefault<T>(string key, T fallback) { return ContainsKey(key) ? (T)this[key] : fallback; }
 }
-public class Body { public string Text; public T As<T>() { return (T)(object)JObject.Parse(Text); } }
+public class Body { public string Text; public T As<T>() { return (T)(object)JObject.Parse(Text); } public T As<T>(bool preserveContent) { return As<T>(); } }
 public interface IResponse { int StatusCode { get; } Body Body { get; } }
 public class Response : IResponse { public int StatusCode { get; set; } public Body Body { get; set; } }
 public class Error { public string Source = ""; public string PolicyId = ""; public string Reason = ""; }
+public class Url { public string Path = ""; }
+public class Headers : Dictionary<string, string> {
+  public Headers() : base(StringComparer.OrdinalIgnoreCase) {}
+  public string GetValueOrDefault(string key, string fallback) { return ContainsKey(key) ? this[key] : fallback; }
+}
+public class Request { public Url OriginalUrl = new Url(); public Headers Headers = new Headers(); public Body Body = new Body(); }
 public class Context {
   public Bag Variables = new Bag();
   public Response Response = new Response();
   public Error LastError = new Error();
+  public Request Request = new Request();
   public Guid RequestId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 }
 public static class PolicyExpressions { ${bodies} }`;
@@ -54,6 +65,9 @@ foreach ($v in $inputJson.vectors) {
   $ctx.Response.StatusCode = [int]$v.status
   $ctx.LastError.PolicyId = [string]$v.policyId
   $ctx.LastError.Reason = [string]$v.reason
+  $ctx.Request.OriginalUrl.Path = [string]$v.path
+  $ctx.Request.Body.Text = [string]$v.body
+  if ($v.headers) { foreach ($name in $v.headers.Keys) { $ctx.Request.Headers[$name] = [string]$v.headers[$name] } }
   foreach ($key in $v.vars.Keys) {
     $value = $v.vars[$key]
     if ($key -eq 'ccofResolverResponse') {

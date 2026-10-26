@@ -33,8 +33,16 @@ The preview and the apply print one line, for example (the region as API Managem
 audit archive: ccoflab4f2kq7xz3m6bwaud in East US 2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention unchanged
 ```
 
-With the archive off the line is `audit archive: off; workspace retention unchanged`. After the read-back, the apply
-prints the network mode it found:
+With the archive off, Stage 5 does not remove an existing `ccof-gateway-archive` diagnostic setting: it keeps
+exporting. Stop exports manually with the command Stage 5 prints (replace the placeholder with the API Management
+resource ID):
+
+```powershell
+az monitor diagnostic-settings delete --name ccof-gateway-archive --resource <API Management resource ID>
+```
+
+This removes the diagnostic setting only; it does **not** delete the archive storage account or its data.
+After the read-back, the apply prints the network mode it found:
 
 ```text
 audit archive: ccoflab4f2kq7xz3m6bwaud network public-enabled (firewall Deny, no rules), trusted services allowed

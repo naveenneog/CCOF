@@ -86,6 +86,8 @@ try {
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'Silent token command missing'
         # One sign-in command for every method: the helper setup just wrote, with `login`.
         Assert ($codeResult.signInMethod -ceq 'msal') "Sign-in method not reported: $($codeResult.signInMethod)"
+        # Bug bash DEV-11: the alias mapping is printed, so an Opus alias that runs another model is visible.
+        Assert ($codeResult.models.opus -ceq 'opus-deployment' -and $codeResult.models.sonnet -ceq 'sonnet-deployment' -and $codeResult.models.haiku -ceq 'haiku-deployment' -and $codeResult.models.default -ceq 'sonnet-deployment') "Model aliases not reported: $($codeResult.models | ConvertTo-Json -Compress)"
         Assert ($codeResult.signIn -ceq ('"' + (Join-Path $claudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($codeResult.signIn)"
         $snapshot = Join-Path $backupRoot $codeResult.changeId
         $manifest = Read-ClientJson (Join-Path $snapshot 'snapshot.json')
@@ -114,9 +116,17 @@ try {
         $wrapperPath = Join-Path $claudeHome 'ccof-usage.ps1'
         Assert (Test-Path -LiteralPath $skillPath) 'Skill not installed'
         $skill = [IO.File]::ReadAllText($skillPath)
-        Assert ($skill -match '(?s)^---\r?\nname: usage\r?\ndescription: .+\r?\n---\r?\n') 'Skill front matter missing or not named usage'
-        $expected = '!`powershell -NoProfile -ExecutionPolicy Bypass -File "' + $wrapperPath.Replace('\', '/') + '"`'
+        Assert ($skill -match '(?s)^---\r?\nname: usage\r?\ndescription: .+\r?\n(allowed-tools:\r?\n(  - .+\r?\n)+)?---\r?\n') 'Skill front matter missing or not named usage'
+        $command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + $wrapperPath.Replace('\', '/') + '"'
+        $expected = '!`' + $command + '`'
         Assert ($skill.Contains($expected)) "Skill does not inject the wrapper's output: expected $expected"
+        # DEV-1: Claude Code aborts a skill whose injected command its permission rules do not allow ("Shell command
+        # permission check failed ... requires approval"). With Git Bash (this machine) the Bash tool runs the command,
+        # and the skill pre-approves exactly that command for it.
+        Assert ((Test-CcofGitBash)) 'Git Bash not found: the Bash-tool skill cannot be tested on this machine'
+        $grants = @([regex]::Matches(($skill -split '\r?\n---\r?\n')[0], '(?m)^  - (.+)$') | ForEach-Object { $_.Groups[1].Value.TrimEnd("`r") })
+        Assert ($grants.Count -eq 1 -and $grants[0] -ceq ("'" + "Bash($command)".Replace("'", "''") + "'")) "Skill does not pre-approve exactly its own command: $($grants -join ' | ')"
+        Assert ($skill -notmatch '(?m)^shell:') 'A Git Bash machine must leave the skill on the default shell'
         Assert ($skill -match 'exactly as written') 'Skill does not tell Claude to show the figures unchanged'
         $wrapper = [IO.File]::ReadAllText($wrapperPath)
         Assert ($wrapper.Contains("`$env:CCOF_CONFIG_FILE = '")) 'Wrapper does not pin the config'
@@ -135,6 +145,26 @@ try {
         Assert (Test-Path -LiteralPath $bash) 'Git Bash not found: the Git Bash path cannot be tested on this machine'
         $gb = & $bash -c "$command --bogus-argument 2>&1" | Out-String
         Assert ($gb -match 'Usage: ccof-usage \[--statusline\]') "Git Bash did not reach ccof-usage: $gb"
+    }
+    Test-Case 'without Git Bash the /usage skill runs the wrapper with the PowerShell tool, which refuses a nested powershell (DEV-1)' {
+        $wrapperPath = Join-Path $claudeHome "it's/ccof-usage.ps1"
+        $skill = New-CcofUsageSkill -WrapperPath $wrapperPath -Shell powershell
+        $command = "& '" + $wrapperPath.Replace('\', '/').Replace("'", "''") + "'"
+        Assert ($skill -match '(?m)^shell: powershell\r?$') 'The skill does not ask for the PowerShell tool'
+        Assert ($skill.Contains('!`' + $command + '`')) "The skill does not call the wrapper directly: $skill"
+        Assert ($skill -notmatch '(?m)^!`powershell ') 'The skill spawns a nested powershell, which the PowerShell tool refuses'
+        Assert ($skill.Contains("  - '" + "PowerShell($command)".Replace("'", "''") + "'")) "The skill does not pre-approve exactly its command for the PowerShell tool: $skill"
+        Refuses { New-CcofUsageSkill -WrapperPath (Join-Path $work 'a$b/ccof-usage.ps1') -Shell powershell } 'dollar sign'
+        # PowerShell also closes a single-quoted string at U+2018-U+201B (a home folder such as O’Brien).
+        $curly = "C:/Users/O$([char]0x2019)Brien x$([char]0x2018)/.claude/ccof-usage.ps1"
+        $curlyCommand = [regex]::Match((New-CcofUsageSkill -WrapperPath $curly -Shell powershell), '(?m)^!`(.+)`\r?$').Groups[1].Value
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseInput($curlyCommand, [ref]$tokens, [ref]$errors)
+        $element = $ast.EndBlock.Statements[0].PipelineElements[0].CommandElements[0]
+        Assert ($errors.Count -eq 0 -and $element.Value -ceq $curly) "A typographic quote in the path breaks the PowerShell-form command: $curlyCommand"
+        $real = [regex]::Match([IO.File]::ReadAllText((Join-Path $claudeHome 'skills/usage/SKILL.md')), '-File "([^"]+)"').Groups[1].Value
+        $ps = & pwsh -NoProfile -Command ("& '" + $real.Replace("'", "''") + "' --bogus-argument") 2>&1 | Out-String
+        Assert ($ps -match 'Usage: ccof-usage \[--statusline\]') "The direct wrapper call did not reach ccof-usage ($real): $ps"
     }
     Test-Case 'a usage path with a backtick, dollar sign or quote is refused before any file is written' {
         $options = $codeArgs.Clone(); $options.ClaudeHome = Join-Path $work 'odd$home/.claude'
@@ -662,6 +692,8 @@ exit /b 0
         $shim = [IO.File]::ReadAllText((Join-Path $options.ClaudeHome 'ccof-token.cmd'))
         Assert ($shim -match '"%AZ%" account get-access-token' -and $shim.Contains("set `"AZ=$mockAz`"") -and $shim -notmatch '\bnode\b') "Claude Code helper is not the Azure CLI helper pinned to the installed az.cmd: $(($shim -split "`r`n") -match '^set .AZ=')"
         Assert ($shim.Contains('set "AZURE_CONFIG_DIR=' + (Join-Path (Split-Path $azConfigPath -Parent) 'az') + '"')) 'Profile folder is not beside the configuration'
+        # Bug bash DEV-12: status before sign-in prints only the helper's own line, not the Azure CLI's 'Please run az login'.
+        Assert ($shim.Contains('call "%AZ%" account show --query user.name --output tsv --only-show-errors 2>nul')) 'status lets the Azure CLI error through'
         $settings = Read-ClientJson (Join-Path $options.ClaudeHome 'settings.json')
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'apiKeyHelper not set'
         Assert ([int]$settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS -le 240000) "Helper cache too long: $($settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS)"

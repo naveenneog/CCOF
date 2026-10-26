@@ -10,7 +10,11 @@ root = Path(__file__).resolve().parents[1]
 diagrams = root / "docs" / "diagrams"
 rendered = json.loads((diagrams / "render-manifest.json").read_text())
 for filename, digest in rendered["files"].items():
-    assert hashlib.sha256((diagrams / filename).read_bytes()).hexdigest() == digest, f"Diagram export drift: {filename}"
+    data = (diagrams / filename).read_bytes()
+    # Text exports are pinned with LF line ends: a Windows checkout (core.autocrlf) holds CRLF, macOS and Linux LF.
+    if filename.endswith((".drawio", ".svg")):
+        data = data.replace(b"\r\n", b"\n")
+    assert hashlib.sha256(data).hexdigest() == digest, f"Diagram export drift: {filename}"
 manifest = json.loads((diagrams / "icons" / "azure" / "manifest.json").read_text())
 hashes = set()
 for icon in manifest["icons"]:

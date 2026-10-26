@@ -84,7 +84,7 @@ closed day never becomes open again. Before reading, the export checks every day
 ## Download an old month
 
 The export needs a delegated token for the admin API. History is not read by the console's **Export CSV** button,
-so an old month is downloaded with a script. This route uses the Azure CLI as the client, tested live on 2026-10-26.
+so an old month is downloaded with a script, with the Azure CLI (tested live 2026-10-26).
 
 1. **Once per deployment: allow the Azure CLI client**: its public client ID `04b07795-8ddb-461a-bbee-02f9e1bf7b46`
    in `admin.extraAllowedClientIds` (the turn-on steps below add it; added later, it needs Stage 4, then Stages 5,
@@ -92,12 +92,12 @@ so an old month is downloaded with a script. This route uses the Azure CLI as th
 2. **The person downloading** needs the `CCOF.Projects.Read` (or `CCOF.Projects.Write`) app role on the CCOF Admin
    application (`entra.adminReaders`), and a network path to the admin app. With
    `stage1.functionsPublicNetworkAccess: Disabled`, run from a machine on the VNet ([network](../NETWORK.md)).
-3. **Download**, from a workstation signed in with `az login` (`period=previous` also works for last month):
+3. **Download**, from a workstation signed in with `az login` (or `period=previous` for last month):
 
 ```powershell
 $rg = 'ccoflab-rg'
 $adminApp = az functionapp list -g $rg --query "[?ends_with(name, '-admin')].name | [0]" -o tsv
-$adminHost = az functionapp show -g $rg -n $adminApp --query defaultHostName -o tsv
+$adminHost = az functionapp show -g $rg -n $adminApp --query "properties.defaultHostName || defaultHostName" -o tsv
 $adminAppId = az functionapp config appsettings list -g $rg -n $adminApp --query "[?name=='ADMIN_AUDIENCE'].value | [0]" -o tsv
 $token = az account get-access-token --scope "api://$adminAppId/Projects.Manage" --query accessToken -o tsv
 $url = "https://$adminHost/api/v3/export/usage?period=custom&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z&format=csv"
@@ -172,12 +172,16 @@ Prices are USD list prices; agreements and regions differ. The estimate comes fr
 
 ## Turn off
 
-Set `enabled: false` (or remove the `audit.chargebackHistory` section) and preview and apply Stages 2, 3 and 5. If
-Stage 7 or 8 then refuses with `stage_dependency_changed`, rerun it. Stage 5 removes the reconciler's and admin
-app's history settings: the reconciler stops writing, and the export reads Log Analytics only. The stages never
-delete: the `chargebackDaily` container, its three Stage 3 role assignments and the `ccof-chargeback-history`
-lease document remain until removed by hand, with the commands in
-[ADR-0044, Rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback).
+Set `enabled: false` (or remove `audit.chargebackHistory`). Hashes require this order; preview/apply each before
+continuing:
+
+1. Preview and apply Stage 2.
+2. Then preview and apply Stage 3.
+3. Then preview and apply Stage 5.
+
+If Stage 7/8 reports `stage_dependency_changed`, rerun it. Stage 5 stops history writes; exports use Log Analytics.
+It retains the `chargebackDaily` container, its three Stage 3 role assignments and the lease document (see
+[ADR-0044 rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback)). History remains until TTL expiry/deletion.
 
 A section that is only `{ "enabled": false }` is recorded as if it were absent; with any other key beside it, as
 in the template, it is part of the Stage 2, 3 and 5 records ([configuration reference](../get-started/configuration-reference-3.md#audit)).

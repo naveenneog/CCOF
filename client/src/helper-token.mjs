@@ -7,6 +7,9 @@ import { ClientError } from './errors.mjs';
 
 const TIMEOUT_MS = 60_000;
 const AZURE_CLI_MISSING = 3;
+// ADR-0048: macOS and Linux run the sh helper; the install route differs per platform.
+const INSTALL_AZURE_CLI = process.platform === 'win32' ? 'https://aka.ms/installazurecliwindows'
+  : 'macOS: brew install azure-cli; Linux: https://learn.microsoft.com/cli/azure/install-azure-cli';
 
 function run(file, args, options) {
   return new Promise((resolve, reject) => {
@@ -18,7 +21,7 @@ function run(file, args, options) {
 // Claude Code and Desktop, may). The helper runs in its own folder, so no az.cmd in the caller's folder is found.
 export async function helperToken(helper, { timeoutMs = TIMEOUT_MS } = {}) {
   if (typeof helper !== 'string' || !helper || !path.isAbsolute(helper) || /["%\r\n]/.test(helper)) {
-    throw new ClientError('invalid_configuration', 'CCOF_TOKEN_HELPER must be the absolute path of ccof-token.cmd. Run the client installer again.');
+    throw new ClientError('invalid_configuration', 'CCOF_TOKEN_HELPER must be the absolute path of the generated ccof-token helper. Run the client installer again.');
   }
   const options = { cwd: path.dirname(helper), timeout: timeoutMs };
   let stdout;
@@ -29,7 +32,7 @@ export async function helperToken(helper, { timeoutMs = TIMEOUT_MS } = {}) {
       : await run(helper, ['silent-token'], options);
   } catch (error) {
     if (error.killed) throw new ClientError('sign_in_timeout', `The Azure CLI helper gave no token within ${Math.round(timeoutMs / 1000)} seconds. Retry; if it persists, run "${helper}" status.`);
-    if (error.code === AZURE_CLI_MISSING) throw new ClientError('azure_cli_missing', 'The Azure CLI is not installed where setup found it. Install it (https://aka.ms/installazurecliwindows), then run the client setup again.');
+    if (error.code === AZURE_CLI_MISSING) throw new ClientError('azure_cli_missing', `The Azure CLI is not installed where setup found it. Install it (${INSTALL_AZURE_CLI}), then run the client setup again.`);
     const entra = /AADSTS\d{5,6}/.exec(String(error.stderr ?? ''));
     throw new ClientError('sign_in_required', `No gateway token${entra ? ` (Microsoft Entra ${entra[0]})` : ''}. Sign in: run "${helper}" login.${entra ? ' If sign-in fails again, give your admin this code.' : ''}`);
   }

@@ -14,5 +14,9 @@ test('isolated client suite passes without loading native MSAL or making live Az
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /# fail 0/);
   assert.match(result.stdout, /# cancelled 0/);
-  assert.match(result.stdout, /# skipped 0/);
+  // Only the tests of the other platform's helper may skip: the cmd.exe helper off Windows, the sh helper on Windows
+  // (ADR-0048).
+  const allowed = process.platform === 'win32' ? '# SKIP sh helper' : '# SKIP cmd helper';
+  const skips = result.stdout.match(/# SKIP.*$/gm) ?? [];
+  assert.deepEqual(skips.filter((line) => line !== allowed), []);
 });

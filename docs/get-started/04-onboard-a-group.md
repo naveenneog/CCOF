@@ -15,7 +15,10 @@ projects**: the same page for the earlier project model. New teams are onboarded
 
 **Groups → Onboard a group.** Search by display name (needs the admin Graph permission,
 [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync)) or paste the group's
-**Object ID** from Entra ID → Groups. Enter the display name used in reports and choose the Foundry backend.
+**Object ID** from Entra ID → Groups. Enter the display name used in reports and choose the Foundry backend from
+the list of the deployment's backends (Stage 5 writes it). The console then lists the models deployed on that
+backend; the admin API refuses any other backend or model
+([ADMIN-API](../ADMIN-API.md#onboarded-groups-adr-0034)).
 
 ![Step 1: the group's Object ID, display name and Foundry backend](../evidence/2026-10-24-demo/console-01-find-group.png)
 

@@ -1,0 +1,9 @@
+PS ~/ccof> pwsh -File infra/staged/Invoke-StagedDeployment.ps1 -Stage 5 -ConfigPath $HOME/ccof-private/staged.config.json -Apply
+== stage 5 (apply) subscription ebf7ae8f-e8b3-4f44-9395-85b2b1ad6db8 RG ccof-nov4-rg; state $HOME/ccof-private/.staged-state
+audit archive: ccofnv4yqbn3defpyqxoaud in East US 2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention unchanged
+gateway logs: diagnostic setting ccof-gateway-logs on contoso-apim sends GatewayLogs and GatewayLlmLogs to ccofnv4-yqbn3defpyqxo-law (resource-specific); the owner's other settings are not changed
+deployed stage5-config (PT32.1323729S)
+gateway logs: ccof-gateway-logs on contoso-apim verified: GatewayLlmLogs, GatewayLogs to ccofnv4-yqbn3defpyqxo-law (resource-specific)
+audit archive: ccofnv4yqbn3defpyqxoaud network public-disabled (policy or private), trusted services allowed
+stage 5 completed and verified in 108 s; outputs in $HOME/ccof-private/.staged-state/state.json
+== exit 0 elapsed 109 s log $HOME/logs/stage5-apply-081118.log

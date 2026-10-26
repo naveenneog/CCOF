@@ -1,0 +1,14 @@
+PS /home/alex/repo> pwsh -File $run -Stage 4 -ConfigPath $cfg
+== stage 4 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-nov3-rg; state $HOME/ccof-private/.staged-state
+reuse existing gateway application 'CCOF Gateway' (44d58842-1005-4adc-befd-4820cf6b9ad0)
+reuse existing resolver application 'CCOF Resolver API' (6f45123c-3a1b-4a6c-b8bb-ef1be1ba1a31)
+reuse existing admin application 'CCOF Admin' (7c6d58f3-0765-48ae-ad1a-6cd69a02f647)
+preview: gateway app: api://<appId>, access_as_user, v2 tokens, public client (localhost, WAM), self preauthorized and Azure CLI
+preview: resolver app: api://<appId>, v2 tokens, no redirects or secrets
+preview: admin app: Projects.Manage scope, CCOF.Projects.Read/Write roles, SPA redirects /api/console and /api/console-v3, assignment required, self preauthorized and 04b07795-8ddb-461a-bbee-02f9e1bf7b46
+preview: group group/0b65c63f-4d92-4e52-a492-c5455d71cfda: use 0b65c63f-4d92-4e52-a492-c5455d71cfda, members
+preview: gateway application 'CCOF Gateway' (44d58842-1005-4adc-befd-4820cf6b9ad0): no change
+preview: resolver application 'CCOF Resolver API' (6f45123c-3a1b-4a6c-b8bb-ef1be1ba1a31): no change
+preview: admin application 'CCOF Admin' (7c6d58f3-0765-48ae-ad1a-6cd69a02f647): add SPA redirect https://ccofnv3-x3vzhl57xkgvw-admin.azurewebsites.net/api/console; add SPA redirect https://ccofnv3-x3vzhl57xkgvw-admin.azurewebsites.net/api/console-v3
+not done here: Microsoft Graph application permission for the sync identity (sync.mode delegated-snapshot needs none); a Privileged Role Administrator runs infra/quickstart/Grant-SyncGraphPermissions.ps1 if approved.
+stage 4 preview only: nothing changed. Rerun with -Apply.

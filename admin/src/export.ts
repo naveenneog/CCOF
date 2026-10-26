@@ -6,6 +6,7 @@
 // formula are prefixed with an apostrophe (OWASP "CSV Injection").
 
 import { ApiError } from "./auth.ts";
+import { neutraliseFormula } from "./text-rules.ts";
 import type { ApiResponse } from "./api.ts";
 import { buildChargebackQuery, prepareRateCard, readChargebackFilters, readChargebackSettings, shapeRows, tableRows } from "./chargeback.ts";
 import type { Configured } from "./chargeback.ts";
@@ -30,12 +31,16 @@ export interface ExportHelpers {
   capability(deps: V3Dependencies, cfg: Configured<unknown>, name: string, run: () => Promise<unknown>): Promise<Capability>;
   currentRateCard(deps: V3Dependencies): Promise<{ rateCard: Doc; source: string } | null>;
   groupMetadata(deps: V3Dependencies, projectId: string): Promise<GroupMetadata[]>;
+  // The request ID the handler logs; every error body carries it, as V3 errors do.
+  requestId: string;
 }
 
+const refusal = (status: number, body: Doc, requestId: string): ApiResponse =>
+  ({ status, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { ...body, requestId } });
+
 function csvCell(value: unknown): string {
-  let text = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return `"${text.replace(/"/g, '""')}"`;
+  const text = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+  return `"${neutraliseFormula(text).replace(/"/g, '""')}"`;
 }
 
 export function toCsv(columns: string[], rows: unknown[][]): string {
@@ -100,10 +105,10 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   const coverage = split.history ? await historyCoverage(deps.chargebackHistory as HistoryStore, split.history, deps.now()) : null;
   // ADR-0044 decision 9: a day whose documents may have expired is refused, never exported with what is left.
   if (coverage && coverage.expired.length) {
-    return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_expired", expiredDays: coverage.expired, expiresAt: coverage.expiresAt } };
+    return refusal(409, { error: "history_expired", expiredDays: coverage.expired, expiresAt: coverage.expiresAt }, helpers.requestId);
   }
   if (coverage && coverage.uncovered.length) {
-    return { status: 409, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "history_not_covered", uncoveredDays: coverage.uncovered } };
+    return refusal(409, { error: "history_not_covered", uncoveredDays: coverage.uncovered }, helpers.requestId);
   }
   const result = await helpers.capability(deps, cfg, "chargeback", async () => {
     const card = await helpers.currentRateCard(deps);
@@ -127,7 +132,7 @@ export async function handleExport(kind: string, params: URLSearchParams, deps: 
   });
   // Only an available or partial (truncated) capability carries data.
   if (!isObject(result.data)) {
-    return { status: 503, headers: { "cache-control": "no-store", "content-type": "application/json" }, jsonBody: { error: "export_unavailable", capability: result } };
+    return refusal(503, { error: "export_unavailable", capability: result }, helpers.requestId);
   }
   const data = result.data;
   let label: string | undefined;

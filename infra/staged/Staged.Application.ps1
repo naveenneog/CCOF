@@ -73,19 +73,22 @@ function Invoke-Stage5 {
     $auditLocked = if (Get-StgAuditArchive $Cfg) { Get-StgAuditLockedContainers "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Storage/storageAccounts/$(Get-StgAuditArchiveName $s1.names)" } else { @() }
     $audit = Get-StgAuditDeployment -Cfg $Cfg -Names $s1.names -ApimLocation $ctx.Apim.location -LockedContainers $auditLocked
     Write-Host (Format-StgAuditPreview -Deployment $audit -WorkspaceRetentionDays $Cfg.audit.workspaceRetentionDays)
+    # Existing API Management (ADR-0045): its gateway logs go to CCOF's workspace; its own logger is not rewritten.
+    $apimInput = Get-StgStage5ApimInput -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
-        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
+        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url; deployments = @(if ($_.deploymentInferenceGeo) { $_.deploymentInferenceGeo.Keys | Sort-Object }) } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
         resolver = $resolverSettings; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
         auditArchive = $(if ($audit) { $audit } else { @{} })
+        gatewayLogs = $apimInput.gatewayLogs; reuseMonitorLogger = $apimInput.reuseMonitorLogger
         chargebackHistory = $history ?? @{}
         logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -StageNumber 5 -Parameters $params
     if (-not $Apply) { return $null }
     $v = [ordered]@{ settings = [ordered]@{} }
     foreach ($k in @($s1.names.apps.Keys | Sort-Object)) {
@@ -110,6 +113,7 @@ function Invoke-Stage5 {
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
     $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
+    if ($apimInput.plan) { $v.gatewayLogs = Test-StgStage5ApimExisting -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim -Plan $apimInput.plan }
     if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
     $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
     $null = Write-StgEvidence 'stage5.verify.json' $v
@@ -126,14 +130,25 @@ function Invoke-Stage7 {
     $docs = New-QsSeedDocuments -P $ctx.P -ClassificationGroupDisplayNames $ctx.State.completed['1'].outputs.classificationGroupDisplayNames
     $groupDocs = @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups)
     Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
+    $groupDrift = @(Get-StgGroupSeedDrift -Endpoint $s1.cosmosEndpoint -DatabaseName $Cfg.cosmos.databaseName -Documents $groupDocs)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
         Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function; a group document edited in the admin console $(if ($Cfg.stage7.keepDifferingGroups -eq $true) { 'is kept (stage7.keepDifferingGroups)' } else { 'stops the stage' })"
+        if ($groupDrift.Count) {
+            $details = Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs
+            if ($Cfg.stage7.keepDifferingGroups -eq $true) { Write-Host "preview: group seed drift will be kept (stage7.keepDifferingGroups): $details" -ForegroundColor Yellow }
+            else { Write-Host "preview: group seed drift would be refused (seed_documents_differ): $details" -ForegroundColor Yellow }
+        }
         Write-Host "preview: delegated snapshot of $(@($entra.groups.Values).Count) groups, applied through the sync app's snapshotApply function"
         Write-Host "preview: write the client config.json for $(if ($Cfg.client.Contains('group')) { "group $($Cfg.client.group)" } else { 'client.projectId/classification' })"
         return $null
     }
     Assert-StgGroupsExist $groupDocs
+    if ($groupDrift.Count -and $Cfg.stage7.keepDifferingGroups -ne $true) {
+        $details = Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs
+        throw "seed_documents_differ: these group documents differ from the configuration and were left unchanged: $details. After the first seed the admin console owns a group: change it there (groups[] is not applied to an existing group). To keep the console's version and continue, set stage7.keepDifferingGroups to true and rerun Stage 7."
+    }
+    if ($groupDrift.Count) { Write-Host "kept $($groupDrift.Count) console-edited group(s): $(Format-StgGroupDrift -Kept $groupDrift -GroupDocuments $groupDocs)" -ForegroundColor Yellow }
     $code = Invoke-QsCode $ctx
     $result = @{ code = $code }
     if ($Cfg.stage1.includeAdmin) {

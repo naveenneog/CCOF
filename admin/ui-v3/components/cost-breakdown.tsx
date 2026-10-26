@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { int, usd } from "../lib/format.ts";
 import { href } from "../lib/router.ts";
+import { isGroupId } from "../lib/groups.ts";
 import { Button, CapabilityNotice, ChoiceInput, ErrorNote, Field, Loading } from "./ui.tsx";
 import { Donut, HBars, topWithOther } from "./charts.tsx";
 import type { DonutItem } from "./charts.tsx";
 import { UserIdentity } from "./user-identity.tsx";
 
-// Month-to-date cost breakdown for the Overview: all projects → one project's classifications
-// (STD, PRM, CYB, ...) → one classification, with the users and models split for the current level
+// Month-to-date cost breakdown for the Overview: all groups → one group (a legacy project also splits by
+// classification), with the users and models split for the current level
 // beside the main donut. Tags resolve to projects on the server. Unknown cost is never drawn as zero.
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
@@ -50,6 +51,8 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
   const userSplit = items(ok(users.data) ? users.data.data.rows : [], (r) => String(r.person));
   const modelSplit = items(ok(models.data) ? models.data.data.rows : [], (r) => String(r.model));
   const mainQ = project ? classes : projects;
+  // A group (its ID is a GUID) has one scope; only a legacy project splits by classification.
+  const group = isGroupId(project);
 
   const toggleTag = (t: string) => { setTags((cur) => cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t].sort()); setProject(""); setClassification(""); };
   const reset = () => { setTags([]); setProject(""); setClassification(""); };
@@ -57,14 +60,14 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
     if (!project) { setProject(key); setClassification(""); }
     else setClassification(classification === key ? "" : key);
   };
-  const scopeText = classification ? `${project} · ${classification}` : project || (tags.length ? `projects tagged ${tags.join(" + ")}` : "all projects");
+  const scopeText = classification ? `${project} · ${classification}` : project || (tags.length ? `legacy projects tagged ${tags.join(" + ")}` : "all groups");
   const chargebackLink = `/chargeback${qs({ project, tags: tagParam })}`;
 
   return (
     <section className="panel breakdown" data-help="project-costs" aria-labelledby="breakdown-title">
       <div className="panel-head">
         <div><h2 id="breakdown-title">Month-to-date cost breakdown</h2>
-          <p className="section-desc">Select a slice to drill from projects into classifications (STD, PRM, CYB). The users and models split follows the selection.</p></div>
+          <p className="section-desc">Select a group to show its cost alone; a legacy project also splits by classification. The users and models split follows the selection.</p></div>
         <a className="btn btn-quiet btn-small" href={href(chargebackLink)}>Open in chargeback</a>
       </div>
 
@@ -73,11 +76,11 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
           <span className="field-label" id="bd-tags">Tags</span>
           {knownTags.length ? <div className="tag-toggles" role="group" aria-labelledby="bd-tags">
             {knownTags.map((t) => <button key={t} type="button" className="tag-toggle" aria-pressed={tags.includes(t)} onClick={() => toggleTag(t)}>{t}</button>)}
-          </div> : <span className="hint">{registry.loading ? "Loading tags…" : "No tagged projects"}</span>}
+          </div> : <span className="hint">{registry.loading ? "Loading tags…" : "No tagged legacy projects"}</span>}
         </div>
-        <Field label="Project">{(id) => <ChoiceInput id={id} value={project} options={projectOptions} emptyLabel="All projects"
-          onChange={(v) => { setProject(v); setClassification(""); }} manualLabel="Enter a project ID…" />}</Field>
-        {project && <Field label="Classification">{(id) => (
+        <Field label="Group">{(id) => <ChoiceInput id={id} value={project} options={projectOptions} emptyLabel="All groups"
+          onChange={(v) => { setProject(v); setClassification(""); }} manualLabel="Enter a group ID…" />}</Field>
+        {project && !group && <Field label="Classification">{(id) => (
           <select id={id} className="input" value={classification} onChange={(e) => setClassification(e.target.value)}>
             <option value="">All classifications</option>
             {main.items.map((i) => <option key={i.key} value={i.key}>{i.key}</option>)}
@@ -90,7 +93,7 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
         <span className="breakdown-total" aria-live="polite">{total ? usd(total.knownListUsd) : totals.loading ? "…" : "—"}</span>
         <span className="hint">known list cost for {scopeText}{total?.listUsd === null && total?.knownListUsd !== null ? " · lower bound, some usage is unpriced" : ""}{total ? ` · ${int(total.requests)} requests` : ""}</span>
         {project && <ol className="crumbs" aria-label="Drill-down">
-          <li>{project ? <button type="button" onClick={() => { setProject(""); setClassification(""); }}>All projects</button> : <span aria-current="location">All projects</span>}</li>
+          <li>{project ? <button type="button" onClick={() => { setProject(""); setClassification(""); }}>All groups</button> : <span aria-current="location">All groups</span>}</li>
           {project && <li>{classification ? <button type="button" onClick={() => setClassification("")}>{project}</button> : <span aria-current="location">{project}</span>}</li>}
           {classification && <li><span aria-current="location">{classification}</span></li>}
         </ol>}
@@ -98,15 +101,15 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
 
       <div className="breakdown-grid">
         <div className="breakdown-main">
-          <h3>{project ? `${project} by classification` : "By project"}</h3>
+          <h3>{project ? (group ? project : `${project} by classification`) : "By group"}</h3>
           {!mainQ.data && !mainQ.error ? <Loading chart /> : mainQ.error ? <ErrorNote error={mainQ.error} retry={mainQ.reload} />
             : !ok(mainQ.data) ? <CapabilityNotice cap={mainQ.data} what="Cost breakdown" />
               : main.items.length === 0 ? <p className="empty-inline">No usage observed for {scopeText} this month. That is no data, not zero cost.</p>
-                : <Donut items={topWithOther(main.items)} format={money} label={project ? `${project} cost by classification` : "Cost by project"}
-                  centerValue={usd(main.items.reduce((s, i) => s + (i.value ?? 0), 0), 0)} centerLabel={project ? "project" : "all projects"}
+                : <Donut items={topWithOther(main.items)} format={money} label={project ? `${project} cost by classification` : "Cost by group"}
+                  centerValue={usd(main.items.reduce((s, i) => s + (i.value ?? 0), 0), 0)} centerLabel={project ? (group ? "group" : "project") : "all groups"}
                   onSelect={drill} selected={project ? classification : undefined} unknownCount={main.unknown} />}
-          {!project && main.items.length > 8 && <p className="hint">The top 7 projects are drawn; the rest are combined. Pick one from Project to drill in.</p>}
-          {project && <p className="hint"><a href={href(`/projects/${encodeURIComponent(project)}`)}>Open {project}</a> for budgets, limits and onboarding files.</p>}
+          {!project && main.items.length > 8 && <p className="hint">The top 7 groups are drawn; the rest are combined. Pick one from Group to see it alone.</p>}
+          {project && <p className="hint"><a href={href(group ? `/groups/${encodeURIComponent(project)}` : `/projects/${encodeURIComponent(project)}`)}>Open {project}</a> for {group ? "its budget, limits and models" : "budgets, limits and onboarding files"}.</p>}
         </div>
         <div>
           <h3>Users</h3>
@@ -129,7 +132,7 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
                   centerValue={String(modelSplit.items.length)} centerLabel={modelSplit.items.length === 1 ? "model" : "models"} unknownCount={modelSplit.unknown} />}
         </div>
       </div>
-      <p className="hint">Current month in UTC at list price, not an invoice. Projects with no telemetry are not shown; <a href={href("/projects")}>the registry lists every project</a>.</p>
+      <p className="hint">Current month in UTC at list price, not an invoice. Groups with no telemetry are not shown; <a href={href("/groups")}>Groups lists every onboarded group</a>.</p>
     </section>
   );
 }

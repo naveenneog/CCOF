@@ -1,5 +1,42 @@
 # Current work
 
+## Release 17 (2026-10-26)
+
+**Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an
+existing API Management; merge into main and publish (owner instruction 2026-10-26: "finish the pending tasks push to
+github ... user is running a powershell from mac, novice user deployment to existing APIM is what we need").
+
+- Branches merged on `release/17`: `test/novice3` (G-NOVICE3), `fix/bugbash-admin`, `fix/bugbash-ops`,
+  `fix/bugbash-gateway` (G-BUGBASH-GW), `fix/macos` (G-MACOS), `fix/macos-client` (G-MACOS-CLIENT),
+  `feature/existing-apim` (G-EXAPIM). Bug bash 2026-10-26 on a lab: 41 findings (developer 16, admin 11, operations 8, gateway 6) across developer, admin, operations and
+  gateway areas; all fixed except DEV-9 (cache-read tokens of streamed replies stay unpriced; documented as a lower
+  bound). Security review of the long-term audit: no findings.
+- Not verified on a real Mac: the deployer and developer setup ran on Linux PowerShell 7 (UNKNOWNS MAC-2).
+
+## Existing API Management
+
+**Active packet:** G-EXAPIM — a first-time reader deploys CCOF into an existing API Management instance (branch
+`feature/existing-apim`, [ADR-0045](adr/0045-existing-api-management.md)).
+
+- Acceptance: (1) Stage 0 checks the named instance (readable, identity, tier, API ID/path, backend names,
+  diagnostic-setting room, network route) and refuses with a next step before anything is created; the global policy
+  is printed, never changed; (2) Stage 5 sends GatewayLogs and GatewayLlmLogs to CCOF's workspace through
+  `ccof-gateway-logs` (or reuses an equivalent setting) and reads it back; (3) the owner's other APIs, global policy,
+  logger and own diagnostic settings are unchanged after Stages 0–8; (4) Stage 8 telemetry passes on an existing
+  instance; (5) a reader page "Use an existing API Management" linked from prerequisites and deploy.
+- Live, lab, 2026-10-26 ([evidence](evidence/2026-10-26-existing-apim/README.md)): a simulated customer instance
+  (Standard v2, its own API, global policy and diagnostic setting, created outside CCOF); the deployer on Linux
+  PowerShell (WSL, standing in for a Mac). Stages 0–8 passed: 52, 302, 229, 426, 44, 109, 697, 822, 278 s. Stage 5
+  what-if was `Create` only on the instance; Stage 8 telemetry came through `ccof-gateway-logs`; the ledger
+  attributed both requests to the group; `claude -p` through the instance answered. The owner's tier, identity,
+  networking, other API and its policy, global policy, logger and own diagnostic setting read back unchanged. A
+  private Foundry was refused live at Stage 0 (`apim_existing_no_private_route`).
+- Checks: new suite `tests/Test-StagedApimExisting.ps1` (57 checks), mutations 30/30 caught; Stage 0 keeps a hash of the global policy in `stage0.json`, not its text; `npm test`, CI
+  typecheck, build, admin tests, `node .ironclad/gate.mjs --stage packet`.
+- Open: manual removal from the instance; a private Foundry behind a VNet-integrated instance not run live; create
+  mode still adds an unused API Management subnet.
+- State: complete; merged on `release/17` (owner approval 2026-10-26).
+
 ## Group-centric onboarding
 
 **Active packet:** G-AUDIT — long-term audit: gateway log archive and chargeback history (feature branch
@@ -36,6 +73,67 @@
   `node .ironclad/gate.mjs --stage packet` PASS; mutation checks on every new guard.
 - Follow-up (non-blocking): a per-person history deletion that stops part-way is not yet marked as in progress, and
   exports do not yet show that a person's history was deleted.
+
+### G-MACOS-CLIENT — Claude Code setup on macOS and Linux (branch `fix/macos-client`, 2026-10-26)
+
+- Acceptance: given a client configuration with `signInMethod: azure-cli`, `pwsh ./scripts/client/Set-ClaudeCodeGateway.ps1
+  -Confirmed` on macOS or Linux writes `~/.claude/settings.json` (gateway `env` as on Windows) and an `sh` helper
+  `~/.claude/ccof-token` (700) pinned to the `az` found at setup, with its own `AZURE_CONFIG_DIR` (700) and the verbs
+  `token`/`silent-token`/`login`/`status`/`logout`, printing only the token; `/usage` and the status line run through
+  `pwsh -NoProfile -File`, pre-approved by the skill; another sign-in method stops with `unsupported_sign_in_method`
+  before writing; Windows output unchanged ([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md), UNKNOWNS
+  MAC-4..MAC-9).
+- Tests: `tests/Test-ClaudeCodePosix.ps1` (6 cases on Windows with the platform simulated, 12 on Linux pwsh: `sh` helper
+  against a mock `az`, file modes, a quote and space in the home path under `/bin/sh`, entrypoints end to end with
+  restore); Test-CrossPlatform (Claude Code entrypoints carry no `unsupported_platform` guard); client Node tests for the
+  `sh` helper and messages. 18 mutations caught (2 only catchable off Windows).
+- Live, Linux pwsh 7.6.9 in WSL, Azure CLI 2.91.0, Claude Code 2.1.272, a lab deployment (sign-in replaced by a copy
+  of a signed-in Linux Azure CLI profile in the helper's own folder, deleted afterwards): `silent-token` before sign-in
+  exit 4 with nothing on stdout; after: a JWT, and the same token from `apiKeyHelper` under `/bin/sh`; gateway
+  `POST /v1/messages` `429` "tokens-per-minute limit" (the test account's known guard block, UNKNOWNS DEV-3; a bad token
+  gets `401`), so the helper's token was accepted; `claude -p` "API Error: Request rejected (429) … tokens-per-minute
+  limit"; the `/usage` wrapper and the status line command read `GET /anthropic/ccof/me/usage`
+  (`CCOF $0.01/$100.00 (0%)`); the generated skill command and grant ran under Claude Code's Bash tool and its lines
+  reached the model (a copy without the grant: "permission check failed"); the verifier: token verified, `429`.
+- Not verified on a Mac: the browser `az login` from the helper, Homebrew paths, the Azure CLI cask's broker sign-in,
+  APFS modes (UNKNOWNS MAC-8). Not supported: `msal` and Claude Desktop on macOS (ROADMAP G-MACOS-MSAL, G-MACOS-DESKTOP).
+- Checks: Windows `npm ci` (root, admin), CI typecheck, build, admin 203/0, `npm test` Node 1305 passed with one failure
+  that predates this branch (`get-started and operate pages stay short (15 KB)`: `03-deploy.md` is 15,580 bytes in a
+  Windows CRLF checkout, 15,220 with LF; fails identically on `release/17` c7cdbe0), every PowerShell suite green;
+  Linux pwsh `npm test` exit 0 (Node 1306/0, 6 skipped, every PowerShell suite). Council: Coder PASS, QA PASS,
+  Security PASS-WITH-NOTES (`pwsh` is found on `PATH` at run time, as `powershell` is on Windows; pinning it is
+  optional hardening), Architect and UX PASS (ADR-0048; one platform table, refusals name their remedy).
+
+### G-MACOS — the deployer on macOS (branch `fix/macos`, 2026-10-26)
+
+- Acceptance: a deployer runs Stages 0-8 from PowerShell 7 on macOS by following the pages; the docs give the macOS
+  install route; what macOS developers can and cannot use is stated, and the Windows-only setup refuses cleanly.
+- Proof on Linux pwsh 7.6 (WSL Ubuntu 24.04, the closest available to macOS; no Mac was used): full `npm test` green
+  (Node 1305 passed); Stage 0 and the previews of Stages 1-8 against the lab with a copy of its Windows-made state
+  folder (same what-if counts as Windows); resolver, sync, reconciler and admin packages built, zipped and their entry
+  points loaded under Node 22.
+- Found and fixed: config path guard for cmd.exe applied off Windows; `Remove-Item` without `-Force` left dot-files
+  on macOS/Linux; deployer page passed `.\dist\...` to node; client setup failed half-way on macOS (now
+  `unsupported_platform`); test harness tied to Windows (bicep.exe, python, az.cmd fake, CRLF hashes, skip count).
+- Bug bash DEV-1/DEV-2 (developer area): `/usage` skill pre-approves its own command (Bash or PowerShell tool), probed
+  with Claude Code 2.1.272 on Windows and Linux; docs separate interactive `/usage`, `claude -p`, and a refused budget
+  (status line, wrapper). DEV-3 (guard `429` outlives a raised budget) recorded as UNKNOWNS DEV-3, not analysed.
+- Not verified on a real Mac: everything above (UNKNOWNS MAC-2); macOS developer setup (MAC-1, G-MACOS-CLIENT).
+- Checks (Windows): `npm test` 1305/0 plus every PowerShell suite, CI typecheck, build, 41 Bicep templates, admin
+  183/0, `node .ironclad/gate.mjs --stage packet`.
+
+### G-BUGBASH-GW — gateway and developer bug-bash fixes (branch `fix/bugbash-gateway`, 2026-10-26)
+
+- Scope: findings DEV-3, DEV-5..DEV-16 and GW-1..GW-6 of the 2026-10-26 bug bash (DEV-1, DEV-2, DEV-4 are on
+  `fix/macos`). Decisions: [ADR-0047](adr/0047-budget-pacing-counter.md) (budget pacing on its own counter keyed by
+  budget and month), [ADR-0048](adr/0048-request-checks-and-backend-refusals.md) (path, content-type and size checks
+  before forwarding; backend 4xx other than 429 priced at zero). Unknowns BB-G1..BB-G7.
+- Commits: 902a94a (DEV-3, DEV-6, DEV-7), f5cee9e (GW-2, GW-3, GW-4), 43b441d (GW-1, GW-5, DEV-8, DEV-10, DEV-15),
+  d972cdc (GW-6), 75ee895 (DEV-9, DEV-13, DEV-14), d99e5d9 (DEV-5, DEV-11, DEV-12, DEV-16).
+- Proof so far: offline only (tests, compiled policy C#, mutation checks on every new guard). Not applied to a lab:
+  live proof of the pacing counter after a budget raise (BB-G1) is the coordinator's decision.
+- Not fixed: DEV-9's unpriced cache tokens of streamed replies (needs a non-buffering SSE usage reader, COST-MODEL
+  U-17); documented as a lower bound.
 **Previous packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)

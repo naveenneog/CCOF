@@ -73,7 +73,8 @@ function Read-StgConfig {
     $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
     foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
     foreach ($p in @(Get-StgStage7Problems $c)) { $problems.Add($p) }
-    if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
+    # The state folder next to the config reaches az as @<file> arguments; only az.cmd re-parses them.
+    if (($script:StgOnWindows ?? $IsWindows) -and $full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
     $entraNames = @(
@@ -117,6 +118,11 @@ function Read-StgConfig {
     if (-not $c.stage1.approveNewPublicApimBootstrap -and -not ($apimExisting -and $apimExisting.name -and $apimExisting.subscriptionId -and $apimExisting.resourceGroup)) {
         $problems.Add('no API Management: set stage1.approveNewPublicApimBootstrap to true (Stage 1 creates a new one) or name an existing one in apim.existing { name, subscriptionId, resourceGroup }; Stage 1 is create-only, so decide before it runs')
     }
+    # ADR-0045: with both, Stage 1 would create a new instance and silently ignore the existing one.
+    if ($c.stage1.approveNewPublicApimBootstrap -and $apimExisting) {
+        $problems.Add('both a new API Management (stage1.approveNewPublicApimBootstrap true) and apim.existing are set: keep one. To use the existing instance set approveNewPublicApimBootstrap to false; for a new one set apim.existing to null')
+    }
+    if ($apimExisting -and $apimExisting.subscriptionId -and "$($apimExisting.subscriptionId)" -notmatch $script:Guid) { $problems.Add('apim.existing.subscriptionId must be a GUID (the subscription that holds the API Management instance)') }
     if ($problems.Count) { throw "invalid staged configuration:`n  - $($problems -join "`n  - ")" }
     $c.__path = $full
     return $c
@@ -405,9 +411,40 @@ function Write-StgParameters {
     return $file
 }
 
+function Test-StgBicepPreviewNoChange {
+    param($Cfg, [ValidateSet(2, 5)] [int]$StageNumber)
+    $state = Read-StgState $Cfg
+    $record = $state.stages["$StageNumber"]
+    if (-not $record) { return $false }
+    $currentHash = Get-StgStageInput $Cfg $StageNumber
+    if ($record.configHash -cne $currentHash) {
+        $changed = @($state.stages.Keys | ForEach-Object { [int]$_ } | Sort-Object | Where-Object {
+            $saved = $state.stages["$_"].configHash
+            $saved -and $saved -cne (Get-StgStageInput $Cfg $_)
+        })
+        foreach ($number in $changed) {
+            $saved = $state.stages["$number"].configHash
+            $current = Get-StgStageInput $Cfg $number
+            Write-Host "preview: Stage $number input hash changed (recorded=$saved; current=$current); review what-if, then apply Stage $number before dependent stages."
+        }
+        return $false
+    }
+
+    $currentDependencies = Get-StgDependencyHashes $state $StageNumber
+    $dependenciesMatch = $null -ne $record.dependencyHashes -and
+        @($currentDependencies.Keys | Where-Object { $record.dependencyHashes[$_] -cne $currentDependencies[$_] }).Count -eq 0
+    if ($dependenciesMatch) {
+        Write-Host "preview: Stage $StageNumber is verify-only; input and prerequisite hashes match (sha256 $currentHash), no change will be planned."
+        return $true
+    }
+    Write-Host "preview: Stage $StageNumber input hash matches (sha256 $currentHash), but verified prerequisite outputs changed; review what-if, then apply Stage $StageNumber before dependent stages."
+    return $false
+}
+
 function Invoke-StgBicep {
     <# what-if (preview) or create (apply) of one stage template; returns the outputs as a hashtable. #>
-    param($Cfg, [string]$Template, [string]$Name, [hashtable]$Parameters, [switch]$Apply)
+    param($Cfg, [string]$Template, [string]$Name, [hashtable]$Parameters, [switch]$Apply, [int]$StageNumber = 0)
+    if (-not $Apply -and $StageNumber -in 2, 5 -and (Test-StgBicepPreviewNoChange -Cfg $Cfg -StageNumber $StageNumber)) { return $null }
     $file = Write-StgParameters $Cfg $Name $Parameters
     $common = @('--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--name', $Name, '--template-file', (Join-Path $script:StagedDir $Template), '--parameters', "@$file")
     if (-not $Apply) {
@@ -458,7 +495,7 @@ function Send-StgGraph {
     try {
         $Body | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $f -Encoding utf8NoBOM
         Invoke-QsAz @('rest', '--method', $Method, '--url', "https://graph.microsoft.com/v1.0/$Path", '--headers', 'Content-Type=application/json', '--body', "@$f")
-    } finally { Remove-Item -LiteralPath $f -ErrorAction SilentlyContinue }
+    } finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
 }
 
 # The quickstart parameter object (infra/quickstart/main.bicepparam shape) assembled from the config

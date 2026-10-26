@@ -100,7 +100,7 @@ export function LimitsEditor({ policy, onChange, classification, readOnly, restr
           ))}
         </div>
       )}
-      <p className="hint">Empty TPM or quota means no limit at that scope. Fable and Mythos can be admitted only for the CYB classification, or for a group whose restricted families are approved.</p>
+      <p className="hint">Empty TPM or quota means no limit at that scope. {classification === "group" ? "Fable and Mythos can be admitted only when restricted families are approved for this group." : "Fable and Mythos can be admitted only for the CYB classification."}</p>
     </div>
   );
 }

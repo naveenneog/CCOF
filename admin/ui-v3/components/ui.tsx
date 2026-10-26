@@ -112,7 +112,7 @@ export function Skeleton({ rows = 4, height }: { rows?: number; height?: "chart"
   );
 }
 export function Loading({ label = "Loading", rows, chart }: { label?: string; rows?: number; chart?: boolean }) {
-  return <div role="status" aria-live="polite"><span className="visually-hidden">{label}…</span><Skeleton rows={rows} height={chart ? "chart" : undefined} /></div>;
+  return <div role="status" aria-live="polite" aria-busy="true"><span className="visually-hidden">{label}…</span><Skeleton rows={rows} height={chart ? "chart" : undefined} /></div>;
 }
 
 export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {

@@ -267,7 +267,7 @@ Family policy IDs:
 
 | Internal reason | HTTP | Anthropic error type | Message |
 |---|---:|---|---|
-| `model_family_not_allowed` | 403 | `permission_error` | `The requested model family is not available to your project classification. Ask your platform team for an approved model.` |
+| `model_family_not_allowed` | 403 | `permission_error` | `Model <model> is not available in group <ID>. Allowed models: <list>. Choose one of them (in Claude Code: /model), or ask your platform team to admit the model.` (bug bash GW-1) |
 | `family_person_rate_exceeded` | 429 | `rate_limit_error` | `Your token rate limit for this model family is exceeded. Retry after the indicated interval.` |
 | `family_group_rate_exceeded` | 429 | `rate_limit_error` | `Your group's token rate limit for this model family is exceeded. Retry after the indicated interval.` |
 | `family_person_quota_exceeded` | 403 | `permission_error` | `Your token quota for this model family is used up for this quota period.` |

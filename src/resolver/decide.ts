@@ -127,6 +127,8 @@ export interface ResolveSuccess {
   personBudgetScope: string;
   // null in token-limits-only mode: no budget document was read.
   personCeilingTokensPerMinute: number | null;
+  // ADR-0047: "<period>_<budgetCcu>", the gateway's pacing counter key; absent without a valid period and budget.
+  personCeilingKey?: string;
   degraded: boolean;
   degradedReasons: string[];
   // WP-TEL's ccof.resolver.v1 vocabulary: null when no budget was evaluated
@@ -295,6 +297,16 @@ function observe<T>(promise: Promise<T>): { result?: PromiseSettledResult<T> } {
   return box;
 }
 
+// ADR-0047: the pacing counter restarts when the budget or the month changes, not when the ceiling moves with spend.
+const CEILING_PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+const CEILING_BUDGET = /^\d{1,20}(\.\d{1,12})?$/;
+function ceilingKeyOf(budget: BudgetStateRecord): { personCeilingKey?: string } {
+  const { period, budgetCcu } = budget as BudgetStateRecord & { period?: unknown; budgetCcu?: unknown };
+  if (typeof period !== "string" || !CEILING_PERIOD.test(period)) return {};
+  if (typeof budgetCcu !== "string" || !CEILING_BUDGET.test(budgetCcu)) return {};
+  return { personCeilingKey: `${period}_${budgetCcu}` };
+}
+
 async function resolveBudgetState(
   resolved: Resolved,
   membership: ValidMembership,
@@ -358,6 +370,7 @@ async function resolveBudgetState(
     aggregateState,
     // The last-known ceiling, also while degraded (ADR-0008 decision 3).
     personCeilingTokensPerMinute: budget.realtimeCeilingTokensPerMinute,
+    ...ceilingKeyOf(budget),
     degraded: degradedReasons.length > 0,
     degradedReasons,
     budgetState: staleReasons.length > 0 ? "degraded" : "fresh",

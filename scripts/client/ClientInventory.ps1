@@ -4,8 +4,9 @@
 function Get-CcofClientInventory {
     $result = @{ CliVersion = $null; CliPath = $null; VSCodeVersion = $null
         DesktopVersion = $null; DesktopBundles = @() }
+    # Off Windows the CLI is an executable without an extension (ADR-0048).
     $claude = @(Get-Command claude -All -ErrorAction SilentlyContinue |
-        Where-Object { $_.Source -match '\.(exe|cmd|ps1)$' }) | Select-Object -First 1
+        Where-Object { (-not $IsWindows -and $_.CommandType -eq 'Application') -or $_.Source -match '\.(exe|cmd|ps1)$' }) | Select-Object -First 1
     if ($claude) {
         $banner = & $claude.Source --version 2>$null
         if ($LASTEXITCODE -eq 0 -and "$banner" -match '(\d+\.\d+\.\d+)') {

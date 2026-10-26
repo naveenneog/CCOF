@@ -7,7 +7,7 @@ Two sign-in methods are available, set by `signInMethod` in the client configura
 | `signInMethod` | Token source | Needs |
 | --- | --- | --- |
 | `msal` (default) | `ccof-token` Node helper: WAM or browser sign-in, MSAL encrypted cache | Node.js 22 |
-| `azure-cli` | Generated `ccof-token.cmd`: one interactive `az login` in its own Azure CLI profile, then `az account get-access-token` | Azure CLI on PATH; the deployment set `entra.allowAzureCliClient` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)) |
+| `azure-cli` | Generated `ccof-token.cmd` (Windows) or `ccof-token` (`sh`, macOS and Linux): one interactive `az login` in its own Azure CLI profile, then `az account get-access-token` | Azure CLI on PATH; the deployment set `entra.allowAzureCliClient` ([section 3a](#3a-azure-cli-sign-in-signinmethod-azure-cli)) |
 
 An ordinary Azure CLI login on its own is not accepted: the gateway app must preauthorize the Azure CLI and APIM
 must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. The
@@ -15,8 +15,31 @@ must list it as an allowed client. Both are set by `entra.allowAzureCliClient`. 
 remains available for testing.
 The standalone `client/` Node package contains
 `ccof-token`. Its dependencies are separate from the gateway's server dependencies.
-The PowerShell workstation scripts target Windows; the token helper also supports
-macOS and Linux secure storage.
+The PowerShell workstation scripts target Windows; the Claude Code setup also runs on macOS and Linux
+([macOS and Linux](#macos-and-linux)).
+
+## macOS and Linux
+
+The Claude Code setup runs in PowerShell 7.4 or later (`pwsh`) on macOS and Linux with `signInMethod: azure-cli`
+([ADR-0048](adr/0048-claude-code-setup-on-macos-and-linux.md)). Steps: [developer setup](get-started/05-developer-setup.md).
+
+| Part | Windows | macOS and Linux |
+| --- | --- | --- |
+| `Set-ClaudeCodeGateway.ps1`, `Restore-ClaudeCodeGateway.ps1`, `Test-ClientGatewayAccess.ps1` | Supported | Supported with `signInMethod: azure-cli`. Any other method stops with `unsupported_sign_in_method` and changes nothing |
+| Token helper Claude Code runs (`apiKeyHelper`) | `%USERPROFILE%\.claude\ccof-token.cmd` | `~/.claude/ccof-token`, an `sh` script (mode 700); Claude Code runs `apiKeyHelper` through `/bin/sh` there ([Claude Code settings reference](https://code.claude.com/docs/en/settings-reference#apikeyhelper)) |
+| Configuration folder (setup's default) | `%LOCALAPPDATA%\ClaudeGateway` | `$XDG_CONFIG_HOME/ClaudeGateway` if set, else `~/.config/ClaudeGateway` |
+| The helper's own Azure CLI profile (`AZURE_CONFIG_DIR`) | `az` in the configuration folder | `az` in the configuration folder (mode 700) |
+| `/usage` skill and status line | `powershell -File` (Git Bash) or `& '<wrapper>'` | `pwsh -NoProfile -File "<home>/.claude/ccof-usage.ps1"` through the Bash tool, pre-approved by the skill |
+| Claude Desktop setup, `Test-InstalledClients.ps1` | Supported | **Not supported**: stops with `{"event":"unsupported_platform",…}`, exit code 2, changes nothing |
+| `ccof-token` Node helper, `signInMethod: msal` | Supported | Not set up by the scripts. The code handles macOS (Keychain cache, default browser) and Linux (libsecret) and its offline tests pass on Linux; no sign-in on a Mac has been tested |
+
+Files setup writes on macOS and Linux are created readable by the owner only (600; the helper and new folders
+700). Setup pins the configuration path into Claude Code's settings (`CCOF_CONFIG_FILE`), so the Node helper's own
+per-platform default ([section 2](#2-prepare-the-helper-and-configuration)) is not used. Proved on Linux pwsh with Claude
+Code 2.1.272; not yet run on a Mac ([UNKNOWNS MAC-8](UNKNOWNS.md)).
+
+The **deployment** (Stages 0-8, the admin's commands) runs in PowerShell 7 on macOS:
+[prerequisites](get-started/02-prerequisites.md#install-the-tools).
 
 ## 1. Check what is installed
 
@@ -88,7 +111,7 @@ depend on the terminal environment.
 | `models.default`, `opus`, `sonnet`, `haiku` | **Deployment names**, not guessed model IDs; every name must occur in `available` |
 | `models.available` | Explicit model picker list; the gateway still enforces actual authorization |
 | `models.capabilities` | Optional documented capability string per pinned alias |
-| `desktop.profileId`, `profileName` | Stable profile GUID and non-personal display label |
+| `desktop.profileId`, `profileName` | Stable profile GUID and non-personal display label. Stage 7 writes `Claude gateway (<group display name>)`; the quick-start writes `Claude gateway (quick-start)` |
 | `project` | Optional C-1 selector: `{id, selectorHeader}`; explicit `id: null` clears that header |
 
 The pilot example uses a five-minute helper TTL and a six-minute minimum remaining
@@ -465,20 +488,24 @@ status codes, the gateway's `x-ccof-request-id`, error types and messages, the
 model and the reply. Any other status fails with a remedy from the table under
 "Troubleshooting". Exit codes: 0 pass, 1 fail, 2 refused.
 
-### CCOFPILOT02 and multiple-project profiles (C-1/C-8)
+### Multiple groups and projects
 
-Omit selection for a person with one active project. For multiple memberships,
-add this object to the **same shared** `%LOCALAPPDATA%\ClaudeGateway\config.json`:
+A person in one onboarded group needs no selector. A person in several groups is served by the group where they
+have spent the most this month, then the lower priority number
+([users and groups](operate/users-and-groups.md#a-person-in-several-groups)); `400 project_selection_required` comes
+only when that leaves a tie, or when a membership is a legacy project. To choose a group, add this object to the
+**same shared** `%LOCALAPPDATA%\ClaudeGateway\config.json`, with the group's Object ID:
 
 ```json
-"project": { "id": "CCOFPILOT02", "selectorHeader": "x-ccof-project" }
+"project": { "id": "<group Object ID>", "selectorHeader": "x-ccof-project" }
 ```
 
-The header name must match the gateway configuration; `x-ccof-project` is the PoC
-value, not a code default. Project IDs match `^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$`.
+For a legacy project (not an onboarded group) `id` is the project ID, for example `CCOFPILOT02`. The header name must
+match the gateway configuration; `x-ccof-project` is the PoC value, not a code default. IDs match
+`^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$`; a group Object ID is compared in lower case.
 From the checkout, run `pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -Confirmed` for a global CLI/VS Code profile:
-`ANTHROPIC_CUSTOM_HEADERS` becomes `x-ccof-project: CCOFPILOT02`. For a separate
-Desktop profile, set `desktop.profileName` to `CCOFPILOT02` and `desktop.profileId`
+`ANTHROPIC_CUSTOM_HEADERS` becomes `x-ccof-project: <group Object ID>`. For a separate
+Desktop profile, set `desktop.profileName` to a name of your choice and `desktop.profileId`
 to a fresh GUID, then run `pwsh -NoProfile -File .\scripts\client\Set-ClaudeDesktopGateway.ps1 -Confirmed` from the checkout.
 Choose that profile in Connection before sending the test message; existing profiles
 remain saved. Its `inferenceCustomHeaders` carries the selector; SSO stays shared.
@@ -524,9 +551,9 @@ cache directory after reviewing backups. Do not remove files still used by a cli
 | Symptom | Meaning / remedy |
 |---|---|
 | `401` | Missing, expired or wrong-audience token. Run `ccof-token login`; check tenant, public client and gateway API scope. An ID token, Azure CLI/ARM token or Cognitive Services token is not the gateway access token. |
-| `403` | Not entitled, model not allowed, or a token quota exhausted. Check pilot-group membership and selected deployment with the administrator; do not change the token audience or bypass the gateway. |
+| `403` | Not a member of the group, a model the group does not admit (the message lists the admitted ones), a budget reached, or a token quota used up; the message says which. Claude Code 2.1.272 and earlier show it as `Failed to authenticate. API Error: 403 …` after several minutes of retries; read the text after `403`. Do not change the token audience or bypass the gateway. |
 | `429` | Per-person/group rate limit. Honor `Retry-After`; do not retry in a tight loop. |
-| `400 project_selection_required` | Multiple active memberships need a selector. Apply the CCOFPILOT02 profile above; the gateway still checks membership. |
+| `400 project_selection_required` | Several memberships and no single preferred group (equal spend and priority, or a legacy project). Set `project.id` as in [Multiple groups and projects](#multiple-groups-and-projects); the gateway still checks membership. |
 | `404` | Wrong API base or deployment name. Use `/anthropic`, not `/anthropic/v1`; use the recorded deployment names. |
 | Helper nonzero / `sign_in_required` | Silent-only by design. Sign in explicitly once; headless consumers never prompt. |
 | Secure cache unavailable/corrupt | Unlock the OS credential store, then retry. No plaintext or alternate-identity fallback. Preserve evidence without copying cache contents; restore/reset only this helper's cache if necessary. |

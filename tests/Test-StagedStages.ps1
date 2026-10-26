@@ -8,10 +8,12 @@
 param([string]$BicepPath)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$scratch = Join-Path $root '.env.public-test-scratch\staged-stages'
+New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 if (-not $BicepPath) {
     $command = Get-Command bicep -ErrorAction SilentlyContinue
     if ($command) { $BicepPath = $command.Source }
-    elseif (Test-Path (Join-Path $HOME '.azure\bin\bicep.exe')) { $BicepPath = Join-Path $HOME '.azure\bin\bicep.exe' }
+    elseif ($installed = @('bicep.exe', 'bicep' | ForEach-Object { Join-Path $HOME '.azure' 'bin' $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]) { $BicepPath = $installed }
     else { throw 'Offline Bicep CLI required. Supply -BicepPath; this test does not install tools or call Azure.' }
 }
 $passed = 0
@@ -67,10 +69,15 @@ Assert-Contract $caught 'Negative control: an injected role assignment was not r
 
 # Stage 5 (configuration) must never grant: no Authorization resource anywhere, including the reused modules.
 Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -Match 'Authorization|sqlRole')) 'Stage 5 contains a grant.'
-# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): its only one is
-# the audit archive's, with a storage destination (ADR-0043; tests/Test-AuditArchive.ps1).
+# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): the audit
+# archive's has a storage destination (ADR-0043; tests/Test-AuditArchive.ps1); the workspace one, ccof-gateway-logs, is
+# deployed only when gatewayLogs is given, which the driver does only for an existing API Management (ADR-0045;
+# tests/Test-StagedApimExisting.ps1).
 $stage5Diag = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')
-Assert-Contract ($stage5Diag.Count -eq 1 -and $stage5Diag[0].name -ceq 'ccof-gateway-archive' -and -not $stage5Diag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
+$archiveDiag = @($stage5Diag | Where-Object { $_.name -ceq 'ccof-gateway-archive' })
+$gatewayLogsModule = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object { $_.type -eq 'Microsoft.Resources/deployments' -and "$($_.name)" -match 'stage5-gateway-logs' })
+Assert-Contract ($stage5Diag.Count -eq 2 -and $archiveDiag.Count -eq 1 -and -not $archiveDiag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
+Assert-Contract ($gatewayLogsModule.Count -eq 1 -and "$($gatewayLogsModule[0].condition)" -match "empty\(parameters\('gatewayLogs'\)\)") 'Stage 5 deploys ccof-gateway-logs only when gatewayLogs is given (existing API Management).'
 
 # Stage 3 and Stage 4 keep the quickstart's Cosmos data contract.
 $quick = Build-Arm 'infra\quickstart\modules\cosmos-data.bicep'
@@ -316,10 +323,12 @@ Assert-Contract (-not $exampleCfg.acceptance.allowed[0].Contains('project') -and
 # Stage 7 client file for a group: client.group selects the entry; the selector value is the group's object ID.
 $realClientFiles = ${function:New-QsClientFiles}
 try {
-    Set-Item function:New-QsClientFiles { param($Ctx, $ProjectId, $FamilyPolicy, $BackendId, $Aliases) @{ projectId = $ProjectId; backendId = $BackendId; families = @($FamilyPolicy.families.Keys | Sort-Object); aliases = $Aliases } }
+    Set-Item function:New-QsClientFiles { param($Ctx, $ProjectId, $FamilyPolicy, $BackendId, $Aliases, $ProfileName) @{ projectId = $ProjectId; backendId = $BackendId; families = @($FamilyPolicy.families.Keys | Sort-Object); aliases = $Aliases; profileName = $ProfileName } }
     $clientCfg = @{ client = $exampleCfg.client; groups = $exampleCfg.groups }
     $made = Invoke-StgClient -Ctx @{} -Cfg $clientCfg -EntraGroups $entraGroups
     Assert-Contract ($made.projectId -ceq '0000000a-0000-4000-8000-0000000000aa' -and $made.backendId -ceq $groupEntry.backendId -and ($made.families -join ',') -ceq 'haiku,sonnet' -and $made.aliases.haiku -ceq 'claude-haiku-4-5') 'client.group must build the client file from that group''s ID, backend, families and aliases.'
+    # Bug bash DEV-16: a staged deployment's Desktop profile is named after the group, not "(quick-start)".
+    Assert-Contract ($made.profileName -ceq "Claude gateway ($($groupEntry.groupDisplayName))") "The staged Desktop profile name must name the group: $($made.profileName)"
     foreach ($case in 'unknown-group', 'extra-key', 'unapproved-fable') {
         $badCfg = $clientCfg | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable -Depth 100
         switch ($case) {
@@ -695,7 +704,73 @@ Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inboun
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
+# With lost local state, Stage 1 may verify its ARM deployment before Stage 5 has been recorded.
+# Stage 5 owns the complete app-settings set, so its settings cannot be used as a Stage 1 mismatch.
+$stage5OnlySettings = @(
+    @{ name = 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING' },
+    @{ name = 'RESOLVER_USAGE_GROUP_TOTALS' })
+Assert-StgStage1AppSettings -Settings $stage5OnlySettings -AppKey 'resolver' -Stage5Record $null -Stage7Record $null
+$script:passed++
+$settingsMismatch = $false
+try {
+    Assert-StgStage1AppSettings -Settings $stage5OnlySettings -AppKey 'resolver' `
+        -Stage5Record @{ outputs = @{ verify = @{ settings = @{ resolver = @('EXPECTED_SETTING') } } } } -Stage7Record $null
+} catch { $settingsMismatch = $_.Exception.Message -match 'application setting names differ' }
+Assert-Contract $settingsMismatch 'When Stage 5 is recorded, Stage 1 must still refuse an app-settings mismatch.'
 # Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
 Assert-Contract ($resText -match "if \(\`$expectedSettings -cnotcontains 'AzureWebJobs\.snapshotApply\.Disabled'\)") 'The Stage 1 recheck must add the snapshot switch only when the Stage 5 record lacks it.'
 
+# Stage 2/5 previews may bypass noisy ARM what-if only when the config and verified dependencies
+# match the saved hashes. A changed input must still run what-if and identify the exact hash change.
+$previewCfg = @{
+    tenantId = '00000000-0000-4000-8000-000000000001'; subscriptionId = '00000000-0000-4000-8000-000000000002'; resourceGroup = 'ops-test'
+    stage1 = @{ includeAdmin = $true }; cosmos = @{ databaseName = 'ccof'; capacityMode = 'serverless' }
+    apim = @{}; backends = @(); resolver = @{}; sync = @{}; reconciler = @{ budgetGuard = @{ warnPercent = 80 } }
+    budgetState = @{}; syncTimerEnabled = $true; gateway = @{}; workbook = @{}; rateCard = @{}; admin = @{}; groups = @()
+}
+$previewState = @{ stages = @{} }
+foreach ($dependency in 1, 3, 4) {
+    $previewState.stages["$dependency"] = @{ outputs = @{ stable = "stage-$dependency" } }
+}
+foreach ($stage in 2, 5) {
+    $dependencies = [ordered]@{}
+    foreach ($dependency in Get-StgStageDependencies $stage) { $dependencies["$dependency"] = Get-StgOutputHash $previewState.stages["$dependency"].outputs }
+    $previewState.stages["$stage"] = @{ configHash = Get-StgStageInput $previewCfg $stage; dependencyHashes = $dependencies; outputs = @{} }
+}
+$savedStateDir = $script:StateDir
+$savedReadState = ${function:Read-StgState}
+$savedQsAzForPreview = ${function:Invoke-QsAz}
+$script:StateDir = Join-Path $scratch 'stage-preview'
+[void][IO.Directory]::CreateDirectory($script:StateDir)
+$script:previewWhatIfCalls = 0
+try {
+    Set-Item function:Read-StgState { $script:previewState }
+    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) $script:previewWhatIfCalls++; @{ changes = @() } }
+    foreach ($stage in 2, 5) {
+        $script:previewWhatIfCalls = 0
+        $name = if ($stage -eq 2) { 'stage2-schema' } else { 'stage5-config' }
+        $null = Invoke-StgBicep -Cfg $previewCfg -Template 'unused.bicep' -Name $name -StageNumber $stage -Parameters @{}
+        Assert-Contract ($script:previewWhatIfCalls -eq 0) "An unchanged Stage $stage preview must not invoke ARM what-if."
+    }
+    $changedCfg = $previewCfg.Clone()
+    $changedCfg.reconciler = @{ budgetGuard = @{ warnPercent = 79 } }
+    $script:previewWhatIfCalls = 0
+    $preview = Invoke-StgBicep -Cfg $changedCfg -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{} *>&1 | Out-String
+    $recordedHash = $previewState.stages['5'].configHash
+    $currentHash = Get-StgStageInput $changedCfg 5
+    Assert-Contract ($script:previewWhatIfCalls -eq 1 -and $preview.Contains($recordedHash) -and $preview.Contains($currentHash) -and $preview.Contains('apply Stage 5')) 'A changed Stage 5 input must show recorded/current hashes, run what-if and name the next apply.'
+    $changedStage2Cfg = $previewCfg.Clone()
+    $changedStage2Cfg.cosmos = @{ databaseName = 'ccof-new'; capacityMode = 'serverless' }
+    $script:previewWhatIfCalls = 0
+    $preview = Invoke-StgBicep -Cfg $changedStage2Cfg -Template 'unused.bicep' -Name 'stage2-schema' -StageNumber 2 -Parameters @{} *>&1 | Out-String
+    $recordedHash = $previewState.stages['2'].configHash
+    $currentHash = Get-StgStageInput $changedStage2Cfg 2
+    Assert-Contract ($script:previewWhatIfCalls -eq 1 -and $preview.Contains($recordedHash) -and $preview.Contains($currentHash) -and $preview.Contains('apply Stage 2')) 'A changed Stage 2 input must show recorded/current hashes, run what-if and name the next apply.'
+} finally {
+    ${function:Read-StgState} = $savedReadState
+    ${function:Invoke-QsAz} = $savedQsAzForPreview
+    $script:StateDir = $savedStateDir
+}
+
+Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 "Staged stages: $passed checks passed (4 stage boundaries, negative control, Cosmos contract, network-last order and layout migration, network verify mode, driver and configuration). No Azure calls."

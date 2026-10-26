@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
+import { focusFirstInvalidSoon } from "../lib/focus.ts";
 import { api, errorMessage, useQuery } from "../lib/api.ts";
 import { href, navigate } from "../lib/router.ts";
-import { clearErrors, emptyGroupForm, formProblems, formToBody } from "../lib/groups.ts";
-import type { GroupForm } from "../lib/groups.ts";
-import { Button, ChoiceInput, Empty, ErrorNote, Field, PageHeader, Section, useToast } from "../components/ui.tsx";
+import { clearErrors, deploymentProblems, emptyGroupForm, formProblems, formToBody } from "../lib/groups.ts";
+import type { BackendOption, GroupForm } from "../lib/groups.ts";
+import { Button, Empty, ErrorNote, Field, PageHeader, Section, useToast } from "../components/ui.tsx";
 import { AccessFields, AssistantFields, BudgetFields, CacheFields, ModelFields } from "../components/group-fields.tsx";
 import { useSession } from "../components/shell.tsx";
 
@@ -65,7 +66,7 @@ function GroupSearch({ form, set, errors, onMembers, chosenName, setChosenName }
 export function GroupOnboard() {
   const session = useSession();
   const toast = useToast();
-  const inventory = useQuery("/api/v2/inventory");
+  const backendList = useQuery<{ state: string; backends: BackendOption[] }>("/api/groups/backends");
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<GroupForm>(emptyGroupForm);
   const [members, setMembers] = useState<{ groupId: string; count: number | null }>({ groupId: "", count: null });
@@ -74,19 +75,25 @@ export function GroupOnboard() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   if (!session.canWrite) return <div className="page"><PageHeader title="Onboard a group" /><Empty title="Read-only access">Onboarding groups needs the CCOF.Projects.Write role.</Empty></div>;
   const set = (patch: Partial<GroupForm>) => { setForm((f) => ({ ...f, ...patch })); setErrors((e) => clearErrors(e, patch)); };
-  const backends: string[] = inventory.data?.data?.backends?.map((b: any) => b.backendId) ?? [];
+  // undefined while loading; null when the deployment's list is not configured (the server then refuses onboarding).
+  const options: BackendOption[] | null | undefined = backendList.data ? (backendList.data.state === "configured" ? backendList.data.backends : null) : undefined;
+  const backends = (options ?? []).map((b) => b.id);
+  const deployed = options?.find((b) => b.id === form.backendId.trim())?.deployments;
+  const problems = () => ({ ...formProblems(form), ...deploymentProblems(form, options) });
   const next = () => {
-    const all = formProblems(form);
+    const all = problems();
     const here = Object.fromEntries(Object.entries(all).filter(([k]) => STEP_FIELDS[step].includes(k)));
     setErrors(here);
-    if (!Object.keys(here).length) setStep(step + 1);
+    if (Object.keys(here).length) focusFirstInvalidSoon(() => pageRef.current);
+    else setStep(step + 1);
   };
   const body = formToBody(form);
   const create = async () => {
-    const all = formProblems(form);
-    if (Object.keys(all).length) { setErrors(all); return; }
+    const all = problems();
+    if (Object.keys(all).length) { setErrors(all); focusFirstInvalidSoon(() => pageRef.current); return; }
     setBusy(true); setSaveError(null);
     try {
       await api("/api/groups", { method: "POST", body });
@@ -95,7 +102,7 @@ export function GroupOnboard() {
     } catch (e) { setSaveError(e); } finally { setBusy(false); }
   };
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <PageHeader title="Onboard a group" subtitle="Four steps. Nothing is saved until you onboard the group on the last step." />
       <ol className="stepper" aria-label="Steps">
         {STEPS.map((s, i) => (
@@ -109,8 +116,11 @@ export function GroupOnboard() {
           <GroupSearch form={form} set={set} errors={errors} onMembers={(groupId, count) => setMembers({ groupId, count })} chosenName={chosenName} setChosenName={setChosenName} />
           <div className="form-grid">
             <Field label="Display name" hint="Shown in the console and chargeback." error={errors.displayName}>{(id, d) => <input id={id} aria-describedby={d} aria-invalid={Boolean(errors.displayName)} className="input" value={form.displayName} maxLength={256} onChange={(e) => set({ displayName: e.target.value })} />}</Field>
-            <Field label="Foundry backend" hint={backends.length ? "From the APIM inventory." : "Type the APIM backend ID."} error={errors.backendId}>{(id, d) => (
-              <ChoiceInput id={id} describedBy={d} invalid={Boolean(errors.backendId)} value={form.backendId} options={backends} onChange={(backendId) => set({ backendId })} emptyLabel="Select a backend" />
+            <Field label="Foundry backend" hint="The backends this deployment configured (ADMIN_BACKENDS)." error={errors.backendId}>{(id, d) => (
+              <select id={id} className="input" aria-describedby={d} aria-invalid={Boolean(errors.backendId) || undefined} value={form.backendId} onChange={(e) => set({ backendId: e.target.value })}>
+                <option value="">{options === undefined ? "Loading backends…" : "Select a backend"}</option>
+                {backends.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
             )}</Field>
           </div>
         </Section>
@@ -120,6 +130,7 @@ export function GroupOnboard() {
       {step === 2 && (
         <div className="stack">
           <AccessFields form={form} set={set} errors={errors} />
+          {deployed && <p className="hint" role="note">Models deployed on {form.backendId}: {deployed.join(", ") || "none"}. Admit only these.</p>}
           <ModelFields form={form} set={set} errors={errors} />
           <CacheFields form={form} set={set} errors={errors} autoApply />
           <AssistantFields form={form} set={set} />
@@ -145,7 +156,7 @@ export function GroupOnboard() {
         {step < 3 && <Button variant="primary" onClick={next}>Continue</Button>}
         {step === 3 && <Button variant="primary" onClick={create} busy={busy}>Onboard group</Button>}
         <a className="btn btn-quiet" href={href("/groups")}>Cancel</a>
-        {Object.keys(errors).length > 0 && <span className="field-error" role="alert">{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
+        {Object.keys(errors).length > 0 && <span className="field-error" role="alert" tabIndex={-1} data-error-summary>{Object.keys(errors).length} field{Object.keys(errors).length === 1 ? " needs" : "s need"} attention</span>}
       </div>
       {saveError && (saveError as any).problems?.length ? <p className="hint">{errorMessage(saveError)}</p> : null}
     </div>

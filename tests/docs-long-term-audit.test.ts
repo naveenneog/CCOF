@@ -43,9 +43,50 @@ test("the deploy page quotes the Stage 5 audit line and the Stage 2 history cont
   const deploy = read("docs/get-started/03-deploy.md");
   assert.match(section(deploy, "## Stage 5 "), /`audit archive: /);
   assert.match(section(deploy, "## Stage 5 "), /`audit archive: off/);
-  assert.match(read("infra/staged/Staged.Audit.ps1"), /"audit archive: off; \$ws"/);
+  assert.match(read("infra/staged/Staged.Audit.ps1"), /audit archive: off; an existing ccof-gateway-archive diagnostic setting keeps exporting/);
   assert.match(read("infra/staged/Staged.Audit.ps1"), /return "audit archive: \$\(\$Deployment\.accountName\) in /);
   assert.match(section(deploy, "## Stage 2 "), /`chargebackDaily`/);
+});
+
+test("operator recovery docs match Stage 0/1 and Stage 7 behavior", () => {
+  const stage0 = read("infra/staged/Staged.Resources.ps1");
+  assert.match(stage0, /no Stage 1 state[\s\S]*succeeded stage1-services deployment matches this config[\s\S]*recovered state/);
+  const troubleshooting = read("docs/operate/troubleshooting.md");
+  assert.match(troubleshooting, /stage7_busy/);
+  const stage7Guide = section(read("docs/STAGED-DEPLOYMENT-GUIDE.md"), "### Stage 7: code and initial data");
+  assert.match(stage7Guide, /When the operator can reach[\s\S]*private Cosmos endpoint/);
+  assert.match(stage7Guide, /warns and\s+continues/);
+  assert.doesNotMatch(stage7Guide, /Built-in Data Reader/);
+  assert.doesNotMatch(troubleshooting, /Stage 7: `npm ci` EPERM in `admin\/node_modules`/);
+  const stage7 = section(read("docs/get-started/03-deploy.md"), "## Stage 7 ");
+  assert.match(stage7, /When the operator can reach Cosmos DB/);
+  assert.match(stage7, /the seed step still checks for drift after publishing/);
+  assert.doesNotMatch(stage7, /Built-in Data Reader/);
+});
+
+test("archive-off guidance names the surviving export and exact manual deletion command", () => {
+  const preview = read("infra/staged/Staged.Audit.ps1");
+  const page = read("docs/operate/audit-archive.md");
+  const deletion = "az monitor diagnostic-settings delete --name ccof-gateway-archive --resource <API Management resource ID>";
+  assert.match(preview, /existing ccof-gateway-archive diagnostic setting keeps exporting/);
+  assert.ok(preview.includes(deletion), "Stage 5 preview prints the exact removal command");
+  assert.ok(page.includes(deletion), "archive runbook gives the exact removal command");
+  assert.match(page, /does \*\*not\*\* delete the archive storage account/);
+});
+
+test("chargeback-history turn-off previews and applies stages sequentially for config hashes", () => {
+  const off = section(read("docs/operate/chargeback-history.md"), "## Turn off").toLowerCase();
+  const steps = [
+    "preview and apply stage 2",
+    "then preview and apply stage 3",
+    "then preview and apply stage 5",
+  ];
+  let previous = -1;
+  for (const step of steps) {
+    const current = off.indexOf(step);
+    assert.ok(current > previous, `turn-off guidance includes ordered step: ${step}`);
+    previous = current;
+  }
 });
 
 test("the archive page quotes the Stage 5 lines as printed and gives Windows-safe checks, including the delivery metrics", () => {
@@ -194,4 +235,20 @@ test("the audit reader pages use plain terms, not unknown-register IDs", () => {
   const pages = ["docs/operate/audit-archive.md", "docs/operate/chargeback-history.md", "docs/operate/chargeback-and-tags.md", "docs/get-started/configuration-reference-3.md"];
   const found = pages.flatMap((p) => [...read(p).matchAll(/\bAUD-[AC]\d+\b|configuration hash/g)].map((m) => `${p}: ${m[0]}`));
   assert.deepEqual(found, []);
+});
+
+// Novice run 3 (2026-10-26): Azure CLI 2.91 returns `az functionapp show` in the ARM shape (properties.defaultHostName),
+// so `--query defaultHostName` printed nothing and the history download failed with "Invalid URI: The hostname could
+// not be parsed". Reader pages read the host name in a form that works for both shapes.
+test("reader pages read a Function App host name in both Azure CLI output shapes", () => {
+  const dirs = ["docs/get-started", "docs/operate"];
+  const bad: string[] = [];
+  for (const dir of dirs) {
+    for (const file of readdirSync(path.join(root, dir)).filter((f) => f.endsWith(".md"))) {
+      for (const line of read(`${dir}/${file}`).split("\n")) {
+        if (/functionapp show/.test(line) && /defaultHostName/.test(line) && !(/properties\.defaultHostName/.test(line) && /\|\|/.test(line))) bad.push(`${dir}/${file}: ${line.trim()}`);
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
 });

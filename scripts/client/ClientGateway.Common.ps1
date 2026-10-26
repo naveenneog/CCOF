@@ -1,6 +1,16 @@
 #Requires -Version 7.0
 $script:ClientRepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
+function Assert-ClientWindows {
+    <# Claude Desktop setup and the inventory use cmd.exe helpers and Windows folders; elsewhere they stop before reading or writing anything. #>
+    param([Parameter(Mandatory)][string]$Script, [bool]$OnWindows = $IsWindows)
+    if ($OnWindows) { return }
+    [ordered]@{ event = 'unsupported_platform'; platform = $(if ($IsMacOS) { 'macOS' } elseif ($IsLinux) { 'Linux' } else { 'other' }); script = $Script
+        reason = 'Claude Desktop setup and the installed-client check support Windows only; nothing was changed. Claude Code setup runs on macOS and Linux (signInMethod azure-cli).'
+        docs = 'docs/CLIENTS.md#macos-and-linux' } | ConvertTo-Json -Compress
+    exit 2
+}
+
 function Read-ClientJson {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @{} }
@@ -10,12 +20,27 @@ function Read-ClientJson {
     return $value
 }
 
+function New-ClientDirectory {
+    <# Off Windows, every folder setup creates (parents included) is 700 from the start (ADR-0048); existing folders keep their mode. #>
+    param([Parameter(Mandatory)][string]$Path)
+    if ($IsWindows) { [void][IO.Directory]::CreateDirectory($Path); return }
+    $missing = [Collections.Generic.Stack[string]]::new()
+    for ($dir = [IO.Path]::GetFullPath($Path); $dir -and -not [IO.Directory]::Exists($dir); $dir = [IO.Path]::GetDirectoryName($dir)) { $missing.Push($dir) }
+    foreach ($dir in $missing) { [void][IO.Directory]::CreateDirectory($dir, [IO.UnixFileMode]448) }
+}
+
 function Write-ClientText {
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text)
-    [void][IO.Directory]::CreateDirectory((Split-Path $Path -Parent))
+    <# -UnixMode (off Windows only): the mode the file is created with; default 600 (decimal 384), the helper 700 (448). #>
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text, [int]$UnixMode = 384)
+    New-ClientDirectory (Split-Path $Path -Parent)
     $pending = "$Path.pending-$([guid]::NewGuid().ToString('N'))"
     try {
-        [IO.File]::WriteAllText($pending, $Text, [Text.UTF8Encoding]::new($false))
+        if ($IsWindows) { [IO.File]::WriteAllText($pending, $Text, [Text.UTF8Encoding]::new($false)) }
+        else {
+            $options = [IO.FileStreamOptions]@{ Mode = 'CreateNew'; Access = 'Write'; UnixCreateMode = [IO.UnixFileMode]$UnixMode }
+            $writer = [IO.StreamWriter]::new($pending, [Text.UTF8Encoding]::new($false), $options)
+            try { $writer.Write($Text) } finally { $writer.Dispose() }
+        }
         [IO.File]::Move($pending, $Path, $true)
     } finally {
         if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force }
@@ -28,7 +53,13 @@ function Write-ClientJson {
 }
 
 function Get-ClientDefaultConfigPath {
+    <# Off Windows: $XDG_CONFIG_HOME/ClaudeGateway (when absolute), else ~/.config/ClaudeGateway (ADR-0048, XDG Base Directory). #>
+    param([bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME)
     if ($env:CCOF_CONFIG_FILE) { return $env:CCOF_CONFIG_FILE }
+    if (-not $OnWindows) {
+        $base = if ($env:XDG_CONFIG_HOME -and [IO.Path]::IsPathFullyQualified($env:XDG_CONFIG_HOME)) { $env:XDG_CONFIG_HOME } else { Join-Path $HomePath '.config' }
+        return Join-Path $base 'ClaudeGateway/config.json'
+    }
     if (-not $env:LOCALAPPDATA) { throw 'Set CCOF_CONFIG_FILE to an absolute client configuration file path.' }
     return Join-Path $env:LOCALAPPDATA 'ClaudeGateway\config.json'
 }
@@ -60,7 +91,7 @@ function New-ClientSnapshot {
     param([string]$Kind, [string[]]$Paths, [string]$BackupRoot)
     $id = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N')
     $directory = Join-Path $BackupRoot $id
-    [void][IO.Directory]::CreateDirectory($directory)
+    New-ClientDirectory $directory
     $records = @(); $index = 0; $createdDirectories = [Collections.Generic.List[string]]::new()
     foreach ($path in $Paths) {
         $exists = Test-Path -LiteralPath $path -PathType Leaf
@@ -140,19 +171,101 @@ function Get-ClientAzureCliProfilePath {
 }
 
 function Resolve-ClientAzureCliPath {
-    <# Full path of the installed az.cmd, pinned into the helper so cmd.exe never searches the folder a helper is started from. #>
-    $az = Get-Command az.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $az) { throw 'azure_cli_missing: signInMethod azure-cli needs the Azure CLI. Install it (https://aka.ms/installazurecliwindows), open a new terminal, and run the setup again.' }
+    <#
+    Full path of the installed Azure CLI, pinned into the helper so it never runs an az found in the folder it is
+    started from or earlier on PATH: az.cmd on Windows (cmd.exe), az elsewhere (ADR-0048).
+    #>
+    param([bool]$OnWindows = $IsWindows)
+    if ($OnWindows) {
+        $az = Get-Command az.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $az) { throw 'azure_cli_missing: signInMethod azure-cli needs the Azure CLI. Install it (https://aka.ms/installazurecliwindows), open a new terminal, and run the setup again.' }
+        return $az.Source
+    }
+    $az = Get-Command az -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $az) { throw 'azure_cli_missing: signInMethod azure-cli needs the Azure CLI. Install it (macOS: brew install azure-cli; Linux: https://learn.microsoft.com/cli/azure/install-azure-cli), open a new terminal, and run the setup again.' }
     return $az.Source
 }
 
 function Resolve-ClientTokenHelperPath {
-    <# The generated ccof-token.cmd: the Claude Code one, else the Desktop one (both share one Azure CLI profile); $null when neither exists. #>
-    param([string]$UserProfile = $env:USERPROFILE, [string]$LocalAppData = $env:LOCALAPPDATA)
-    foreach ($candidate in @((Join-Path $UserProfile '.claude\ccof-token.cmd'), (Join-Path $LocalAppData 'Claude-3p\ccof-token.cmd'))) {
+    <#
+    The generated helper: on Windows ccof-token.cmd of Claude Code, else of Claude Desktop (both share one Azure CLI
+    profile); elsewhere ~/.claude/ccof-token (ADR-0048). $null when there is none.
+    #>
+    param([string]$UserProfile = $env:USERPROFILE, [string]$LocalAppData = $env:LOCALAPPDATA, [bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME)
+    $candidates = if ($OnWindows) { @((Join-Path $UserProfile '.claude\ccof-token.cmd'), (Join-Path $LocalAppData 'Claude-3p\ccof-token.cmd')) }
+                  else { @(Join-Path $HomePath '.claude/ccof-token') }
+    foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
     }
     return $null
+}
+
+function ConvertTo-ClientShQuoted {
+    <# One sh word: the value in single quotes, each ' written as '\'' (POSIX Shell Command Language 2.2.2). #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
+    return "'" + $Value.Replace("'", "'\''") + "'"
+}
+
+function New-ClientAzureCliPosixTokenShim {
+    <#
+    .SYNOPSIS
+        ~/.claude/ccof-token on macOS and Linux (ADR-0048): the sh counterpart of New-ClientAzureCliTokenShim, with
+        the same verbs (token, silent-token, login, status, logout) and exit codes (0 token, 2 usage, 3 Azure CLI
+        missing, 4 not signed in). Claude Code runs apiKeyHelper through /bin/sh there. Only token and silent-token
+        write to stdout, and only the token; Azure CLI output goes to stderr. Every value is one single-quoted word;
+        the tenant and scope are validated as on Windows, and no value may hold a line break.
+    #>
+    param([Parameter(Mandatory)][string]$TenantId, [Parameter(Mandatory)][string]$Scope, [Parameter(Mandatory)][string]$AzureConfigDir,
+        [Parameter(Mandatory)][string]$AzureCliPath)
+    if ($TenantId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { throw 'The tenant must be a directory (tenant) ID GUID.' }
+    if ($Scope -cnotmatch '^[A-Za-z0-9:/._-]+$') { throw 'The scope may contain only letters, digits and : / . _ - for the Azure CLI helper.' }
+    if (-not [IO.Path]::IsPathFullyQualified($AzureConfigDir) -or $AzureConfigDir -match "[\r\n\0]") { throw 'The Azure CLI profile folder must be absolute and contain no line breaks.' }
+    if (-not [IO.Path]::IsPathFullyQualified($AzureCliPath) -or $AzureCliPath -match "[\r\n\0]") { throw 'The Azure CLI path must be absolute and contain no line breaks.' }
+    $lines = @(
+        '#!/bin/sh'
+        '# CCOF gateway token helper (signInMethod azure-cli, ADR-0041/ADR-0048), generated by Set-ClaudeCodeGateway.ps1.'
+        '# Usage: ccof-token [token|silent-token|login|status|logout]. Only the token is written to stdout.'
+        "AZ=$(ConvertTo-ClientShQuoted $AzureCliPath)"
+        "TENANT='$TenantId'"
+        "SCOPE='$Scope'"
+        "AZURE_CONFIG_DIR=$(ConvertTo-ClientShQuoted $AzureConfigDir)"
+        'AZURE_CORE_LOGIN_EXPERIENCE_V2=off'
+        'export AZURE_CONFIG_DIR AZURE_CORE_LOGIN_EXPERIENCE_V2'
+        'gettoken() { "$AZ" account get-access-token --tenant "$TENANT" --scope "$SCOPE" --query accessToken --output tsv --only-show-errors; }'
+        'signin() { "$AZ" login --tenant "$TENANT" --scope "$SCOPE" --allow-no-subscriptions --output none --only-show-errors </dev/null 1>&2; }'
+        'if [ ! -x "$AZ" ]; then'
+        '  echo "The Azure CLI is not installed at $AZ. Install it (macOS: brew install azure-cli; Linux: https://learn.microsoft.com/cli/azure/install-azure-cli) and run the client setup again." >&2'
+        '  exit 3'
+        'fi'
+        'case "${1:-token}" in'
+        '  token)'
+        '    gettoken 2>/dev/null && exit 0'
+        '    echo "Not signed in to the Claude gateway. Opening the Microsoft Entra sign-in." >&2'
+        '    signin || exit 4'
+        '    gettoken && exit 0'
+        '    echo "No gateway token after sign-in. Run: ''$0'' status, and contact the platform team." >&2'
+        '    exit 4 ;;'
+        '  silent-token)'
+        '    gettoken && exit 0'
+        '    echo "Not signed in to the Claude gateway. Run: ''$0'' login" >&2'
+        '    exit 4 ;;'
+        '  login)'
+        '    signin || exit 4'
+        '    echo "Signed in. Claude Code now uses this sign-in." >&2'
+        '    exit 0 ;;'
+        '  status)'
+        '    "$AZ" account show --query user.name --output tsv --only-show-errors && exit 0'
+        '    echo "Not signed in. Run: ''$0'' login" >&2'
+        '    exit 4 ;;'
+        '  logout)'
+        '    "$AZ" logout --only-show-errors 1>&2'
+        '    exit 0 ;;'
+        '  *)'
+        '    echo "Usage: ccof-token [token|silent-token|login|status|logout]" >&2'
+        '    exit 2 ;;'
+        'esac'
+    )
+    return ($lines -join "`n") + "`n"
 }
 
 function New-ClientAzureCliTokenShim {
@@ -210,7 +323,7 @@ function New-ClientAzureCliTokenShim {
         '>&2 echo Signed in. Claude Code and Claude Desktop now use this sign-in.'
         'exit /b 0'
         ':status'
-        'call "%AZ%" account show --query user.name --output tsv --only-show-errors'
+        'call "%AZ%" account show --query user.name --output tsv --only-show-errors 2>nul'
         'if errorlevel 1 goto notsignedin'
         'exit /b 0'
         ':notsignedin'

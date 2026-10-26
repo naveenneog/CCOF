@@ -92,6 +92,7 @@ export function errorMessage(err: unknown): string {
       project_store_not_configured: "The project registry is not configured on this admin app (COSMOS_ENDPOINT, COSMOS_DATABASE).",
       invalid_project: "The registry refused the project.",
       project_exists: "A project with this ID already exists.",
+      group_not_found: "No onboarded group has this ID. Check the link, or find the group on the Groups page.",
       bearer_token_required: "Your session expired. Sign in again.",
       invalid_access_token: "Your session expired. Sign in again.",
       admin_auth_not_configured: "Sign-in is not configured on the admin app.",

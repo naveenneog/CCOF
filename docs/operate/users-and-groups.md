@@ -11,6 +11,9 @@ Entra is the source of truth for who has access. CCOF never adds, removes or cha
 
 Granting the permissions: [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync).
 Managed identity tokens are cached for up to 24 hours, so a new grant can take that long to apply.
+An admin console role (CCOF Admin app role) change applies at the person's next access token, up to 60-90 minutes
+([access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens)); to apply it at once, see
+[ADMIN-API sign-in](../ADMIN-API.md#sign-in).
 
 Only **direct user members** of an onboarded group are counted; nested groups, devices and service principals are not.
 
@@ -47,9 +50,9 @@ $settingsFile = Join-Path $private 'snapshot-settings.json'
 $snapshot = Join-Path $private ('.env.sync-snapshot-' + [guid]::NewGuid().ToString('N') + '.json')
 npm run build
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-node .\dist\sync\cli.js snapshot --credential azure-cli --groups $groupsFile --settings $settingsFile --out $snapshot
+node ./dist/sync/cli.js snapshot --credential azure-cli --groups $groupsFile --settings $settingsFile --out $snapshot
 if ($LASTEXITCODE -ne 0) { throw 'Snapshot failed; nothing applied' }
-pwsh -File .\infra\sync\Invoke-SnapshotApplyThroughFunction.ps1 `
+pwsh -File ./infra/sync/Invoke-SnapshotApplyThroughFunction.ps1 `
     -Subscription $deployment.subscriptionId -ResourceGroup $deployment.resourceGroup `
     -FunctionApp '<sync-app-name>' -AppInsights '<sync-app-insights-name>' `
     -SnapshotPath $snapshot -ExpectedSnapshotSha256 '<SHA-256 printed by the snapshot command>'
@@ -67,6 +70,8 @@ Transport limits and trust boundary: [SYNC.md](../SYNC.md#apply-through-the-sync
 Each onboarded group gives a separate budget. A request without a group selector uses the group where the person
 has **spent the most this month** (then the lower priority number). If that group's budget is used up, the request
 is refused; it does not move to another group by itself. A developer chooses another group by sending its Object ID
-in the `x-ccof-project` header, for example through a separate client profile ([CLIENTS.md](../CLIENTS.md)).
+in the `x-ccof-project` header (upper or lower case), for example through a separate client profile
+([CLIENTS.md, multiple groups](../CLIENTS.md#multiple-groups-and-projects)). A name or chargeback ID is refused with a message
+asking for the Object ID.
 
 ![A group's page: budget, models, and Retire group](../evidence/2026-10-24-demo/console-07-group-detail.png)

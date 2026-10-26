@@ -34,12 +34,35 @@ The [demo evidence](../evidence/2026-10-24-demo/README.md) records which directo
 - [ ] **Entra administrator** for the three app registrations (Application Administrator, or owner of existing apps).
 - [ ] **Privileged Role Administrator**, only if Microsoft Graph application permissions are approved (automatic
       group sync, group search, people's names).
+- [ ] **API Management owner**, only when CCOF uses an existing instance: approves what CCOF adds and grants Stage 5 access ([existing API Management](existing-api-management.md#2-what-the-instances-owner-approves)).
 - [ ] **Network team**, unless a lab creates its own network (`network.mode: create`).
 - [ ] **Cost approval** for API Management Standard v2, Function Apps, Cosmos DB, Log Analytics and model usage.
 
-## Tools (Azure Cloud Shell has them all)
+## Install the tools
 
-- [ ] PowerShell 7.2 or later, Azure CLI with Bicep, Node.js 22 and npm, Git.
+- [ ] PowerShell 7.2 or later, Azure CLI with Bicep, Node.js 22 or later and npm, Git.
+
+Azure Cloud Shell (PowerShell) has them all and is already signed in. On your own computer, install them once:
+
+**macOS** (Terminal, with [Homebrew](https://brew.sh)):
+
+```bash
+brew update
+brew install powershell azure-cli node@22 git
+echo 'export PATH="$(brew --prefix node@22)/bin:$PATH"' >> ~/.zprofile
+```
+
+Then open a **new** Terminal window and start PowerShell with `pwsh`. Every command in these pages runs in
+`pwsh`. Check: `pwsh --version`, `az version`, `node --version` (v22 or later) and `git --version`. Bicep needs no
+separate install: the Azure CLI installs it on the first deployment ([Install Bicep tools](https://learn.microsoft.com/azure/azure-resource-manager/bicep/install));
+`az bicep install` installs it now. Sources:
+[Azure CLI on macOS](https://learn.microsoft.com/cli/azure/install-azure-cli-macos) (`brew install azure-cli`, macOS 13 or later);
+[PowerShell on macOS](https://learn.microsoft.com/powershell/scripting/install/install-powershell-on-macos)
+(Microsoft's preferred route is the signed `.pkg` from that page; `brew install powershell` is the Homebrew
+community formula, [alternate methods](https://learn.microsoft.com/powershell/scripting/install/alternate-install-methods#install-on-macos-using-homebrew));
+[node@22](https://formulae.brew.sh/formula/node@22) is keg-only, hence the `PATH` line, and Homebrew marks it
+deprecated from 2026-10-30 (it still installs, with a warning, until 2027-10-30); the Node.js 22 LTS installer from
+[nodejs.org](https://nodejs.org/) works too.
 
 ## Microsoft Foundry models
 
@@ -62,7 +85,11 @@ in `stage1.foundry.deployments` and one in `backends[].deploymentInferenceGeo`:
 
 `us` (DataZone) usage is priced at 1.1 times `global` in [config/rate-card.json](../../config/rate-card.json).
 
-The `version` comes from the model list; Stage 0 refuses a model, version or `sku` the region does not offer:
+The `version` comes from the model list; Stage 0 refuses a model, version or `sku` the region does not offer, and a
+`capacity` above the free quota (deployments on the same quota line add up; a rerun after Stage 1 counts only capacity
+added to this lab's existing deployments). A deleted Foundry account keeps its quota until it is purged; Stage 0 names
+the soft-deleted accounts in the region when it refuses (`az cognitiveservices account list-deleted`, then
+`az cognitiveservices account purge`):
 
 ```powershell
 az cognitiveservices model list -l eastus2 -o json | ConvertFrom-Json |
@@ -107,6 +134,7 @@ Stage 4 creates them, or merges its settings into existing ones (`entra.existing
 
 | Decision | Options | Where it is set |
 | --- | --- | --- |
+| API Management | **New** (Stage 1 creates Standard v2, about USD 23 a day) or **existing** (CCOF adds one API to your instance; its owner approves) | `stage1.approveNewPublicApimBootstrap` or `apim.existing`; [use an existing API Management](existing-api-management.md) |
 | How membership is read | **Automatic** (Graph permission granted, sync timer on) or **snapshot** (an operator applies changes) | `sync`, `syncTimerEnabled`; [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync) |
 | Dollar budgets enforced | `budget-state` (enforced) or `token-limits-only` | `resolver.budgetEnforcement` |
 | Budget guard | Example: warn at 80%, rate allowance 5% per projection window; not a strict cap | `reconciler.budgetGuard`; [budgets](../operate/budgets-and-guard.md) |

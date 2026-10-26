@@ -110,3 +110,15 @@ test("a malformed response fails the read: no tables, no PrimaryResult, a missin
     assert.throws(() => parseLedgerResponse(body, 10), (e: unknown) => e instanceof LedgerReadError && e.reason === "ledger_response_invalid", label);
   }
 });
+
+// ADR-0048, bug bash GW-6: a backend 4xx other than 429 is a refusal before inference. Its row prices at exactly zero
+// in every category, so a typo does not make the month partial; a backend 429 keeps unknown tokens.
+test("a backend refusal (4xx other than 429) has zero known tokens in every category; a backend 429 does not", () => {
+  const refused = /backendRefused = gatewayOutcomeKnown and not\(noBackendCall\)\s+and BackendResponseCode between \(400 \.\. 499\) and BackendResponseCode != 429/;
+  assert.match(LEDGER_KQL, refused);
+  for (const column of ["inputTokens", "outputTokens", "cacheWrite5mTokens", "cacheWrite1hTokens", "cacheReadTokens"]) {
+    assert.match(LEDGER_KQL, new RegExp(`\\b${column} = iff\\(backendRefused, long\\(0\\),`), `${column} is not zero for a backend refusal`);
+  }
+  assert.match(LEDGER_KQL, /inputSource = iff\(backendRefused, "backend-refused",/);
+  assert.ok(LEDGER_KQL.indexOf("backendRefused =") < LEDGER_KQL.indexOf("inputTokens = iff"), "defined before use");
+});

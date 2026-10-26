@@ -10,6 +10,7 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 | 2 | [Prerequisites](get-started/02-prerequisites.md) | Platform, Entra and network owners |
 | 3 | [Deploy, Stages 0–8](get-started/03-deploy.md) | Platform engineer |
 | 3a | [Configuration reference](get-started/configuration.md): every key of the staged configuration file, create-new and reuse-existing JSON, a complete sample | Platform engineer |
+| 3b | [Use an existing API Management](get-started/existing-api-management.md): requirements, the owner's approvals, what CCOF adds | Platform engineer, API Management owner |
 | 4 | [Onboard an Entra group](get-started/04-onboard-a-group.md) | Admin console editor |
 | 5 | [Developer setup](get-started/05-developer-setup.md) | Developers |
 

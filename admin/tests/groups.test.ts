@@ -12,6 +12,8 @@ import { createCosmosProjectStore } from "../src/cosmos-store.ts";
 import { createAuthenticator, readAuthConfig } from "../src/auth.ts";
 import { createMemoryChangeLog } from "../src/change-log.ts";
 import type { Doc } from "../src/validation.ts";
+import { readBackendSettings } from "../src/backend-settings.ts";
+import type { BackendSettings } from "../src/backend-settings.ts";
 import { readProjectDocument } from "../../src/sync/projects.ts";
 
 const TENANT = "00000000-0000-4000-8000-000000000001";
@@ -84,13 +86,16 @@ class FakeDirectory implements GroupDirectory {
   }
 }
 
-function setup(directory: GroupDirectory | null = new FakeDirectory()) {
+const BACKENDS: BackendSettings = readBackendSettings({ ADMIN_BACKENDS: JSON.stringify([
+  { id: "backend01", deployments: ["claude-sonnet-5", "claude-haiku-4-5"] }, { id: "backend02", deployments: ["claude-opus-5"] }]) });
+
+function setup(directory: GroupDirectory | null = new FakeDirectory(), backends: BackendSettings = BACKENDS) {
   const store = new FakeStore();
   const changeLog = createMemoryChangeLog();
   const lines: string[] = [];
   let ids = 0;
   const deps: GroupApiDependencies = {
-    authenticate: createAuthenticator(auth, keys), store, changeLog, directory,
+    authenticate: createAuthenticator(auth, keys), store, changeLog, directory, backends,
     log: (l) => lines.push(l), now: () => new Date("2026-10-22T12:00:00Z"), newId: () => `req-${++ids}`,
   };
   const call = async (method: string, path: string, opts: { oid?: string; body?: unknown; ifMatch?: string; query?: Record<string, string> } = {}) => {
@@ -247,4 +252,74 @@ test("members are listed only for an active onboarded group, never for any other
   const created = await h.call("POST", "/api/groups", { body: groupBody() });
   await h.call("POST", `/api/groups/${GROUP}/retire`, { body: { confirmGroupId: GROUP }, ifMatch: created.headers.etag });
   assert.equal((await h.call("GET", `/api/groups/directory/${GROUP}/members`, { oid: READER })).status, 404, "retired");
+});
+
+test("a display name must have visible text and no control characters, on create and edit (ADMIN-5)", async () => {
+  const { call } = setup();
+  for (const displayName of [" ", "\u3000", "\t=1+1", "a\r\n=1+1", "a\u0000b", "a\u0085b"]) {
+    const res = await call("POST", "/api/groups", { body: groupBody({ displayName }) });
+    assert.equal(res.status, 422, JSON.stringify(displayName));
+    assert.deepEqual((res.jsonBody as Doc).problems, ["displayName:invalid"], JSON.stringify(displayName));
+  }
+  const created = await call("POST", "/api/groups", { body: groupBody({ displayName: "Payments – Zürich team" }) });
+  assert.equal(created.status, 201);
+  const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName: "x\ty" }, ifMatch: created.headers!.etag });
+  assert.deepEqual([edit.status, (edit.jsonBody as Doc).problems], [422, ["displayName:invalid"]]);
+});
+
+test("a group link that is not a group ID is group_not_found, not route_not_found (ADMIN-7)", async () => {
+  const { call } = setup();
+  for (const [method, path] of [["GET", "/api/groups/onboard"], ["GET", "/api/groups/not-a-guid"], ["PUT", "/api/groups/abc"], ["POST", "/api/groups/abc/retire"]]) {
+    const res = await call(method, path, { ifMatch: '"x"', body: { confirmGroupId: "abc" } });
+    assert.deepEqual([res.status, (res.jsonBody as Doc).error], [404, "group_not_found"], `${method} ${path}`);
+  }
+  assert.equal(((await call("GET", "/api/groups/abc/other")).jsonBody as Doc).error, "route_not_found");
+});
+
+test("onboarding refuses a backend or model the deployment does not have, naming the allowed values (ADMIN-1)", async () => {
+  const { call, store } = setup();
+  const backend = await call("POST", "/api/groups", { body: groupBody({ backendId: "no-such-backend" }) });
+  assert.equal(backend.status, 422);
+  assert.deepEqual((backend.jsonBody as Doc).problems, ["backendId:not_deployed"]);
+  assert.deepEqual(((backend.jsonBody as Doc).allowed as Doc).backendIds, ["backend01", "backend02"]);
+  const haiku = { models: ["claude-haiku-9-9"], person: unlimited, group: unlimited };
+  const policy = { aggregateLimits: { person: unlimited, group: unlimited }, families: { haiku } };
+  const model = await call("POST", "/api/groups", { body: groupBody({ familyPolicy: policy }) });
+  assert.equal(model.status, 422);
+  assert.deepEqual((model.jsonBody as Doc).problems, ["familyPolicy.families.haiku.models:not_deployed"]);
+  assert.deepEqual(((model.jsonBody as Doc).allowed as Doc).deployments, ["claude-haiku-4-5", "claude-sonnet-5"]);
+  assert.equal(store.docs.size, 0, "nothing stored");
+});
+
+test("an edit checks a new backend against every model, and only new models against the backend (ADMIN-1)", async () => {
+  const { call, store } = setup();
+  const created = await call("POST", "/api/groups", { body: groupBody() });
+  const moved = await call("PUT", `/api/groups/${GROUP}`, { body: { backendId: "backend02" }, ifMatch: created.headers!.etag });
+  assert.deepEqual([moved.status, (moved.jsonBody as Doc).problems], [422, ["familyPolicy.families.sonnet.models:not_deployed"]]);
+  // A model stored before this check (or removed from the deployment since) does not block other edits.
+  const doc = store.docs.get(GROUP)!;
+  ((doc.doc.familyPolicy as Doc).families as Doc).sonnet = { models: ["claude-sonnet-5", "claude-sonnet-old"], person: unlimited, group: unlimited };
+  const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { chargebackId: "WBS-9", familyPolicy: doc.doc.familyPolicy }, ifMatch: doc.etag });
+  assert.equal(edit.status, 200, JSON.stringify(edit.jsonBody));
+});
+
+test("without the deployment's backend list, onboarding is refused rather than unchecked; other edits still work (ADMIN-1)", async () => {
+  for (const env of [{}, { ADMIN_BACKENDS: "not json" }, { ADMIN_BACKENDS: '[{"id":"bad id","deployments":[]}]' }]) {
+    const { call } = setup(new FakeDirectory(), readBackendSettings(env));
+    const res = await call("POST", "/api/groups", { body: groupBody() });
+    assert.deepEqual([res.status, (res.jsonBody as Doc).error], [503, env.ADMIN_BACKENDS ? "backend_list_invalid" : "backend_list_not_configured"], JSON.stringify(env));
+  }
+  const { call, store } = setup(new FakeDirectory(), readBackendSettings({}));
+  await store.create({ ...groupBody(), id: GROUP, kind: "group", projectId: GROUP, status: "active", retiredAt: null });
+  const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { chargebackId: "WBS-9" }, ifMatch: store.docs.get(GROUP)!.etag });
+  assert.equal(edit.status, 200, JSON.stringify(edit.jsonBody));
+});
+
+test("the console reads the deployment's backends and their deployments (ADMIN-1)", async () => {
+  const res = await setup().call("GET", "/api/groups/backends", { oid: READER });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.jsonBody, { state: "configured", backends: [
+    { id: "backend01", deployments: ["claude-haiku-4-5", "claude-sonnet-5"] }, { id: "backend02", deployments: ["claude-opus-5"] }] });
+  const none = await setup(new FakeDirectory(), readBackendSettings({})).call("GET", "/api/groups/backends", { oid: READER });
+  assert.deepEqual(none.jsonBody, { state: "not_configured", backends: [] });
 });

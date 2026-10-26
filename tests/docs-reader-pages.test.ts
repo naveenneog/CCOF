@@ -32,7 +32,7 @@ test("reader-facing pages carry no internal packet or unknown IDs", () => {
 });
 
 test("get-started and operate pages stay short (15 KB)", () => {
-  const big = [...dir("docs/get-started"), ...dir("docs/operate")].filter((p) => statSync(path.join(root, p)).size > 15 * 1024);
+  const big = [...dir("docs/get-started"), ...dir("docs/operate")].filter((p) => Buffer.byteLength(read(p).replace(/\r\n/g, "\n")) > 15 * 1024); // LF size: the same on a Windows (CRLF) and a Linux checkout
   assert.deepEqual(big, []);
 });
 
@@ -95,6 +95,20 @@ test("budget-exhausted evidence describes the current status-line output", () =>
   const onboarding = read("docs/get-started/04-onboard-a-group.md");
   assert.match(onboarding, /console-04-review\.png/);
   assert.doesNotMatch(onboarding, /console-03-access-models\.png/);
+});
+
+test("developer /usage page separates the interactive skill, claude -p and a refused budget (DEV-1, DEV-2, DEV-4)", () => {
+  const setup = read("docs/get-started/05-developer-setup.md");
+  const step = setup.split("## 4. Check your own budget")[1]?.split("\n## ")[0] ?? "";
+  assert.match(step, /interactive Claude Code session/i);
+  assert.match(step, /`claude -p "\/usage"`[^.]*built-in/);
+  assert.match(step, /Once requests are refused, `\/usage` cannot show it/);
+  assert.match(step, /status line/);
+  assert.match(step, /& "\$HOME\/\.claude\/ccof-usage\.ps1"/);
+  assert.doesNotMatch(step, /usage-03-refused\.png/, "a refused budget is not shown by /usage");
+  const usage = read("docs/USAGE.md");
+  assert.match(usage, /Shell command permission check failed/);
+  assert.match(usage, /allowed-tools/);
 });
 
 test("developer setup starts by getting the code and names the folder to run from", () => {
@@ -257,5 +271,20 @@ test("every JSON block on the configuration pages parses, and the complete sampl
     assert.match(output, /sample accepted/);
   } finally {
     rmSync(dirPath, { recursive: true, force: true });
+  }
+});
+test("the existing API Management page is on the reader's route and quotes lines the scripts print", () => {
+  for (const page of ["docs/get-started/02-prerequisites.md", "docs/get-started/03-deploy.md"]) {
+    assert.match(read(page), /\(existing-api-management\.md[#)]/, `${page} links the existing API Management page`);
+  }
+  const existing = read("docs/get-started/existing-api-management.md");
+  const scripts = readdirSync(path.join(root, "infra/staged")).filter((f) => f.endsWith(".ps1")).map((f) => read(`infra/staged/${f}`)).join("\n");
+  const quoted = ["apim_existing_unreadable", "apim_identity_missing", "apim_existing_sku", "apim_existing_api_conflict", "apim_existing_path_taken",
+    "apim_existing_backend_conflict", "apim_existing_diagnostic_settings_full", "apim_existing_no_private_route", "apim_gateway_logs_conflict",
+    "you cannot run Stage 5 on", "also runs for the CCOF API", "system-assigned identity on,", "gateway logs: diagnostic setting", "gateway logs: reusing diagnostic setting",
+    "verified:", "is not changed: CCOF does not change the networking of an existing API Management.", "both a new API Management"];
+  for (const text of quoted) {
+    assert.ok(existing.includes(text), `the page quotes "${text}"`);
+    assert.ok(scripts.includes(text), `a staged script prints "${text}"`);
   }
 });

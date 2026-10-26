@@ -28,10 +28,17 @@ if ($joined -match 'dns-zone-group list') {
 exit 0
 '@
 Set-Content -LiteralPath (Join-Path $work 'fake-az.ps1') -Value $fake -Encoding utf8NoBOM
-Set-Content -LiteralPath (Join-Path $work 'az.cmd') -Value "@pwsh -NoProfile -File `"%~dp0fake-az.ps1`" %*`r`n" -Encoding ascii
+if ($IsWindows) {
+    Set-Content -LiteralPath (Join-Path $work 'az.cmd') -Value "@pwsh -NoProfile -File `"%~dp0fake-az.ps1`" %*`r`n" -Encoding ascii
+} else {
+    # On macOS and Linux az is a shell script found on PATH; the fake is one too.
+    $fakeAz = Join-Path $work 'az'
+    Set-Content -LiteralPath $fakeAz -Value "#!/bin/sh`nexec pwsh -NoProfile -File `"`$(dirname `"`$0`")/fake-az.ps1`" `"`$@`"`n" -Encoding ascii -NoNewline
+    chmod +x $fakeAz
+}
 $savedPath = $env:PATH
 try {
-    $env:PATH = "$work;$env:PATH"; $env:FAKE_COSMOS_ID = $cosmosId
+    $env:PATH = "$work$([IO.Path]::PathSeparator)$env:PATH"; $env:FAKE_COSMOS_ID = $cosmosId
     function Run([string]$Dns, [string[]]$Regions) {
         $env:FAKE_COSMOS_DNS = $Dns
         $result = Join-Path $work "result-$([guid]::NewGuid().ToString('N')).json"

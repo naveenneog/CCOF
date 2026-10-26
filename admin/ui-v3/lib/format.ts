@@ -1,6 +1,7 @@
 // Display formatting. Money arrives as exact decimal text; it is rounded only for display and a
 // blank (null) amount is shown as "—" with its reason, never as 0.
 import { userTagHeaders } from "../../../src/contracts/user-tags.ts";
+import { neutraliseFormula } from "../../src/text-rules.ts";
 export const BLANK = "—";
 
 export function usd(v: unknown, digits = 2): string {
@@ -55,8 +56,7 @@ export const human = (code: unknown) => String(code ?? "").replace(/_/g, " ");
 
 export function toCsv(columns: string[], rows: Record<string, unknown>[], meta: Record<string, unknown>, tagLabel?: string): string {
   const cell = (v: unknown) => {
-    let s = v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    const s = neutraliseFormula(v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = Object.entries(meta).map(([k, v]) => `# ${k}: ${v}`).join("\n");
