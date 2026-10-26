@@ -19,7 +19,8 @@ Constraints:
   USD 0.02/GB/month (eastus2 retail).
 - Research ([UNKNOWNS](../UNKNOWNS.md) AUD-A1 to AUD-A10): a resource can have five diagnostic settings; a storage
   destination must be in the gateway's region; Azure Monitor reaches a firewalled account only through the
-  trusted-service exception, not when public network access is Disabled; the hourly `PT1H.json` blobs are append
+  trusted-service exception (research said not when public network access is Disabled; the live test showed it does,
+  see Consequences); the hourly `PT1H.json` blobs are append
   blobs, which lifecycle management cannot move to Cool or Archive; GatewayLlmLogs exports are billed (USD 0.25/GB
   eastus2), GatewayLogs exports are not.
 
@@ -67,6 +68,13 @@ retention change from option 1.
   No Cool or Archive tier.
 - Readers need Storage Blob Data Reader and a network path (a private endpoint or a temporary IP rule, which the
   next Stage 5 run removes).
+- Live result (2026-10-26, AUD-A2 and AUD-A3 resolved): Azure Monitor writes with Shared Key disabled, and also
+  after a storage policy (`modify` effect) set public network access to Disabled, through the trusted-services
+  bypass (storage metrics: `AppendBlock`/`PutBlob` successes with `OAuth`). Stage 5 keeps deploying Enabled, since
+  many tenants have no such policy, and its read-back accepts Enabled or Disabled with default Deny, the
+  AzureServices bypass and no rule (`Get-StgAuditArchiveNetworkMode`), printing which. With Disabled, a temporary IP
+  rule does not open a path; reading needs a private endpoint. Delivery is checked from the account's Transactions
+  metrics, which Stage 5 does not wait for (exports can take about 90 minutes).
 - Turning the feature off stops nothing that already exists: delete `ccof-gateway-archive` to stop exports. An
   unlocked immutability policy is not removed when `immutabilityDays` becomes null. A locked policy blocks account
   deletion until it expires.

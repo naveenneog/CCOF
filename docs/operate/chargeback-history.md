@@ -55,8 +55,8 @@ For a period that starts before the first whole month Log Analytics still holds,
 whole requested period in `periodStart` and `periodEnd`. The current month always comes from Log Analytics. The
 history part must start and end at 00:00 UTC. Every export filter except `backend` (refused there) applies to the
 history part too. The
-JSON lists the parts in `sources` (`chargebackHistory`, `logAnalytics`); the CSV header uses the tag field name set
-in **User tags**.
+JSON lists the parts in `sources` (`chargebackHistory`, `logAnalytics`); an export read from Log Analytics alone
+has no `sources` key. The CSV header uses the tag field name set in **User tags**.
 
 Example: on a hypothetical 19 October with 30-day retention, `period=previous` (September) comes from history; a
 custom range 15 September to 10 October reads 15-30 September from history and 1-10 October from Log Analytics.
@@ -84,8 +84,7 @@ closed day never becomes open again. Before reading, the export checks every day
 ## Download an old month
 
 The export needs a delegated token for the admin API. History is not read by the console's **Export CSV** button,
-so an old month is downloaded with a script. This route uses the Azure CLI as the client; it has not been run
-against a live deployment yet.
+so an old month is downloaded with a script. This route uses the Azure CLI as the client, tested live on 2026-10-26.
 
 1. **Once per deployment: allow the Azure CLI client**: its public client ID `04b07795-8ddb-461a-bbee-02f9e1bf7b46`
    in `admin.extraAllowedClientIds` (the turn-on steps below add it; added later, it needs Stage 4, then Stages 5,

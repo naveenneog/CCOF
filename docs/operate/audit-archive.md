@@ -11,7 +11,7 @@ With `audit.archive.enabled: true`, Stage 5 ([Staged.Audit.ps1](../../infra/stag
 
 | Resource | Settings |
 | --- | --- |
-| Storage account `<prefix><suffix>aud` in the deployment resource group | The Stage 1 storage names with `aud` instead of `res`, for example `ccoflab4f2kq7xz3m6bwaud`. Region of the API Management service. StorageV2, HTTPS only, TLS 1.2, no blob public access, Shared Key (account-key access) disabled. Firewall: default action Deny; "Allow Azure services on the trusted services list" on, which lets Azure Monitor write; no IP or VNet rule |
+| Storage account `<prefix><suffix>aud` in the deployment resource group | The Stage 1 storage names with `aud` instead of `res`, for example `ccoflab4f2kq7xz3m6bwaud`. Region of the API Management service. StorageV2, HTTPS only, TLS 1.2, no blob public access, Shared Key (account-key access) disabled. Firewall: public network access Enabled, default action Deny; "Allow Azure services on the trusted services list" on, which lets Azure Monitor write; no IP or VNet rule. A storage policy may turn public network access off; see [when a policy turns public network access off](audit-archive-reading.md#when-a-policy-turns-public-network-access-off) |
 | Containers `insights-logs-gatewaylogs`, `insights-logs-gatewayllmlogs` | With `immutabilityDays`: an unlocked time-based retention policy (see [Immutability](#immutability-turning-off-removal)) that still lets Azure Monitor append to the hourly blobs ("protected append writes") |
 | Lifecycle rule `ccof-audit-retention` | Deletes log blobs `retentionDays` after their last write; disabled when `retentionDays` is `null` |
 | Diagnostic setting `ccof-gateway-archive` on the API Management service | GatewayLogs and GatewayLlmLogs to the account. Stage 1's `ccof-gateway-logs` keeps sending them to the workspace |
@@ -27,13 +27,23 @@ prints `log retention: the workspace holds rows from <instant> ...` and the repo
 `ADMIN_LOG_RETENTION_HELD_FROM` or the deployed workbook. Stage 5 reads every item back; the result is in
 `stage5.verify.json` under `audit`.
 
-The preview and the apply print one line, for example:
+The preview and the apply print one line, for example (the region as API Management reports it):
 
 ```text
-audit archive: ccoflab4f2kq7xz3m6bwaud in eastus2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention unchanged
+audit archive: ccoflab4f2kq7xz3m6bwaud in East US 2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention unchanged
 ```
 
-With the archive off the line is `audit archive: off; workspace retention unchanged`. The account and setting exist
+With the archive off the line is `audit archive: off; workspace retention unchanged`. After the read-back, the apply
+prints the network mode it found:
+
+```text
+audit archive: ccoflab4f2kq7xz3m6bwaud network public-enabled (firewall Deny, no rules), trusted services allowed
+```
+
+or, when a policy (or you) turned public network access off,
+`audit archive: ccoflab4f2kq7xz3m6bwaud network public-disabled (policy or private), trusted services allowed`.
+Any other firewall state (default action Allow, no trusted-services bypass, an IP or VNet rule) stops Stage 5. The
+account and setting exist
 on the first Stage 5 run; blobs appear within about 90 minutes of the first request
 ([diagnostic settings](https://learn.microsoft.com/en-us/azure/azure-monitor/data-collection/diagnostic-settings)).
 
@@ -64,80 +74,37 @@ Stage 1 is not rerun.
    (next to the configuration file) holds an `audit` block, for example:
 
    ```json
-   { "enabled": true, "account": "ccoflab4f2kq7xz3m6bwaud", "location": "eastus2", "retentionDays": 2555,
-     "immutabilityDays": null, "diagnosticSetting": "ccof-gateway-archive", "workspaceRetentionDays": null }
+   { "enabled": true, "account": "ccoflab4f2kq7xz3m6bwaud", "location": "East US 2", "network": "public-enabled",
+     "retentionDays": 2555, "immutabilityDays": null, "diagnosticSetting": "ccof-gateway-archive", "workspaceRetentionDays": null }
    ```
 
 2. In the Portal, API Management → **Monitoring** → **Diagnostic settings** lists `ccof-gateway-logs` (to the
    workspace) and `ccof-gateway-archive` (to the archive account).
-3. Stage 5 does not wait for blobs. After at least one request (Stage 8 sends some) and about 90 minutes, with the
-   read access below, this count is above 0:
-   `az storage blob list --account-name $account -c insights-logs-gatewaylogs --auth-mode login --query "length(@)"`.
-
-If there are still no blobs: check that `ccof-gateway-archive` sends GatewayLogs and GatewayLlmLogs to the archive
-account, and that the account's **Networking** page has "Allow Azure services on the trusted services list" on.
-Whether Azure Monitor writes with Shared Key disabled is not yet proven (see below).
-
-## Where the blobs land
-
-One blob per category and hour ([resource logs](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/resource-logs)):
-
-```text
-insights-logs-gatewaylogs/resourceId=/SUBSCRIPTIONS/00000000-0000-4000-8000-000000000002/RESOURCEGROUPS/CCOFLAB-RG/PROVIDERS/MICROSOFT.APIMANAGEMENT/SERVICE/CCOFLAB-APIM/y=2026/m=10/d=25/h=14/m=00/PT1H.json
-```
-
-Each `PT1H.json` is an append blob with one JSON record per line (`time`, `resourceId`, `category`, `operationName`,
-`properties`). Records are filed by the hour they were received, so a blob can hold a few records from the previous
-hour. Azure documents resource logs as not completely lossless: the archive is a retained copy of the gateway log,
-not a transactional record. Prompts and completions are not logged
-([stage5-api-telemetry.bicep](../../infra/staged/stage5-api-telemetry.bicep)), so the records hold metadata and token counts.
-
-## Read the archive
-
-Reading needs a data role on the account and a network path to it: the account's firewall admits only trusted
-Azure services.
-
-1. **Grant the reader role.** Someone with Owner, User Access Administrator or Role Based Access Control
-   Administrator on the account runs:
+3. Stage 5 does not wait for the first export. After at least one request (Stage 8 sends some) and up to about
+   90 minutes, the account's storage metrics show Azure Monitor's writes: `AppendBlock` or `PutBlob` successes with
+   Microsoft Entra (`OAuth`) authentication. This reads metrics only, so it needs Reader or Monitoring Reader on the
+   account and no network path:
 
    ```powershell
    $rg = 'ccoflab-rg'
    $account = az storage account list -g $rg --query "[?ends_with(name, 'aud')].name | [0]" -o tsv
    $accountId = az storage account show -g $rg -n $account --query id -o tsv
-   az role assignment create --role "Storage Blob Data Reader" --assignee '<reader sign-in name or object ID>' --scope $accountId
+   $m = az monitor metrics list --resource "$accountId/blobServices/default" --metric Transactions --interval PT1H --aggregation Total --offset 24h --filter "ApiName eq '*' and Authentication eq 'OAuth' and ResponseType eq 'Success'" -o json | ConvertFrom-Json
+   $m.value[0].timeseries | ForEach-Object { $api = $_.metadatavalues[0].value; $_.data | Where-Object total | ForEach-Object { "$($_.timeStamp) $api $($_.total)" } }
    ```
 
-   A new role assignment can take up to 10 minutes to apply
-   ([troubleshoot Azure RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting)).
-2. **Open a network path.** For regular reading, add a private endpoint for the `blob` sub-resource in a network
-   you reach ([private endpoints for Azure Storage](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints));
-   Stage 6 does not create one for this account. For a one-off read, add your public IP as a temporary rule. This
-   needs Storage Account Contributor (or another role with `Microsoft.Storage/storageAccounts/write`) on the
-   account. Cloud Shell's outbound IP changes between sessions, so look it up in the session that reads:
+   Expected: lines such as `10/25/2026 22:58:00 AppendBlock 4` and `… PutBlob 2` (one hour each; the time format
+   follows your locale). No line means nothing was written in the last 24 hours. With [read access](audit-archive-reading.md#read-the-archive), the
+   blob count is above 0:
+   `(az storage blob list --account-name $account -c insights-logs-gatewaylogs --auth-mode login -o json | ConvertFrom-Json).Count`.
 
-   ```powershell
-   $myIp = Invoke-RestMethod https://api.ipify.org
-   az storage account network-rule add -g $rg --account-name $account --ip-address $myIp
-   ```
+If nothing is written: check that `ccof-gateway-archive` sends GatewayLogs and GatewayLlmLogs to the archive
+account, and that the account's **Networking** page has "Allow Azure services on the trusted services list" on.
 
-3. **List and download one day.** The path starts with the API Management resource ID in upper case. With
-   `apim.existing`, use its resource group in `az apim list`.
+## Read the archive
 
-   ```powershell
-   $apimId = az apim list -g $rg --query "[0].id" -o tsv
-   $prefix = "resourceId=$($apimId.ToUpper())/y=2026/m=10/d=25/"
-   az storage blob list --account-name $account -c insights-logs-gatewaylogs --auth-mode login --prefix $prefix --query '[].name' -o tsv
-   az storage blob download --account-name $account -c insights-logs-gatewaylogs --auth-mode login -n '<name from the list>' -f PT1H.json
-   Get-Content PT1H.json | ForEach-Object { $_ | ConvertFrom-Json } | Select-Object time, operationName -First 5
-   ```
-
-   `m=` appears twice in the path: first the month (`m=10`), then the minute, which is always `m=00`.
-4. **Remove the IP rule:** `az storage account network-rule remove -g $rg --account-name $account --ip-address $myIp`.
-   The next Stage 5 run also removes IP rules.
-
-Property names follow the API Management tables
-[ApiManagementGatewayLogs](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apimanagementgatewaylogs) and
-[ApiManagementGatewayLlmLog](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apimanagementgatewayllmlog).
+Where the hourly blobs land, how to grant read access and open a network path, and what changes when a storage
+policy turns public network access off: [reading the audit archive](audit-archive-reading.md).
 
 ## Cost
 
@@ -157,16 +124,17 @@ and [blob storage](https://prices.azure.com/api/retail/prices?$filter=serviceNam
 Example, assuming about 1 KB per request across both categories (an estimate, not measured): one million requests
 is about 1 GB, under USD 0.25 to export and about USD 0.02 per month to keep on LRS. Azure Monitor appends to each
 hourly blob many times; the number of appends is not documented. If it were once a minute per category, writes
-would add about 86,400 operations, about USD 0.43, a month on LRS. Measure your own size after a day with
-`--query "sum([].properties.contentLength)"` on the blob list. Append blobs cannot move to Cool or Archive, so the
+would add about 86,400 operations, about USD 0.43, a month on LRS. Measure your own size after a day:
+`(az storage blob list --account-name $account -c insights-logs-gatewaylogs --auth-mode login -o json | ConvertFrom-Json).properties.contentLength | Measure-Object -Sum`. Append blobs cannot move to Cool or Archive, so the
 account stays at the Hot rate.
 
 ## Not yet verified live
 
 These points are assumptions until a live run proves them ([UNKNOWNS](../UNKNOWNS.md), audit archive rows): that
-Azure Monitor writes to an account with Shared Key disabled; that appends continue under an immutability policy;
-that Stage 5 works on an existing API Management that already has five diagnostic settings; and that the Stage 5
-roles listed above are enough. If Stage 5 fails because the service has too many diagnostic settings, delete an
+appends continue under an immutability policy; that Stage 5 works on an existing API Management that already has
+five diagnostic settings; and that the Stage 5 roles listed above are enough. Verified live on 2026-10-26: Azure
+Monitor writes to the account with Shared Key disabled, also with public network access Disabled (storage metrics,
+`OAuth` writes). If Stage 5 fails because the service has too many diagnostic settings, delete an
 unused one: Azure allows five per resource.
 
 ## Immutability, turning off, removal
@@ -178,7 +146,7 @@ unused one: Azure allows five per resource.
   account until every blob's retention has expired.
 - Lifecycle deletion does not act on blobs in a container with an immutability policy, so with `immutabilityDays`
   the `retentionDays` rule deletes nothing: delete expired blobs yourself. This needs Storage Blob Data Contributor
-  on the account and the network path above. For example, blobs last written more than `retentionDays` (here 2555)
+  on the account and a network path ([read the archive](audit-archive-reading.md#read-the-archive)). For example, blobs last written more than `retentionDays` (here 2555)
   days ago (repeat for `insights-logs-gatewayllmlogs`; blobs still inside their immutability period are refused):
 
   ```powershell

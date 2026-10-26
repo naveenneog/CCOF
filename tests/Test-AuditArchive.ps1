@@ -101,6 +101,9 @@ Assert-Contract ((@($p.lockedContainers) -join ',') -ceq 'insights-logs-gatewayl
 Assert-Contract ($null -eq (Get-StgAuditDeployment -Cfg @{} -Names $names -ApimLocation 'eastus2')) 'With the archive off there are no deployment parameters.'
 Assert-Contract ((Format-StgAuditPreview -Deployment $p -WorkspaceRetentionDays 365) -match "audit archive: $name in westeurope.*2555.*365.*Standard_ZRS.*ccof-gateway-archive.*workspace retention 365") 'The Stage 5 preview must name the account, retention, immutability, SKU, setting and workspace retention.'
 Assert-Contract ((Format-StgAuditPreview -Deployment $null -WorkspaceRetentionDays $null) -match 'audit archive: off.*workspace retention unchanged') 'The Stage 5 preview must say when the archive is off.'
+# ARM returns the gateway region as its display name, which the preview prints as is (live: "in East US 2").
+$pDisplay = Get-StgAuditDeployment -Cfg $cfgOn -Names $names -ApimLocation 'East US 2'
+Assert-Contract ((Format-StgAuditPreview -Deployment $pDisplay -WorkspaceRetentionDays $null) -clike "audit archive: $name in East US 2, blobs deleted after 2555 days, *") 'The preview prints the API Management region as ARM returns it.'
 
 # ---------------------------------------------------------------- Stage 5 configuration hash
 $base = @{ tenantId = 't'; subscriptionId = 's'; resourceGroup = 'rg'; stage1 = @{ prefix = 'ccoflab' }; apim = @{}; backends = @(); groups = @() }
@@ -180,7 +183,11 @@ $cases = [ordered]@{
     'firewall'             = { param($o) $o.account.properties.networkAcls.defaultAction = 'Allow' }
     'trusted services'     = { param($o) $o.account.properties.networkAcls.bypass = 'None' }
     'IP or VNet rule'      = { param($o) $o.account.properties.networkAcls.ipRules = @(@{ value = '203.0.113.7' }) }
-    'public network'       = { param($o) $o.account.properties.publicNetworkAccess = 'Disabled' }
+    'public network'       = { param($o) $o.account.properties.publicNetworkAccess = 'SecuredByPerimeter' }
+    'public network absent' = { param($o) $o.account.properties.Remove('publicNetworkAccess') }
+    'disabled, no bypass'  = { param($o) $o.account.properties.publicNetworkAccess = 'Disabled'; $o.account.properties.networkAcls.bypass = 'None' }
+    'disabled, allow'      = { param($o) $o.account.properties.publicNetworkAccess = 'Disabled'; $o.account.properties.networkAcls.defaultAction = 'Allow' }
+    'disabled, IP rule'    = { param($o) $o.account.properties.publicNetworkAccess = 'Disabled'; $o.account.properties.networkAcls.ipRules = @(@{ value = '203.0.113.7' }) }
     'SKU'                  = { param($o) $o.account.sku.name = 'Standard_LRS' }
     'region'               = { param($o) $o.account.location = 'eastus2' }
     'lifecycle'            = { param($o) $o.policy.properties.policy.rules[0].definition.actions.baseBlob.delete.daysAfterModificationGreaterThan = 30 }
@@ -198,6 +205,31 @@ foreach ($k in $cases.Keys) {
     $o = New-Observed; & $cases[$k] $o
     Assert-Contract ((Get-Problems $o).Count -gt 0) "The read-back must refuse a changed $k."
 }
+# A storage policy (modify effect) can force public network access off after Stage 5 creates the account; Azure Monitor
+# still writes through the trusted-services bypass (live 2026-10-26), so Disabled + Deny + AzureServices passes.
+$o = New-Observed; $o.account.properties.publicNetworkAccess = 'Disabled'
+$disabled = Get-Problems $o
+Assert-Contract ($disabled.Count -eq 0) "Public network access Disabled with Deny and the trusted-services bypass must pass (got: $($disabled -join '; '))."
+$o.account.properties.networkAcls.bypass = 'Logging, Metrics, AzureServices'
+Assert-Contract ((Get-Problems $o).Count -eq 0) 'A bypass list that includes AzureServices must pass.'
+Assert-Contract ((Get-StgAuditArchiveNetworkMode (New-Observed).account) -ceq 'public-enabled') 'Enabled + Deny + bypass is the public-enabled mode.'
+Assert-Contract ((Get-StgAuditArchiveNetworkMode $o.account) -ceq 'public-disabled') 'Disabled + Deny + bypass is the public-disabled mode.'
+$o.account.properties.networkAcls.bypass = 'None'
+Assert-Contract ($null -eq (Get-StgAuditArchiveNetworkMode $o.account)) 'Without the trusted-services bypass there is no accepted network mode.'
+Assert-Contract ((Format-StgAuditNetwork -AccountName 'ccoflab4f2kq7xz3m6bwaud' -Mode 'public-disabled') -ceq 'audit archive: ccoflab4f2kq7xz3m6bwaud network public-disabled (policy or private), trusted services allowed') 'Stage 5 must name the public-disabled network mode.'
+Assert-Contract ((Format-StgAuditNetwork -AccountName 'ccoflab4f2kq7xz3m6bwaud' -Mode 'public-enabled') -ceq 'audit archive: ccoflab4f2kq7xz3m6bwaud network public-enabled (firewall Deny, no rules), trusted services allowed') 'Stage 5 must name the public-enabled network mode.'
+$savedArm = ${function:Get-StgArm}
+try {
+    $obs = New-Observed; $obs.account.properties.publicNetworkAccess = 'Disabled'
+    function Get-StgArm { param([string]$Path, [string]$ApiVersion)
+        if ($Path -like '*/managementPolicies/default') { return $obs.policy }
+        if ($Path -like '*/immutabilityPolicies/default') { return $obs.immutability[($Path -split '/')[-3]] }
+        if ($Path -like '*/diagnosticSettings') { return @{ value = @($obs.diagnostic) } }
+        if ($Path -like '*/storageAccounts/*') { return $obs.account }
+        return $obs.workspace }
+    $read = Test-StgAuditArchive -Cfg @{ subscriptionId = 's'; resourceGroup = 'rg-ccoflab'; audit = @{ workspaceRetentionDays = 365 } } -Deployment $p -Names $names -Apim @{ id = '/apim' }
+    Assert-Contract ($read.network -ceq 'public-disabled') "The Stage 5 read-back records the network mode (got $($read.network))."
+} finally { ${function:Get-StgArm} = $savedArm }
 # Retention null: the rule must be present but disabled; immutability null: policies are not checked.
 $keep = [ordered]@{}; foreach ($k in $p.Keys) { $keep[$k] = $p[$k] }; $keep.retentionDays = $null; $keep.immutabilityDays = $null
 $o = New-Observed; $o.policy.properties.policy.rules[0].enabled = $false; $o.immutability = @{}
@@ -223,6 +255,7 @@ $stage5 = (Get-Command Invoke-Stage5).ScriptBlock.ToString()
 Assert-Contract ($stage5 -match 'Get-StgAuditDeployment' -and $stage5 -match 'auditArchive' -and $stage5 -match 'Format-StgAuditPreview') 'Invoke-Stage5 must pass the archive to the template and print its preview line.'
 $applyPart = $stage5.Substring($stage5.IndexOf('if (-not $Apply) { return $null }'))
 Assert-Contract ($applyPart -match 'Set-StgWorkspaceRetention' -and $applyPart -match 'Test-StgAuditArchive') 'Invoke-Stage5 must set workspace retention and read back the archive only when applying.'
+Assert-Contract ($applyPart -match 'Format-StgAuditNetwork') 'Invoke-Stage5 must print the archive network mode it read back.'
 
 # ---------------------------------------------------------------- retention held from (ADR-0043)
 # Raising the workspace retention does not bring back deleted rows: Stage 5 records the oldest instant the workspace

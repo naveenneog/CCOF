@@ -48,6 +48,34 @@ test("the deploy page quotes the Stage 5 audit line and the Stage 2 history cont
   assert.match(section(deploy, "## Stage 2 "), /`chargebackDaily`/);
 });
 
+test("the archive page quotes the Stage 5 lines as printed and gives Windows-safe checks, including the delivery metrics", () => {
+  const page = read("docs/operate/audit-archive.md");
+  // ARM returns the API Management region as its display name, which Stage 5 prints as is (live 2026-10-26).
+  const example = page.split("\n").find((l) => l.startsWith("audit archive: ccoflab") && l.includes(" blobs ")) ?? "";
+  assert.match(example, /^audit archive: \S+ in East US 2, blobs deleted after 2555 days, no immutability, Standard_LRS; diagnostic setting ccof-gateway-archive \(GatewayLogs, GatewayLlmLogs\); workspace retention unchanged$/);
+  assert.ok(!/ in eastus2\b|"location": "eastus2"/.test(page), "no region in the short form where Stage 5 prints the display name");
+  assert.ok(page.includes("audit archive: ccoflab4f2kq7xz3m6bwaud network public-enabled (firewall Deny, no rules), trusted services allowed"), "network line, deployed mode");
+  assert.ok(page.includes("audit archive: ccoflab4f2kq7xz3m6bwaud network public-disabled (policy or private), trusted services allowed"), "network line, policy mode");
+  assert.match(read("infra/staged/Staged.Audit.ps1"), /return "audit archive: \$AccountName network \$Mode \(\$how\), trusted services allowed"/);
+  const check = section(page, "## Check it works");
+  for (const text of ["az monitor metrics list", "Transactions", "Authentication eq 'OAuth'", "AppendBlock", "PutBlob", "90 minutes"]) assert.ok(check.includes(text), `check section names ${text}`);
+  // Through az.cmd, cmd.exe splits an argument without spaces at ( ) | & < > ^ (seen live with length(@)).
+  const queries = [...(page + read("docs/operate/audit-archive-reading.md")).matchAll(/--query (["'])(.*?)\1/g)].map((m) => m[2]);
+  assert.deepEqual(queries.filter((q) => /[()|&<>^]/.test(q) && !q.includes(" ")), [], "no --query that cmd.exe splits");
+  const policy = section(read("docs/operate/audit-archive-reading.md"), "## When a policy turns public network access off");
+  for (const text of ["publicNetworkAccess", "Disabled", "private endpoint", "IP rule", "SecurityControl", "Network Security Perimeter", "public-disabled"]) {
+    assert.ok(policy.includes(text), `policy section names ${text}`);
+  }
+  assert.ok(!/not yet proven|Whether Azure Monitor writes with Shared Key disabled/.test(page), "Shared Key delivery is no longer an assumption");
+});
+
+test("the history page says which exports carry sources, as admin/src/export.ts does", () => {
+  const code = read("admin/src/export.ts");
+  assert.match(code, /if \(!split\.history\) return \{ \.\.\.\(logs as NonNullable<typeof logs>\), rateCardVersion: prepared\.version \}/, "a Log-Analytics-only export has no sources");
+  const which = section(read("docs/operate/chargeback-history.md"), "## Which export uses it");
+  assert.match(which.replace(/\n/g, " "), /no `sources` key/);
+});
+
 test("the history page shows how to download an old month and how to check that history is written", () => {
   const page = read("docs/operate/chargeback-history.md");
   const download = section(page, "## Download an old month");
@@ -73,7 +101,8 @@ test("cost sections give prices with sources and retrieval dates", () => {
 
 test("the archive page has reading steps, checks and the not-yet-verified note", () => {
   const page = read("docs/operate/audit-archive.md");
-  const reading = section(page, "## Read the archive");
+  assert.match(section(page, "## Read the archive"), /\(audit-archive-reading\.md\)/);
+  const reading = section(read("docs/operate/audit-archive-reading.md"), "## Read the archive");
   for (const text of ["az role assignment create", "Storage Blob Data Reader", "Storage Account Contributor", "az apim list", "storage-private-endpoints", "m=00"]) {
     assert.ok(reading.includes(text), `reading steps name ${text}`);
   }

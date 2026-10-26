@@ -171,8 +171,10 @@ pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 
 **Expected:** a JSON line with the policy digests; one `audit archive: <account> in <region>, blobs …;
 diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention …` line, or
-`audit archive: off; workspace retention unchanged` when the archive is off; `deployed stage5-config (…)` and
-`stage 5 completed and verified in … s`. The demo capture below predates the archive and has no `audit archive:`
+`audit archive: off; workspace retention unchanged` when the archive is off (`<region>` as API Management reports
+it, for example `East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
+<account> network public-enabled (…), trusted services allowed` (or `public-disabled` when a storage policy turned
+public network access off); and `stage 5 completed and verified in … s`. The demo capture below predates the archive and has no `audit archive:`
 line. Checks for the archive: [audit archive](../operate/audit-archive.md#check-it-works).
 
 ![Expected Stage 5 output](../evidence/2026-10-24-demo/terminal-stage5.png)

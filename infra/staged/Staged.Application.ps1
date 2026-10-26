@@ -110,6 +110,7 @@ function Invoke-Stage5 {
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
     $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
+    if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
     $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }

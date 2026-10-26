@@ -176,6 +176,23 @@ function Get-StgDeployedRetentionHeldFrom {
     return @($found | Sort-Object { [DateTimeOffset]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) })[-1]
 }
 
+function Get-StgAuditArchiveNetworkMode {
+    # The archive's accepted network modes: firewall default Deny with the trusted-services bypass (which Azure Monitor
+    # writes through) and public network access Enabled (as deployed) or Disabled (set by a storage policy, or for
+    # private endpoints; delivery seen live 2026-10-26). $null for anything else.
+    param($Account)
+    $p = $Account.properties; $acl = $p.networkAcls
+    if ($acl.defaultAction -cne 'Deny' -or "$($acl.bypass)" -notmatch '\bAzureServices\b') { return $null }
+    switch -CaseSensitive ($p.publicNetworkAccess) { 'Enabled' { return 'public-enabled' } 'Disabled' { return 'public-disabled' } }
+    return $null
+}
+
+function Format-StgAuditNetwork {
+    param([string]$AccountName, [string]$Mode)
+    $how = if ($Mode -ceq 'public-disabled') { 'policy or private' } else { 'firewall Deny, no rules' }
+    return "audit archive: $AccountName network $Mode ($how), trusted services allowed"
+}
+
 function Get-StgAuditArchiveProblems {
     # Read-back of the archive from ARM objects; returns what differs from the deployed intent.
     param($Deployment, $Account, $ManagementPolicy, $Immutability, $Diagnostic, $Workspace, $WorkspaceRetentionDays)
@@ -188,7 +205,7 @@ function Get-StgAuditArchiveProblems {
     if (($Account.location -replace ' ', '') -ine ($Deployment.location -replace ' ', '')) { $problems += "$n is in $($Account.location), expected the gateway region $($Deployment.location)" }
     if ($p.supportsHttpsTrafficOnly -ne $true -or $p.minimumTlsVersion -cne 'TLS1_2') { $problems += "$n does not require HTTPS with TLS 1.2" }
     if ($p.allowBlobPublicAccess -ne $false -or $p.allowSharedKeyAccess -ne $false) { $problems += "$n allows blob public access or Shared Key" }
-    if ($p.publicNetworkAccess -cne 'Enabled' -or $acl.defaultAction -cne 'Deny' -or "$($acl.bypass)" -notmatch 'AzureServices') { $problems += "$n firewall is not Enabled/Deny with the trusted-services bypass Azure Monitor needs" }
+    if (-not (Get-StgAuditArchiveNetworkMode $Account)) { $problems += "$n firewall is not default Deny with the trusted-services bypass Azure Monitor needs, with public network access Enabled or Disabled" }
     if (@($acl.ipRules).Where({ $_ }).Count -or @($acl.virtualNetworkRules).Where({ $_ }).Count) { $problems += "$n firewall has IP or VNet rules" }
     $rule = @($ManagementPolicy.properties.policy.rules | Where-Object { $_.name -ceq 'ccof-audit-retention' })[0]
     $days = $rule.definition.actions.baseBlob.delete.daysAfterModificationGreaterThan
@@ -226,6 +243,6 @@ function Test-StgAuditArchive {
     }
     $problems = @(Get-StgAuditArchiveProblems -Deployment $Deployment -Account $account -ManagementPolicy $policy -Immutability $immutability -Diagnostic $diagnostic -Workspace $workspace -WorkspaceRetentionDays $ws)
     Assert-Stg (-not $problems.Count) ($problems -join '; ')
-    return [ordered]@{ enabled = [bool]$Deployment; account = $Deployment.accountName; location = $Deployment.location; retentionDays = $Deployment.retentionDays
+    return [ordered]@{ enabled = [bool]$Deployment; account = $Deployment.accountName; location = $Deployment.location; network = $(if ($Deployment) { Get-StgAuditArchiveNetworkMode $account }); retentionDays = $Deployment.retentionDays
         immutabilityDays = $Deployment.immutabilityDays; diagnosticSetting = $(if ($Deployment) { 'ccof-gateway-archive' }); workspaceRetentionDays = $ws }
 }

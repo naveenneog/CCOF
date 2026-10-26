@@ -453,7 +453,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   from an updated checkout ([chargeback history](operate/chargeback-history.md#turn-on-in-an-existing-deployment)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 5`, preview then `-Apply`. The preview prints one `audit archive:` line (account,
-  region, retention, immutability, SKU, workspace retention, or `off`).
+  region, retention, immutability, SKU, workspace retention, or `off`); the apply adds the archive's network mode
+  (`public-enabled`, or `public-disabled` when a storage policy turned public network access off).
 - **Portal:** workbook sections 17 (Function Apps → Environment variables, Authentication), 19 (APIM →
   APIs, Policies, Backends), 20 (Diagnostic settings and workbook).
 - **Worked when:** each app lists its settings, the resolver answers `401` without a token, the

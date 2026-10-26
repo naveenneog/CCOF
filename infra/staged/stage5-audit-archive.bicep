@@ -1,7 +1,7 @@
 // Stage 5 helper: the long-term audit archive account (ADR-0043). Deployed in the deployment resource group at
 // the API Management region (a diagnostic destination must be in the monitored resource's region).
-// Azure Monitor writes through the trusted-services exception, so public network access stays Enabled with
-// default action Deny and no rule; Disabled would admit private endpoints only (docs/UNKNOWNS.md AUD-A2).
+// Azure Monitor writes through the trusted-services exception: public network access Enabled with default action
+// Deny and no rule. A storage policy may set it to Disabled; Azure Monitor still delivers (docs/UNKNOWNS.md AUD-A2).
 targetScope = 'resourceGroup'
 
 @minLength(3)
