@@ -17,7 +17,8 @@
   stored ceiling, without claiming to know the gateway's live wait.
 - DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic
   backend failures get an Anthropic envelope without exposing backend details.
-- DG-3: requests without a valid length are refused before body parsing or forwarding.
+- DG-3: explicit chunked requests are refused before body parsing or forwarding; absence
+  of Content-Length alone is allowed for HTTP/2 compatibility (BB5-H2).
 - DG-1/2: setup imports the downloaded configuration into the per-user configuration folder;
   a missing or invalid configuration names the file and `-ConfigPath`.
 

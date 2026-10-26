@@ -101,9 +101,9 @@
     <set-variable name="ccofRequestRefusal" value="@{
         var media = context.Request.Headers.GetValueOrDefault("Content-Type", "").Split(';')[0].Trim();
         if (!string.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)) { return "request_content_type"; }
+        if (System.Text.RegularExpressions.Regex.IsMatch(context.Request.Headers.GetValueOrDefault("Transfer-Encoding", ""), "(^|,)\\s*chunked\\s*(,|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) { return "request_length_required"; }
         long length;
-        if (!long.TryParse(context.Request.Headers.GetValueOrDefault("Content-Length", ""), out length) || length < 0) { return "request_length_required"; }
-        return length > 33554432 ? "request_too_large" : "";
+        return long.TryParse(context.Request.Headers.GetValueOrDefault("Content-Length", ""), out length) && length > 33554432 ? "request_too_large" : "";
     }" />
     <choose>
       <when condition="@((string)context.Variables["ccofRefusal"] == "" && (string)context.Variables["ccofRequestRefusal"] != "")">

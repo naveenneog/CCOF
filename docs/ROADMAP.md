@@ -3,7 +3,7 @@
 ## Bug bash 5 client fixes
 
 - [x] G-BB5-CLIENT: stable per-user configuration and actionable missing-file diagnostics (DG-1/2);
-  early length refusal and backend error envelopes (DG-3/4); pacing visibility and explicit reused-debt
+  explicit chunking refusal and backend error envelopes (DG-3/4); pacing visibility and explicit reused-debt
   semantics (DG-5/6); evidence-led triage (DG-7); quiet probes (DG-8); shared admin text guards and
   complete export prose (AO-6/7). Offline checks and mutation results recorded in STATUS.
 

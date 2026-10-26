@@ -77,15 +77,19 @@ test("a body that is not JSON, or larger than 32 MB, is refused from its headers
     vector("32 MB exactly", { ...json, "Content-Length": "33554432" }, ""),
     vector("one byte over", { ...json, "Content-Length": "33554433" }, "request_too_large"),
     vector("40 MB", { ...json, "Content-Length": "40000000" }, "request_too_large"),
-    vector("no length", { "Content-Type": "application/json" }, "request_length_required"),
+    vector("no length can be HTTP/2", { "Content-Type": "application/json" }, ""),
     vector("chunked", { "Content-Type": "application/json", "Transfer-Encoding": "chunked" }, "request_length_required"),
-    vector("negative length", { ...json, "Content-Length": "-1" }, "request_length_required"),
-    vector("invalid length", { ...json, "Content-Length": "invalid" }, "request_length_required"),
+    vector("chunked with length", { ...json, "Transfer-Encoding": "chunked" }, "request_length_required"),
+    vector("comma-separated chunked", { "Content-Type": "application/json", "Transfer-Encoding": "gzip, Chunked " }, "request_length_required"),
+    vector("mixed-case chunked", { "Content-Type": "application/json", "Transfer-Encoding": " CHUNKED " }, "request_length_required"),
+    vector("not chunked token", { ...json, "Transfer-Encoding": "unchunked" }, ""),
+    vector("negative length is not evidence of chunking", { ...json, "Content-Length": "-1" }, ""),
+    vector("invalid length is not evidence of chunking", { ...json, "Content-Length": "invalid" }, ""),
   ];
   assert.deepEqual(runExpressions(methods(), vectors), vectors.map((v) => v.expected));
 });
 
-test("a missing length is refused 411 before reading a chunked body", () => {
+test("an explicitly chunked body is refused 411 before reading it", () => {
   const [facts, status, body] = runExpressions(methods(), [
     { label: "skip chunked body", method: "RequestFacts", vars: { ccofRefusal: "request_length_required" }, body: "not-json", expected: "" },
     { label: "length status", method: "RefusalStatus", vars: { ccofRefusal: "request_length_required" }, expected: 411 },
