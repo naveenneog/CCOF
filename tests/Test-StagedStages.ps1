@@ -8,6 +8,8 @@
 param([string]$BicepPath)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$scratch = Join-Path $root '.test-scratch'
+New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 if (-not $BicepPath) {
     $command = Get-Command bicep -ErrorAction SilentlyContinue
     if ($command) { $BicepPath = $command.Source }
@@ -710,5 +712,50 @@ try {
 Assert-Contract $settingsMismatch 'When Stage 5 is recorded, Stage 1 must still refuse an app-settings mismatch.'
 # Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
 Assert-Contract ($resText -match "if \(\`$expectedSettings -cnotcontains 'AzureWebJobs\.snapshotApply\.Disabled'\)") 'The Stage 1 recheck must add the snapshot switch only when the Stage 5 record lacks it.'
+
+# Stage 2/5 previews may bypass noisy ARM what-if only when the config and verified dependencies
+# match the saved hashes. A changed input must still run what-if and identify the exact hash change.
+$previewCfg = @{
+    tenantId = '00000000-0000-4000-8000-000000000001'; subscriptionId = '00000000-0000-4000-8000-000000000002'; resourceGroup = 'ops-test'
+    stage1 = @{ includeAdmin = $true }; cosmos = @{ databaseName = 'ccof'; capacityMode = 'serverless' }
+    apim = @{}; backends = @(); resolver = @{}; sync = @{}; reconciler = @{ budgetGuard = @{ warnPercent = 80 } }
+    budgetState = @{}; syncTimerEnabled = $true; gateway = @{}; workbook = @{}; rateCard = @{}; admin = @{}; groups = @()
+}
+$previewState = @{ stages = @{} }
+foreach ($dependency in 1, 3, 4) {
+    $previewState.stages["$dependency"] = @{ outputs = @{ stable = "stage-$dependency" } }
+}
+foreach ($stage in 2, 5) {
+    $dependencies = [ordered]@{}
+    foreach ($dependency in Get-StgStageDependencies $stage) { $dependencies["$dependency"] = Get-StgOutputHash $previewState.stages["$dependency"].outputs }
+    $previewState.stages["$stage"] = @{ configHash = Get-StgStageInput $previewCfg $stage; dependencyHashes = $dependencies; outputs = @{} }
+}
+$savedStateDir = $script:StateDir
+$savedReadState = ${function:Read-StgState}
+$savedQsAzForPreview = ${function:Invoke-QsAz}
+$script:StateDir = Join-Path $scratch 'stage-preview'
+[void][IO.Directory]::CreateDirectory($script:StateDir)
+$script:previewWhatIfCalls = 0
+try {
+    Set-Item function:Read-StgState { $script:previewState }
+    Set-Item function:Invoke-QsAz { param([string[]]$Arguments) $script:previewWhatIfCalls++; @{ changes = @() } }
+    foreach ($stage in 2, 5) {
+        $script:previewWhatIfCalls = 0
+        $name = if ($stage -eq 2) { 'stage2-schema' } else { 'stage5-config' }
+        $null = Invoke-StgBicep -Cfg $previewCfg -Template 'unused.bicep' -Name $name -StageNumber $stage -Parameters @{}
+        Assert-Contract ($script:previewWhatIfCalls -eq 0) "An unchanged Stage $stage preview must not invoke ARM what-if."
+    }
+    $changedCfg = $previewCfg.Clone()
+    $changedCfg.reconciler = @{ budgetGuard = @{ warnPercent = 79 } }
+    $script:previewWhatIfCalls = 0
+    $preview = Invoke-StgBicep -Cfg $changedCfg -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{} *>&1 | Out-String
+    $recordedHash = $previewState.stages['5'].configHash
+    $currentHash = Get-StgStageInput $changedCfg 5
+    Assert-Contract ($script:previewWhatIfCalls -eq 1 -and $preview.Contains($recordedHash) -and $preview.Contains($currentHash) -and $preview.Contains('apply Stage 5')) 'A changed Stage 5 input must show recorded/current hashes, run what-if and name the next apply.'
+} finally {
+    ${function:Read-StgState} = $savedReadState
+    ${function:Invoke-QsAz} = $savedQsAzForPreview
+    $script:StateDir = $savedStateDir
+}
 
 "Staged stages: $passed checks passed (4 stage boundaries, negative control, Cosmos contract, network-last order and layout migration, network verify mode, driver and configuration). No Azure calls."
