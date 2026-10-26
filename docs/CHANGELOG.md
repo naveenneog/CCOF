@@ -13,6 +13,7 @@
   keep-console-edits option before republishing.
 - AO-8: regional guidance includes outage limits, single-region gateway/Function recovery, and an
   explicitly mutating Cosmos manual-failover drill with rollback and Microsoft Learn citations.
+- N3: Stage 0 reports each Foundry account's region; Stage 1 prints its planned account and deployment regions.
 
 ## 2026-10-26 — Release 17
 

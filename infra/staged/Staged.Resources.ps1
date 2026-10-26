@@ -30,7 +30,7 @@ function Invoke-Stage0 {
         $fd = $Cfg.stage1.foundry
         if ($fd.create -and $b.accountName -ceq $fd.accountName -and $fd.modelDeploymentsBlocked) {
             Write-Host "WARNING: backend $($b.id): model deployments blocked ($($fd.modelDeploymentsBlocked)); allowed requests cannot succeed." -ForegroundColor Yellow
-            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1, no model deployments)"; blocked = $fd.modelDeploymentsBlocked }
+            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1, no model deployments)"; region = Get-StgFoundryLocation $Cfg; blocked = $fd.modelDeploymentsBlocked }
             continue
         }
         if ($fd.create -and $b.accountName -ceq $fd.accountName) {
@@ -43,14 +43,14 @@ function Invoke-Stage0 {
                 Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $(Get-StgFoundryLocation $Cfg) for this subscription. Claude is offered only in some regions: set stage1.foundry.location to one that offers it (az cognitiveservices model list -l <region>), or reuse an existing account with stage1.foundry.create false"
             }
             Assert-StgFoundryQuota -Cfg $Cfg -Deployments @($fd.deployments)
-            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
+            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; region = Get-StgFoundryLocation $Cfg; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
             continue
         }
         $acct = Get-StgArm "/subscriptions/$($b.subscriptionId)/resourceGroups/$($b.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($b.accountName)" '2024-10-01'
         $deps = @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value | ForEach-Object { $_.name })
         $missing = @($b.deploymentInferenceGeo.Keys | Where-Object { $deps -cnotcontains $_ })
         Assert-Stg (-not $missing.Count) "backend $($b.id) lacks deployments: $($missing -join ', ')"
-        $report.backends += [ordered]@{ id = $b.id; account = $acct.name; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
+        $report.backends += [ordered]@{ id = $b.id; account = $acct.name; region = $acct.location; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
     if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports $report.backends }
     $me = Get-StgGraph 'me?$select=id,userPrincipalName'
@@ -196,6 +196,7 @@ function Assert-StgStage1AppSettings {
 
 function Invoke-Stage1 {
     param($Cfg, [switch]$Apply)
+    if ($Cfg.stage1.foundry.create) { Write-Host "Foundry account region: $(Get-StgFoundryLocation $Cfg) (deployment region: $($Cfg.location))" }
     $exists = (Invoke-QsAz @('group', 'exists', '--subscription', $Cfg.subscriptionId, '--name', $Cfg.resourceGroup)) -eq 'true'
     if (-not $exists) {
         if (-not $Apply) { Write-Host "preview: resource group $($Cfg.resourceGroup) does not exist; -Apply creates it in $($Cfg.location) (subscription-scope resourceGroups/write). Stage 1 is create-only: once applied, its stage1 values (Cosmos DB regions, API Management, public access, Foundry deployments) cannot be changed in this resource group, so review them now."; return $null }
