@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- DG-8: unattended token and status probes hide Azure CLI's default-profile sign-in message;
+  CCOF's own helper-specific login instruction remains on stderr.
 - AO-6: server and console reject invisible-only names and bidi overrides/isolates; CSV
   formula protection also covers leading invisible format characters.
 - DG-5: usage and the status line show budget pacing below the warning threshold, using the
