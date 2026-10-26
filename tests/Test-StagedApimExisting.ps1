@@ -177,7 +177,7 @@ $v = Test-StgGatewayLogSetting -Settings @($ours) -WorkspaceId $ws -Name 'ccof-g
 Assert-Contract ($v.name -ceq 'ccof-gateway-logs' -and ($v.categories -join ',') -ceq 'GatewayLlmLogs,GatewayLogs' -and $v.destinationType -ceq 'Dedicated') 'The read-back records the setting, its categories and destination type.'
 $bad = $false; try { $null = Test-StgGatewayLogSetting -Settings @($partial) -WorkspaceId $ws -Name 'llm-only' } catch { $bad = $_.Exception.Message -match 'GatewayLogs' }
 Assert-Contract $bad 'The read-back must fail when the setting lacks a category.'
-$bad = $false; try { $null = Test-StgGatewayLogSetting -Settings @() -WorkspaceId $ws -Name 'ccof-gateway-logs' } catch { $bad = $_.Exception.Message -match 'ccof-gateway-logs' }
+$bad = $false; try { $null = Test-StgGatewayLogSetting -Settings @() -WorkspaceId $ws -Name 'ccof-gateway-logs' } catch { $bad = $_.Exception.Message -match 'ccof-gateway-logs is missing' }
 Assert-Contract $bad 'The read-back must fail when the setting is missing.'
 
 # ---------------------------------------------------------------- templates
@@ -195,6 +195,6 @@ Assert-Contract ($text -match "module gatewayLogsSetting 'stage5-gateway-logs\.b
 # Stage 6 never changes an existing instance.
 $resources = Get-Content -LiteralPath (Join-Path $root 'infra/staged/Staged.Resources.ps1') -Raw
 Assert-Contract ($resources -match '\$integrateApim = \$s1\.apimName -and') 'Stage 6 integrates only an instance Stage 1 created.'
-Assert-Contract ($resources -match 'not changed: CCOF does not change the networking of an existing API Management') 'Stage 6 preview says an existing instance is not changed.'
+Assert-Contract ([regex]::Matches($resources, 'Write-Host "API Management \$\(\$Cfg\.apim\.existing\.name\) \(apim\.existing\) is not changed: CCOF does not change the networking of an existing API Management\."').Count -eq 2) 'Both Stage 6 previews (network mode verify, and existing/create) say an existing instance is not changed.'
 
 Write-Host "PASS: $passed existing API Management contract checks"
