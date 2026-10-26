@@ -133,8 +133,8 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 
 ![Expected Stage 2 output](../evidence/2026-10-24-demo/terminal-stage2.png)
 
-Stages 2/5: unchanged hashes mean read-back only on `-Apply`; drift fails. For repair, preview with
-`-ForceRedeploy`, then add `-Apply`. Changed hashes or missing state redeploy.
+Stages 2/5: unchanged configuration skips noisy what-if, not deployment. `-Apply` always redeploys the current
+template (idempotent); Stage 5 restarts the Function Apps.
 
 ## Stage 3 — Runtime role assignments
 

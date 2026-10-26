@@ -2,24 +2,29 @@
 
 ## Bug bash 5 staged driver
 
-**Active packet:** G-R18-STAGED — COMPLETE; coordinator integration/publication pending.
-AO-1: Stage 1 retains the Stage 5 record shape; the offline rerun fixture reproduces the null-array error
-and checks both matching and mismatched saved settings. No live applies.
-AO-2: empty-state recovery records only Stages 1/2 as explicitly run, unlocks Stage 2 preview, and
-compares role assignment IDs before/after schema apply instead of requiring none.
-AO-3: unchanged Stage 2/5 applies return saved deployment outputs to their normal read-back, without ARM
-redeployment. Explicit force and changed inputs/prerequisites still deploy; drift fails closed.
+**Active packet:** G-R18-STAGED-REVIEW — COMPLETE; coordinator re-review/integration pending.
+Coordinator decision: configuration/dependency hashes do not cover template/effective-parameter changes;
+existing read-back cannot certify skipped configuration, and failed applies can leave stale completion state.
+Stage 2/5 `-Apply` now always deploys the current template, as in release 17. AO-3 is answered by accurate
+unchanged-preview wording, not a no-op guarantee; Stage 5 Function App restarts are documented.
+The no-op/force behavior and its tests were withdrawn by review, not weakened to pass. The replacement
+regressions cover both unchanged previews, current templates/effective parameters, failed-B-to-A recovery,
+and the retained AO-4 changed-parameter assertions.
+
+AO-1/2 remain fixed: Stage 1 keeps the Stage 5 record shape; recovery tolerates later resources without inferring
+later completion, retaining recorded grant-count checks and the Stage 2 before/after assignment comparison.
 AO-4/5/8 and novice Low fixes are implemented: named parameter diffs, actionable private-Cosmos warning,
 outage/manual-write-and-read drill guidance, separate Foundry regions, seed creation evidence, timing and links.
-Offline mutations: 26/26 killed with loaded suites and targeted failure messages (22 behavior guards, four
-documentation regressions). Root/admin installs, root tests, admin 203 tests, explicit TypeScript typecheck
-and build passed. Packet gate PASS: 23 passed, 2 warnings (existing file-size/open-unknown debt), no failures.
-Implementation through `6f8a3a6`; finding commits and RED/mutation evidence are recorded in the handoff log.
+GREEN: redeployment 23 checks; recovery 11; reader links/output/page budgets 3; six targeted mutations killed
+with loaded suites and expected test failures. Root/admin `npm ci`, admin 203 tests, explicit typecheck/build,
+and full packet gate passed (including `npm test`, 360.8 seconds). Gate: 23 passed, 2 existing warning
+categories (oversized files/open unknowns), 0 failed. No live applies or pushes.
 
-Self-review council (not an independent review): ARCHITECT PASS — no new runtime boundaries or dependencies;
-CODER PASS — existing stage read-back remains authoritative; QA PASS — caller-level regressions and 26
-targeted mutations; UX PASS — truthful no-op/repair previews and recovery steps; SECURITY PASS — force limited
-to Stages 2/5, parameter values not printed, recorded grant checks retained, added-line leak scan clean.
+Self-review, not independent council approval: ARCHITECT PASS — release-17 apply contract restored;
+CODER PASS — no completion-record shortcut on apply; QA PASS — wording, current inputs and failed-B-to-A
+regressions plus six mutations; UX PASS — restart/redeployment disclosed; SECURITY PASS — no new writer,
+dependency or credential exposure. The external Coder/QA BLOCK is addressed by withdrawal, not by claiming
+the former read-back can certify drift; coordinator owns independent re-review.
 
 ## Release 17 (2026-10-26)
 

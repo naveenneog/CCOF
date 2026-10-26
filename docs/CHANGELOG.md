@@ -5,8 +5,10 @@
 - AO-1: Stage 1 apply reruns after Stage 5 verify the saved settings without a null-array failure.
 - AO-2: lost-state Stage 1 recovery accepts later resources without marking later stages complete;
   Stage 2 verifies existing grants remain unchanged. The troubleshooting row covers Stages 0–8.
-- AO-3: unchanged Stage 2/5 applies verify without redeploying; `-ForceRedeploy` explicitly previews or applies
-  a repair. Stage 5 no-op verifies retention instead of rewriting it.
+- AO-3 (review correction): no-op apply withdrawn by Coder/QA review and coordinator decision. Stage 2/5
+  `-Apply` always deploys the current template, as in release 17; unchanged previews disclose idempotent
+  redeployment and Stage 5 Function App restarts. Removed the withdrawn no-op/force tests and switch, not
+  weakened assertions; AO-4 changed-parameter tests remain in the redeployment regression suite.
 - AO-4: changed previews list parameter names (never values), comparing with the last successful
   deployment snapshot; older state explicitly labels its last-generated-file fallback.
 - AO-5: the unreachable-Cosmos preflight warning names the admin Groups page and the explicit

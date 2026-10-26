@@ -2,8 +2,11 @@
 
 ## Bug bash 5 staged driver
 
-- [x] G-R18-STAGED: reproduce and fix Stage 1 reruns/lost-state recovery; unchanged Stage 2/5 applies must
-  read back without redeploying, with explicit force for repairs; name changed inputs and operator next steps.
+- [x] G-R18-STAGED-REVIEW: withdraw AO-3 no-op apply by coordinator decision; always deploy on apply, accurately
+  disclose unchanged configuration/redeployment/restarts in previews, retain AO-4 and verify full checks.
+
+- [x] G-R18-STAGED: reproduce and fix Stage 1 reruns/lost-state recovery; name changed inputs and operator next
+  steps. AO-3 no-op apply was withdrawn by review: always deploy on apply and document Stage 5 restarts.
 - [x] Reader guidance: regional outage and reversible Cosmos drills; Foundry region previews, seed outcomes,
   Stage 3 duration and backend recovery link. No live applies in this packet.
 - [ ] Coordinator integration/publication after the final packet gate and review record.

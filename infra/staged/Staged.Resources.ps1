@@ -500,7 +500,7 @@ function Invoke-Stage6 {
 # ---------------------------------------------------------------- stage 2: Cosmos schema
 
 function Invoke-Stage2 {
-    param($Cfg, [switch]$Apply, [switch]$ForceRedeploy)
+    param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1
     $listRoles = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount) | ForEach-Object { $_.id } | Sort-Object) }
     $rolesBefore = if ($Apply) { & $listRoles } else { @() }
@@ -510,7 +510,7 @@ function Invoke-Stage2 {
         $before = try { & $listContainers } catch { if ("$_" -match 'NotFound') { @() } else { throw } }
         if ($problem = Get-StgChargebackTtlTransitionProblem -Cfg $Cfg -Containers $before) { throw $problem }
     }
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -ForceRedeploy:$ForceRedeploy -StageNumber 2 -Parameters @{
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -StageNumber 2 -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
         autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
         chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }

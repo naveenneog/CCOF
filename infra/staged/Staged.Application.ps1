@@ -24,7 +24,7 @@ function Test-StgUsagePolicyDeployed {
     return ($code.Contains('ccof-usage-person') -and $code.Contains('/api/me/usage') -and $code -notmatch '<base\s*/>')
 }
 function Invoke-Stage5 {
-    param($Cfg, [switch]$Apply, [switch]$ForceRedeploy)
+    param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1; $null = Get-StgStage $Cfg 3; $entra = Get-StgStage $Cfg 4
     $ctx = New-StgQsContext $Cfg
     $apimSp = Get-StgGraph "servicePrincipals/$($ctx.Apim.principalId)?`$select=appId"
@@ -88,8 +88,7 @@ function Invoke-Stage5 {
         chargebackHistory = $history ?? @{}
         logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
-    $verifyOnly = $Apply -and -not $ForceRedeploy -and (Test-StgBicepPreviewNoChange -Cfg $Cfg -StageNumber 5 -Quiet)
-    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -ForceRedeploy:$ForceRedeploy -StageNumber 5 -Parameters $params
+    $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -StageNumber 5 -Parameters $params
     if (-not $Apply) { return $null }
     $v = [ordered]@{ settings = [ordered]@{} }
     foreach ($k in @($s1.names.apps.Keys | Sort-Object)) {
@@ -112,9 +111,7 @@ function Invoke-Stage5 {
     Assert-Stg (Test-StgUsagePolicyDeployed $usageDeployed) 'the deployed get-my-usage policy is not the rendered usage policy'
     $v.usageOperation = @{ method = $usageOp.properties.method; urlTemplate = $usageOp.properties.urlTemplate; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($usagePolicy))) -Algorithm SHA256).Hash; deployedPolicyChecked = $true }
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
-    if ($verifyOnly) {
-        if ($null -ne $Cfg.audit.workspaceRetentionDays) { Assert-Stg ($currentRetention -eq $Cfg.audit.workspaceRetentionDays) 'workspace retention differs; inspect drift or use -ForceRedeploy -Apply' }
-    } else { Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names }
+    Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
     $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
     if ($apimInput.plan) { $v.gatewayLogs = Test-StgStage5ApimExisting -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim -Plan $apimInput.plan }
     if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
