@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-10-26 — Release 17
+
+- Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash
+  fixes below (sections of 2026-10-26).
+
 ## 2026-10-26 — Claude Code setup on macOS and Linux (branch fix/macos-client)
 
 - `Set-ClaudeCodeGateway.ps1`, `Restore-ClaudeCodeGateway.ps1` and `Test-ClientGatewayAccess.ps1` run in PowerShell

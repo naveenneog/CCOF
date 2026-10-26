@@ -1,5 +1,18 @@
 # Current work
 
+## Release 17 (2026-10-26)
+
+**Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an
+existing API Management; merge into main and publish (owner instruction 2026-10-26: "finish the pending tasks push to
+github ... user is running a powershell from mac, novice user deployment to existing APIM is what we need").
+
+- Branches merged on `release/17`: `test/novice3` (G-NOVICE3), `fix/bugbash-admin`, `fix/bugbash-ops`,
+  `fix/bugbash-gateway` (G-BUGBASH-GW), `fix/macos` (G-MACOS), `fix/macos-client` (G-MACOS-CLIENT),
+  `feature/existing-apim` (G-EXAPIM). Bug bash 2026-10-26 on a lab: 41 findings (developer 16, admin 11, operations 8, gateway 6) across developer, admin, operations and
+  gateway areas; all fixed except DEV-9 (cache-read tokens of streamed replies stay unpriced; documented as a lower
+  bound). Security review of the long-term audit: no findings.
+- Not verified on a real Mac: the deployer and developer setup ran on Linux PowerShell 7 (UNKNOWNS MAC-2).
+
 ## Existing API Management
 
 **Active packet:** G-EXAPIM — a first-time reader deploys CCOF into an existing API Management instance (branch
@@ -22,7 +35,7 @@
   typecheck, build, admin tests, `node .ironclad/gate.mjs --stage packet`.
 - Open: manual removal from the instance; a private Foundry behind a VNet-integrated instance not run live; create
   mode still adds an unused API Management subnet.
-- State: complete on the branch; not merged (needs the owner's approval).
+- State: complete; merged on `release/17` (owner approval 2026-10-26).
 
 ## Group-centric onboarding
 
