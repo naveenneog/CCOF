@@ -7,7 +7,9 @@
 //   - infra/workbook/main.bicep: the chargeback workbook, only when content is supplied;
 //   - the API-level Azure Monitor logger and diagnostic of infra/poc/phase4-apim-telemetry.bicep. Stage 1
 //     already created the APIM and Function resource-log diagnostic settings; a second setting with the
-//     same categories and workspace would be refused, so they are not repeated.
+//     same categories and workspace would be refused, so they are not repeated;
+//   - optional long-term audit archive (ADR-0043): a storage account and the gateway's second diagnostic
+//     setting, ccof-gateway-archive, with a storage destination only.
 // A sites/config appsettings resource replaces the whole set: this stage is the only settings writer.
 targetScope = 'resourceGroup'
 
@@ -36,6 +38,10 @@ param sync object
 param reconciler object
 param budgetState object = { graceSeconds: 900, hardLimitSeconds: 3600 }
 param syncTimerEnabled bool = false
+@description('audit.chargebackHistory (ADR-0044): enabled, closeAfterDays, ttlDays, logRetentionDays. Empty: off.')
+param chargebackHistory object = {}
+@description('Admin app log retention (ADR-0043), with or without history: days (effective workspace retention), heldFrom (empty: none). Empty: no setting.')
+param logRetention object = {}
 
 param resolverApiAppId string
 param apimIdentityAppId string
@@ -48,6 +54,9 @@ param workbook object = {}
 @description('Empty leaves any existing workbook untouched.')
 param workbookContent object = {}
 param workbookContentTags object = {}
+
+@description('Long-term audit archive (ADR-0043): Staged.Audit.ps1 Get-StgAuditDeployment; {} deploys nothing.')
+param auditArchive object = {}
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: names.logAnalyticsWorkspace
@@ -85,6 +94,7 @@ module settings '../quickstart/modules/app-settings.bicep' = {
     reconciler: reconciler
     budgetState: budgetState
     syncTimerEnabled: syncTimerEnabled
+    chargebackHistory: chargebackHistory
     resolverApiAppId: resolverApiAppId
     apimIdentityAppId: apimIdentityAppId
     apimPrincipalId: apimPrincipalId
@@ -113,6 +123,25 @@ module apiTelemetry 'stage5-api-telemetry.bicep' = {
   dependsOn: [api]
 }
 
+module auditStorage 'stage5-audit-archive.bicep' = if (!empty(auditArchive)) {
+  name: '${names.deploymentPrefix}-stage5-audit-archive'
+  params: {
+    accountName: auditArchive.accountName
+    location: auditArchive.location
+    tags: auditArchive.?tags ?? {}
+    storageSku: auditArchive.storageSku
+    retentionDays: auditArchive.?retentionDays
+    immutabilityDays: auditArchive.?immutabilityDays
+    lockedContainers: auditArchive.?lockedContainers ?? []
+  }
+}
+
+module auditDiagnostic 'stage5-audit-diagnostic.bicep' = if (!empty(auditArchive)) {
+  name: '${names.deploymentPrefix}-stage5-audit-diagnostic'
+  scope: resourceGroup(apim.subscriptionId, apim.resourceGroup)
+  params: { apimName: apim.name, storageAccountId: auditStorage!.outputs.id }
+}
+
 module workbookFull '../workbook/main.bicep' = if (!empty(workbookContent)) {
   name: '${names.deploymentPrefix}-stage5-workbook'
   params: {
@@ -136,10 +165,19 @@ resource adminInsights 'Microsoft.Insights/components@2020-02-02' existing = if 
 // Admin app settings (docs/ADMIN-V3.md Settings, docs/archive/ADMIN-QUICK-STAGES.md 4g). One shared
 // workspace: the reconciler logs through its diagnostic setting (site id), the admin audit through its
 // Application Insights component.
+// Chargeback history (ADR-0044): the export reads months before the workspace retention from chargebackDaily.
+var adminHistorySettings = (chargebackHistory.?enabled ?? false) ? {
+  ADMIN_CHARGEBACK_HISTORY_CONTAINER: 'chargebackDaily'
+} : {}
+// The effective workspace retention and, after Stage 5 raised it, the oldest instant the workspace then held (ADR-0043:
+// deleted rows do not come back). Chargeback reports use them with history on or off.
+var adminRetentionSettings = empty(logRetention) ? {} : union({
+  ADMIN_LOG_RETENTION_DAYS: string(logRetention.days)
+}, empty(logRetention.?heldFrom ?? '') ? {} : { ADMIN_LOG_RETENTION_HELD_FROM: logRetention.heldFrom })
 resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnabled) {
   parent: adminSite
   name: 'appsettings'
-  properties: {
+  properties: union({
     AzureWebJobsStorage__accountName: names.apps.?admin.?storageAccount ?? ''
     AzureWebJobsStorage__credential: 'managedidentity'
     APPLICATIONINSIGHTS_CONNECTION_STRING: adminInsights!.properties.ConnectionString
@@ -168,7 +206,7 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     ADMIN_CLIENT_ID: admin.?clientId ?? ''
     ADMIN_GATEWAY_URL: admin.?gatewayUrl ?? ''
     ADMIN_PROJECT_HEADER: admin.?projectHeader ?? 'x-ccof-project'
-  }
+  }, adminRetentionSettings, adminHistorySettings)
 }
 
 output gatewayUrl string = '${api.outputs.gatewayUrl}/${apim.apiPath}'

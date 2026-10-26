@@ -212,7 +212,8 @@ function Test-Stage1 {
         if ($a.key -ceq 'sync' -and $code) {
             $snapshotToggle = @($settings | Where-Object { $_.name -ceq 'AzureWebJobs.snapshotApply.Disabled' })
             Assert-Stg ($snapshotToggle.Count -eq 1 -and $snapshotToggle[0].value -ceq 'true') 'snapshotApply must remain disabled after the delegated snapshot cleanup'
-            $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled'
+            # Stage 5 writes it since council round 2 (app-settings.bicep); an older Stage 5 record lacks it.
+            if ($expectedSettings -cnotcontains 'AzureWebJobs.snapshotApply.Disabled') { $expectedSettings += 'AzureWebJobs.snapshotApply.Disabled' }
             $expectedSettings = @($expectedSettings | Sort-Object)
         }
         Assert-Stg (($settingNames -join '|') -ceq ($expectedSettings -join '|')) "$($a.service.name) application setting names differ from completed Stage 5 (actual=$($settingNames -join ', '); expected=$($expectedSettings -join ', '))"
@@ -440,16 +441,24 @@ function Invoke-Stage6 {
 function Invoke-Stage2 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1
+    $listContainers = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName)) }
+    if (Get-StgChargebackHistory $Cfg) {
+        # A first run has no database yet, so no container to compare.
+        $before = try { & $listContainers } catch { if ("$_" -match 'NotFound') { @() } else { throw } }
+        if ($problem = Get-StgChargebackTtlTransitionProblem -Cfg $Cfg -Containers $before) { throw $problem }
+    }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage2-schema.bicep' -Name 'stage2-schema' -Apply:$Apply -Parameters @{
         names = $s1.names; databaseName = $Cfg.cosmos.databaseName; capacityMode = $Cfg.cosmos.capacityMode
-        autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin }
+        autoscaleMaxThroughput = $Cfg.cosmos.autoscaleMaxThroughput; includeAdmin = [bool]$Cfg.stage1.includeAdmin
+        chargebackHistory = ((Get-StgChargebackHistory $Cfg) ?? @{}) }
     if (-not $Apply) { return $null }
-    $actual = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName))
+    $actual = & $listContainers
     $v = @()
     foreach ($c in $out.containers) {
         $m = @($actual | Where-Object { $_.name -ceq $c.name })
         Assert-Stg ($m.Count -eq 1) "container $($c.name) missing"
         Assert-Stg (@($m[0].resource.partitionKey.paths)[0] -ceq $c.partitionKey) "container $($c.name) partition key $(@($m[0].resource.partitionKey.paths)[0])"
+        if ($c.name -ceq 'chargebackDaily') { Assert-Stg (Test-StgChargebackTtl $Cfg $m[0].resource.defaultTtl) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)" }
         $v += [ordered]@{ name = $c.name; partitionKey = $c.partitionKey }
     }
     $docs = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount))
@@ -467,6 +476,7 @@ function Invoke-Stage3 {
     $apim = Get-StgApimIdentity $Cfg
     $params = @{ names = $s1.names; principals = $s1.principals; databaseName = $Cfg.cosmos.databaseName; roleNames = $Cfg.cosmos.roleNames
         syncMode = $Cfg.sync.mode; apimPrincipalId = $apim.principalId; apimResourceId = $apim.id
+        chargebackHistoryEnabled = ($null -ne (Get-StgChargebackHistory $Cfg))
         backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; subscriptionId = $_.subscriptionId; resourceGroup = $_.resourceGroup; accountName = $_.accountName; assignCognitiveServicesUser = ($_.assignCognitiveServicesUser -ne $false) } }) }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage3-grants.bicep' -Name 'stage3-grants' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }

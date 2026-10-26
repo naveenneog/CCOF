@@ -240,3 +240,17 @@ test("workbook health counts no-usage rows separately instead of pricing them", 
   assert.match(health, /let NoUsage = toscalar\(LedgerRows \| where noUsage/);
   assert.match(health, /RetentionTruncated, "retention_truncated"/);
 });
+
+// ADR-0043: Stage 5 records the instant the workspace held data from when it raised retention; the workbook's
+// RetentionTruncated starts at the later of that and now - retentionDays.
+test("the workbook's retention flag uses retentionHeldFrom when given, and the answers check its format", async () => {
+  const { validateAnswers } = await configModule();
+  const { buildWorkbook } = await buildModule();
+  const held = { ...workbookAnswers(), retentionDays: 90, retentionHeldFrom: "2026-09-10T00:00:00.000Z" };
+  assert.deepEqual(validateAnswers(held), held);
+  assert.throws(() => validateAnswers({ ...held, retentionHeldFrom: "2026-09-10" }), /retentionHeldFrom/);
+  const raised = JSON.stringify(buildWorkbook(held, workbookRateCard(), fixtureLedger).workbook);
+  assert.ok(raised.includes("FromTime < max_of(ReportNow - 90 * 1d, datetime(2026-09-10T00:00:00.000Z))"));
+  const plain = JSON.stringify(buildWorkbook({ ...workbookAnswers(), retentionDays: 90 }, workbookRateCard(), fixtureLedger).workbook);
+  assert.ok(plain.includes("FromTime < ReportNow - 90 * 1d;") && !plain.includes("max_of(ReportNow"));
+});

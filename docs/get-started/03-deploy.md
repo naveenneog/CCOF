@@ -66,6 +66,14 @@ These settings are not create-only, but the template's values differ from what t
 | `reconciler.timerEnabled` | `false` | `true`: the reconciler prices usage on its schedule |
 | `groups[].budget.perUser` | `25000` `CCU` | For example `100` `USD` |
 
+The template turns on the audit archive and shows chargeback history switched off
+([prerequisites, Decide before you start](02-prerequisites.md#decide-before-you-start)):
+
+| Setting | Template | Effect |
+| --- | --- | --- |
+| `audit.archive.enabled` | `true` | Stage 5 creates a storage account with a copy of every gateway request log ([audit archive](../operate/audit-archive.md)). `false` creates nothing |
+| `audit.chargebackHistory.enabled` | `false` | `true`: Stage 2 creates the Cosmos DB container `chargebackDaily` for daily chargeback totals ([chargeback history](../operate/chargeback-history.md)). `true` needs `reconciler.timerEnabled: true`, which the template leaves off, so Stage 0 refuses `true` alone; set both to `true` together. `false` creates nothing |
+
 Every key, with create-new and reuse-existing JSON, the allowed values and a complete sample: [configuration reference](configuration.md). The full key reference is [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file). For each stage, run
 without `-Apply`, review the preview with its owner, then run with `-Apply`. Each preview ends with
 `stage N preview only: nothing changed. Rerun with -Apply.`; Stage 0 is read-only and has no `-Apply` step.
@@ -116,7 +124,8 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 ```
 
-**Expected:** `deployed stage2-schema (…)` and `stage 2 completed and verified in … s`.
+**Expected:** `deployed stage2-schema (…)` and `stage 2 completed and verified in … s`. With chargeback history on,
+`$HOME/ccof-private/.staged-state/evidence/stage2.verify.json` lists the `chargebackDaily` container.
 
 ![Expected Stage 2 output](../evidence/2026-10-24-demo/terminal-stage2.png)
 
@@ -160,7 +169,13 @@ pwsh -File $run -Stage 5 -ConfigPath $cfg          # preview
 pwsh -File $run -Stage 5 -ConfigPath $cfg -Apply
 ```
 
-**Expected:** a JSON line with the policy digests, `deployed stage5-config (…)` and `stage 5 completed and verified in … s`.
+**Expected:** a JSON line with the policy digests; one `audit archive: <account> in <region>, blobs …;
+diagnostic setting ccof-gateway-archive (GatewayLogs, GatewayLlmLogs); workspace retention …` line, or
+`audit archive: off; workspace retention unchanged` when the archive is off (`<region>` as API Management reports
+it, for example `East US 2`); `deployed stage5-config (…)`; with the archive on and `-Apply`, `audit archive:
+<account> network public-enabled (…), trusted services allowed` (or `public-disabled` when a storage policy turned
+public network access off); and `stage 5 completed and verified in … s`. The demo capture below predates the archive and has no `audit archive:`
+line. Checks for the archive: [audit archive](../operate/audit-archive.md#check-it-works).
 
 ![Expected Stage 5 output](../evidence/2026-10-24-demo/terminal-stage5.png)
 ![Expected in the Portal: API Management, the Claude Messages API](../evidence/2026-10-24-demo/portal-05-apim-apis-preview.png)
@@ -203,8 +218,12 @@ pwsh -File $run -Stage 7 -ConfigPath $cfg -Apply
 - [ ] `Configure this machine: pwsh -File scripts/client/Set-ClaudeCodeGateway.ps1 …`, the command for developers;
 - [ ] the last line `stage 7 completed and verified in … s`.
 
-A rerun prints `present-equal` instead of `created` for documents that already exist. A document that differs from
-the configuration stops the stage with `seed_documents_differ` and is not overwritten.
+A rerun prints `present-equal` instead of `created` for documents that already exist. A document that differs is
+never overwritten. A group document that differs (edited in the admin console) stops the stage with
+`seed_documents_differ`, naming each group and the differing fields; set `stage7.keepDifferingGroups: true` to keep
+the console's version, and the stage then ends with a `kept N console-edited group(s): …` line
+([configuration reference](configuration-reference-2.md#groups)). Any other document that differs always stops the
+stage ([Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1) `Invoke-StgSeed`).
 A first run right after Stage 6 can stop with a storage `403`; rerun after about five minutes
 ([troubleshooting](../operate/troubleshooting.md)).
 

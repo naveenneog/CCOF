@@ -19,7 +19,7 @@ invalid ones before anything is created. All values on these pages are hypotheti
 | [Foundry, network, API Management, Cosmos DB](configuration-resources.md) | Create new and reuse existing, as JSON |
 | [Reference: target, Stage 1, network, Cosmos DB, API Management, backends](configuration-reference.md) | Every key: required, template value, allowed values, reader |
 | [Reference: Entra, groups, client](configuration-reference-2.md) | Same, for these sections |
-| [Reference: resolver, sync, reconciler, gateway, reports](configuration-reference-3.md) | Same, for these sections |
+| [Reference: resolver, sync, reconciler, gateway, reports, audit](configuration-reference-3.md) | Same, for these sections |
 
 ## Choices
 
@@ -272,6 +272,9 @@ stays valid. Stage 0 additionally needs the account, its deployments and the app
     "groupSearchEnabled": false,
     "userNamesEnabled": false
   },
+  "audit": {
+    "chargebackHistory": { "enabled": true, "closeAfterDays": 2, "ttlDays": null }
+  },
   "acceptance": {
     "allowed": [{ "model": "claude-haiku-5-5" }],
     "denied": [
@@ -285,3 +288,8 @@ stays valid. Stage 0 additionally needs the account, its deployments and the app
   "sharedResourceGroup": false
 }
 ```
+
+The sample turns on chargeback history (`audit.chargebackHistory`, with `reconciler.timerEnabled: true`) and leaves
+the audit archive off: it has no `audit.archive` block. The template does the opposite: its `audit.archive` is on,
+and its `audit.chargebackHistory` is `enabled: false` because its reconciler timer is off. Add the template's
+`audit.archive` block to keep a long-term copy of the gateway log ([audit archive](../operate/audit-archive.md)).

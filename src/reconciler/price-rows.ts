@@ -6,6 +6,7 @@
 // one bad row affects only its own scope.
 
 import type { Decimal } from "decimal.js";
+import { usdToCcu } from "../cost/budget-units.ts";
 import type { ContractSchedule } from "../cost/contract-schedule.ts";
 import { UsageRowError } from "../cost/errors.ts";
 import { priceUsage } from "../cost/price-usage.ts";
@@ -26,7 +27,8 @@ export interface Attribution {
 
 export type RowOutcome =
   | { kind: "no_usage" }
-  | { kind: "priced" | "partial"; ccu: Decimal }
+  // ccu: the contract amount the budget counts; listCcu: list price, the chargeback report's basis.
+  | { kind: "priced" | "partial"; ccu: Decimal; listCcu: Decimal }
   | { kind: "unpriced"; reasons: readonly string[] };
 
 export interface ClassifiedRow {
@@ -95,7 +97,7 @@ function priceRow(row: LedgerRow, at: Date, card: RateCard, schedule: ContractSc
   try {
     const outcome = priceUsage({ requestTime: at, model: typeof row.model === "string" ? row.model : "", inferenceGeo, tokens }, card, schedule);
     if (outcome.status === "unpriced") return { kind: "unpriced", reasons: outcome.reasons };
-    return { kind: outcome.status, ccu: outcome.predictedCcu };
+    return { kind: outcome.status, ccu: outcome.predictedCcu, listCcu: usdToCcu(outcome.listUsd) };
   } catch (error) {
     if (error instanceof UsageRowError) return invalidRow;
     throw error;

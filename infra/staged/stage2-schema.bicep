@@ -2,7 +2,8 @@
 // assignments (Stage 3) and no settings. The container list matches the quickstart's
 // (infra/quickstart/modules/cosmos-data.bicep, cosmosContainers); tests/Test-StagedStages.ps1 compares
 // them. adminConfig is the admin catalog container (infra/admin/admin-v2-catalog.bicep), only with
-// includeAdmin.
+// includeAdmin. chargebackDaily is the chargeback history container (ADR-0044), only with
+// audit.chargebackHistory.enabled; it is not in the quickstart.
 targetScope = 'resourceGroup'
 
 @description('Stage 1 output `names`.')
@@ -19,6 +20,9 @@ param autoscaleMaxThroughput int = 1000
 
 param includeAdmin bool = true
 
+@description('audit.chargebackHistory (ADR-0044): enabled and ttlDays (null: no expiry). Empty: no history container.')
+param chargebackHistory object = {}
+
 var cosmosContainers = [
   { name: 'entitlement', partitionKey: '/personId' }
   { name: 'projects', partitionKey: '/projectId' }
@@ -30,7 +34,19 @@ var cosmosContainers = [
   { name: 'backends', partitionKey: '/backendId' }
 ]
 var adminContainers = includeAdmin ? [{ name: 'adminConfig', partitionKey: '/scopeId' }] : []
-var allContainers = concat(cosmosContainers, adminContainers)
+var historyEnabled = chargebackHistory.?enabled ?? false
+var historyTtlDays = chargebackHistory.?ttlDays
+var historyContainers = historyEnabled ? [{ name: 'chargebackDaily', partitionKey: '/month' }] : []
+var allContainers = concat(cosmosContainers, adminContainers, historyContainers)
+// Only the fields the reconciler and the export query are indexed: fewer RU per write (UNKNOWNS AUD-C1).
+var historyResource = union({
+  indexingPolicy: {
+    indexingMode: 'consistent'
+    automatic: true
+    includedPaths: [{ path: '/day/?' }, { path: '/chargebackId/?' }, { path: '/projectId/?' }, { path: '/classification/?' }, { path: '/personId/?' }, { path: '/model/?' }]
+    excludedPaths: [{ path: '/*' }]
+  }
+}, historyTtlDays == null ? {} : { defaultTtl: historyTtlDays * 86400 })
 
 resource account 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' existing = {
   name: names.cosmosAccount
@@ -50,10 +66,10 @@ resource containers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containe
   parent: database
   name: c.name
   properties: {
-    resource: {
+    resource: union({
       id: c.name
       partitionKey: { paths: [c.partitionKey], kind: 'Hash' }
-    }
+    }, c.name == 'chargebackDaily' ? historyResource : {})
   }
 }]
 

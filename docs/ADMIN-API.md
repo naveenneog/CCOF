@@ -201,6 +201,19 @@ an export is never broader than its request. The JSON echoes every applied filte
 When the chargeback source is not configured or fails, `export/usage` returns `503 export_unavailable`
 with the capability state, never an empty file.
 
+With chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md),
+[chargeback history](operate/chargeback-history.md)), `export/usage` reads the part of its range before the
+first whole UTC month the Log Analytics workspace still holds from the Cosmos DB container `chargebackDaily`, and
+the rest from Log Analytics; rows with the same chargeback ID, group and person are merged, and every row carries
+the whole requested period in `periodStart` and `periodEnd` ([admin/src/history.ts](../admin/src/history.ts)).
+The JSON lists the parts in `sources`; the `chargebackHistory` entry has `openDays` (covered days not yet closed),
+which the response (CSV too) also gives in the `x-ccof-history-open-days` header, comma-separated.
+Refusals of that part: `400 history_range_not_whole_days` (it must start and end at 00:00 UTC),
+`400 backend_filter_not_in_history`, `409 history_not_covered` with `uncoveredDays` (days the reconciler never
+recorded; JSON body for CSV requests too, never a file with zeros), `409 history_expired` with `expiredDays` and
+`expiresAt` (days whose documents expired, or expire within a day, under `ttlDays`), `503 chargeback_history_not_configured` and
+`503 chargeback_history_settings_invalid`. Without the history settings the whole range is read from Log Analytics.
+
 Usage CSV uses the configured individual-tag label instead of the `chargebackId` display heading.
 Browser chargeback CSV similarly labels `chargebackId` / `userTag`. Values are still read by their
 original keys. Collisions with other headings are resolved by appending the machine key in

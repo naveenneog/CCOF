@@ -112,5 +112,7 @@ Stage 4 creates them, or merges its settings into existing ones (`entra.existing
 | Budget guard | Example: warn at 80%, rate allowance 5% per projection window; not a strict cap | `reconciler.budgetGuard`; [budgets](../operate/budgets-and-guard.md) |
 | Cosmos DB redundancy | One region, or two regions with failover | `stage1.cosmosLocations`; [guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy) |
 | Developer sign-in | `msal` (default: the CCOF helper, Node.js on each machine) or `azure-cli` (interactive `az login` through a helper; the Azure CLI on each machine). Before Stage 4 | `client.signInMethod`, and `entra.allowAzureCliClient: true` for `azure-cli`; [guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in) |
+| Long-term audit archive of the gateway log | On (template) or off. A storage account and a second diagnostic setting; about USD 0.25 per GB of LLM log exported, once, plus about USD 0.02 per GB per month kept (Hot LRS) | `audit.archive`; [audit archive](../operate/audit-archive.md) |
+| Chargeback history beyond the Log Analytics retention | Off (template) or on. On needs `reconciler.timerEnabled: true`, which the template also leaves off; set both to `true` together. A Cosmos DB container; for 1,000 active people, under USD 2 a month in writes on serverless plus USD 0.25 per GB per month stored | `audit.chargebackHistory`; [chargeback history](../operate/chargeback-history.md) |
 
 Next: [deploy](03-deploy.md).

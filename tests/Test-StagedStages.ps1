@@ -22,13 +22,16 @@ function Build-Arm([string]$Relative) {
     return ($out -join "`n") | ConvertFrom-Json -AsHashtable -Depth 100
 }
 function Get-Resources($Template) {
-    foreach ($resource in $Template.resources) {
+    # languageVersion 2.0 templates hold resources in an object keyed by symbolic name.
+    $items = if ($Template.resources -is [Collections.IDictionary]) { $Template.resources.Values } else { $Template.resources }
+    foreach ($resource in $items) {
         $resource
         if ($resource.properties.template) { Get-Resources $resource.properties.template }
     }
 }
 function Test-StageBoundary($Arm, [string[]]$Allowed, [string]$Stage) {
-    foreach ($r in @(Get-Resources $Arm)) {
+    # An `existing` reference (languageVersion 2.0) deploys nothing.
+    foreach ($r in @(Get-Resources $Arm | Where-Object { $_.existing -ne $true })) {
         if ($r.type -notin $Allowed) { throw "$Stage declares a resource outside its boundary: $($r.type)" }
     }
 }
@@ -43,7 +46,10 @@ $boundaries = [ordered]@{
         'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions', 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')
     'infra\staged\stage5-config.bicep' = @('Microsoft.Resources/deployments', 'Microsoft.Web/sites/config', 'Microsoft.ApiManagement/service/apis',
         'Microsoft.ApiManagement/service/backends', 'Microsoft.ApiManagement/service/apis/policies', 'Microsoft.ApiManagement/service/apis/operations', 'Microsoft.ApiManagement/service/apis/operations/policies', 'Microsoft.ApiManagement/service/policyFragments', 'Microsoft.ApiManagement/service/loggers',
-        'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks')
+        'Microsoft.ApiManagement/service/apis/diagnostics', 'Microsoft.Insights/workbooks',
+        # The long-term audit archive (ADR-0043): its account, containers, policies and diagnostic setting.
+        'Microsoft.Storage/storageAccounts', 'Microsoft.Storage/storageAccounts/blobServices/containers', 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies',
+        'Microsoft.Storage/storageAccounts/managementPolicies', 'Microsoft.Insights/diagnosticSettings')
 }
 $arms = @{}
 foreach ($path in $boundaries.Keys) {
@@ -61,8 +67,10 @@ Assert-Contract $caught 'Negative control: an injected role assignment was not r
 
 # Stage 5 (configuration) must never grant: no Authorization resource anywhere, including the reused modules.
 Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -Match 'Authorization|sqlRole')) 'Stage 5 contains a grant.'
-# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates).
-Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')) 'Stage 5 repeats a diagnostic setting.'
+# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): its only one is
+# the audit archive's, with a storage destination (ADR-0043; tests/Test-AuditArchive.ps1).
+$stage5Diag = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')
+Assert-Contract ($stage5Diag.Count -eq 1 -and $stage5Diag[0].name -ceq 'ccof-gateway-archive' -and -not $stage5Diag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
 
 # Stage 3 and Stage 4 keep the quickstart's Cosmos data contract.
 $quick = Build-Arm 'infra\quickstart\modules\cosmos-data.bicep'
@@ -83,8 +91,9 @@ foreach ($a in $quick.variables.cosmosAssignments | Where-Object principal -NE '
 # Every client the admin API accepts (ADMIN_ALLOWED_CLIENT_IDS) is preauthorized by Stage 4 and read back.
 $entraText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Entra.ps1')
 Assert-Contract ($entraText -match '\$adminClients = @\(\$adm\.appId\) \+ @\(\$Cfg\.admin\.extraAllowedClientIds' -and $entraText -match 'Merge-StgPreauthorized \$adm \$adminClients' -and $entraText -match 'foreach \(\$cid in \$adminClients\)') 'Stage 4 must preauthorize and verify admin.extraAllowedClientIds.'
-$adminScopes = @($grants.variables.cosmosAssignments | Where-Object principal -EQ 'admin' | ForEach-Object { $_.container })
-Assert-Contract ((($adminScopes | Sort-Object) -join ',') -ceq 'adminConfig,projects') 'Admin Cosmos access must be limited to projects and adminConfig.'
+# Admin write access stays on projects and adminConfig; its read of chargebackDaily (ADR-0044) is checked in Test-ChargebackHistory.ps1.
+$adminScopes = @($grants.variables.cosmosAssignments | Where-Object { $_.principal -eq 'admin' -and $_.role -cne '00000000-0000-0000-0000-000000000001' } | ForEach-Object { $_.container })
+Assert-Contract ((($adminScopes | Sort-Object) -join ',') -ceq 'adminConfig,projects') 'Admin Cosmos write access must be limited to projects and adminConfig.'
 # The sync reads the admin console's removal-limit override: read-only, adminConfig only, and only with the admin app.
 $syncConfig = @($grants.variables.cosmosAssignments | Where-Object { $_.principal -ceq 'sync' -and $_.container -ceq 'adminConfig' })
 Assert-Contract ($syncConfig.Count -eq 1 -and $syncConfig[0].role -ceq '00000000-0000-0000-0000-000000000001') 'Sync access to adminConfig must be the built-in Data Reader only.'
@@ -362,6 +371,8 @@ $checkAt = $stage7Body.IndexOf('Assert-StgClientSignInMethod -Cfg $Cfg -AzureCli
 Assert-Contract ($checkAt -ge 0 -and $checkAt -lt $stage7Body.IndexOf('if (-not $Apply)')) 'Stage 7 must check client.signInMethod before its preview and before any deployment step.'
 $stage5Body = @($functionAsts | Where-Object Name -EQ 'Invoke-Stage5')[0].Body.Extent.Text
 $qsParamsBody = @($functionAsts | Where-Object Name -EQ 'Get-StgQuickstartParameters')[0].Body.Extent.Text
+$groupsText = Get-Content -Raw (Join-Path $root 'infra\staged\Staged.Groups.ps1')
+Assert-Contract ($groupsText -match 'Invoke-QsSeedThroughFunction -Ctx \$Ctx -Documents \$docs -KeepDiffering @\(\$GroupDocuments \| ForEach-Object \{ "projects/\$\(\$_\.id\)" \}\)') 'Stage 7 must ask the seed step to report group documents edited in the admin console (KeepDiffering); Invoke-StgSeed decides (Test-Stage7GroupDrift.ps1).'
 Assert-Contract ($stage7Body -match 'Invoke-StgSeed -Ctx \$ctx -GroupDocuments \$groupDocs' -and $stage7Body -match 'Invoke-StgClient -Ctx \$ctx -Cfg \$Cfg' -and $stage7Body -notmatch 'Invoke-QsSeed \$ctx') 'Stage 7 must seed group documents and build the client file through the group-aware functions.'
 Assert-Contract ($stage5Body -match 'Get-StgGroupWorkbookRows' -and $qsParamsBody -match 'Select-StgBaselineGroups \$Cfg\.groups') 'Stage 5 must add group workbook rows; only baseline entries may reach the quickstart parameters.'
 # Council G-SEED fixes: backend reference, Entra group still present before the seed, Stage 8 selected group.
@@ -470,7 +481,7 @@ try {
         Assert-Contract $badGuard "A partial or out-of-range budget guard must be refused before Azure calls ($($bad | ConvertTo-Json -Compress))."
         $c.reconciler.budgetGuard = $saved
     }
-    Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'RECONCILER_PROJECTION_MINUTES: string\(reconcilerGuard\.projectionMinutes\)' -and (Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'union\(reconcilerSettings, reconcilerGuardSettings\)') 'Stage 5 must write the budget guard settings to the reconciler.'
+    Assert-Contract ((Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'RECONCILER_PROJECTION_MINUTES: string\(reconcilerGuard\.projectionMinutes\)' -and (Get-Content -Raw (Join-Path $root 'infra\quickstart\modules\app-settings.bicep')) -match 'union\(reconcilerSettings, reconcilerGuardSettings[,)]') 'Stage 5 must write the budget guard settings to the reconciler.'
     Assert-Contract ($read.stage1.prefix -ceq 'ccofstg' -and $read.stage1.functionsPublicNetworkAccess -ceq 'Disabled' -and $read.stage1.approveNewPublicApimBootstrap -eq $false) 'Example defaults must stay private and defer APIM.'
     $stage1Parameters = Get-Stage1Parameters $read
     $recordedParameters = @{ properties = @{ parameters = @{} } }
@@ -684,5 +695,7 @@ Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inboun
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
+# Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
+Assert-Contract ($resText -match "if \(\`$expectedSettings -cnotcontains 'AzureWebJobs\.snapshotApply\.Disabled'\)") 'The Stage 1 recheck must add the snapshot switch only when the Stage 5 record lacks it.'
 
 "Staged stages: $passed checks passed (4 stage boundaries, negative control, Cosmos contract, network-last order and layout migration, network verify mode, driver and configuration). No Azure calls."

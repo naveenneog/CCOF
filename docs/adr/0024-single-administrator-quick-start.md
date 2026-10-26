@@ -89,8 +89,12 @@ so it needs one. Cosmos public access is off, so the writer runs inside the VNet
   - *When the function runs.* The function is registered only while the app setting
     `CCOF_SEED_DOCUMENTS` is set, which only step 5 does (the staged path never does), and the host
     runs it only while `AzureWebJobs.registrySeed.Disabled` is `false`. The quick-start's settings
-    keep that switch `true` (the one quick-start setting that D2 does not write); step 5 sets it to
+    keep that switch `true` (one of two quick-start settings that D2 does not write); step 5 sets it to
     `false` with the documents and, whatever the outcome, back to `true` and deletes the documents.
+    The other is `AzureWebJobs.snapshotApply.Disabled`, also kept `true` (council round 2, 2026-10-26):
+    the delegated snapshot (`Invoke-SnapshotApplyThroughFunction.ps1`, staged Stage 7) sets it to `false`
+    for its run and back to `true`, and the settings resource replaces the whole set, so without it a
+    later settings deployment (staged Stage 5) dropped the switch and the Stage 1 recheck then failed.
 - **The runner**, when it exists (`runner.enabled` true, which only the delegated-snapshot sync mode
   needs), holds the same role on `backends` (`qs-runner-backends-writer`) besides D3's on `projects`,
   and step 5 then uses it through Run Command, as reviewed in PR #58. Its assignments exist only when

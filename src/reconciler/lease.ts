@@ -11,6 +11,8 @@
 // A protocol constant, not configuration: every reconciler writer must use
 // the same id, or two writers could each hold "the" lease.
 export const RECONCILER_LEASE_ID = "ccof-budget-reconciler";
+// Chargeback history (ADR-0044) runs after the budget lease is released, under its own lease in the same container.
+export const HISTORY_LEASE_ID = "ccof-chargeback-history";
 
 export interface LeaseDocument {
   id: string;
@@ -53,6 +55,8 @@ export interface AcquireOptions {
   holder: string;
   leaseSeconds: number;
   now: () => Date;
+  // The lease document id; RECONCILER_LEASE_ID when absent.
+  id?: string;
 }
 
 const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
@@ -63,9 +67,9 @@ function expiryOf(value: unknown): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function leaseDocument(holder: string, acquiredAt: string, at: Date, leaseSeconds: number): LeaseDocument {
+function leaseDocument(id: string, holder: string, acquiredAt: string, at: Date, leaseSeconds: number): LeaseDocument {
   return {
-    id: RECONCILER_LEASE_ID,
+    id,
     holder,
     acquiredAt,
     renewedAt: at.toISOString(),
@@ -98,7 +102,7 @@ function heldLease(store: LeaseStore, initial: LeaseDocument, initialEtag: strin
       const now = options.now();
       if (now.getTime() - renewedMs < (options.leaseSeconds * 1000) / 3) return;
       renewal = (async () => {
-        const next = leaseDocument(options.holder, doc.acquiredAt, now, options.leaseSeconds);
+        const next = leaseDocument(initial.id, options.holder, doc.acquiredAt, now, options.leaseSeconds);
         const result = await store.replace(next, etag);
         if ("conflict" in result) {
           lost = true;
@@ -124,11 +128,11 @@ function heldLease(store: LeaseStore, initial: LeaseDocument, initialEtag: strin
 
 export async function acquireLease(store: LeaseStore, options: AcquireOptions): Promise<AcquireResult> {
   const now = options.now();
-  const doc = leaseDocument(options.holder, now.toISOString(), now, options.leaseSeconds);
+  const doc = leaseDocument(options.id ?? RECONCILER_LEASE_ID, options.holder, now.toISOString(), now, options.leaseSeconds);
   const created = await store.create(doc);
   if (!("conflict" in created)) return { acquired: true, lease: heldLease(store, doc, created.etag, options) };
 
-  const held = await store.read(RECONCILER_LEASE_ID);
+  const held = await store.read(doc.id);
   if (held === null) {
     // Deleted between our create and read: try once more, then give up.
     const again = await store.create(doc);

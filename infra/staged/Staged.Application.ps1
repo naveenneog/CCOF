@@ -44,6 +44,15 @@ function Invoke-Stage5 {
     $usagePolicy = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).usage.policy.xml") -Raw
     # API Management refuses an API policy over 16 KB: the policy is deployed as one fragment per section (ADR-0039).
     $policyDeployment = Get-Content -LiteralPath (Join-Path $ctx.GeneratedDir "gateway/$($Cfg.apim.apiId).policy.deployment.json") -Raw | ConvertFrom-Json -AsHashtable
+    # ADR-0043: raising the workspace retention does not bring back deleted rows. The oldest instant the workspace holds
+    # is recorded before anything changes, and the workbook, the console and the history export start there.
+    $retentionDays = Get-StgLogRetentionDays $Cfg
+    $currentRetention = if ($null -ne $Cfg.audit.workspaceRetentionDays) { (Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.OperationalInsights/workspaces/$($s1.names.logAnalyticsWorkspace)" '2023-09-01').properties.retentionInDays } else { $null }
+    $heldFrom = Get-StgRetentionHeldFrom -CurrentDays $currentRetention -DesiredDays $retentionDays -Previous (Get-StgPreviousRetentionHeldFrom -Cfg $Cfg -Names $s1.names)
+    if ($heldFrom) { Write-Host "log retention: the workspace holds rows from $heldFrom (retention raised to $retentionDays days); reports flag earlier periods as retention_truncated" }
+    if ($Apply) { $null = Write-StgEvidence 'stage5.retention.json' ([ordered]@{ days = $retentionDays; heldFrom = $heldFrom }) }
+    $ctx.P.logRetentionHeldFrom = $heldFrom
+    $history = Get-StgChargebackHistory $Cfg
     $answers = New-QsWorkbookAnswers -P $ctx.P -ApimId $ctx.Apim.id -Directory $ctx.GeneratedDir
     $groupsPath = Join-Path $ctx.GeneratedDir 'workbook.groups.json'
     $groupRows = @(Get-StgGroupWorkbookRows -Documents @(New-StgGroupDocuments -Groups $Cfg.groups -EntraGroups $entra.groups))
@@ -60,6 +69,10 @@ function Invoke-Stage5 {
     # The resolver reads Cosmos in the configured failover order when the account has two or more regions (ADR-0036).
     $resolverSettings = @{}; foreach ($k in $Cfg.resolver.Keys) { $resolverSettings[$k] = $Cfg.resolver[$k] }
     $resolverSettings.preferredRegions = @((Get-StgCosmosPreferredRegions $Cfg) -split ',' | Where-Object { $_ })
+    # Long-term audit archive (ADR-0043): in the gateway's region; never rewrites an immutability policy the owner locked.
+    $auditLocked = if (Get-StgAuditArchive $Cfg) { Get-StgAuditLockedContainers "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Storage/storageAccounts/$(Get-StgAuditArchiveName $s1.names)" } else { @() }
+    $audit = Get-StgAuditDeployment -Cfg $Cfg -Names $s1.names -ApimLocation $ctx.Apim.location -LockedContainers $auditLocked
+    Write-Host (Format-StgAuditPreview -Deployment $audit -WorkspaceRetentionDays $Cfg.audit.workspaceRetentionDays)
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
@@ -68,6 +81,9 @@ function Invoke-Stage5 {
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
+        auditArchive = $(if ($audit) { $audit } else { @{} })
+        chargebackHistory = $history ?? @{}
+        logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage5-config.bicep' -Name 'stage5-config' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
@@ -92,6 +108,10 @@ function Invoke-Stage5 {
     Assert-Stg (Test-StgUsagePolicyDeployed $usageDeployed) 'the deployed get-my-usage policy is not the rendered usage policy'
     $v.usageOperation = @{ method = $usageOp.properties.method; urlTemplate = $usageOp.properties.urlTemplate; policySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($usagePolicy))) -Algorithm SHA256).Hash; deployedPolicyChecked = $true }
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
+    Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
+    $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
+    if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
+    $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }
 }
@@ -108,7 +128,7 @@ function Invoke-Stage7 {
     Assert-StgClientSignInMethod -Cfg $Cfg -AzureCliAllowed ([bool]$entra.azureCliClientAllowed)
     if (-not $Apply) {
         Write-Host "preview: publish resolver, sync, reconciler$(if ($Cfg.stage1.includeAdmin) { ', admin' }) packages (OneDeploy), wait for their functions"
-        Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function"
+        Write-Host "preview: seed $(@($docs.projects).Count) projects, $($groupDocs.Count) groups and $(@($docs.backends).Count) backends through the sync app's registrySeed function; a group document edited in the admin console $(if ($Cfg.stage7.keepDifferingGroups -eq $true) { 'is kept (stage7.keepDifferingGroups)' } else { 'stops the stage' })"
         Write-Host "preview: delegated snapshot of $(@($entra.groups.Values).Count) groups, applied through the sync app's snapshotApply function"
         Write-Host "preview: write the client config.json for $(if ($Cfg.client.Contains('group')) { "group $($Cfg.client.group)" } else { 'client.projectId/classification' })"
         return $null
@@ -129,7 +149,7 @@ function Invoke-Stage7 {
     }
     # Invoke-StgSeed checks baseline documents against onboarding's schema and adds the group documents;
     # with the runner off it seeds through the sync app's registrySeed function.
-    $result.seed = Invoke-StgSeed -Ctx $ctx -GroupDocuments $groupDocs
+    $result.seed = Invoke-StgSeed -Ctx $ctx -GroupDocuments $groupDocs -KeepDifferingGroups ($Cfg.stage7.keepDifferingGroups -eq $true)
     # Delegated snapshot (docs/runbooks/CLOUD-SHELL-QUICKSTART.md section 5): the operator's own
     # Graph read through Azure CLI; no application permission.
     $groupsFile = Join-Path $ctx.GeneratedDir 'snapshot-groups.json'
@@ -152,6 +172,7 @@ function Invoke-Stage7 {
     Assert-Stg ($LASTEXITCODE -eq 0) 'client config failed the client validator'
     $result.client = $client
     $null = Write-StgEvidence 'stage7.verify.json' $result
+    if ($kept = Format-StgKeptGroups -Kept $result.seed.kept -GroupDocuments $groupDocs) { Write-Host $kept -ForegroundColor Yellow }
     return $result
 }
 

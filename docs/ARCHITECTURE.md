@@ -70,7 +70,9 @@ amber dashed components are optional, not universally deployed.
    input/output/cache-read/cache-write-5m/cache-write-1h categories are reported without logging
    prompts, responses or credentials. Stream cache categories remain unknown. Workbook selectors
    are not access controls, list-price reporting is not a Marketplace invoice or dollar enforcement,
-   and historical group attribution is never rewritten using today's membership.
+   and historical group attribution is never rewritten using today's membership. With `audit.archive`, a second
+   diagnostic setting, `ccof-gateway-archive`, copies GatewayLogs/GatewayLlmLogs to a firewalled storage account for
+   long-term audit, independent of the workspace retention ([ADR-0043](adr/0043-long-term-audit-archive.md)).
 7. **Revocation and classification changes.** Group removal must successfully sync and refresh the
    resolver/cache before new requests are denied. Baseline allow TTL is 120 seconds, refusal TTL
    30 seconds, with an additional 3600-second last-known-good allowance on resolver failure;
@@ -397,6 +399,18 @@ realtime ceiling is kept tight enough to hit the ±2-3% target. `docs/MARKETPLAC
 is resolved from Marketplace CCU billing, including prompt-cache tokens, and how per-project figures
 are tied to the invoice.
 
+Chargeback history ([ADR-0044](adr/0044-chargeback-history-in-cosmos.md), optional): after the reconciler run has
+written the budget states and the budget lease (`ccof-budget-reconciler`) is released, the same run turns the ledger
+rows it already priced into daily totals per day, chargeback ID, group, person and model, and writes the changed
+ones to the Cosmos container `chargebackDaily` (partition key `/month`). This step runs only when the budget part
+wrote its states, under its own lease `ccof-chargeback-history` in the same lease container, within half the run
+interval (at least 15 seconds) and at most 1,000 document writes per run; a failure is reported on the run line and
+never fails or delays the budget run ([run.ts](../src/reconciler/run.ts), [history-run.ts](../src/reconciler/history-run.ts)).
+Early in a month it reads the previous month's last days with one extra ledger query, so their late rows
+are counted before the days close. A monthly coverage document records which days history holds. The admin usage
+export reads months older than the effective Log Analytics retention (`audit.workspaceRetentionDays` if set, else
+`stage1.retentionInDays`) from that container and later ones from Log Analytics, and refuses days history does not
+cover ([chargeback history](operate/chargeback-history.md)).
 ## 7. Why this reuses, rather than replaces, the reference repository's infrastructure
 
 | Component | Reused as-is | Extended |

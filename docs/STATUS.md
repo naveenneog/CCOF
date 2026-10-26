@@ -2,7 +2,41 @@
 
 ## Group-centric onboarding
 
-**Active packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
+**Active packet:** G-AUDIT — long-term audit: gateway log archive and chargeback history (feature branch
+`feature/long-term-audit`, merged into main on 2026-10-26 with the owner's approval, merge commit 2265e25; [ADR-0043](adr/0043-long-term-audit-archive.md),
+[ADR-0044](adr/0044-chargeback-history-in-cosmos.md)).
+
+### G-AUDIT — long-term audit (feature branch, 2026-10-26)
+
+- Acceptance: (1) API Management gateway logs archived to a storage account in Stage 5 (`audit.archive`), kept for
+  `retentionDays` with an optional immutability policy; (2) the reconciler writes daily chargeback totals to Cosmos DB
+  (`audit.chargebackHistory`), and the admin usage export reads months older than the Log Analytics window from them,
+  refusing days history does not cover (`409 history_not_covered`) or that have expired (`409 history_expired`);
+  (3) neither feature can delay or fail budget enforcement; (4) existing configurations without `audit` keep their
+  stage hashes; (5) documentation a first-time reader can follow.
+- Process: two parallel build branches (archive, history), integrated, then four council rounds (Architect, Coder,
+  QA, UX, Security) plus a first-time-reader review; blocking findings fixed test-first in three fix rounds; final
+  verdicts PASS or PASS-WITH-NOTES; first-reader ratings 5/3/4 → 8/8/8.
+- Live, lab, 2026-10-26: Stages 0, 2, 3, 5, 7, 8 passed from the branch. History: reconciler run lines
+  `historyOutcome: written`; current-month export 200; previous month `409 history_not_covered` (JSON and CSV);
+  budgets and `/usage` unchanged. Archive: a management-group storage policy turned the account's public network
+  access off; Azure Monitor still delivered (storage metrics: `PutBlob`/`AppendBlock` successes with OAuth, Shared Key
+  disabled), and Stage 5 now accepts that state (public access off, default Deny, trusted services allowed). Re-proof:
+  writes appeared about 5 minutes after the requests; about 6–7 KB per request in the archive.
+- Private reads, lab, 2026-10-26, from a temporary runner inside the VNet (managed identity, archive private
+  endpoint, container-scoped reader roles; all removed afterwards and the original settings read back unchanged):
+  both archive categories held all 15 request IDs of the earlier traffic and no prompt or completion text; the
+  daily history documents and the coverage record matched the Log Analytics export totals; the deletion tool's
+  what-if ran on real history (an old month: 0 documents; the current month: refused), and `--confirm` deleted
+  only synthetic documents in a disposable container, with a repeat run deleting nothing.
+- Not checked live: an admin export answered from history (`sources`, `X-CCOF-History-Open-Days`). The export
+  reads history only for months before the current one, and the first covered month is still current; possible
+  from the first day of the next month.
+- Checks: full `npm test` 1304 passed, CI typecheck and build, 41 Bicep templates, docs and admin tests,
+  `node .ironclad/gate.mjs --stage packet` PASS; mutation checks on every new guard.
+- Follow-up (non-blocking): a per-person history deletion that stops part-way is not yet marked as in progress, and
+  exports do not yet show that a person's history was deleted.
+**Previous packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)
 
@@ -18,6 +52,13 @@
   idle timeout, recovery after lost `$HOME`, and this error.
 - Checks: `tests/Test-StagedStages.ps1` 499 checks pass (a mutation that dropped the `''` case was caught); docs tests
   27/27; packet gate PASS (23 passed, 2 warned, 0 failed, includes `npm test`), all in a logged-out Azure CLI profile.
+- Source commit: `9091ad5` (`fix(staged): accept the configured Functions subnet at Stage 1 after lost state`), local `main`.
+- Public release 15: `07900bc` on `naveenneog/CCOF` `main`, the `f368d2d..9091ad5` diff (G-CONFIG-GUIDE-2 and G-RESUME)
+  applied with no conflicts. The planned base `e5e7d8d` conflicted in 7 files because release 14 already holds
+  `e5e7d8d..f368d2d`; `f368d2d..06a8489` is only STATUS, so `f368d2d` is the base. Scrub check: 16 matches, all
+  hypothetical `contoso` examples (5 new on `configuration-resources.md`, 1 in the release 14 STATUS line, kept as
+  written). No real lab identifier in the public tree; gitleaks: the 3 known `projectApi` false positives; docs tests
+  27/27; public CI run `40209444154` success.
 
 **Previous packet:** G-CONFIG-GUIDE-2 — configuration reference reworked (complete; [ROADMAP](ROADMAP.md)).
 

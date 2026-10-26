@@ -21,6 +21,10 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 | [Budgets and the budget guard](operate/budgets-and-guard.md) | Budget owner |
 | [Chargeback and user tags](operate/chargeback-and-tags.md) | Finance, admin |
 | [Troubleshooting](operate/troubleshooting.md) | Platform engineer |
+| [Audit archive](operate/audit-archive.md): long-term copy of the gateway log | Auditor, platform engineer |
+| [Reading the audit archive](operate/audit-archive-reading.md): blob paths, read access, storage policies that turn public access off | Auditor, platform engineer |
+| [Chargeback history](operate/chargeback-history.md): daily chargeback totals beyond the Log Analytics retention, and how to download an old month | Finance, platform engineer |
+| [Chargeback history changes](operate/chargeback-history-changes.md): change the expiry, delete history | Platform engineer |
 
 ## Reference
 

@@ -27,6 +27,7 @@ import { createUserDirectory } from "./user-directory.ts";
 import { createGroupDirectory } from "./group-directory.ts";
 import { handleGroupRequest } from "./groups.ts";
 import { createCosmosUserTagStore, handleUserTagRequest } from "./user-tags.ts";
+import { createCosmosHistoryStore, readHistorySettings } from "./history.ts";
 
 let authenticate: Authenticator | null = null;
 let authProblem = "";
@@ -50,6 +51,10 @@ const changeLog = catalogContainer ? createCosmosChangeLog(catalogContainer) : n
 const limitsStore = catalogContainer ? createLimitsStore(catalogContainer) : null;
 // User tags and their saved list (src/contracts/user-tags.ts) share it too; the sync reads them there.
 const userTagStore = catalogContainer ? createCosmosUserTagStore(catalogContainer) : null;
+// Chargeback history (ADR-0044): read-only, the reconciler writes it.
+const historySettings = readHistorySettings(process.env);
+const chargebackHistory = cosmos && historySettings !== null && historySettings !== "invalid"
+  ? createCosmosHistoryStore(openContainer({ ...cosmos, container: historySettings.container }, credential)) : null;
 let defaultCatalogPromise: Promise<Doc | null> | null = null;
 // A missing or invalid packaged rate card degrades only the cost-definitions view, and is retried
 // on the next request rather than cached as a permanent failure.
@@ -204,7 +209,7 @@ app.http("adminV3", {
       method: request.method, path: new URL(request.url).pathname + new URL(request.url).search,
       headers: (name) => request.headers.get(name), body: ["POST", "PUT"].includes(request.method.toUpperCase()) ? await request.text() : null,
     }, {
-      authenticate, projects: store, catalogStore, changeLog, limitsStore, userTagStore, defaultCatalog: await defaultCatalog(log),
+      authenticate, projects: store, catalogStore, changeLog, limitsStore, userTagStore, chargebackHistory, defaultCatalog: await defaultCatalog(log),
       operations: createOperations(process.env, credential, log), env: process.env,
       sources: await querySources(log), cache: v3Cache, directory, now: () => new Date(), newId: randomUUID, log,
     });

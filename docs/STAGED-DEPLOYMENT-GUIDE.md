@@ -41,6 +41,7 @@ and the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md). This guide is th
 | Admin console | Function App | Onboards groups, sets budgets and limits, shows chargeback, exports ([ADMIN-V3.md](ADMIN-V3.md)) |
 | Registry | Cosmos DB (capacity mode chosen in section 2.6) | Group documents, entitlements, budget state, admin change record |
 | Telemetry | Log Analytics, Application Insights, workbook | Usage ledger and the chargeback workbook ([CHARGEBACK.md](CHARGEBACK.md)) |
+| Audit archive (optional, Stage 5) | Storage account, diagnostic setting `ccof-gateway-archive` | Long-term copy of the gateway request log ([audit archive](operate/audit-archive.md)) |
 | Models | Microsoft Foundry account with Claude deployments | Existing or created by Stage 1 |
 
 Stage order and what each one needs:
@@ -88,7 +89,7 @@ Several people can share the work; each stage names who runs it.
 | 2 | Platform engineer | Contributor on the Cosmos DB account |
 | 3 | Access administrator | Role Based Access Control Administrator (or Owner) on the resource group, the Cosmos account and each Foundry account |
 | 4 | Entra administrator | Application Administrator (or owner of existing apps) and Groups Administrator (or owner of existing groups) |
-| 5 | Platform engineer | Website Contributor on the Function Apps, API Management Service Contributor, workbook write |
+| 5 | Platform engineer | Website Contributor on the Function Apps, API Management Service Contributor, workbook write. With `audit.archive`: Storage Account Contributor on the resource group and Monitoring Contributor on the API Management service (diagnostic setting); with `audit.workspaceRetentionDays`: Log Analytics Contributor on the workspace |
 | 6 | Network team | Reader (verify mode). Network Contributor and Private DNS Zone Contributor in `existing`/`create` modes |
 | 7 | Platform engineer | Website Contributor (publish); delegated read of the registered groups |
 | 8 | Platform engineer | A gateway caller identity in an onboarded group; Log Analytics Reader |
@@ -102,7 +103,7 @@ The default (`network.mode: verify`) expects the customer's network team to buil
 Stage 6 check it without changing it. In `existing` mode Stage 6 uses the customer's subnets and DNS
 zones and creates only the private endpoints, DNS zone groups and VNet integrations. In `create` mode
 (labs) it also creates the VNet, subnets, NSG and DNS zones
-(stage6-network.bicep; [NETWORK.md](NETWORK.md)).
+([stage6-network.bicep](../infra/staged/stage6-network.bicep); [NETWORK.md](NETWORK.md)).
 
 | Item | Requirement |
 | --- | --- |
@@ -125,7 +126,7 @@ DNS resolution or routing from inside the VNet ([CLOUD-SHELL-QUICKSTART.md](runb
 ### 2.3 Entra applications
 
 Stage 4 creates these registrations, or merges settings into existing ones named in `entra.existing`
-(infra/staged/Staged.Entra.ps1). The table lists what each one
+([infra/staged/Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1)). The table lists what each one
 needs, so an Entra administrator can also create them by hand (Portal path: **Microsoft Entra ID →
 App registrations**).
 
@@ -173,7 +174,7 @@ Stage 4 needs verified Stage 1 outputs to calculate the admin redirects. New adm
 `entra.adminEditors` (object IDs, or `@me` for the operator); `adminReaders` is optional. Prefer
 explicit object IDs for a multi-person handoff. Stage 4 does not grant the managed identities Graph
 application permissions. These are separate from the delegated gateway/admin scopes
-(Staged.Entra.ps1;
+([Staged.Entra.ps1](../infra/staged/Staged.Entra.ps1);
 [Learn: expose an API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis);
 [Learn: SPA registration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-spa-app-registration)).
 
@@ -250,7 +251,7 @@ account the read-back function returns "Cosmos has 1 region(s); the configuratio
 region access request at <https://aka.ms/cosmosdbquota>, or another region or `isZoneRedundant` value, followed by
 Stage 1 with `-Apply` again. When the resource group holds resources from the failed attempt, that rerun runs a
 what-if first and refuses any Delete and any Modify of a resource the earlier attempt did not record; it can still
-create resources (Staged.Resources.ps1, `Invoke-Stage1`).
+create resources ([Staged.Resources.ps1](../infra/staged/Staged.Resources.ps1), `Invoke-Stage1`).
 
 ---
 
@@ -311,7 +312,7 @@ Settings added for group onboarding:
 | `resolver.requireCompleteUsage` | `false` | Stage 5 writes `RESOLVER_REQUIRE_COMPLETE_USAGE`. Optional fail-closed accounting check; `true` requires `budgetEnforcement: budget-state`, otherwise configuration is refused |
 | `reconciler.budgetGuard` | `{ "warnPercent": 80, "overshootPercent": 5, "projectionMinutes": 5 }` | Budget guard ([ADR-0040](adr/0040-budget-guard.md), section 6.5): warns the person at `warnPercent` of projected spend and slows requests from there; limits the spend rate so that the spend the reporting lag hides stays near `overshootPercent` of the budget. Takes effect with `resolver.budgetEnforcement: budget-state`. Absent: no guard. Stage 5 writes `RECONCILER_BUDGET_WARN_PERCENT`, `RECONCILER_OVERSHOOT_PERCENT`, `RECONCILER_PROJECTION_MINUTES` |
 | `gateway.admission.usage` | 10 per 60 s | Per-person limit of `GET /ccof/me/usage`, separate from the `/v1/messages` limit |
-| `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) (Staged.Application.ps1). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
+| `gateway.surfaceClients` | `[]` | `[{ "clientAppId": "<guid>", "surface": "code" }]`: maps a client application to `chat`, `code`, `cowork`, `design` or `m365`. Empty means surfaces are not enforced. Each client must be admitted by the gateway. In the staged path the admitted clients are the CCOF Gateway app (Stage 4) and, when `entra.allowAzureCliClient` is `true`, Azure CLI (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) ([Staged.Application.ps1](../infra/staged/Staged.Application.ps1)). Any other client ID stops Stage 5 with `render_failed` and the message "`<id>` is not in delegatedClientAppIds or testIdentities.clientAppIds" ([config.ts](../infra/gateway/config.ts)) |
 
 The state of each stage is written next to the configuration file in `.staged-state/state.json`. One
 state folder belongs to one tenant, subscription and resource group.
@@ -365,8 +366,8 @@ Stages that need earlier outputs refuse to preview without them; do not fabricat
 that guard. If the new resource group does not exist, Stage 1 preview only reports that `-Apply`
 would create it: **no ARM what-if has run yet**. On an existing eligible target, Bicep-backed previews
 run what-if; script-backed previews print a plan. Only a successful Stage 0 or `-Apply` records a
-completed stage (driver,
-Stage 1 guard).
+completed stage ([driver](../infra/staged/Invoke-StagedDeployment.ps1),
+[Stage 1 guard](../infra/staged/Staged.Resources.ps1)).
 
 Each stage lists: what it does, who runs it, the Cloud Shell command, the Portal equivalent (section
 numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how to see that it worked.
@@ -400,7 +401,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** creates the `ccof` database and eight containers: `entitlement`, `projects` (group
   documents live here), `subscriptionIndex`, `budgetState`, `aggregateBudgetState`, `syncLease`,
   `reconcilerLease`, `backends`; plus `adminConfig` when the admin app is included
-  (stage2-schema.bicep).
+  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)). With `audit.chargebackHistory.enabled: true` it also
+  creates `chargebackDaily` ([chargeback history](operate/chargeback-history.md)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 2`, preview then `-Apply`.
 - **Portal:** workbook section 08 (Cosmos DB → Data Explorer).
@@ -412,7 +414,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** gives each managed identity the least access it needs: storage and metrics for each app,
   Cosmos SQL roles per container, Log Analytics Reader for the reconciler and admin, and Cognitive
   Services User for APIM on each Foundry account
-  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)).
+  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)). With chargeback history it also grants the reconciler
+  write access to `chargebackDaily` and the admin app read access.
 - **Who:** access administrator.
 - **Cloud Shell:** `-Stage 3`, preview then `-Apply`.
 - **Portal:** workbook section 15 (Access control (IAM) per resource; Cosmos data-plane roles through
@@ -438,14 +441,27 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   Sets `ADMIN_GROUP_SEARCH_ENABLED` from `admin.groupSearchEnabled` and `entra.surfaceClients` from
   `gateway.surfaceClients`. Timer state follows `syncTimerEnabled` and `reconciler.timerEnabled`
   (both `false` in the example). The sync timer is turned on only after its Graph grant
-  ([section 6.1](#61-graph-grants-group-search-names-and-sync)).
+  ([section 6.1](#61-graph-grants-group-search-names-and-sync)). With `audit.archive.enabled: true` (the
+  template's value) it also creates the audit archive account in the API Management region and the gateway's
+  second diagnostic setting `ccof-gateway-archive` (GatewayLogs, GatewayLlmLogs to storage); with
+  `audit.workspaceRetentionDays` it sets the Log Analytics retention, which Stage 1 cannot change on an existing
+  install ([ADR-0043](adr/0043-long-term-audit-archive.md), [audit archive](operate/audit-archive.md)). An existing
+  install gets the archive by adding the `audit.archive` block and rerunning Stage 5, then Stage 7 and Stage 8,
+  which refuse with `stage_dependency_changed` until rerun; Stage 1 is not rerun. With
+  `audit.chargebackHistory.enabled: true` it writes the reconciler's and admin app's history settings; history needs
+  `reconciler.timerEnabled: true` (the example has both `false`; Stage 0 refuses history without the timer). An existing install turns history on with Stages 2, 3, 5, 7 and 8 in that order,
+  from an updated checkout ([chargeback history](operate/chargeback-history.md#turn-on-in-an-existing-deployment)).
 - **Who:** platform engineer.
-- **Cloud Shell:** `-Stage 5`, preview then `-Apply`.
+- **Cloud Shell:** `-Stage 5`, preview then `-Apply`. The preview prints one `audit archive:` line (account,
+  region, retention, immutability, SKU, workspace retention, or `off`); the apply adds the archive's network mode
+  (`public-enabled`, or `public-disabled` when a storage policy turned public network access off).
 - **Portal:** workbook sections 17 (Function Apps → Environment variables, Authentication), 19 (APIM →
   APIs, Policies, Backends), 20 (Diagnostic settings and workbook).
 - **Worked when:** each app lists its settings, the resolver answers `401` without a token, the
   API path and policy hash match, and the operation `get-my-usage` (`GET /ccof/me/usage`) exists with its
-  policy hash recorded in `stage5.verify.json`.
+  policy hash recorded in `stage5.verify.json`. With the archive, `stage5.verify.json` `audit` records the
+  account; the read-back checked its firewall, Shared Key, TLS, lifecycle rule, immutability and the diagnostic
+  setting's destination and categories.
 
 ### Stage 6: network
 

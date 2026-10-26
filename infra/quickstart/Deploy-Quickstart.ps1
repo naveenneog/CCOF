@@ -291,7 +291,7 @@ function New-QsWorkbookAnswers {
         defaultProjectId = $s.defaultProjectId; maxRows = $s.maxRows; topUsers = $s.topUsers
         maxQueryDays = $s.maxQueryDays; budgetLookbackDays = $s.budgetLookbackDays
         retentionDays = if ($null -ne $P.logRetentionDays) { $P.logRetentionDays } else { 31 }
-    } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $file -Encoding utf8NoBOM
+    } | ForEach-Object { if ($P.logRetentionHeldFrom) { $_.retentionHeldFrom = $P.logRetentionHeldFrom }; $_ } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $file -Encoding utf8NoBOM
     return $file
 }
 
@@ -644,9 +644,11 @@ function Invoke-QsSeedThroughFunction {
         the function's line with this seedId (up to 10 minutes), prints each document's outcome, and
         then always sets AzureWebJobs.registrySeed.Disabled=true and deletes CCOF_SEED_DOCUMENTS.
         present-differs, failed, a refusal or a missing document fails the step by name; a rerun is
-        safe (create only).
+        safe (create only). KeepDiffering lists "container/id" of documents that may differ (staged Stage 7:
+        group documents, edited in the admin console after the first seed): they are left as they are, not a
+        failure, and returned in kept with their differing fields; the caller decides whether to stop.
     #>
-    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] $Documents)
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] $Documents, [string[]]$KeepDiffering = @())
     $p = $Ctx.P; $sub = $p.names.subscriptionId; $rg = $p.names.resourceGroup; $app = $p.names.apps.sync.functionApp
     $entries = @(New-QsSeedEntries -Documents $Documents)
     $seedId = [guid]::NewGuid().ToString('N')
@@ -682,13 +684,15 @@ function Invoke-QsSeedThroughFunction {
     if ($failure) { throw "$failure$(if ($cleanupText) { " Also $cleanupText" })" }
     if ($cleanupText) { throw $cleanupText }
     if ($result.outcome -ceq 'refused') { throw "seed_refused: the registrySeed function refused the documents ($($result.reason)$(if ($result.problems) { ': ' + (@($result.problems) -join ', ') })) and wrote nothing." }
-    $differs = @($result.documents | Where-Object { $_.outcome -ceq 'present-differs' })
+    $isKept = { param($d) $d.outcome -ceq 'present-differs' -and $KeepDiffering -ccontains "$($d.container)/$($d.id)" }
+    $differs = @($result.documents | Where-Object { $_.outcome -ceq 'present-differs' -and -not (& $isKept $_) })
     if ($differs.Count) { throw "seed_documents_differ: these existing documents differ from the parameters and were left unchanged: $(@($differs | ForEach-Object { "$($_.container)/$($_.id) ($(@($_.fields) -join ', '))" }) -join '; '). The sync identity may create but not replace (ADR-0024, D-7): change them through onboarding, or correct the parameters." }
-    $failed = @($result.documents | Where-Object { $_.outcome -cnotin @('created', 'present-equal') })
+    $failed = @($result.documents | Where-Object { $_.outcome -cnotin @('created', 'present-equal') -and -not (& $isKept $_) })
     if ($failed.Count) { throw "seed_failed: $(@($failed | ForEach-Object { "$($_.container)/$($_.id) ($($_.code))" }) -join '; '). A create_http_403 means the sync identity's Cosmos role (step 3) is missing or still applying: run this step again." }
     $missing = @($entries | Where-Object { $e = $_; -not @($result.documents | Where-Object { $_.container -ceq $e.container -and $_.id -ceq $e.document.id }).Count })
     if ($missing.Count) { throw "seed_incomplete: the function's line has no outcome for $(@($missing | ForEach-Object { "$($_.container)/$($_.document.id)" }) -join ', ')." }
-    return @{ mechanism = 'registrySeed'; seedId = $seedId; documents = @($result.documents | ForEach-Object { "$($_.container)/$($_.id): $($_.outcome)" }) }
+    return @{ mechanism = 'registrySeed'; seedId = $seedId; documents = @($result.documents | ForEach-Object { "$($_.container)/$($_.id): $($_.outcome)$(if (& $isKept $_) { ' (kept)' })" })
+        kept = @($result.documents | Where-Object { & $isKept $_ } | ForEach-Object { [ordered]@{ document = "$($_.container)/$($_.id)"; fields = @($_.fields) } }) }
 }
 
 function Invoke-QsSeed {

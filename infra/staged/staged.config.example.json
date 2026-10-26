@@ -315,6 +315,19 @@
     "groupSearchEnabled": false,
     "userNamesEnabled": false
   },
+  "audit": {
+    "archive": {
+      "enabled": true,
+      "retentionDays": 2555,
+      "immutabilityDays": null,
+      "storageSku": "Standard_LRS"
+    },
+    "chargebackHistory": {
+      "enabled": false,
+      "closeAfterDays": 2,
+      "ttlDays": null
+    }
+  },
   "acceptance": {
     "selectorNote": "Requests carry no project selector: the caller's group with the higher month-to-date spend applies (ADR-0034).",
     "allowed": [

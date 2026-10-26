@@ -100,9 +100,12 @@ function Assert-StgSelectedGroup {
 
 # Stage 7 seed: the quickstart's baseline documents (checked against onboarding's schema, as Invoke-QsSeed
 # does) plus the group documents, through the sync app's registrySeed function, which checks each group
-# document with the group contract and writes nothing if one fails.
+# document with the group contract and writes nothing if one fails. groups[] seeds a group once; afterwards the
+# admin console owns it. A group document that differs (edited in the console) stops Stage 7 with
+# seed_documents_differ naming each group and field, unless stage7.keepDifferingGroups is true: then the console's
+# version is kept and returned in kept. Other differing documents always stop (Invoke-QsSeedThroughFunction).
 function Invoke-StgSeed {
-    param([Parameter(Mandatory)] $Ctx, $GroupDocuments)
+    param([Parameter(Mandatory)] $Ctx, $GroupDocuments, [bool]$KeepDifferingGroups)
     if (-not @($GroupDocuments).Count) { return Invoke-QsSeed $Ctx }
     $docs = New-QsSeedDocuments -P $Ctx.P -ClassificationGroupDisplayNames $Ctx.State.completed['1'].outputs.classificationGroupDisplayNames
     foreach ($project in @($docs.projects)) {
@@ -110,7 +113,34 @@ function Invoke-StgSeed {
         catch { throw "seed_document_invalid: the projects document $($project.id) fails onboarding Stage 3's schema: $($_.Exception.Message)" }
     }
     $docs.projects = @($docs.projects) + @($GroupDocuments)
-    return Invoke-QsSeedThroughFunction -Ctx $Ctx -Documents $docs
+    $seed = Invoke-QsSeedThroughFunction -Ctx $Ctx -Documents $docs -KeepDiffering @($GroupDocuments | ForEach-Object { "projects/$($_.id)" })
+    if (@($seed.kept).Count -and -not $KeepDifferingGroups) {
+        throw "seed_documents_differ: these group documents differ from the configuration and were left unchanged: $(Format-StgGroupDrift -Kept $seed.kept -GroupDocuments $GroupDocuments). After the first seed the admin console owns a group: change it there (groups[] is not applied to an existing group). To keep the console's version and continue, set stage7.keepDifferingGroups to true and rerun Stage 7."
+    }
+    return $seed
+}
+
+function Format-StgGroupDrift {
+    param($Kept, $GroupDocuments)
+    $names = @{}; foreach ($d in @($GroupDocuments)) { $names["projects/$($d.id)"] = $d.displayName }
+    return (@($Kept | ForEach-Object { "$($names[$_.document]) ($($_.document)): $(@($_.fields) -join ', ')" }) -join '; ')
+}
+
+# The line Stage 7 prints last when stage7.keepDifferingGroups kept groups; $null when none was kept.
+function Format-StgKeptGroups {
+    param($Kept, $GroupDocuments)
+    if (-not @($Kept).Count) { return $null }
+    return "kept $(@($Kept).Count) console-edited group(s): $(Format-StgGroupDrift -Kept $Kept -GroupDocuments $GroupDocuments)"
+}
+
+# stage7 { keepDifferingGroups }: absent, or a JSON boolean (Invoke-StgSeed).
+function Get-StgStage7Problems {
+    param($Cfg)
+    if (-not $Cfg.Contains('stage7') -or $null -eq $Cfg.stage7) { return }
+    $s = $Cfg.stage7
+    if ($s -isnot [Collections.IDictionary] -or @($s.Keys | Where-Object { $_ -cne 'keepDifferingGroups' }).Count -or ($s.Contains('keepDifferingGroups') -and $s.keepDifferingGroups -isnot [bool])) {
+        'stage7 takes only stage7.keepDifferingGroups, a JSON boolean (keep group documents edited in the admin console when they differ from groups[])'
+    }
 }
 
 # Stage 7 client file. client.group names one group entry (groupDisplayName or groupId); the selector

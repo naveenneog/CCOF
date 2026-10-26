@@ -27,6 +27,14 @@ Forms: [Groups](configuration-identity.md#groups). Contract: [group-registration
 `groups[].budget` holds the keys `mode`, `perUser` and `groupCap` and `groups[].familyPolicy` holds `aggregateLimits` and
 `families`; each leaf is a row below.
 
+`groups[]` seeds a group once: Stage 7 creates its document and never replaces it (create-only, ADR-0024). Afterwards
+the admin console owns the group. To change an existing group, change it in the console; editing its `groups[]` entry
+does not apply. When a Stage 7 rerun finds a group document that differs from its entry (edited in the console), it
+stops with `seed_documents_differ`, naming each group and the differing fields. Set `stage7.keepDifferingGroups: true`
+to keep the console's version and continue; Stage 7 then prints `kept N console-edited group(s): …` last and records
+the kept groups in `evidence/stage7.verify.json` (`seed.kept`). Other differing documents always stop Stage 7
+([Staged.Groups.ps1](../../infra/staged/Staged.Groups.ps1) `Invoke-StgSeed`).
+
 | Key | Req | Template | Allowed values and effect | Read by |
 | --- | --- | --- | --- | --- |
 | `groups[].kind` | Yes | `group` | `group` | `Test-StgGroupEntry` |
@@ -59,6 +67,7 @@ Forms: [Groups](configuration-identity.md#groups). Contract: [group-registration
 | `groups[].surfaces[]` | Yes | `code` | `chat`, `code`, `cowork`, `design`, `m365` | `group-registration.ts` |
 | `groups[].cacheProfile.expectedCacheReadPercent` | Yes | `85` | Number 0-100 | `group-registration.ts` |
 | `groups[].cacheProfile.basis` | Yes | `suggested` | `suggested` or `custom` | `group-registration.ts` |
+| `stage7.keepDifferingGroups` | No | absent | `true`: a Stage 7 rerun keeps group documents edited in the admin console; absent or `false`: it stops with `seed_documents_differ`. Part of the Stage 7 hash only when present | `Invoke-StgSeed`, `Get-StgStage7Problems` |
 
 ## Client
 

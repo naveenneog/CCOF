@@ -118,7 +118,8 @@ change.
 | `ADMIN_GATEWAY_RESOURCE_ID` | Chargeback, Overview cost | Full ARM ID of the APIM instance (`_ResourceId` of `ApiManagementGatewayLogs`) |
 | `ADMIN_CHARGEBACK_WORKSPACE_ID` | Chargeback (optional) | Workspace GUID holding the gateway logs; defaults to `ADMIN_WORKSPACE_ID` |
 | `ADMIN_CHARGEBACK_MAX_QUERY_DAYS` | Chargeback (optional) | 31–366, default 62 |
-| `ADMIN_LOG_RETENTION_DAYS` | Chargeback (optional) | Workspace retention, default 90; earlier periods are flagged `retention_truncated` |
+| `ADMIN_LOG_RETENTION_DAYS` | Chargeback (optional) | Workspace retention, default 90 (staged Stage 5 always writes the effective retention); earlier periods are flagged `retention_truncated` |
+| `ADMIN_LOG_RETENTION_HELD_FROM` | Chargeback (optional) | ISO 8601 instant written by staged Stage 5 after it raised the retention (ADR-0043); earlier periods are flagged `retention_truncated` |
 | `ADMIN_WORKSPACE_ID`, `ADMIN_LOG_RESOURCE_IDS` | Reconciler, Budgets, Audit (as V2) | Workspace GUID; comma-separated originating resource IDs (include the reconciler app) |
 | `ADMIN_RECONCILER_RESOURCE_ID` | Reconciler (optional) | Reconciler Function App ID; when set, only it is read for runs and snapshots |
 | `ADMIN_RECONCILER_INTERVAL_MINUTES` | Reconciler freshness (optional) | Timer interval matching `RECONCILER_SCHEDULE`, default 5 |
