@@ -24,6 +24,14 @@ test('pacing is visible even with zero recorded spend and no warning', () => {
   const [zero] = formatUsage(usage([scope({ pacingTokensPerMinute: 0 })]), NOW);
   assert.match(zero, /Budget pacing allows no new tokens/);
   assert.match(statusLine(usage([scope({ pacingTokensPerMinute: 0 })])), /budget pacing: requests refused/);
+  const roundedToZero = scope({ warning: true, projectedPercent: 85, pacingTokensPerMinute: 0 });
+  assert.match(statusLine(usage([roundedToZero])), /requests refused/);
+  assert.doesNotMatch(formatUsage(usage([roundedToZero]), NOW)[0], /requests are now slowed/);
+  for (const invalid of [-1, 1.5, '3', null]) {
+    const malformed = usage([scope({ pacingTokensPerMinute: invalid })]);
+    assert.doesNotMatch(formatUsage(malformed, NOW)[0], /Budget pacing/);
+    assert.doesNotMatch(statusLine(malformed), /budget pacing/);
+  }
   assert.doesNotMatch(formatUsage(usage([scope()]), NOW)[0], /Budget pacing/);
 });
 
