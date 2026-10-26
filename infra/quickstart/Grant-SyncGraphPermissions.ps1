@@ -51,7 +51,7 @@ function Invoke-QsGraph {
         $text = @($out | Where-Object { $_ -is [string] }) -join "`n"
         if ($text.Trim()) { return $text | ConvertFrom-Json -AsHashtable -Depth 50 }
     }
-    finally { if ($file) { Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue } }
+    finally { if ($file) { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue } }
 }
 
 function Get-QsActiveAdminRole {

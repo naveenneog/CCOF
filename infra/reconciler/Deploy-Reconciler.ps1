@@ -65,7 +65,7 @@ try {
     Get-ReconcilerAppSettings $answers -IdentityClientId '00000000-0000-4000-8000-000000000000' | ConvertTo-Json | Set-Content -LiteralPath $settingsFile -Encoding utf8NoBOM
     $check = "import { readReconcilerSettings } from './dist/reconciler/settings.js'; import { readFileSync } from 'node:fs'; const r = readReconcilerSettings(JSON.parse(readFileSync(process.argv[1], 'utf8'))); console.log(r.ok ? 'ok' : r.problems.map((p) => p.setting + ':' + p.problem).join(', '));"
     $verdict = node --input-type=module -e $check $settingsFile
-    Remove-Item -LiteralPath $settingsFile -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $settingsFile -Force -ErrorAction SilentlyContinue
     if ($verdict -ne 'ok') { Stop-Reconciler "The reconciler settings are refused by the app's validator: $verdict" 'settings_invalid' }
 }
 finally { Pop-Location }

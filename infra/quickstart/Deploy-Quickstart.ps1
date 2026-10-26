@@ -801,7 +801,7 @@ function New-QsClientFiles {
         $validated=& node (Join-Path $script:RepoRoot 'client\bin\validate-config.mjs') $candidate 2>$null
         if($LASTEXITCODE -ne 0 -or -not $validated) {throw 'client_configuration_invalid: export failed the workstation client schema; existing exports unchanged.'}
         $config=$validated | ConvertFrom-Json -AsHashtable
-    } finally {Remove-Item -LiteralPath $candidate -ErrorAction SilentlyContinue}
+    } finally {Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue}
     $file = Join-Path $Ctx.GeneratedDir 'client-config.json'
     $onboarding=Join-Path $Ctx.GeneratedDir 'onboarding.json'
     $text=$config | ConvertTo-Json -Depth 10

@@ -331,7 +331,7 @@ function Invoke-StgNetworkVerify {
         return $null
     }
     $resultPath = Join-Path $script:StateDir 'network-check.json'
-    Remove-Item -LiteralPath $resultPath -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue
     & $check @arguments -ResultPath $resultPath | Out-Host
     $exit = $LASTEXITCODE
     Assert-Stg (Test-Path -LiteralPath $resultPath) "network check wrote no results (exit $exit)"

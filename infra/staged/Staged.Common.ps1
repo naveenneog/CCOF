@@ -459,7 +459,7 @@ function Send-StgGraph {
     try {
         $Body | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $f -Encoding utf8NoBOM
         Invoke-QsAz @('rest', '--method', $Method, '--url', "https://graph.microsoft.com/v1.0/$Path", '--headers', 'Content-Type=application/json', '--body', "@$f")
-    } finally { Remove-Item -LiteralPath $f -ErrorAction SilentlyContinue }
+    } finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
 }
 
 # The quickstart parameter object (infra/quickstart/main.bicepparam shape) assembled from the config

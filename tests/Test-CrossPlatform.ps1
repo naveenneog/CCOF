@@ -45,4 +45,20 @@ try {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-"Cross-platform: $passed checks passed (Windows-only cmd.exe guards). No Azure calls."
+# 2. On macOS and Linux a dot-file is hidden, and Remove-Item without -Force leaves a hidden file in place (with
+#    -ErrorAction SilentlyContinue, silently). Every Remove-Item in the deployer's code paths uses -Force.
+$deployer = @('infra/staged', 'infra/quickstart', 'infra/sync', 'infra/reconciler', 'infra/gateway', 'infra/workbook', 'admin') |
+    ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $root $_) -Recurse -File -Include '*.ps1', '*.psm1' } |
+    Where-Object { $_.FullName -notmatch '[\\/](node_modules|tests)[\\/]' }
+$deployer += Get-ChildItem -LiteralPath (Join-Path $root 'scripts') -File -Filter '*.psm1'
+$noForce = foreach ($file in $deployer) {
+    $ast = [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$null)
+    foreach ($cmd in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in 'Remove-Item', 'rm', 'del', 'ri' }, $true)) {
+        if (-not @($cmd.CommandElements | Where-Object { $_ -is [Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -ieq 'Force' }).Count) {
+            "$($file.FullName.Substring($root.Length + 1)):$($cmd.Extent.StartLineNumber)"
+        }
+    }
+}
+Assert-Contract (-not @($noForce).Count) "Remove-Item without -Force leaves dot-files on macOS/Linux: $(@($noForce) -join ', ')"
+
+"Cross-platform: $passed checks passed (Windows-only cmd.exe guards, hidden-file removal). No Azure calls."
