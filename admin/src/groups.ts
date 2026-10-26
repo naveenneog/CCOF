@@ -14,6 +14,8 @@ import { beginChange } from "./change-log.ts";
 import type { ChangeEntry, ChangeLog } from "./change-log.ts";
 import { ValidationError, isObject, stripSystem } from "./validation.ts";
 import { isDisplayName } from "./text-rules.ts";
+import { BackendNotDeployed, assertDeployed } from "./backend-settings.ts";
+import type { BackendSettings } from "./backend-settings.ts";
 import type { Doc } from "./validation.ts";
 import { readGroupRegistration, SURFACES } from "../../src/contracts/group-registration.ts";
 import type { Surface } from "../../src/contracts/group-registration.ts";
@@ -51,6 +53,8 @@ export interface GroupApiDependencies {
   store: ProjectStore | null;
   changeLog?: ChangeLog | null;
   directory: GroupDirectory | null;
+  // The deployment's backends and model deployments (ADMIN_BACKENDS); absent means not configured.
+  backends?: BackendSettings;
   log(line: string): void;
   now(): Date;
   newId(): string;
@@ -63,7 +67,7 @@ const SEARCH_TEXT = /^(?=.*\S)[^"\\]{1,100}$/;
 
 type Route =
   | { op: "list" } | { op: "create" } | { op: "read"; groupId: string } | { op: "update"; groupId: string }
-  | { op: "retire"; groupId: string } | { op: "search" } | { op: "directoryGroup"; groupId: string } | { op: "directoryMembers"; groupId: string } | { op: "cacheSuggestion" };
+  | { op: "retire"; groupId: string } | { op: "search" } | { op: "directoryGroup"; groupId: string } | { op: "directoryMembers"; groupId: string } | { op: "cacheSuggestion" } | { op: "backends" };
 
 const WRITES = new Set(["create", "update", "retire"]);
 
@@ -76,6 +80,7 @@ function route(method: string, path: string): Route | "method_not_allowed" | "gr
   if (parts.length === 1) return m === "GET" ? { op: "list" } : m === "POST" ? { op: "create" } : "method_not_allowed";
   if (parts.length === 2 && parts[1] === "directory") return only("GET", { op: "search" });
   if (parts.length === 2 && parts[1] === "cache-suggestion") return only("GET", { op: "cacheSuggestion" });
+  if (parts.length === 2 && parts[1] === "backends") return only("GET", { op: "backends" });
   if (parts.length === 3 && parts[1] === "directory") return isGuid(parts[2]) ? only("GET", { op: "directoryGroup", groupId: parts[2].toLowerCase() }) : null;
   if (parts.length === 4 && parts[1] === "directory" && parts[3] === "members") return isGuid(parts[2]) ? only("GET", { op: "directoryMembers", groupId: parts[2].toLowerCase() }) : null;
   const groupId = parts[1];
@@ -144,6 +149,8 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
     groupId = "groupId" in matched ? matched.groupId : undefined;
     if (WRITES.has(matched.op) && !actor.canWrite) throw new ApiError(403, "write_permission_required");
 
+    const backends: BackendSettings = deps.backends ?? { state: "not_configured", backends: [] };
+    if (matched.op === "backends") return json(200, { state: backends.state, backends: backends.backends });
     if (matched.op === "cacheSuggestion") {
       const surfaces = readSurfaces(request.query("surfaces"));
       return json(200, { surfaces, suggestion: suggestCacheReadPercent(surfaces), table: CACHE_SUGGESTIONS });
@@ -187,6 +194,7 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
         const id = typeof body.groupId === "string" ? body.groupId.toLowerCase() : "";
         const doc = assertValidGroup({ ...body, id, kind: "group", groupId: id, projectId: id, status: "active", retiredAt: null }, true);
         groupId = id;
+        assertDeployed(doc, null, backends);
         const pending = await begin(changes({}, doc, "", []));
         const written = await recorded(pending, () => store.create(doc));
         if (written === "conflict") { await pending.finish("refused", { code: "group_exists" }); throw new ApiError(409, "group_exists"); }
@@ -213,6 +221,7 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
           ? { ...structuredClone(before), status: "retired", retiredAt: deps.now().toISOString() }
           : { ...structuredClone(before), ...structuredClone(body as Doc) };
         assertValidGroup(after, matched.op === "update" && Object.hasOwn(body as Doc, "displayName"));
+        if (matched.op === "update") assertDeployed(after, before, backends);
         const changed = changes(before, after, "", []);
         if (changed.length === 0) return json(200, { changed: false, group: before }, { etag });
         const pending = await begin(changed, { etagBefore: etag });
@@ -228,7 +237,8 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
     if (err instanceof ApiError) {
       if (WRITES.has(operation) || err.status === 401 || err.status === 403) audit({ outcome: "refused", status: err.status, code: err.code });
       const body: Record<string, unknown> = { error: err instanceof ValidationError ? "invalid_group" : err.code, requestId };
-      if (err instanceof ValidationError) body.problems = err.problems;
+      if (err instanceof ValidationError || err instanceof BackendNotDeployed) body.problems = err.problems;
+      if (err instanceof BackendNotDeployed) body.allowed = err.allowed;
       return json(err.status, body);
     }
     audit({ outcome: "failed", status: 500, code: "internal_error" });

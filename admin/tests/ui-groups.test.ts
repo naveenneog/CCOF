@@ -85,3 +85,16 @@ test("a malformed group link gets a plain explanation, not a retry of route_not_
   assert.match(page, /groupLinkProblem\(id\)/);
   assert.match(page, /retry=\{doc\.error\.status === 404 \? undefined : doc\.reload\}|status === 404/);
 });
+
+test("the onboarding form names the deployment's backends and the models deployed on the chosen one (ADMIN-1)", async () => {
+  const { deploymentProblems } = await import("../ui-v3/lib/groups.ts");
+  const backends = [{ id: "backend01", deployments: ["claude-haiku-4-5", "claude-sonnet-5"] }, { id: "backend02", deployments: ["claude-opus-5"] }];
+  assert.deepEqual(deploymentProblems(filled(), backends), {});
+  assert.match(deploymentProblems({ ...filled(), backendId: "nope" }, backends).backendId ?? "", /backend01, backend02/);
+  const moved = deploymentProblems({ ...filled(), backendId: "backend02" }, backends);
+  assert.match(moved.families ?? "", /claude-sonnet-5.*not deployed on backend02.*claude-opus-5/);
+  assert.match(deploymentProblems(filled(), null).backendId ?? "", /ADMIN_BACKENDS/, "no list: say why onboarding will be refused");
+  const page = await readFile(new URL("../ui-v3/pages/group-onboard.tsx", import.meta.url), "utf8");
+  assert.match(page, /useQuery[^\n]*"\/api\/groups\/backends"/);
+  assert.doesNotMatch(page, /Type the APIM backend ID/);
+});

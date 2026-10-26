@@ -198,6 +198,8 @@ resource adminSettings 'Microsoft.Web/sites/config@2024-04-01' = if (adminEnable
     // Entra group search for onboarding (ADR-0034); needs Graph Group.ReadBasic.All and GroupMember.ReadBasic.All.
     ADMIN_GROUP_SEARCH_ENABLED: (admin.?groupSearchEnabled ?? false) ? 'true' : 'false'
     ADMIN_USER_NAMES_ENABLED: (admin.?userNamesEnabled ?? false) ? 'true' : 'false'
+    // The backends a group may route to and the models deployed on each (ADR-0046); the admin refuses others.
+    ADMIN_BACKENDS: string(map(backends, b => { id: b.id, deployments: b.?deployments ?? [] }))
     ADMIN_WORKSPACE_ID: workspace.properties.customerId
     ADMIN_GATEWAY_RESOURCE_ID: apimService.id
     ADMIN_LOG_RESOURCE_IDS: join([reconcilerSite.id, adminInsights!.id, adminSite!.id], ',')

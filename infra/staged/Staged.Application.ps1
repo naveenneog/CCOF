@@ -76,7 +76,7 @@ function Invoke-Stage5 {
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
-        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
+        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url; deployments = @(if ($_.deploymentInferenceGeo) { $_.deploymentInferenceGeo.Keys | Sort-Object }) } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
         resolver = $resolverSettings; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin

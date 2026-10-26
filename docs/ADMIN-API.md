@@ -118,7 +118,16 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 | `GET /api/groups/directory/{groupId}` | Reader | One Entra group with its direct member count |
 | `GET /api/groups/directory/{groupId}/members` | Reader | The direct user members (`id`, `displayName`, up to 999, with `truncated`) of an **active onboarded** group; `404 group_not_onboarded` for any other group |
 | `GET /api/groups/cache-suggestion?surfaces=code,chat` | Reader | Suggested cache-read share for the surfaces, with evidence class ([cache-suggestions.ts](../src/contracts/cache-suggestions.ts)) |
+| `GET /api/groups/backends` | Reader | The deployment's backends and the model deployments on each, from `ADMIN_BACKENDS` (`state` is `configured`, `not_configured` or `invalid`) |
 
+- **Backend and models** ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)): onboarding, and an edit that
+  changes the backend or adds models, must use a backend in the app setting `ADMIN_BACKENDS` and models deployed on
+  it. Stage 5 writes the setting from `backends[].id` and the keys of `backends[].deploymentInferenceGeo`, as
+  `[{"id":"<backendId>","deployments":["<deployment>"]}]`. A refusal is `422 invalid_group` with
+  `backendId:not_deployed` or `familyPolicy.families.<family>.models:not_deployed`, and `allowed` names the valid
+  `backendIds` and the chosen backend's `deployments`. Without the setting such a write is refused with
+  `503 backend_list_not_configured` (`503 backend_list_invalid` when it is malformed): rerun Stage 5. Without this
+  check, members of such a group are refused at the gateway (`backend_not_configured`) or by Foundry.
 - **Validation:** the same contract the sync and reconciler read
   ([src/contracts/group-registration.ts](../src/contracts/group-registration.ts)); problems are
   returned as field paths (`422 invalid_group`). The admin also refuses a `displayName` with no visible text

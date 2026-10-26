@@ -92,6 +92,19 @@ export function formProblems(form: GroupForm): Record<string, string> {
   return p;
 }
 
+// The deployment's backends and their model deployments (GET /api/groups/backends, from ADMIN_BACKENDS). The server
+// refuses anything else (ADR-0046); this explains it before sending. null: the list is not configured; undefined: loading.
+export interface BackendOption { id: string; deployments: string[] }
+export function deploymentProblems(form: GroupForm, backends: BackendOption[] | null | undefined): Record<string, string> {
+  if (backends === undefined) return {};
+  if (backends === null) return { backendId: "The deployment's backend list (ADMIN_BACKENDS) is missing or not valid, so onboarding is refused. Ask the platform engineer to rerun Stage 5." };
+  const backend = backends.find((b) => b.id === form.backendId.trim());
+  if (!backend) return { backendId: `Choose one of the deployment's backends: ${backends.map((b) => b.id).join(", ")}.` };
+  const missing = Object.values(form.policy.families).flatMap((f) => f.models).filter((m) => !backend.deployments.includes(m));
+  if (!missing.length) return {};
+  return { families: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not deployed on ${backend.id}. Deployed there: ${backend.deployments.join(", ") || "none"}.` };
+}
+
 // A group page's link must end with the group's Object ID; anything else (a mistyped #/groups/onboard) is
 // explained rather than sent to the API (ADMIN-7).
 export function groupLinkProblem(id: string): string | null {

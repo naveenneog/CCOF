@@ -131,6 +131,7 @@ change.
 | `ADMIN_GATEWAY_URL` | Onboarding downloads | Gateway base URL the client calls, `https://…` without `/v1` (same value as the client's `gatewayUrl`) |
 | `ADMIN_PROJECT_HEADER` | Onboarding downloads (optional) | Project selector header, default `x-ccof-project` |
 | `ADMIN_CONFIG_CONTAINER` | Saving cost definitions (as V2); change record and removal limits (3.2.0) | Cosmos container (`adminConfig`); when a catalog is saved, chargeback and the budget assistant use its rate card. When set, a change that cannot be recorded here is refused |
+| `ADMIN_BACKENDS` | Onboarding and editing groups | JSON `[{"id","deployments"}]` written by Stage 5: the backends a group may use and the models deployed on each ([ADR-0046](adr/0046-admin-checks-backends-and-models.md)). Without it, onboarding is refused |
 
 A missing or invalid setting disables only its feature, which then shows its capability state
 (`disabled`, `permission_required`, `unavailable`) with the reason and the permission that enables it.
