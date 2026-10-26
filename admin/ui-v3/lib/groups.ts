@@ -92,6 +92,12 @@ export function formProblems(form: GroupForm): Record<string, string> {
   return p;
 }
 
+// A group page's link must end with the group's Object ID; anything else (a mistyped #/groups/onboard) is
+// explained rather than sent to the API (ADMIN-7).
+export function groupLinkProblem(id: string): string | null {
+  return GUID.test(id) ? null : "This link is not a group ID. A group's link ends with its Entra Object ID, a GUID such as 0f1e2d3c-4b5a-4978-8a6b-5c4d3e2f1a0b.";
+}
+
 // What the budget means for the group's current direct members: auto-scale grows with the group;
 // a cap is the most the group can spend however many members it has.
 export function groupEstimate(form: GroupForm, members: number | null) {

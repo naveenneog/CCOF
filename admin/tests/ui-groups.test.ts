@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { clearErrors, emptyGroupForm, formFromDoc, formProblems, formToBody, groupEstimate } from "../ui-v3/lib/groups.ts";
 import { readGroupRegistration } from "../../src/contracts/group-registration.ts";
 import { toCsv } from "../ui-v3/lib/format.ts";
+import { readFile } from "node:fs/promises";
 
 const GROUP = "abcdef01-2345-4678-9abc-def012345678";
 const unlimited = { tokensPerMinute: null, tokenQuota: null, tokenQuotaPeriod: null };
@@ -71,4 +72,16 @@ test("the console refuses the names the server refuses, and its CSV neutralises 
   assert.equal(formProblems({ ...filled(), displayName: "Payments – Zürich" }).displayName, undefined);
   const csv = toCsv(["v"], [{ v: " =1+1" }, { v: "\uFF1D1" }, { v: "plain" }], {});
   assert.equal(csv, "\nv\n' =1+1\n'\uFF1D1\nplain\n");
+});
+
+test("a malformed group link gets a plain explanation, not a retry of route_not_found (ADMIN-7)", async () => {
+  const groups = await import("../ui-v3/lib/groups.ts");
+  const { ApiFailure, errorMessage } = await import("../ui-v3/lib/api.ts");
+  assert.match(groups.groupLinkProblem("onboard") ?? "", /not a group ID/);
+  assert.equal(groups.groupLinkProblem(GROUP), null);
+  assert.equal(groups.groupLinkProblem(GROUP.toUpperCase()), null);
+  assert.match(errorMessage(new ApiFailure(404, { error: "group_not_found" })), /No onboarded group/);
+  const page = await readFile(new URL("../ui-v3/pages/group-detail.tsx", import.meta.url), "utf8");
+  assert.match(page, /groupLinkProblem\(id\)/);
+  assert.match(page, /retry=\{doc\.error\.status === 404 \? undefined : doc\.reload\}|status === 404/);
 });

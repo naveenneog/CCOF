@@ -261,3 +261,12 @@ test("a display name must have visible text and no control characters, on create
   const edit = await call("PUT", `/api/groups/${GROUP}`, { body: { displayName: "x\ty" }, ifMatch: created.headers!.etag });
   assert.deepEqual([edit.status, (edit.jsonBody as Doc).problems], [422, ["displayName:invalid"]]);
 });
+
+test("a group link that is not a group ID is group_not_found, not route_not_found (ADMIN-7)", async () => {
+  const { call } = setup();
+  for (const [method, path] of [["GET", "/api/groups/onboard"], ["GET", "/api/groups/not-a-guid"], ["PUT", "/api/groups/abc"], ["POST", "/api/groups/abc/retire"]]) {
+    const res = await call(method, path, { ifMatch: '"x"', body: { confirmGroupId: "abc" } });
+    assert.deepEqual([res.status, (res.jsonBody as Doc).error], [404, "group_not_found"], `${method} ${path}`);
+  }
+  assert.equal(((await call("GET", "/api/groups/abc/other")).jsonBody as Doc).error, "route_not_found");
+});

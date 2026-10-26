@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage, useQuery } from "../lib/api.ts";
 import { href, navigate } from "../lib/router.ts";
-import { clearErrors, formFromDoc, formProblems, formToBody } from "../lib/groups.ts";
+import { clearErrors, formFromDoc, formProblems, formToBody, groupLinkProblem } from "../lib/groups.ts";
 import type { GroupForm } from "../lib/groups.ts";
 import { Button, Empty, ErrorNote, Field, Loading, PageHeader, Section, StatePill, useToast } from "../components/ui.tsx";
 import { AccessFields, AssistantFields, BudgetFields, CacheFields, ModelFields } from "../components/group-fields.tsx";
@@ -10,16 +10,24 @@ import { useSession } from "../components/shell.tsx";
 export function GroupDetail({ id }: { id: string }) {
   const session = useSession();
   const toast = useToast();
-  const doc = useQuery<Record<string, unknown>>(`/api/groups/${encodeURIComponent(id)}`);
-  const directory = useQuery<{ group: { memberCount?: number } }>(`/api/groups/directory/${encodeURIComponent(id)}`);
+  const linkProblem = groupLinkProblem(id);
+  const doc = useQuery<Record<string, unknown>>(linkProblem ? null : `/api/groups/${encodeURIComponent(id)}`);
+  const directory = useQuery<{ group: { memberCount?: number } }>(linkProblem ? null : `/api/groups/directory/${encodeURIComponent(id)}`);
   const [form, setForm] = useState<GroupForm | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [confirm, setConfirm] = useState("");
   useEffect(() => { if (doc.data) setForm(formFromDoc(doc.data)); }, [doc.data]);
+  if (linkProblem) {
+    return (
+      <div className="page"><PageHeader title="Group not found" />
+        <Empty title="This link does not open a group">{linkProblem} Open the group from <a href={href("/groups")}>Groups</a>, or <a href={href("/groups/new")}>onboard a group</a>.</Empty>
+      </div>
+    );
+  }
   if (doc.loading && !doc.data) return <div className="page"><PageHeader title="Group" /><Loading label="Loading the group" /></div>;
-  if (doc.error) return <div className="page"><PageHeader title="Group" /><ErrorNote error={doc.error} retry={doc.reload} /></div>;
+  if (doc.error) return <div className="page"><PageHeader title="Group" /><ErrorNote error={doc.error} retry={"status" in doc.error && doc.error.status === 404 ? undefined : doc.reload} /></div>;
   if (!doc.data || !form) return null;
   const retired = doc.data.status === "retired";
   const readOnly = retired || !session.canWrite;

@@ -110,7 +110,7 @@ stored in the `projects` container with `kind: "group"` and `id = projectId = gr
 | Request | Role | Behaviour |
 |---|---|---|
 | `GET /api/groups` | Reader | Group summaries with ETags; baseline projects are not listed |
-| `GET /api/groups/{groupId}` | Reader | The group document and its `ETag`; 404 for a baseline project |
+| `GET /api/groups/{groupId}` | Reader | The group document and its `ETag`; `404 group_not_found` for a baseline project, an unknown ID, or a value that is not a GUID (also on `PUT` and `/retire`) |
 | `POST /api/groups` | Editor | Onboard: body holds `groupId` and the editable fields; stored `active`; 409 if the ID exists as a group or a project |
 | `PUT /api/groups/{groupId}` | Editor | Change any of `displayName`, `backendId`, `priority`, `chargebackId`, `budget`, `restrictedFamiliesApproved`, `familyPolicy`, `surfaces`, `cacheProfile`; needs `If-Match`; 409 when retired |
 | `POST /api/groups/{groupId}/retire` | Editor | Body `{"confirmGroupId": "<groupId>"}`; needs `If-Match`; one way. The next sync removes every member's access |

@@ -67,7 +67,7 @@ type Route =
 
 const WRITES = new Set(["create", "update", "retire"]);
 
-function route(method: string, path: string): Route | "method_not_allowed" | null {
+function route(method: string, path: string): Route | "method_not_allowed" | "group_not_found" | null {
   const parts = path.replace(/^\/+|\/+$/g, "").split("/").map((p) => decodeURIComponent(p));
   if (parts[0] === "api") parts.shift();
   if (parts[0] !== "groups") return null;
@@ -79,7 +79,8 @@ function route(method: string, path: string): Route | "method_not_allowed" | nul
   if (parts.length === 3 && parts[1] === "directory") return isGuid(parts[2]) ? only("GET", { op: "directoryGroup", groupId: parts[2].toLowerCase() }) : null;
   if (parts.length === 4 && parts[1] === "directory" && parts[3] === "members") return isGuid(parts[2]) ? only("GET", { op: "directoryMembers", groupId: parts[2].toLowerCase() }) : null;
   const groupId = parts[1];
-  if (!isGuid(groupId)) return null;
+  // A mistyped or malformed group link names no group (ADMIN-7): say so, rather than "no such route".
+  if (!isGuid(groupId)) return parts.length === 2 || (parts.length === 3 && parts[2] === "retire") ? "group_not_found" : null;
   if (parts.length === 2) return m === "GET" ? { op: "read", groupId } : m === "PUT" ? { op: "update", groupId } : "method_not_allowed";
   if (parts.length === 3 && parts[2] === "retire") return only("POST", { op: "retire", groupId });
   return null;
@@ -138,6 +139,7 @@ export async function handleGroupRequest(request: GroupRequest, deps: GroupApiDe
     actor = await deps.authenticate(request.headers("authorization"));
     if (matched === null) throw new ApiError(404, "route_not_found");
     if (matched === "method_not_allowed") throw new ApiError(405, "method_not_allowed");
+    if (matched === "group_not_found") throw new ApiError(404, "group_not_found");
     operation = matched.op;
     groupId = "groupId" in matched ? matched.groupId : undefined;
     if (WRITES.has(matched.op) && !actor.canWrite) throw new ApiError(403, "write_permission_required");
