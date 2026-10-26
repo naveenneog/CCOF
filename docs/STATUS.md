@@ -8,7 +8,8 @@ gateway refuses missing lengths and normalizes backend errors; usage states paci
 budget-key semantics are explicit; sign-in probes are quiet; admin names are visible and safe.
 No live changes. [ADR-0050](adr/0050-import-client-configuration.md).
 
-**State:** complete offline, ready for the coordinator to merge; no push or live deployment.
+**State:** review follow-up in progress: make configuration publication transactional and
+restrict the framing refusal to explicit chunked bodies; no push or live deployment.
 DG-1/2 `4f9c987` (safety `bf833c6`, entrypoint proof `bbc8d2b`); DG-3 `70e5b65`;
 DG-4 `5c903a5` (SSE contract `8fdb210`); DG-5 `3cd182b` (zero ceiling `9a6329a`);
 DG-6 `36b72a4` ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md));

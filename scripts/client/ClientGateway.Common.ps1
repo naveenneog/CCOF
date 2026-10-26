@@ -77,14 +77,15 @@ function Read-ClientConfiguration {
 }
 
 function Install-ClientConfiguration {
-    param([Parameter(Mandatory)][string]$Path, [bool]$OnWindows = $IsWindows)
-    $config = Read-ClientConfiguration $Path
+    param([Parameter(Mandatory)][string]$Path, [bool]$OnWindows = $IsWindows,
+        [string]$Destination, [Collections.IDictionary]$Configuration)
+    $config = if ($Configuration) { $Configuration } else { Read-ClientConfiguration $Path }
     if (-not $OnWindows -and $config.signInMethod -cne 'azure-cli') {
         throw 'unsupported_sign_in_method: on macOS and Linux Claude Code setup supports signInMethod azure-cli only; nothing was changed.'
     }
-    $destination = Get-ClientDefaultConfigPath -OnWindows $OnWindows -IgnoreEnvironment
+    if (-not $Destination) { $Destination = Get-ClientDefaultConfigPath -OnWindows $OnWindows -IgnoreEnvironment }
     if (-not [string]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetFullPath($destination), $(if ($IsWindows) { 'OrdinalIgnoreCase' } else { 'Ordinal' }))) {
-        Write-ClientText $destination ([IO.File]::ReadAllText($Path))
+        Write-ClientJson $destination $config
     }
     return $destination
 }
@@ -130,6 +131,21 @@ function Complete-ClientSnapshot {
     foreach ($record in $Snapshot.Manifest.files) { $record.afterSha256 = Get-ClientFileHash $record.path }
     $Snapshot.Manifest.complete = $true
     Write-ClientJson (Join-Path $Snapshot.Directory 'snapshot.json') $Snapshot.Manifest
+}
+
+function Invoke-ClientSetupTransaction {
+    param([string]$Kind, [string[]]$Paths, [string]$BackupRoot, [scriptblock]$Write)
+    $snapshot = New-ClientSnapshot $Kind $Paths $BackupRoot
+    try {
+        & $Write
+        Complete-ClientSnapshot $snapshot
+    } catch {
+        $failure = $_
+        try { Restore-ClientSnapshot -BackupPath $snapshot.Directory -Kind $Kind -Confirmed -AllowChangedFiles | Out-Null }
+        catch { throw "Setup failed and rollback could not finish. Review backup '$($snapshot.Directory)' before retrying. Setup: $($failure.Exception.Message). Rollback: $($_.Exception.Message)" }
+        throw $failure
+    }
+    return $snapshot
 }
 
 function Restore-ClientSnapshot {

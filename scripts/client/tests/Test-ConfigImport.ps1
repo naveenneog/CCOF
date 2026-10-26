@@ -55,6 +55,32 @@ try {
     $wrapper = [IO.File]::ReadAllText((Join-Path $profile '.claude/ccof-usage.ps1'))
     if (-not $wrapper.Contains($installed.Replace("'", "''"))) { throw 'Usage wrapper still depends on the deleted download' }
     if (-not (Test-Path (Join-Path (Split-Path $installed -Parent) 'backups'))) { throw 'Default backups were not placed with the installed configuration' }
+    $before = [IO.File]::ReadAllText($installed)
+    $settingsBefore = [IO.File]::ReadAllText((Join-Path $profile '.claude\settings.json'))
+    Write-ClientText (Join-Path $profile '.claude\settings.json') '{"env":"invalid"}'
+    $other = $config.Clone(); $other.gatewayUrl = 'https://gateway-b.example.test/anthropic'
+    Write-ClientJson $source $other
+    $failed = Invoke-CcofChild -FilePath (Join-Path $repo 'scripts\client\Set-ClaudeCodeGateway.ps1') `
+        -Arguments @('-ConfigPath', $source, '-Confirmed') -WorkingDirectory $repo -TimeoutSeconds 120 `
+        -Environment @{ HOME = $profile; USERPROFILE = $profile; APPDATA = (Join-Path $profile 'appdata')
+            LOCALAPPDATA = $env:LOCALAPPDATA; XDG_CONFIG_HOME = $env:XDG_CONFIG_HOME
+            PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH" }
+    if ($failed.ExitCode -eq 0) { throw 'Invalid settings did not refuse setup' }
+    if ([IO.File]::ReadAllText($installed) -cne $before) { throw 'Failed public setup replaced the previous live configuration' }
+    Write-ClientText (Join-Path $profile '.claude\settings.json') $settingsBefore
+    foreach ($entrypoint in @('Set-ClaudeCodeGateway.ps1', 'Set-ClaudeDesktopGateway.ps1')) {
+        if (-not $IsWindows -and $entrypoint -like '*Desktop*') { continue }
+        $scriptPath = (Join-Path $repo "scripts\client\$entrypoint").Replace("'", "''")
+        $inputPath = $source.Replace("'", "''")
+        $command = "function NoInstalledClients { @{ CliVersion = `$null; VSCodeVersion = `$null; DesktopVersion = `$null } }; Set-Alias Get-CcofClientInventory NoInstalledClients; & '$scriptPath' -ConfigPath '$inputPath' -Confirmed"
+        $absent = Invoke-CcofChild -FilePath (Get-Command pwsh).Source -Arguments @('-NoProfile', '-Command', $command) `
+            -WorkingDirectory $repo -TimeoutSeconds 120 `
+            -Environment @{ HOME = $profile; USERPROFILE = $profile; APPDATA = (Join-Path $profile 'appdata')
+                LOCALAPPDATA = $env:LOCALAPPDATA; XDG_CONFIG_HOME = $env:XDG_CONFIG_HOME
+                PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH" }
+        if ($absent.ExitCode -ne 0 -or ($absent.Stdout | ConvertFrom-Json).event -cne 'not_installed') { throw "$entrypoint did not report not_installed: $($absent.Stderr)" }
+        if ([IO.File]::ReadAllText($installed) -cne $before) { throw "$entrypoint not_installed replaced the previous live configuration" }
+    }
     try { Read-ClientConfiguration (Join-Path $work 'missing.json'); throw 'Expected missing configuration refusal' }
     catch {
         if ($_.Exception.Message -notmatch 'missing.json' -or $_.Exception.Message -notmatch '-ConfigPath') {

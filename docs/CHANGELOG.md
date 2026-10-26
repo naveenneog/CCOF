@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- Review follow-up: configuration publication now follows all setup preflight checks, shares
+  the client snapshot, rolls back on failure and is recovered by Restore. Missing clients change nothing.
 - AO-7: complete the export documentation's interrupted sentence about JSON errors.
 - DG-7: record restart-confounded versus clean budget-change evidence; no reproducible
   independent cache issue established, so no speculative code change.
