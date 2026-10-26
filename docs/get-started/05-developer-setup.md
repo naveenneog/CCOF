@@ -24,6 +24,8 @@ it instead.
 
 ## 1. Install the helper and configure Claude Code
 
+**Windows:**
+
 ```powershell
 npm ci --prefix .\client --no-audit --no-fund
 $env:CCOF_CONFIG_FILE = (Resolve-Path '<client-config.json>').Path
@@ -55,7 +57,7 @@ only, and keeps the helper's Azure CLI sign-in in `~/.config/ClaudeGateway/az`.
 
 ## 2. Sign in once
 
-Run the `"signIn"` command from step 1. For Claude Code it is always:
+Run the `"signIn"` command from step 1. For Claude Code on Windows it is always:
 
 ```powershell
 & "$env:USERPROFILE\.claude\ccof-token.cmd" login
