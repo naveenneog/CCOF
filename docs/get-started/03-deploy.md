@@ -1,12 +1,11 @@
 # 3. Deploy: Stages 0–8
 
-Nine stages, run in order from Azure Cloud Shell or from PowerShell 7 (`pwsh`) on Windows or macOS
-([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
-the same command with `-Apply` makes the change and then reads it back. A stage that fails its read-back stops
-with `verify_failed: <reason>` and records nothing, so it can be run again.
+Run nine stages in order in Cloud Shell or PowerShell 7 (`pwsh`) on Windows/macOS
+([tools](02-prerequisites.md#install-the-tools)). **Preview** first; `-Apply` then changes or verifies resources.
+A failed read-back stops with `verify_failed: <reason>`, records nothing, and can be rerun.
 
-The captures on this page come from one demo deployment on 2026-10-24
-([evidence](../evidence/2026-10-24-demo/README.md)). Names and IDs in them are hypothetical, in the real format. Settings and Portal steps per stage: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
+Captures: [demo deployment, 2026-10-24](../evidence/2026-10-24-demo/README.md); names and IDs are hypothetical.
+Settings and Portal steps: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
 
 ## Before Stage 0: get the code and write the configuration
 
@@ -134,9 +133,12 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 
 ![Expected Stage 2 output](../evidence/2026-10-24-demo/terminal-stage2.png)
 
+Stages 2/5: unchanged configuration skips noisy what-if, not deployment. `-Apply` always redeploys the current
+template (idempotent); Stage 5 restarts the Function Apps.
+
 ## Stage 3 — Runtime role assignments
 
-**Who:** access administrator · **Time:** about 6 minutes · **Creates:** each managed identity's Azure and Cosmos DB
+**Who:** access administrator · **Time:** 6–15 minutes · **Creates:** each managed identity's Azure and Cosmos DB
 roles, and Cognitive Services User for API Management on the Foundry account. Not Microsoft Graph permissions.
 
 ```powershell

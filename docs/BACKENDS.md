@@ -80,7 +80,7 @@ Each `backendId` gets a backend descriptor:
 - dialect;
 - region or endpoint type (global, data zone, regional);
 - billed-figure source;
-- failover pool membership (`docs/AVAILABILITY.md`).
+- recovery limitations ([regions and failover](get-started/region-and-failover.md)); the staged gateway does not switch accounts automatically.
 
 Stage 2 (backend registration) asks the admin for each of these and records the answers. Stage 4 output
 tells each member the client settings for their project's dialect.

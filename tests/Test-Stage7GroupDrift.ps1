@@ -97,6 +97,7 @@ try {
         $warning = Get-StgGroupSeedDrift -Endpoint 'https://account.documents.azure.com/' -DatabaseName 'ccof' -Documents @($groupDocs[0]) *>&1 | Out-String
         $warningLines = @($warning -split "`r?`n" | Where-Object { $_ -match '^preview/preflight:' })
         Assert-Contract ($warningLines.Count -eq 1 -and $warningLines[0].Contains("($($case.reason)); the seed step checks them after publishing") -and $script:restReads.Count -eq ($before + 1) -and $script:restReads[-1].timeoutSec -eq 10) "A $($case.mode) read failure must warn once and continue without drift."
+        Assert-Contract ($warningLines[0] -match 'admin console.*Groups' -and $warningLines[0] -match 'stage7.keepDifferingGroups' -and $warningLines[0] -match 'private endpoint') 'AO-5: the one-line unreachable-Cosmos warning must name the admin Groups page, private endpoint possibility, and keepDifferingGroups next step.'
     }
     $script:readMode = 'http404'
     $before = $script:restReads.Count
@@ -141,7 +142,7 @@ try {
     $fallbackLines = [Collections.Generic.List[string]]::new()
     $script:publishCalls = 0
     $fallback = try { Invoke-Stage7 -Cfg $stage7Cfg -Apply *>&1 | ForEach-Object { $fallbackLines.Add("$_") }; '' } catch { $_.Exception.Message }
-    Assert-Contract ($fallback -ceq 'test_stop_after_publish' -and $script:publishCalls -eq 1 -and @($fallbackLines | Where-Object { $_ -match '^preview/preflight: could not read group documents before publishing \(token unavailable\); the seed step checks them after publishing$' }).Count -eq 1) 'A failed preflight token lookup must warn once and still reach the post-publish seed step.'
+    Assert-Contract ($fallback -ceq 'test_stop_after_publish' -and $script:publishCalls -eq 1 -and @($fallbackLines | Where-Object { $_ -match '^preview/preflight: could not read group documents before publishing \(token unavailable\); the seed step checks them after publishing; check the admin console Groups page before republishing' }).Count -eq 1) 'A failed preflight token lookup must warn once and still reach the post-publish seed step.'
 } finally {
     foreach ($name in $savedFunctions.Keys) { Set-Item "function:$name" $savedFunctions[$name] }
 }

@@ -97,6 +97,9 @@ try {
     $india.stage1.foundry.location = 'eastus2'; $script:quotaRegions = @()
     $indiaReport = Invoke-Stage0 $india 6>$null
     Assert-Contract ($indiaReport.backends.Count -eq 1 -and $script:quotaRegions.Count -ge 2 -and -not @($script:quotaRegions | Where-Object { $_ -and $_ -cne 'eastus2' }).Count) "The Foundry checks must read stage1.foundry.location (regions read: $($script:quotaRegions -join ', '))."
+    Assert-Contract ($indiaReport.backends[0].region -ceq 'eastus2') 'N3: Stage 0 report must show the Foundry account region, not only the main deployment region.'
+    $preview = Invoke-Stage1 $india 6>&1 | Out-String
+    Assert-Contract ($preview -match 'Foundry account region: eastus2 \(deployment region: centralindia\)') 'N3: Stage 1 preview must print both Foundry and deployment regions.'
     $script:quotaUsages = @((New-QuotaLine 'AIServices.GlobalStandard.claude-haiku-5-5.Azure' 70 80))
     $script:quotaDeleted = @(@{ name = 'old-lab-foundry'; location = 'East US 2' }, @{ name = 'india-foundry'; location = 'Central India' })
     $message = ''; try { $null = Invoke-Stage0 $india 6>$null } catch { $message = $_.Exception.Message }

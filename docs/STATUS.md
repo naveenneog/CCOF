@@ -1,5 +1,32 @@
 # Current work
 
+## Bug bash 5 staged driver
+
+**Active packet:** G-R18-STAGED-REVIEW — COMPLETE; coordinator re-review/integration pending.
+Coordinator decision: configuration/dependency hashes do not cover template/effective-parameter changes;
+existing read-back cannot certify skipped configuration, and failed applies can leave stale completion state.
+Stage 2/5 `-Apply` now always deploys the current template, as in release 17. AO-3 is answered by accurate
+unchanged-preview wording, not a no-op guarantee; Stage 5 Function App restarts are documented.
+The no-op/force behavior and its tests were withdrawn by review, not weakened to pass. The replacement
+regressions cover both unchanged previews, current templates/effective parameters, failed-B-to-A recovery,
+and the retained AO-4 changed-parameter assertions.
+
+AO-1/2 remain fixed: Stage 1 keeps the Stage 5 record shape; recovery tolerates later resources without inferring
+later completion, retaining recorded grant-count checks and the Stage 2 before/after assignment comparison.
+AO-4/5/8 and novice Low fixes are implemented: named parameter diffs, actionable private-Cosmos warning,
+outage/manual-write-and-read drill guidance, separate Foundry regions, seed creation evidence, timing and links.
+GREEN: redeployment 23 checks; recovery 11; reader links/output/page budgets 3; six targeted mutations killed
+with loaded suites and expected test failures. Root/admin `npm ci`, admin 203 tests, explicit typecheck/build,
+and full packet gate passed (including `npm test`, 360.8 seconds). Gate: 23 passed, 2 existing warning
+categories (oversized files/open unknowns), 0 failed. No live applies or pushes.
+Withdrawal implementation: `a5a9dd6`.
+
+Self-review, not independent council approval: ARCHITECT PASS — release-17 apply contract restored;
+CODER PASS — no completion-record shortcut on apply; QA PASS — wording, current inputs and failed-B-to-A
+regressions plus six mutations; UX PASS — restart/redeployment disclosed; SECURITY PASS — no new writer,
+dependency or credential exposure. The external Coder/QA BLOCK is addressed by withdrawal, not by claiming
+the former read-back can certify drift; coordinator owns independent re-review.
+
 ## Release 17 (2026-10-26)
 
 **Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an

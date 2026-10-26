@@ -13,6 +13,28 @@ const dir = (d: string) => readdirSync(path.join(root, d)).filter((f) => f.endsW
 const pages = ["README.md", "docs/INDEX.md", "docs/GLOSSARY.md", ...dir("docs/get-started"), ...dir("docs/operate"), ...dir("docs/evidence/2026-10-24-demo")];
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 
+test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {
+  const regions = read("docs/get-started/region-and-failover.md");
+  assert.match(regions, /az cosmosdb failover-priority-change.*southindia=0 centralindia=1/, "AO-8: document a planned Cosmos write-region switch");
+  assert.match(regions, /az cosmosdb failover-priority-change.*centralindia=0 southindia=1/, "AO-8: document switching back");
+  assert.match(regions, /learn\.microsoft\.com\/.*cosmosdb.*#az-cosmosdb-failover-priority-change/);
+  assert.match(regions, /gateway.*unavailable/i);
+  assert.match(regions, /writeLocations/);
+  assert.match(regions, /Stage 8/);
+  assert.match(regions, /does not prove.*South India/i);
+  assert.match(regions, /COSMOS_PREFERRED_REGIONS.*southindia,centralindia/);
+  assert.match(regions, /restore.*saved value/i);
+  assert.match(regions, /new Cosmos.*account/i);
+});
+
+test("novice operations guidance gives realistic grant timing and a real backend availability link", () => {
+  const stage3 = read("docs/get-started/03-deploy.md").split("## Stage 3")[1]?.split("\n## ")[0] ?? "";
+  assert.match(stage3, /Time:\*\* 6[–-]15 minutes/, "N4: Stage 3 time estimate must cover the observed 6–15 minute range");
+  const backends = read("docs/BACKENDS.md");
+  assert.doesNotMatch(backends, /AVAILABILITY\.md/, "novice Low: BACKENDS must not name the missing AVAILABILITY page");
+  assert.match(backends, /\[[^\]]+\]\(get-started\/region-and-failover\.md\)/);
+});
+
 test("every relative link and image on the reader-facing pages resolves", () => {
   const missing: string[] = [];
   for (const page of pages) {

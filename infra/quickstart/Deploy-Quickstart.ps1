@@ -609,6 +609,24 @@ function Wait-QsSeedResult {
         }
         if ($lines.Count) {
             $latest = $lines[-1]
+            # The timer can run twice before logs arrive. Preserve creation evidence for this seed,
+            # but never replace a later failure or drift outcome with an earlier successful write.
+            $created = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            foreach ($line in $lines) {
+                foreach ($d in @($line.documents | Where-Object { $_.outcome -ceq 'created' })) { [void]$created.Add("$($d.container)/$($d.id)") }
+            }
+            $latest = $latest.Clone()
+            $latest.documents = @($latest.documents | ForEach-Object {
+                $d = $_.Clone()
+                if ($d.outcome -ceq 'present-equal' -and $created.Contains("$($d.container)/$($d.id)")) { $d.outcome = 'created' }
+                $d
+            })
+            $latest.counts = @{
+                created = @($latest.documents | Where-Object outcome -CEQ 'created').Count
+                presentEqual = @($latest.documents | Where-Object outcome -CEQ 'present-equal').Count
+                presentDiffers = @($latest.documents | Where-Object outcome -CEQ 'present-differs').Count
+                failed = @($latest.documents | Where-Object outcome -CEQ 'failed').Count
+            }
             if ($latest.outcome -cne 'failed' -or $lines.Count -ge 3) { return $latest }
         }
         elseif ($FunctionsUrl -and $SyncUrl) {

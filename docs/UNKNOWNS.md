@@ -1,5 +1,14 @@
 # Current deployment unknowns
 
+## Bug bash 5 staged driver
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| STG5-4 | RESOLVED | Coder/QA review rejected using config/dependency hashes to skip apply: template/effective parameters are not covered, existing read-back is insufficient, and failed applies leave stale completion records. Coordinator explicitly withdrew no-op apply; restore unconditional deployment rather than extend the certification scheme. |
+| STG5-1 | RESOLVED | Why did the first seed report already-present documents? The polling test reproduces two timer result lines with the same seed ID; preserving the earlier creation evidence fixes reporting without replacing later drift/failures ([test](../tests/Test-QuickstartSeed.ps1)). |
+| STG5-2 | RESEARCHED | Manual Cosmos failover takes every replicated region as `regionName=priority`, with unique priorities and one zero ([CLI reference](https://learn.microsoft.com/cli/azure/cosmosdb#az-cosmosdb-failover-priority-change), checked 2026-10-27). The reader guide distinguishes writer switching, preferred reads and a service-region outage. |
+| STG5-3 | ASSUMED | Offline ARM/CLI stubs reproduce the reported state/record shapes; they do not prove live Azure behavior or a real regional outage. No live applies or failovers are authorized for this packet; deployment validation belongs to the coordinator's separate release process. |
+
 ## Group-centric onboarding (ADR-0034)
 
 | ID | State | Question / evidence |
