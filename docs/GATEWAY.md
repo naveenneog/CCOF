@@ -112,8 +112,8 @@ non-empty path segments ending exactly in `/v1/messages` are served.
 **Request size.** After the token and admission checks, and before the body is read, a request whose `Content-Type`
 is not `application/json` is answered `415`, and one whose `Content-Length` is above 32 MB (33,554,432 bytes)
 `413 request_too_large`. 32 MB is the Messages API limit ([Claude API errors](https://platform.claude.com/docs/en/api/errors),
-"Request size limits"); Foundry enforces the same limit with its own `413`. A request without `Content-Length` is
-checked by Foundry only.
+"Request size limits"); Foundry enforces the same limit with its own `413`. Missing, invalid or negative
+`Content-Length` is answered `411 invalid_request_error` before reading the body; chunked requests are not forwarded.
 
 ## Backends
 
@@ -158,6 +158,7 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
 | `Content-Type` other than `application/json` | 415 | `invalid_request_error` |
 | `Content-Length` above 32 MB | 413 | `request_too_large` |
+| Missing or invalid `Content-Length` (including chunked requests) | 411 | `invalid_request_error` |
 | A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500), or a variant of `/v1/messages` such as a trailing slash | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
