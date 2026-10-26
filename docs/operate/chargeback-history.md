@@ -84,7 +84,7 @@ closed day never becomes open again. Before reading, the export checks every day
 ## Download an old month
 
 The export needs a delegated token for the admin API. History is not read by the console's **Export CSV** button,
-so an old month is downloaded with a script. This route uses the Azure CLI as the client, tested live on 2026-10-26.
+so an old month is downloaded with a script, with the Azure CLI (tested live 2026-10-26).
 
 1. **Once per deployment: allow the Azure CLI client**: its public client ID `04b07795-8ddb-461a-bbee-02f9e1bf7b46`
    in `admin.extraAllowedClientIds` (the turn-on steps below add it; added later, it needs Stage 4, then Stages 5,
@@ -92,12 +92,12 @@ so an old month is downloaded with a script. This route uses the Azure CLI as th
 2. **The person downloading** needs the `CCOF.Projects.Read` (or `CCOF.Projects.Write`) app role on the CCOF Admin
    application (`entra.adminReaders`), and a network path to the admin app. With
    `stage1.functionsPublicNetworkAccess: Disabled`, run from a machine on the VNet ([network](../NETWORK.md)).
-3. **Download**, from a workstation signed in with `az login` (`period=previous` also works for last month):
+3. **Download**, from a workstation signed in with `az login` (or `period=previous` for last month):
 
 ```powershell
 $rg = 'ccoflab-rg'
 $adminApp = az functionapp list -g $rg --query "[?ends_with(name, '-admin')].name | [0]" -o tsv
-$adminHost = az functionapp show -g $rg -n $adminApp --query defaultHostName -o tsv
+$adminHost = az functionapp show -g $rg -n $adminApp --query "properties.defaultHostName || defaultHostName" -o tsv
 $adminAppId = az functionapp config appsettings list -g $rg -n $adminApp --query "[?name=='ADMIN_AUDIENCE'].value | [0]" -o tsv
 $token = az account get-access-token --scope "api://$adminAppId/Projects.Manage" --query accessToken -o tsv
 $url = "https://$adminHost/api/v3/export/usage?period=custom&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z&format=csv"
