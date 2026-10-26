@@ -43,9 +43,42 @@ test("the deploy page quotes the Stage 5 audit line and the Stage 2 history cont
   const deploy = read("docs/get-started/03-deploy.md");
   assert.match(section(deploy, "## Stage 5 "), /`audit archive: /);
   assert.match(section(deploy, "## Stage 5 "), /`audit archive: off/);
-  assert.match(read("infra/staged/Staged.Audit.ps1"), /"audit archive: off; \$ws"/);
+  assert.match(read("infra/staged/Staged.Audit.ps1"), /audit archive: off; an existing ccof-gateway-archive diagnostic setting keeps exporting/);
   assert.match(read("infra/staged/Staged.Audit.ps1"), /return "audit archive: \$\(\$Deployment\.accountName\) in /);
   assert.match(section(deploy, "## Stage 2 "), /`chargebackDaily`/);
+});
+
+test("operator recovery docs match Stage 0/1 and Stage 7 behavior", () => {
+  const stage0 = read("infra/staged/Staged.Resources.ps1");
+  assert.match(stage0, /no Stage 1 state[\s\S]*succeeded stage1-services deployment matches this config[\s\S]*recovered state/);
+  const troubleshooting = read("docs/operate/troubleshooting.md");
+  assert.match(troubleshooting, /stage7_busy/);
+  assert.doesNotMatch(troubleshooting, /Stage 7: `npm ci` EPERM in `admin\/node_modules`/);
+});
+
+test("archive-off guidance names the surviving export and exact manual deletion command", () => {
+  const preview = read("infra/staged/Staged.Audit.ps1");
+  const page = read("docs/operate/audit-archive.md");
+  const deletion = "az monitor diagnostic-settings delete --name ccof-gateway-archive --resource <API Management resource ID>";
+  assert.match(preview, /existing ccof-gateway-archive diagnostic setting keeps exporting/);
+  assert.ok(preview.includes(deletion), "Stage 5 preview prints the exact removal command");
+  assert.ok(page.includes(deletion), "archive runbook gives the exact removal command");
+  assert.match(page, /does \*\*not\*\* delete the archive storage account/);
+});
+
+test("chargeback-history turn-off previews and applies stages sequentially for config hashes", () => {
+  const off = section(read("docs/operate/chargeback-history.md"), "## Turn off").toLowerCase();
+  const steps = [
+    "preview and apply stage 2",
+    "then preview and apply stage 3",
+    "then preview and apply stage 5",
+  ];
+  let previous = -1;
+  for (const step of steps) {
+    const current = off.indexOf(step);
+    assert.ok(current > previous, `turn-off guidance includes ordered step: ${step}`);
+    previous = current;
+  }
 });
 
 test("the archive page quotes the Stage 5 lines as printed and gives Windows-safe checks, including the delivery metrics", () => {

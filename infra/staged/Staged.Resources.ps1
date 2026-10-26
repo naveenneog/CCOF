@@ -13,7 +13,7 @@ function Invoke-Stage0 {
     if ($exists) {
         $items = @(Invoke-StgAzJson @('resource', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup))
         $report.resourceGroup.resourceCount = $items.Count
-        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here; Stage 1 refuses a non-empty RG." -ForegroundColor Yellow }
+        if ($items.Count -and -not (Read-StgState $Cfg).stages['1']) { Write-Host "WARNING: $($Cfg.resourceGroup) holds $($items.Count) resources and no Stage 1 state exists here. Stage 1 can verify without writing only if a succeeded stage1-services deployment matches this config; otherwise it refuses a non-empty RG. Later stages still need their own recovered state and are not assumed complete." -ForegroundColor Yellow }
     }
     $providers = 'Microsoft.Web', 'Microsoft.DocumentDB', 'Microsoft.Storage', 'Microsoft.Network', 'Microsoft.OperationalInsights', 'Microsoft.Insights', 'Microsoft.ManagedIdentity', 'Microsoft.ApiManagement', 'Microsoft.AlertsManagement'
     $report.providers = [ordered]@{}
