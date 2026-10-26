@@ -34,6 +34,7 @@ The [demo evidence](../evidence/2026-10-24-demo/README.md) records which directo
 - [ ] **Entra administrator** for the three app registrations (Application Administrator, or owner of existing apps).
 - [ ] **Privileged Role Administrator**, only if Microsoft Graph application permissions are approved (automatic
       group sync, group search, people's names).
+- [ ] **API Management owner**, only when CCOF uses an existing instance: approves what CCOF adds and grants Stage 5 access ([existing API Management](existing-api-management.md#2-what-the-instances-owner-approves)).
 - [ ] **Network team**, unless a lab creates its own network (`network.mode: create`).
 - [ ] **Cost approval** for API Management Standard v2, Function Apps, Cosmos DB, Log Analytics and model usage.
 
@@ -133,6 +134,7 @@ Stage 4 creates them, or merges its settings into existing ones (`entra.existing
 
 | Decision | Options | Where it is set |
 | --- | --- | --- |
+| API Management | **New** (Stage 1 creates Standard v2, about USD 23 a day) or **existing** (CCOF adds one API to your instance; its owner approves) | `stage1.approveNewPublicApimBootstrap` or `apim.existing`; [use an existing API Management](existing-api-management.md) |
 | How membership is read | **Automatic** (Graph permission granted, sync timer on) or **snapshot** (an operator applies changes) | `sync`, `syncTimerEnabled`; [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync) |
 | Dollar budgets enforced | `budget-state` (enforced) or `token-limits-only` | `resolver.budgetEnforcement` |
 | Budget guard | Example: warn at 80%, rate allowance 5% per projection window; not a strict cap | `reconciler.budgetGuard`; [budgets](../operate/budgets-and-guard.md) |

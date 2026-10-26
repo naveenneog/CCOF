@@ -150,8 +150,12 @@ Assert-Contract ($containers.Count -eq 1 -and "$($containers[0].copy.count)" -ma
 $immutable = @($all | Where-Object type -CEQ 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies')
 Assert-Contract ($immutable.Count -eq 1 -and $immutable[0].properties.allowProtectedAppendWrites -eq $true) 'Immutability must allow protected append writes (the logs are append blobs).'
 Assert-Contract ("$($immutable[0].condition)" -match 'lockedContainers') 'Stage 5 must not write an immutability policy the owner has locked.'
-$diag = @($all | Where-Object type -CEQ 'Microsoft.Insights/diagnosticSettings')
-Assert-Contract ($diag.Count -eq 1 -and $diag[0].name -ceq 'ccof-gateway-archive') 'Stage 5 must declare only the ccof-gateway-archive diagnostic setting.'
+$diagAll = @($all | Where-Object type -CEQ 'Microsoft.Insights/diagnosticSettings')
+# ADR-0045: besides the archive, the only other setting is ccof-gateway-logs for an existing API Management (deployed
+# only when gatewayLogs is given: tests/Test-StagedStages.ps1, tests/Test-StagedApimExisting.ps1).
+$diag = @($diagAll | Where-Object name -CEQ 'ccof-gateway-archive')
+$otherDiag = @($diagAll | Where-Object name -CNE 'ccof-gateway-archive')
+Assert-Contract ($diag.Count -eq 1 -and $otherDiag.Count -eq 1 -and "$($otherDiag[0].properties.logAnalyticsDestinationType)" -ceq 'Dedicated') 'Stage 5 must declare only the ccof-gateway-archive diagnostic setting (and, for an existing API Management, ccof-gateway-logs).'
 Assert-Contract ($diag[0].properties.ContainsKey('storageAccountId') -and -not $diag[0].properties.ContainsKey('workspaceId')) 'The archive setting must send to storage only, never repeat the workspace destination of ccof-gateway-logs.'
 Assert-Contract ((@($diag[0].properties.logs | Where-Object enabled | ForEach-Object category) -join ',') -ceq 'GatewayLogs,GatewayLlmLogs') 'The archive setting must send GatewayLogs and GatewayLlmLogs.'
 

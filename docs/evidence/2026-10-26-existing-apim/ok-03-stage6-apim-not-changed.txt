@@ -1,0 +1,7 @@
+PS ~/ccof> pwsh -File infra/staged/Invoke-StagedDeployment.ps1 -Stage 6 -ConfigPath $HOME/ccof-private/staged.config.json
+== stage 6 (preview) subscription ebf7ae8f-e8b3-4f44-9395-85b2b1ad6db8 RG ccof-nov4-rg; state $HOME/ccof-private/.staged-state
+what-if stage6-network : Create=16, Ignore=27
+then: VNet integration, one app at a time, for admin, reconciler, resolver, sync (az functionapp vnet-integration add).
+API Management contoso-apim (apim.existing) is not changed: CCOF does not change the networking of an existing API Management.
+stage 6 preview only: nothing changed. Rerun with -Apply.
+== exit 0 elapsed 34 s log $HOME/logs/stage6-preview-081356.log

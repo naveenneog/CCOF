@@ -273,3 +273,18 @@ test("every JSON block on the configuration pages parses, and the complete sampl
     rmSync(dirPath, { recursive: true, force: true });
   }
 });
+test("the existing API Management page is on the reader's route and quotes lines the scripts print", () => {
+  for (const page of ["docs/get-started/02-prerequisites.md", "docs/get-started/03-deploy.md"]) {
+    assert.match(read(page), /\(existing-api-management\.md[#)]/, `${page} links the existing API Management page`);
+  }
+  const existing = read("docs/get-started/existing-api-management.md");
+  const scripts = readdirSync(path.join(root, "infra/staged")).filter((f) => f.endsWith(".ps1")).map((f) => read(`infra/staged/${f}`)).join("\n");
+  const quoted = ["apim_existing_unreadable", "apim_identity_missing", "apim_existing_sku", "apim_existing_api_conflict", "apim_existing_path_taken",
+    "apim_existing_backend_conflict", "apim_existing_diagnostic_settings_full", "apim_existing_no_private_route", "apim_gateway_logs_conflict",
+    "you cannot run Stage 5 on", "also runs for the CCOF API", "system-assigned identity on,", "gateway logs: diagnostic setting", "gateway logs: reusing diagnostic setting",
+    "verified:", "is not changed: CCOF does not change the networking of an existing API Management.", "both a new API Management"];
+  for (const text of quoted) {
+    assert.ok(existing.includes(text), `the page quotes "${text}"`);
+    assert.ok(scripts.includes(text), `a staged script prints "${text}"`);
+  }
+});

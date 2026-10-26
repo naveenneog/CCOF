@@ -57,7 +57,7 @@ a different value means a new resource group. Check these before the first `-App
 
 | Setting | Template | Lab (2026-10-24 and 2026-10-25 runs) | Why |
 | --- | --- | --- | --- |
-| `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one. Stage 0 refuses a configuration with neither |
+| `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one ([use an existing API Management](existing-api-management.md): what Stage 0 checks and what CCOF adds to it). Stage 0 refuses a configuration with neither, or with both |
 | `stage1.functionsPublicNetworkAccess` | `Disabled` | `Enabled` | `Disabled` closes the apps and their deployment (SCM) endpoint to the internet ([App Service access restrictions](https://learn.microsoft.com/azure/app-service/overview-access-restrictions)): Stage 7 publishing and the admin console then need a machine on the VNet ([network](../NETWORK.md)) |
 | `stage1.cosmosLocations` | `eastus2` + `centralus`, zone-redundant | `isZoneRedundant: false`, or one region with `cosmosCapacityMode: serverless` | Zone-redundant Cosmos DB capacity was refused in East US 2 ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)) |
 | `stage1.foundry.deployments` | Claude 4.5 and 5 | Deployments that match free quota ([prerequisites](02-prerequisites.md#microsoft-foundry-models)) | Quota differs per subscription |
