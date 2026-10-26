@@ -8,8 +8,8 @@ gateway refuses explicit chunking and normalizes backend errors; usage states pa
 budget-key semantics are explicit; sign-in probes are quiet; admin names are visible and safe.
 No live changes. [ADR-0050](adr/0050-import-client-configuration.md).
 
-**State:** review follow-up in progress: make configuration publication transactional and
-restrict the framing refusal to explicit chunked bodies; no push or live deployment.
+**State:** review follow-up implemented and offline-green, ready for coordinator re-review;
+no push or live deployment.
 DG-1/2 `4f9c987` (safety `bf833c6`, entrypoint proof `bbc8d2b`); DG-3 `70e5b65`;
 DG-4 `5c903a5` (SSE contract `8fdb210`); DG-5 `3cd182b` (zero ceiling `9a6329a`);
 DG-6 `36b72a4` ([ADR-0051](adr/0051-retain-pacing-debt-for-reused-budgets.md));
@@ -22,6 +22,14 @@ Validation: root/admin `npm ci`; full `npm test` through the packet gate; admin 
 All commands used the isolated Azure CLI profile; no live lab was contacted.
 Native macOS was not exercised. Dependency installation reports two existing high-severity
 audit findings in each package tree; this packet changes no dependencies.
+
+Review follow-up: `85cf4f8` moves publication after preflight, includes the shared configuration
+in client snapshots, rolls back failed writes/completion, and makes Restore recover it.
+Public failed/not-installed paths and both Code/Desktop success/rollback/Restore cases pass.
+`326019f` refuses explicit chunked transfer tokens only; absent Content-Length alone is allowed.
+[BB5-H2](UNKNOWNS.md#bug-bash-5-review-follow-up) records SDK/loopback evidence and the unproven
+APIM HTTP/2 exposure. Nine further guard mutants caught. Fresh root/admin installs, admin tests
+(203/203), CI typecheck, build and full packet gate PASS; the gate's `npm test` took 344.6 seconds.
 
 ## Release 17 (2026-10-26)
 

@@ -30,6 +30,8 @@ sign-in state in an unexpected folder.
 One current configuration per OS user, as with the existing setup default. Reinstalling for
 another gateway replaces this configuration only on successful setup. Restore returns the
 previous configuration with the previous settings (or removes it if setup created it).
+Switching gateways requires reconfiguring every client using this shared file; setup does
+not rewrite the other client's helper.
 Restore's existing changed-file protection prevents silently overwriting a later setup.
 Snapshots do not migrate/delete CLI sign-in caches; sign in using the installed helper,
 then remove any old download-folder profile through the approved device-cleanup process.
