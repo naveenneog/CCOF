@@ -172,18 +172,16 @@ Prices are USD list prices; agreements and regions differ. The estimate comes fr
 
 ## Turn off
 
-Set `enabled: false` (or remove the `audit.chargebackHistory` section). Because later stage hashes depend on these
-stages depend on these values, preview and apply each stage before previewing the next:
+Set `enabled: false` (or remove `audit.chargebackHistory`). Hashes require this order; preview/apply each before
+continuing:
 
 1. Preview and apply Stage 2.
 2. Then preview and apply Stage 3.
 3. Then preview and apply Stage 5.
 
-If Stage 7 or 8 then refuses with `stage_dependency_changed`, preview and apply it. Stage 5 removes the reconciler's
-and admin app's history settings: the reconciler stops writing, and the export reads Log Analytics only. The stages
-never delete: the `chargebackDaily` container, its three Stage 3 role assignments and the `ccof-chargeback-history`
-lease document remain until removed by hand, with the commands in
-[ADR-0044, Rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback).
+If Stage 7/8 reports `stage_dependency_changed`, rerun it. Stage 5 stops history writes; exports use Log Analytics.
+It retains the `chargebackDaily` container, its three Stage 3 role assignments and the lease document (see
+[ADR-0044 rollback](../adr/0044-chargeback-history-in-cosmos.md#rollback)). History remains until TTL expiry/deletion.
 
 A section that is only `{ "enabled": false }` is recorded as if it were absent; with any other key beside it, as
 in the template, it is part of the Stage 2, 3 and 5 records ([configuration reference](../get-started/configuration-reference-3.md#audit)).
