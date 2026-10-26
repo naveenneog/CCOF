@@ -2,6 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
 . (Join-Path $repo 'scripts\client\ClaudeCodeGateway.ps1')
+. (Join-Path $repo 'scripts\client\ClientProcess.ps1')
 $work = Join-Path $repo ('client\.test-work\import-' + [guid]::NewGuid().ToString('N'))
 $previousLocal = $env:LOCALAPPDATA
 $previousConfig = $env:CCOF_CONFIG_FILE
@@ -34,6 +35,26 @@ try {
     catch { if ($_.Exception.Message -notmatch 'unsupported_sign_in_method') { throw } }
     $posixDestination = Join-Path $env:XDG_CONFIG_HOME 'ClaudeGateway/config.json'
     if ($IsWindows -and (Test-Path $posixDestination)) { throw 'Unsupported sign-in imported a configuration' }
+    $profile = Join-Path $work 'profile'
+    $bin = Join-Path $work 'bin'
+    if ($IsWindows) { Write-ClientText (Join-Path $bin 'claude.cmd') "@echo off`r`necho 2.1.272`r`n" }
+    else {
+        Write-ClientText (Join-Path $bin 'claude') "#!/bin/sh`necho 2.1.272`n" -UnixMode 448
+        Write-ClientText (Join-Path $bin 'az') "#!/bin/sh`nexit 99`n" -UnixMode 448
+    }
+    Write-ClientJson $source $config
+    $child = Invoke-CcofChild -FilePath (Join-Path $repo 'scripts\client\Set-ClaudeCodeGateway.ps1') `
+        -Arguments @('-ConfigPath', $source, '-Confirmed') -WorkingDirectory $repo -TimeoutSeconds 120 `
+        -Environment @{ HOME = $profile; USERPROFILE = $profile; APPDATA = (Join-Path $profile 'appdata')
+            LOCALAPPDATA = $env:LOCALAPPDATA; XDG_CONFIG_HOME = $env:XDG_CONFIG_HOME
+            PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH" }
+    if ($child.ExitCode -ne 0) { throw "Setup failed: $($child.Stderr)" }
+    Remove-Item -LiteralPath $source
+    $settings = Read-ClientJson (Join-Path $profile '.claude/settings.json')
+    if ($settings.env.CCOF_CONFIG_FILE -cne $installed) { throw 'Installed settings still depend on the deleted download' }
+    $wrapper = [IO.File]::ReadAllText((Join-Path $profile '.claude/ccof-usage.ps1'))
+    if (-not $wrapper.Contains($installed.Replace("'", "''"))) { throw 'Usage wrapper still depends on the deleted download' }
+    if (-not (Test-Path (Join-Path (Split-Path $installed -Parent) 'backups'))) { throw 'Default backups were not placed with the installed configuration' }
     try { Read-ClientConfiguration (Join-Path $work 'missing.json'); throw 'Expected missing configuration refusal' }
     catch {
         if ($_.Exception.Message -notmatch 'missing.json' -or $_.Exception.Message -notmatch '-ConfigPath') {
