@@ -1,5 +1,11 @@
 # Current work
 
+## Bug bash 5 staged driver
+
+**Active packet:** G-R18-STAGED — offline regression fixes for staged reruns, recovery and operator guidance.
+AO-1: Stage 1 retains the Stage 5 record shape; the offline rerun fixture reproduces the null-array error
+and checks both matching and mismatched saved settings. No live applies.
+
 ## Release 17 (2026-10-26)
 
 **Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an

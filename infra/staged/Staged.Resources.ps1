@@ -263,8 +263,8 @@ function Test-Stage1 {
     $network = if ($networkRecord -and $networkRecord.configHash -ceq (Get-StgStageInput $Cfg 6)) { $networkRecord.outputs } else { $null }
     $schema = if ($schemaRecord -and $schemaRecord.configHash -ceq (Get-StgStageInput $Cfg 2)) { $schemaRecord.outputs } else { $null }
     $grantsStage = if ($grantsRecord -and $grantsRecord.configHash -ceq (Get-StgStageInput $Cfg 3)) { $grantsRecord.outputs } else { $null }
-    $config = if ($configRecord -and $configRecord.configHash -ceq (Get-StgStageInput $Cfg 5)) { $configRecord.outputs } else { $null }
-    $code = if ($codeRecord -and $codeRecord.configHash -ceq (Get-StgStageInput $Cfg 7)) { $codeRecord.outputs } else { $null }
+    $config = if ($configRecord -and $configRecord.configHash -ceq (Get-StgStageInput $Cfg 5)) { $configRecord } else { $null }
+    $code = if ($codeRecord -and $codeRecord.configHash -ceq (Get-StgStageInput $Cfg 7)) { $codeRecord } else { $null }
     foreach ($a in $Out.functionApps) {
         $site = Get-StgSite $Cfg $a.service.name
         $settings = @(Invoke-StgAzJson @('functionapp', 'config', 'appsettings', 'list', '--subscription', $sub, '--resource-group', $rg, '--name', $a.service.name))

@@ -1,5 +1,9 @@
 # Change log
 
+## Bug bash 5 — staged deployment
+
+- AO-1: Stage 1 apply reruns after Stage 5 verify the saved settings without a null-array failure.
+
 ## 2026-10-26 — Release 17
 
 - Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash
