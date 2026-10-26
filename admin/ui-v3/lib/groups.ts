@@ -107,8 +107,9 @@ export function deploymentProblems(form: GroupForm, backends: BackendOption[] | 
 
 // A group page's link must end with the group's Object ID; anything else (a mistyped #/groups/onboard) is
 // explained rather than sent to the API (ADMIN-7).
+export const isGroupId = (id: string): boolean => GUID.test(id);
 export function groupLinkProblem(id: string): string | null {
-  return GUID.test(id) ? null : "This link is not a group ID. A group's link ends with its Entra Object ID, a GUID such as 0f1e2d3c-4b5a-4978-8a6b-5c4d3e2f1a0b.";
+  return isGroupId(id) ? null : "This link is not a group ID. A group's link ends with its Entra Object ID, a GUID such as 0f1e2d3c-4b5a-4978-8a6b-5c4d3e2f1a0b.";
 }
 
 // What the budget means for the group's current direct members: auto-scale grows with the group;

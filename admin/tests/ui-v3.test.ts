@@ -96,3 +96,18 @@ test("the sidebar names the pre-group project list Legacy projects, after Groups
   const page = await readFile(new URL("../ui-v3/pages/projects.tsx", import.meta.url), "utf8");
   assert.match(page, /PageHeader title="Legacy projects"/);
 });
+
+test("group-facing console text uses group wording, without project-era names or STD/PRM/CYB (ADMIN-6)", async () => {
+  const src = (p: string) => readFile(new URL(`../ui-v3/${p}`, import.meta.url), "utf8");
+  const main = await src("main.tsx");
+  assert.doesNotMatch(main, /Manage CCOF projects|Projects, limits, budgets/);
+  assert.match(main, /Groups, limits, budgets and chargeback/);
+  const breakdown = await src("components/cost-breakdown.tsx");
+  for (const old of [/STD|PRM|CYB/, /"All projects"|>All projects</, /"By project"/, /"Cost by project"/, /label="Project"/, /The top 7 projects/]) assert.doesNotMatch(breakdown, old);
+  assert.match(breakdown, /href\(group \? `\/groups\/\$\{encodeURIComponent\(project\)\}`/, "a group slice links to its group page");
+  const { HELP } = await import("../ui-v3/help.ts");
+  const overview = HELP.overview.figures!.map(([, text]: [string, string]) => text).join(" ");
+  assert.doesNotMatch(overview, /STD|PRM|CYB|by project/);
+  const limits = await src("components/limits.tsx");
+  assert.match(limits, /classification === "group" \? "Fable and Mythos can be admitted only when restricted families are approved for this group\."/);
+});

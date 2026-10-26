@@ -92,8 +92,8 @@ function App() {
   if (auth.mode === "msal" && !auth.account) {
     return (
       <Center>
-        <h1>Manage CCOF projects</h1>
-        <p>Projects, limits, budgets and chargeback in one place. Sign in with your work account.</p>
+        <h1>Manage CCOF groups</h1>
+        <p>Groups, limits, budgets and chargeback in one place. Sign in with your work account.</p>
         <Button variant="primary" onClick={() => signIn()}>Sign in with Microsoft</Button>
       </Center>
     );
