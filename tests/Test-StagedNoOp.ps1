@@ -32,6 +32,11 @@ function Invoke-QsAz { param([string[]]$Arguments)
     } } }
 }
 try {
+    foreach ($n in 2, 5) {
+        $script:deploys = 0
+        $null = Invoke-StgBicep -Cfg $cfg -Template 'unused.bicep' -Name "force-probe-$n" -StageNumber $n -Parameters @{} -Apply -ForceRedeploy
+        Assert-Contract ($script:deploys -eq 1) "AO-3: forced unchanged apply must redeploy Stage $n."
+    }
     $null = Write-StgParameters $cfg 'stage5-config' @{ reconciler = @{ budgetGuard = @{ warnPercent = 80 } }; tenantId = 't' }
     $changed = $cfg.Clone(); $changed.reconciler = @{ budgetGuard = @{ warnPercent = 79 } }
     $preview = Invoke-StgBicep -Cfg $changed -Template 'unused.bicep' -Name 'stage5-config' -StageNumber 5 -Parameters @{
