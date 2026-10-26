@@ -108,7 +108,7 @@ function Get-StgGroupSeedDrift {
     } catch {
         $message = [string]$_.Exception.Message
         $reason = if ($message -match '^group_preflight_failure: (.+)$') { $matches[1] } else { 'read failure' }
-        Write-Host "preview/preflight: could not read group documents before publishing ($reason); the seed step checks them after publishing" -ForegroundColor Yellow
+        Write-Host "preview/preflight: could not read group documents before publishing ($reason); the seed step checks them after publishing; check the admin console Groups page before republishing, and set stage7.keepDifferingGroups=true to keep console edits (a private endpoint may block this read)." -ForegroundColor Yellow
         return @()
     }
 }

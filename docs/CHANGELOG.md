@@ -9,6 +9,8 @@
   a repair. Stage 5 no-op verifies retention instead of rewriting it.
 - AO-4: changed previews list parameter names (never values), comparing with the last successful
   deployment snapshot; older state explicitly labels its last-generated-file fallback.
+- AO-5: the unreachable-Cosmos preflight warning names the admin Groups page and the explicit
+  keep-console-edits option before republishing.
 
 ## 2026-10-26 — Release 17
 
