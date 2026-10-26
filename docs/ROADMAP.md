@@ -7,6 +7,8 @@
 - [x] Reader guidance: regional outage and reversible Cosmos drills; Foundry region previews, seed outcomes,
   Stage 3 duration and backend recovery link. No live applies in this packet.
 - [ ] Coordinator integration/publication after the final packet gate and review record.
+- [ ] Existing gate debt, outside this bug-fix packet: split oversized UI/deployment files by responsibility
+  and resolve the three unrelated open deployment unknowns. Packet gate passes with these two warning categories.
 
 ## Group-centric onboarding (ADR-0034)
 

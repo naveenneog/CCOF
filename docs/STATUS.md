@@ -2,7 +2,7 @@
 
 ## Bug bash 5 staged driver
 
-**Active packet:** G-R18-STAGED — offline regression fixes for staged reruns, recovery and operator guidance.
+**Active packet:** G-R18-STAGED — COMPLETE; coordinator integration/publication pending.
 AO-1: Stage 1 retains the Stage 5 record shape; the offline rerun fixture reproduces the null-array error
 and checks both matching and mismatched saved settings. No live applies.
 AO-2: empty-state recovery records only Stages 1/2 as explicitly run, unlocks Stage 2 preview, and
@@ -11,8 +11,15 @@ AO-3: unchanged Stage 2/5 applies return saved deployment outputs to their norma
 redeployment. Explicit force and changed inputs/prerequisites still deploy; drift fails closed.
 AO-4/5/8 and novice Low fixes are implemented: named parameter diffs, actionable private-Cosmos warning,
 outage/manual-write-and-read drill guidance, separate Foundry regions, seed creation evidence, timing and links.
-Offline guard mutations: 22/22 killed with loaded suites and targeted failure messages. Root/admin installs,
-admin 203 tests and explicit TypeScript typecheck passed; full root tests/build/packet gate pending.
+Offline mutations: 26/26 killed with loaded suites and targeted failure messages (22 behavior guards, four
+documentation regressions). Root/admin installs, root tests, admin 203 tests, explicit TypeScript typecheck
+and build passed. Packet gate PASS: 23 passed, 2 warnings (existing file-size/open-unknown debt), no failures.
+Implementation through `6f8a3a6`; finding commits and RED/mutation evidence are recorded in the handoff log.
+
+Self-review council (not an independent review): ARCHITECT PASS — no new runtime boundaries or dependencies;
+CODER PASS — existing stage read-back remains authoritative; QA PASS — caller-level regressions and 26
+targeted mutations; UX PASS — truthful no-op/repair previews and recovery steps; SECURITY PASS — force limited
+to Stages 2/5, parameter values not printed, recorded grant checks retained, added-line leak scan clean.
 
 ## Release 17 (2026-10-26)
 
