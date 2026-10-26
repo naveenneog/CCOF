@@ -120,6 +120,18 @@ test("export refuses filters it cannot apply, and echoes every filter it applied
   assert.deepEqual((json.jsonBody as Doc).filters, { project: "", group: "", developer: "", model: "", backend: "foundry-eus2", family: "opus", classification: "group", chargeback: "WBS-1" });
 });
 
+test("from and to are refused with period=month or previous, never ignored (ADMIN-2)", async () => {
+  const { call } = setup();
+  for (const query of ["period=month&from=2026-10-01T00:00:00Z", "period=previous&to=2026-10-01T00:00:00Z", "from=2026-10-05T00:00:00Z"]) {
+    const res = await call(`export/usage?${query}`);
+    assert.equal(res.status, 400, query);
+    assert.equal((res.jsonBody as Doc).error, "from_to_require_custom_period", query);
+    assert.equal((res.jsonBody as Doc).requestId, "req-1", query);
+  }
+  const view = await call("chargeback/totals?period=month&from=2026-10-01T00:00:00Z");
+  assert.equal((view.jsonBody as Doc).error, "from_to_require_custom_period", "the chargeback views share the rule");
+});
+
 test("a truncated export says so in both formats", async () => {
   const rows = Array.from({ length: 2 }, (_, i) => [`WBS-${i}`, GROUP, "p", "1", 5001, true]);
   const { call } = setup(() => ({

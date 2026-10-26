@@ -193,8 +193,9 @@ with `=`, `+`, `-`, `@`, tab or carriage return with an apostrophe
 | `GET /api/v3/export/usage?period=month\|previous\|custom[&from&to][&project][&group][&developer][&model][&backend][&family][&classification][&chargeback=<id>]` | One per chargeback ID, group and person: token categories, known/complete list cost in USD and CCU, observed cache-hit request share. At most 5,000 rows. List price at the rate card, not an Azure invoice |
 | `GET /api/v3/export/groups` | One per onboarded group: chargeback ID, priority, budget mode, per-user amount, group cap, surfaces, expected cache-read share and its basis |
 
-Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, so
-an export is never broader than its request. The JSON echoes every applied filter. Both formats return
+Any other parameter (including `tags`, `offset`, `limit`) is refused with `400 unknown_parameter`, and `from`
+or `to` without `period=custom` with `400 from_to_require_custom_period`, so an export is never broader than its
+request. The JSON echoes every applied filter. Both formats return
 `x-ccof-truncated` (`true` when more than 5,000 rows matched; the JSON also has `truncated`) and
 `x-ccof-row-limit`. A truncated export understates totals: narrow the period or filters.
 

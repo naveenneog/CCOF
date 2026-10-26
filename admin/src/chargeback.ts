@@ -87,9 +87,11 @@ export interface Period { mode: "month" | "previous" | "custom"; from: string; t
 function readPeriod(params: URLSearchParams, now: Date, maxDays: number): Period {
   const mode = params.get("period") ?? "month";
   const monthStart = (offset: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1)).toISOString();
+  if (mode !== "month" && mode !== "previous" && mode !== "custom") throw new ApiError(400, "invalid_period");
+  // Refused, not ignored: a calendar period with from/to would answer more than was asked.
+  if (mode !== "custom" && (params.has("from") || params.has("to"))) throw new ApiError(400, "from_to_require_custom_period");
   if (mode === "month") return { mode, from: monthStart(0), to: monthStart(1) };
   if (mode === "previous") return { mode, from: monthStart(-1), to: monthStart(0) };
-  if (mode !== "custom") throw new ApiError(400, "invalid_period");
   const from = params.get("from") ?? "", to = params.get("to") ?? "";
   if (!UTC.test(from) || !UTC.test(to)) throw new ApiError(400, "custom_period_requires_utc_from_and_to");
   const a = Date.parse(from), b = Date.parse(to);
