@@ -16,6 +16,9 @@
 - The ledger prices a request Foundry refused before inference (`4xx` other than `429`) at zero tokens, so a typo no
   longer makes the month's usage partial or, with `resolver.requireCompleteUsage`, blocks the person. Workbook and
   admin queries change with the ledger (Stages 5 and 7 redeploy them).
+- `/usage` and the status line show a budget under USD 1 to four decimals, and say plainly that figures are a lower
+  bound because the prompt-cache tokens of streamed replies are never priced. USAGE.md explains why, and the usage
+  endpoint's approximate limit.
 
 ## 2026-10-26 — Long-term audit (feature branch)
 
