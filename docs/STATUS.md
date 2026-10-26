@@ -23,8 +23,15 @@
   access off; Azure Monitor still delivered (storage metrics: `PutBlob`/`AppendBlock` successes with OAuth, Shared Key
   disabled), and Stage 5 now accepts that state (public access off, default Deny, trusted services allowed). Re-proof:
   writes appeared about 5 minutes after the requests; about 6–7 KB per request in the archive.
-- Not checked live: reading archive blobs and history documents directly, and the deletion tool, because the storage
-  and Cosmos DB accounts are private (reachable only from a network the accounts allow).
+- Private reads, lab, 2026-10-26, from a temporary runner inside the VNet (managed identity, archive private
+  endpoint, container-scoped reader roles; all removed afterwards and the original settings read back unchanged):
+  both archive categories held all 15 request IDs of the earlier traffic and no prompt or completion text; the
+  daily history documents and the coverage record matched the Log Analytics export totals; the deletion tool's
+  what-if ran on real history (an old month: 0 documents; the current month: refused), and `--confirm` deleted
+  only synthetic documents in a disposable container, with a repeat run deleting nothing.
+- Not checked live: an admin export answered from history (`sources`, `X-CCOF-History-Open-Days`). The export
+  reads history only for months before the current one, and the first covered month is still current; possible
+  from the first day of the next month.
 - Checks: full `npm test` 1304 passed, CI typecheck and build, 41 Bicep templates, docs and admin tests,
   `node .ironclad/gate.mjs --stage packet` PASS; mutation checks on every new guard.
 - Follow-up (non-blocking): a per-person history deletion that stops part-way is not yet marked as in progress, and
