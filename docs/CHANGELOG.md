@@ -5,6 +5,8 @@
 - AO-1: Stage 1 apply reruns after Stage 5 verify the saved settings without a null-array failure.
 - AO-2: lost-state Stage 1 recovery accepts later resources without marking later stages complete;
   Stage 2 verifies existing grants remain unchanged. The troubleshooting row covers Stages 0–8.
+- AO-3: unchanged Stage 2/5 applies verify without redeploying; `-ForceRedeploy` explicitly previews or applies
+  a repair. Stage 5 no-op verifies retention instead of rewriting it.
 
 ## 2026-10-26 — Release 17
 

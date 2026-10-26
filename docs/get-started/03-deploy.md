@@ -136,6 +136,10 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 
 ## Stage 3 — Runtime role assignments
 
+Stages 2 and 5 with unchanged input/prerequisite hashes verify read-back on `-Apply` without redeploying.
+Drift fails verification; inspect it, then preview with `-ForceRedeploy` and add `-Apply` to repair from config.
+Changed inputs or prerequisite outputs redeploy normally. Without recovered state, these stages redeploy.
+
 **Who:** access administrator · **Time:** about 6 minutes · **Creates:** each managed identity's Azure and Cosmos DB
 roles, and Cognitive Services User for API Management on the Foundry account. Not Microsoft Graph permissions.
 

@@ -7,6 +7,8 @@ AO-1: Stage 1 retains the Stage 5 record shape; the offline rerun fixture reprod
 and checks both matching and mismatched saved settings. No live applies.
 AO-2: empty-state recovery records only Stages 1/2 as explicitly run, unlocks Stage 2 preview, and
 compares role assignment IDs before/after schema apply instead of requiring none.
+AO-3: unchanged Stage 2/5 applies return saved deployment outputs to their normal read-back, without ARM
+redeployment. Explicit force and changed inputs/prerequisites still deploy; drift fails closed.
 
 ## Release 17 (2026-10-26)
 

@@ -413,7 +413,7 @@ function Write-StgParameters {
 }
 
 function Test-StgBicepPreviewNoChange {
-    param($Cfg, [ValidateSet(2, 5)] [int]$StageNumber)
+    param($Cfg, [ValidateSet(2, 5)] [int]$StageNumber, [switch]$Quiet)
     $state = Read-StgState $Cfg
     $record = $state.stages["$StageNumber"]
     if (-not $record) { return $false }
@@ -426,7 +426,7 @@ function Test-StgBicepPreviewNoChange {
         foreach ($number in $changed) {
             $saved = $state.stages["$number"].configHash
             $current = Get-StgStageInput $Cfg $number
-            Write-Host "preview: Stage $number input hash changed (recorded=$saved; current=$current); review what-if, then apply Stage $number before dependent stages."
+            if (-not $Quiet) { Write-Host "preview: Stage $number input hash changed (recorded=$saved; current=$current); review what-if, then apply Stage $number before dependent stages." }
         }
         return $false
     }
@@ -435,17 +435,21 @@ function Test-StgBicepPreviewNoChange {
     $dependenciesMatch = $null -ne $record.dependencyHashes -and
         @($currentDependencies.Keys | Where-Object { $record.dependencyHashes[$_] -cne $currentDependencies[$_] }).Count -eq 0
     if ($dependenciesMatch) {
-        Write-Host "preview: Stage $StageNumber is verify-only; input and prerequisite hashes match (sha256 $currentHash), no change will be planned."
+        if (-not $Quiet) { Write-Host "preview: Stage $StageNumber is verify-only; input and prerequisite hashes match (sha256 $currentHash), no change will be planned." }
         return $true
     }
-    Write-Host "preview: Stage $StageNumber input hash matches (sha256 $currentHash), but verified prerequisite outputs changed; review what-if, then apply Stage $StageNumber before dependent stages."
+    if (-not $Quiet) { Write-Host "preview: Stage $StageNumber input hash matches (sha256 $currentHash), but verified prerequisite outputs changed; review what-if, then apply Stage $StageNumber before dependent stages." }
     return $false
 }
 
 function Invoke-StgBicep {
     <# what-if (preview) or create (apply) of one stage template; returns the outputs as a hashtable. #>
-    param($Cfg, [string]$Template, [string]$Name, [hashtable]$Parameters, [switch]$Apply, [int]$StageNumber = 0)
-    if (-not $Apply -and $StageNumber -in 2, 5 -and (Test-StgBicepPreviewNoChange -Cfg $Cfg -StageNumber $StageNumber)) { return $null }
+    param($Cfg, [string]$Template, [string]$Name, [hashtable]$Parameters, [switch]$Apply, [int]$StageNumber = 0, [switch]$ForceRedeploy)
+    if (-not $ForceRedeploy -and $StageNumber -in 2, 5 -and (Test-StgBicepPreviewNoChange -Cfg $Cfg -StageNumber $StageNumber -Quiet:$Apply)) {
+        if (-not $Apply) { return $null }
+        Write-Host "verify-only: Stage $StageNumber inputs and prerequisites match; reading back without redeploying. If verification fails, inspect drift; use -ForceRedeploy -Apply to repair from config."
+        return (Read-StgState $Cfg).stages["$StageNumber"].outputs
+    }
     $file = Write-StgParameters $Cfg $Name $Parameters
     $common = @('--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--name', $Name, '--template-file', (Join-Path $script:StagedDir $Template), '--parameters', "@$file")
     if (-not $Apply) {

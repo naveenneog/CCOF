@@ -33,6 +33,7 @@ param(
     [string]$ConfigPath,
     [string]$StateDirectory,
     [switch]$Apply,
+    [switch]$ForceRedeploy,
     [switch]$DotSourceOnly
 )
 
@@ -54,6 +55,7 @@ foreach ($part in 'Staged.Common.ps1', 'Staged.Groups.ps1', 'Staged.Cosmos.ps1',
 
 if ($script:StgLibraryOnly) { return }
 if (-not $PSBoundParameters.ContainsKey('Stage') -or -not $ConfigPath) { throw 'Usage: -Stage <0-8> -ConfigPath <staged.config.json> [-Apply]' }
+if ($ForceRedeploy -and $Stage -notin 2, 5) { throw 'ForceRedeploy is supported only for Stages 2 and 5; preview with -ForceRedeploy, then add -Apply to redeploy.' }
 $cfg = Read-StgConfig $ConfigPath
 $script:StateDir = if ($StateDirectory) { [IO.Path]::GetFullPath($StateDirectory) } else { Join-Path (Split-Path $cfg.__path -Parent) '.staged-state' }
 New-Item -ItemType Directory -Force -Path $script:StateDir | Out-Null
@@ -66,10 +68,10 @@ try {
 $outputs = switch ($Stage) {
     0 { Invoke-Stage0 $cfg }
     1 { Invoke-Stage1 $cfg -Apply:$Apply }
-    2 { Invoke-Stage2 $cfg -Apply:$Apply }
+    2 { Invoke-Stage2 $cfg -Apply:$Apply -ForceRedeploy:$ForceRedeploy }
     3 { Invoke-Stage3 $cfg -Apply:$Apply }
     4 { Invoke-Stage4 $cfg -Apply:$Apply }
-    5 { Invoke-Stage5 $cfg -Apply:$Apply }
+    5 { Invoke-Stage5 $cfg -Apply:$Apply -ForceRedeploy:$ForceRedeploy }
     6 { Invoke-Stage6 $cfg -Apply:$Apply }
     7 { Invoke-Stage7 $cfg -Apply:$Apply }
     8 { Invoke-Stage8 $cfg -Apply:$Apply }
