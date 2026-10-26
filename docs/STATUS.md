@@ -50,7 +50,7 @@
   against a mock `az`, file modes, a quote and space in the home path under `/bin/sh`, entrypoints end to end with
   restore); Test-CrossPlatform (Claude Code entrypoints carry no `unsupported_platform` guard); client Node tests for the
   `sh` helper and messages. 18 mutations caught (2 only catchable off Windows).
-- Live, Linux pwsh 7.6.9 in WSL, Azure CLI 2.91.0, Claude Code 2.1.272, lab `ccof-nov3-rg` (sign-in replaced by a copy
+- Live, Linux pwsh 7.6.9 in WSL, Azure CLI 2.91.0, Claude Code 2.1.272, a lab deployment (sign-in replaced by a copy
   of a signed-in Linux Azure CLI profile in the helper's own folder, deleted afterwards): `silent-token` before sign-in
   exit 4 with nothing on stdout; after: a JWT, and the same token from `apiKeyHelper` under `/bin/sh`; gateway
   `POST /v1/messages` `429` "tokens-per-minute limit" (the test account's known guard block, UNKNOWNS DEV-3; a bad token
@@ -60,6 +60,12 @@
   reached the model (a copy without the grant: "permission check failed"); the verifier: token verified, `429`.
 - Not verified on a Mac: the browser `az login` from the helper, Homebrew paths, the Azure CLI cask's broker sign-in,
   APFS modes (UNKNOWNS MAC-8). Not supported: `msal` and Claude Desktop on macOS (ROADMAP G-MACOS-MSAL, G-MACOS-DESKTOP).
+- Checks: Windows `npm ci` (root, admin), CI typecheck, build, admin 203/0, `npm test` Node 1305 passed with one failure
+  that predates this branch (`get-started and operate pages stay short (15 KB)`: `03-deploy.md` is 15,580 bytes in a
+  Windows CRLF checkout, 15,220 with LF; fails identically on `release/17` c7cdbe0), every PowerShell suite green;
+  Linux pwsh `npm test` exit 0 (Node 1306/0, 6 skipped, every PowerShell suite). Council: Coder PASS, QA PASS,
+  Security PASS-WITH-NOTES (`pwsh` is found on `PATH` at run time, as `powershell` is on Windows; pinning it is
+  optional hardening), Architect and UX PASS (ADR-0048; one platform table, refusals name their remedy).
 
 ### G-MACOS — the deployer on macOS (branch `fix/macos`, 2026-10-26)
 
