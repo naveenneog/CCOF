@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- DG-7: record restart-confounded versus clean budget-change evidence; no reproducible
+  independent cache issue established, so no speculative code change.
 - DG-6: retain pacing debt on revisiting an earlier monthly budget amount (ADR-0051);
   guides and the refusal no longer promise that every budget edit resets it.
 - DG-8: unattended token and status probes hide Azure CLI's default-profile sign-in message;

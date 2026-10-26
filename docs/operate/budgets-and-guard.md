@@ -42,6 +42,10 @@ Returning to an earlier amount can resume its remaining wait; this is intentiona
 is counted in tokens at the most expensive admitted output price, so with a very small budget one large request can
 make the next requests wait for hours (bug bash 2026-10-26: about 7 hours after one 8,100-token request at USD 0.01).
 
+When checking a budget change, avoid overlapping resolver/reconciler restarts: allow the next cost run
+and gateway cache refresh before judging the outcome. Bug bash 5's intermittent old wait occurred
+only in the restart-confounded run, not its clean repeat ([DG-7 triage](../evidence/2026-10-27-bugbash5-client.md#dg-7-intermittent-old-decisions-after-raising-a-budget)).
+
 ## What people see
 
 | State | `/usage` | Status line |
