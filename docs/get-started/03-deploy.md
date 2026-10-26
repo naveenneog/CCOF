@@ -155,9 +155,11 @@ pwsh -File $run -Stage 4 -ConfigPath $cfg -Apply
 ```
 
 **Expected:** one line per application (`reuse existing …` or `created …`) and `stage 4 completed and verified in … s`.
-For each reused application the preview prints what the apply would add, for example
+For each reused application the preview prints what the apply would change, for example
 `preview: admin application 'CCOF Admin' (…): add SPA redirect https://<prefix>-…-admin.azurewebsites.net/api/console; …`,
-or `no change`. Review these lines with the application's owner before `-Apply`: Stage 4 merges and never removes.
+or `no change`. It also names a scope whose type, enabled state or consent text the apply rewrites, a service
+principal it creates (`create service principal`), and `require user assignment` for the admin application. Review
+these lines with the application's owner before `-Apply`: Stage 4 merges lists and never removes entries.
 
 ![Expected Stage 4 output](../evidence/2026-10-24-demo/terminal-stage4.png)
 

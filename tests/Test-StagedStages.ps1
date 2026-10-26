@@ -773,19 +773,24 @@ try {
 # the apply adds two SPA redirect URIs to a shared admin application).
 $s4Saved = @{ graph = ${function:Get-StgGraph}; send = ${function:Send-StgGraph}; stage = ${function:Get-StgStage} }
 try {
+    $gwText = 'Access the Claude gateway as the signed-in user'; $admText = 'Manage CCOF projects'
     $gwApp = @{ id = 'og'; appId = 'gw-app'; displayName = 'Shared Gateway'; identifierUris = @('api://gw-app'); isFallbackPublicClient = $true
-        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-gw'; value = 'access_as_user'; isEnabled = $true })
+        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-gw'; value = 'access_as_user'; type = 'User'; isEnabled = $true
+                     adminConsentDisplayName = $gwText; adminConsentDescription = $gwText; userConsentDisplayName = $gwText; userConsentDescription = $gwText })
                  preAuthorizedApplications = @(@{ appId = 'gw-app'; delegatedPermissionIds = @('sc-gw') }, @{ appId = $script:AzureCliClientId; delegatedPermissionIds = @('sc-gw') }) }
         publicClient = @{ redirectUris = @('http://localhost', 'ms-appx-web://microsoft.aad.brokerplugin/gw-app') } }
     $resApp = @{ id = 'or'; appId = 'res-app'; displayName = 'Shared Resolver'; identifierUris = @(); api = @{ requestedAccessTokenVersion = 2 } }
     $admApp = @{ id = 'oa'; appId = 'adm-app'; displayName = 'Shared Admin'; identifierUris = @('api://adm-app')
         appRoles = @(@{ value = 'CCOF.Projects.Read' }, @{ value = 'CCOF.Projects.Write' })
-        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-adm'; value = 'Projects.Manage'; isEnabled = $true })
+        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-adm'; value = 'Projects.Manage'; type = 'Admin'; isEnabled = $true
+                     adminConsentDisplayName = $admText; adminConsentDescription = $admText; userConsentDisplayName = $admText; userConsentDescription = $admText })
                  preAuthorizedApplications = @(@{ appId = 'adm-app'; delegatedPermissionIds = @('sc-adm') }) }
         spa = @{ redirectUris = @('https://other-admin.azurewebsites.net/api/console') } }
     $script:s4Apps = @{ 'gw-app' = $gwApp; 'res-app' = $resApp; 'adm-app' = $admApp }
+    $script:s4Sps = @{ 'gw-app' = @{ id = 'sp-gw'; appId = 'gw-app' }; 'res-app' = @{ id = 'sp-res'; appId = 'res-app' }; 'adm-app' = @{ id = 'sp-adm'; appId = 'adm-app'; appRoleAssignmentRequired = $true } }
     function Get-StgGraph { param([string]$Path)
         if ($Path -like 'me*') { return @{ id = 'me' } }
+        if ($Path -match "^servicePrincipals\?\`$filter=appId eq '([^']+)'$") { return @{ value = @($script:s4Sps[$Matches[1]] | Where-Object { $_ }) } }
         if ($Path -match "appId eq '([^']+)'") { return @{ value = @($script:s4Apps[$Matches[1]]) } }
         throw "unexpected Graph read in the Stage 4 preview test: $Path" }
     function Send-StgGraph { param([string]$Method, [string]$Path, $Body) throw "the Stage 4 preview wrote to Graph: $Method $Path" }
@@ -799,6 +804,19 @@ try {
     $gwApp.api.preAuthorizedApplications = @($gwApp.api.preAuthorizedApplications[0])
     $s4Out = (Invoke-Stage4 $s4Cfg 6>&1 | Out-String)
     Assert-Contract ($s4Out -match "gateway application 'Shared Gateway'[^\r\n]*: preauthorize $([regex]::Escape($script:AzureCliClientId)) for access_as_user") "The Stage 4 preview must name a missing Azure CLI preauthorization (got: $s4Out)."
+    Assert-Contract ($s4Out -notmatch '(service principal|user assignment|scope type|enable scope|consent text)') "A matching scope and service principal must not be reported as a change (got: $s4Out)."
+    # Council finding (2026-10-26): the apply also rewrites the scope type, isEnabled and consent texts, creates missing
+    # service principals and requires user assignment on the admin application; the preview must name each.
+    $gwApp.api.oauth2PermissionScopes[0].type = 'Admin'; $gwApp.api.oauth2PermissionScopes[0].userConsentDescription = 'Old text'
+    $admApp.api.oauth2PermissionScopes[0].isEnabled = $false
+    $script:s4Sps['adm-app'].appRoleAssignmentRequired = $false; $script:s4Sps.Remove('res-app')
+    $s4Out = (Invoke-Stage4 $s4Cfg 6>&1 | Out-String)
+    Assert-Contract ($s4Out -match "gateway application 'Shared Gateway'[^\r\n]*set access_as_user scope type User" -and $s4Out -match "gateway application 'Shared Gateway'[^\r\n]*set access_as_user consent text") "The Stage 4 preview must name a scope type and consent text the apply rewrites (got: $s4Out)."
+    Assert-Contract ($s4Out -match "admin application 'Shared Admin'[^\r\n]*enable scope Projects\.Manage" -and $s4Out -match "admin application 'Shared Admin'[^\r\n]*require user assignment" -and $s4Out -notmatch "admin application 'Shared Admin'[^\r\n]*(create service principal|scope type|consent text)") "The Stage 4 preview must name a disabled admin scope and user assignment that is not required (got: $s4Out)."
+    Assert-Contract ($s4Out -match "resolver application 'Shared Resolver'[^\r\n]*create service principal" -and $s4Out -notmatch "resolver application 'Shared Resolver'[^\r\n]*require user assignment") "The Stage 4 preview must name a service principal the apply creates (got: $s4Out)."
+    $script:s4Sps.Remove('adm-app')
+    $s4Out = (Invoke-Stage4 $s4Cfg 6>&1 | Out-String)
+    Assert-Contract ($s4Out -match "admin application 'Shared Admin'[^\r\n]*create service principal" -and $s4Out -match "admin application 'Shared Admin'[^\r\n]*require user assignment") "A missing admin service principal is created and then requires user assignment (got: $s4Out)."
 } finally { ${function:Get-StgGraph} = $s4Saved.graph; ${function:Send-StgGraph} = $s4Saved.send; ${function:Get-StgStage} = $s4Saved.stage }
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
