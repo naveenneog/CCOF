@@ -316,10 +316,12 @@ Assert-Contract (-not $exampleCfg.acceptance.allowed[0].Contains('project') -and
 # Stage 7 client file for a group: client.group selects the entry; the selector value is the group's object ID.
 $realClientFiles = ${function:New-QsClientFiles}
 try {
-    Set-Item function:New-QsClientFiles { param($Ctx, $ProjectId, $FamilyPolicy, $BackendId, $Aliases) @{ projectId = $ProjectId; backendId = $BackendId; families = @($FamilyPolicy.families.Keys | Sort-Object); aliases = $Aliases } }
+    Set-Item function:New-QsClientFiles { param($Ctx, $ProjectId, $FamilyPolicy, $BackendId, $Aliases, $ProfileName) @{ projectId = $ProjectId; backendId = $BackendId; families = @($FamilyPolicy.families.Keys | Sort-Object); aliases = $Aliases; profileName = $ProfileName } }
     $clientCfg = @{ client = $exampleCfg.client; groups = $exampleCfg.groups }
     $made = Invoke-StgClient -Ctx @{} -Cfg $clientCfg -EntraGroups $entraGroups
     Assert-Contract ($made.projectId -ceq '0000000a-0000-4000-8000-0000000000aa' -and $made.backendId -ceq $groupEntry.backendId -and ($made.families -join ',') -ceq 'haiku,sonnet' -and $made.aliases.haiku -ceq 'claude-haiku-4-5') 'client.group must build the client file from that group''s ID, backend, families and aliases.'
+    # Bug bash DEV-16: a staged deployment's Desktop profile is named after the group, not "(quick-start)".
+    Assert-Contract ($made.profileName -ceq "Claude gateway ($($groupEntry.groupDisplayName))") "The staged Desktop profile name must name the group: $($made.profileName)"
     foreach ($case in 'unknown-group', 'extra-key', 'unapproved-fable') {
         $badCfg = $clientCfg | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable -Depth 100
         switch ($case) {

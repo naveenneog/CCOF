@@ -88,7 +88,7 @@ depend on the terminal environment.
 | `models.default`, `opus`, `sonnet`, `haiku` | **Deployment names**, not guessed model IDs; every name must occur in `available` |
 | `models.available` | Explicit model picker list; the gateway still enforces actual authorization |
 | `models.capabilities` | Optional documented capability string per pinned alias |
-| `desktop.profileId`, `profileName` | Stable profile GUID and non-personal display label |
+| `desktop.profileId`, `profileName` | Stable profile GUID and non-personal display label. Stage 7 writes `Claude gateway (<group display name>)`; the quick-start writes `Claude gateway (quick-start)` |
 | `project` | Optional C-1 selector: `{id, selectorHeader}`; explicit `id: null` clears that header |
 
 The pilot example uses a five-minute helper TTL and a six-minute minimum remaining

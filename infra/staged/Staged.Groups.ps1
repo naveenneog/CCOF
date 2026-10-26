@@ -155,7 +155,9 @@ function Invoke-StgClient {
     $doc = @(New-StgGroupDocuments -Groups $entry -EntraGroups $EntraGroups)[0]
     $restricted = @($doc.familyPolicy.families.Keys | Where-Object { $_ -in 'fable', 'mythos' })
     if ($restricted.Count -and -not $doc.restrictedFamiliesApproved) { throw 'client_selection_invalid: Fable and Mythos need restrictedFamiliesApproved on the group.' }
-    return New-QsClientFiles -Ctx $Ctx -ProjectId $doc.id -FamilyPolicy $doc.familyPolicy -BackendId $doc.backendId -Aliases $sel.models
+    # The Desktop profile names the group (bug bash DEV-16), not the quick-start.
+    $name = ([string]$entry[0].groupDisplayName -replace '[\r\n]+', ' ').Trim()
+    return New-QsClientFiles -Ctx $Ctx -ProjectId $doc.id -FamilyPolicy $doc.familyPolicy -BackendId $doc.backendId -Aliases $sel.models -ProfileName $(if ($name) { "Claude gateway ($name)" } else { 'Claude gateway' })
 }
 
 # ADR-0041: client.signInMethod 'azure-cli' makes the client helper sign in through the Azure CLI. Allowed only

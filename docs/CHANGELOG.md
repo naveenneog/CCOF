@@ -19,6 +19,10 @@
 - `/usage` and the status line show a budget under USD 1 to four decimals, and say plainly that figures are a lower
   bound because the prompt-cache tokens of streamed replies are never priced. USAGE.md explains why, and the usage
   endpoint's approximate limit.
+- Developer setup prints `models`, the deployment each Claude Code alias runs, so an Opus alias mapped to another model
+  is visible. The Azure CLI helper's `status` no longer prints the Azure CLI's own `Please run 'az login'`. Stage 7 names
+  the Desktop profile after the group. The developer page explains Claude Code's `Failed to authenticate` on a gateway
+  `403`.
 
 ## 2026-10-26 — Long-term audit (feature branch)
 

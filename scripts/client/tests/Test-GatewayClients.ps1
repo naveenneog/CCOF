@@ -86,6 +86,8 @@ try {
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'Silent token command missing'
         # One sign-in command for every method: the helper setup just wrote, with `login`.
         Assert ($codeResult.signInMethod -ceq 'msal') "Sign-in method not reported: $($codeResult.signInMethod)"
+        # Bug bash DEV-11: the alias mapping is printed, so an Opus alias that runs another model is visible.
+        Assert ($codeResult.models.opus -ceq 'opus-deployment' -and $codeResult.models.sonnet -ceq 'sonnet-deployment' -and $codeResult.models.haiku -ceq 'haiku-deployment' -and $codeResult.models.default -ceq 'sonnet-deployment') "Model aliases not reported: $($codeResult.models | ConvertTo-Json -Compress)"
         Assert ($codeResult.signIn -ceq ('"' + (Join-Path $claudeHome 'ccof-token.cmd') + '" login')) "Sign-in command not reported: $($codeResult.signIn)"
         $snapshot = Join-Path $backupRoot $codeResult.changeId
         $manifest = Read-ClientJson (Join-Path $snapshot 'snapshot.json')
@@ -662,6 +664,8 @@ exit /b 0
         $shim = [IO.File]::ReadAllText((Join-Path $options.ClaudeHome 'ccof-token.cmd'))
         Assert ($shim -match '"%AZ%" account get-access-token' -and $shim.Contains("set `"AZ=$mockAz`"") -and $shim -notmatch '\bnode\b') "Claude Code helper is not the Azure CLI helper pinned to the installed az.cmd: $(($shim -split "`r`n") -match '^set .AZ=')"
         Assert ($shim.Contains('set "AZURE_CONFIG_DIR=' + (Join-Path (Split-Path $azConfigPath -Parent) 'az') + '"')) 'Profile folder is not beside the configuration'
+        # Bug bash DEV-12: status before sign-in prints only the helper's own line, not the Azure CLI's 'Please run az login'.
+        Assert ($shim.Contains('call "%AZ%" account show --query user.name --output tsv --only-show-errors 2>nul')) 'status lets the Azure CLI error through'
         $settings = Read-ClientJson (Join-Path $options.ClaudeHome 'settings.json')
         Assert ($settings.apiKeyHelper -match '^".+ccof-token\.cmd" token$') 'apiKeyHelper not set'
         Assert ([int]$settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS -le 240000) "Helper cache too long: $($settings.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS)"
