@@ -8,7 +8,7 @@
 param([string]$BicepPath)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$scratch = Join-Path $root '.test-scratch'
+$scratch = Join-Path $root '.env.public-test-scratch\staged-stages'
 New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 if (-not $BicepPath) {
     $command = Get-Command bicep -ErrorAction SilentlyContinue
@@ -765,4 +765,5 @@ try {
     $script:StateDir = $savedStateDir
 }
 
+Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 "Staged stages: $passed checks passed (4 stage boundaries, negative control, Cosmos contract, network-last order and layout migration, network verify mode, driver and configuration). No Azure calls."
