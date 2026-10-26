@@ -121,8 +121,11 @@ and [blob storage](https://prices.azure.com/api/retail/prices?$filter=serviceNam
 | Read Operations (reading the archive), per 10,000 | 0.004 |
 | For comparison: Log Analytics retention beyond the 31 days included in the ingestion price ([data retention](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/data-retention-configure)) | USD 0.12 per GB per month |
 
-Example, assuming about 1 KB per request across both categories (an estimate, not measured): one million requests
-is about 1 GB, under USD 0.25 to export and about USD 0.02 per month to keep on LRS. Azure Monitor appends to each
+Example, from the lab run of 2026-10-26: the archive grew by about 6–7 KB per request across both categories
+(35,306 bytes appended for 5 streamed requests, 61,203 bytes for 10; storage `Ingress` metric for `AppendBlock`).
+One million requests is then about 6.5 GB: at most about USD 1.63 to export (an upper bound, since only the
+GatewayLlmLogs part is charged) and about USD 0.12 per month to keep on LRS. Request size, streaming and
+message logging change this figure. Azure Monitor appends to each
 hourly blob many times; the number of appends is not documented. If it were once a minute per category, writes
 would add about 86,400 operations, about USD 0.43, a month on LRS. Measure your own size after a day:
 `(az storage blob list --account-name $account -c insights-logs-gatewaylogs --auth-mode login -o json | ConvertFrom-Json).properties.contentLength | Measure-Object -Sum`. Append blobs cannot move to Cool or Archive, so the

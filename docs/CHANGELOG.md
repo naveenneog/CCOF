@@ -1,5 +1,27 @@
 # Change log
 
+## 2026-10-26 — Long-term audit (feature branch)
+
+- Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated
+  storage account and kept for a set number of days, with an optional immutability policy. Works where a storage
+  policy turns public network access off.
+- Chargeback history (`audit.chargebackHistory`, Stages 2, 3, 5, 7): the reconciler keeps daily totals per
+  chargeback ID, group, person and model in Cosmos DB; the admin usage export reads months older than the Log
+  Analytics window from it and refuses days it does not cover or that have expired.
+- Stage 7 stops when a configured group differs from the deployed one, unless `stage7.keepDifferingGroups` is set.
+- Stage 5 always sets the retention the workspace actually holds, so reports and exports start where data exists.
+- A tool deletes chargeback history by month or by person (`scripts/history/delete-chargeback-history.ts`).
+## 2026-10-26 — Long-term audit (feature branch)
+
+- Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated
+  storage account and kept for a set number of days, with an optional immutability policy. Works where a storage
+  policy turns public network access off.
+- Chargeback history (`audit.chargebackHistory`, Stages 2, 3, 5, 7): the reconciler keeps daily totals per
+  chargeback ID, group, person and model in Cosmos DB; the admin usage export reads months older than the Log
+  Analytics window from it and refuses days it does not cover or that have expired.
+- Stage 7 stops when a configured group differs from the deployed one, unless `stage7.keepDifferingGroups` is set.
+- Stage 5 always sets the retention the workspace actually holds, so reports and exports start where data exists.
+- A tool deletes chargeback history by month or by person (`scripts/history/delete-chargeback-history.ts`).
 ## 2026-10-25 — Resume after lost local state
 
 - Stage 1 read-back no longer fails when the local state was lost after Stage 6 integrated the Function Apps with
