@@ -253,6 +253,22 @@ $ctx = New-FunctionSeedContext @({ @(New-SeedLine 'failed' (New-SeedDocumentResu
 $out = $null; $message = ''; try { $out = Invoke-QsSeed $ctx } catch { $message = $_.Exception.Message }
 Assert-True 'a failed run followed by a successful one passes with the later outcome' ($null -ne $out -and -not $message -and @($out.documents | Where-Object { $_ -match ': created$' }).Count -eq $entries.Count) $message
 
+$ctx = New-FunctionSeedContext @({ @(
+    (New-SeedLine 'succeeded' (New-SeedDocumentResults 'created')),
+    (New-SeedLine 'succeeded' (New-SeedDocumentResults 'present-equal'))
+) })
+$out = Invoke-QsSeed $ctx
+Assert-True 'N5: repeated timer runs of one seed retain created outcomes instead of claiming documents predated the seed' (@($out.documents | Where-Object { $_ -match ': created$' }).Count -eq $entries.Count)
+$ctx = New-FunctionSeedContext @({ @(New-SeedLine 'succeeded' (New-SeedDocumentResults 'present-equal')) })
+$out = Invoke-QsSeed $ctx
+Assert-True 'N5: documents without creation evidence in this seed still report present-equal' (@($out.documents | Where-Object { $_ -match ': present-equal$' }).Count -eq $entries.Count)
+$ctx = New-FunctionSeedContext @({ @(
+    (New-SeedLine 'succeeded' (New-SeedDocumentResults 'created')),
+    (New-SeedLine 'differs' (New-SeedDocumentResults 'present-differs'))
+) })
+$message = try { $null = Invoke-QsSeed $ctx; '' } catch { $_.Exception.Message }
+Assert-True 'N5: earlier created outcomes must not hide later differing documents' ($message -match '^seed_documents_differ') $message
+
 # Cloud Shell's managed-identity sign-in cannot get an https://api.applicationinsights.io token (live,
 # 2026-10-14): the poll falls back to the ARM query route, which answers the Kusto v1 shape.
 $script:AiTokenFails = $true

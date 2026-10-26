@@ -14,6 +14,8 @@
 - AO-8: regional guidance includes outage limits, single-region gateway/Function recovery, and an
   explicitly mutating Cosmos manual-failover drill with rollback and Microsoft Learn citations.
 - N3: Stage 0 reports each Foundry account's region; Stage 1 prints its planned account and deployment regions.
+- N5: seed polling preserves creation evidence across timer runs of the same seed instead of reporting
+  those documents as already present; later drift or failures still win.
 
 ## 2026-10-26 — Release 17
 
