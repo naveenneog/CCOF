@@ -1,5 +1,19 @@
 # Current work
 
+## Release 18 (2026-10-27)
+
+**Active packet:** G-R18 — first-time-reader deployment in Central India (Foundry in East US 2), provisioned
+Cosmos DB with South India as the failover region, bug bash 5 and live security test, and their fixes (owner instructions
+2026-10-26: "test the setup on central India region with provisioned cosmos and find the region for failover" and
+2026-10-27: "do bug bash and security testing and fix any issues found").
+
+- Merged on `release/18`: `test/novice5` (`stage1.foundry.location`, region-and-failover page), `fix/r18-staged`
+  (AO-1, AO-2, AO-4, AO-5, AO-8; AO-3 answered by accurate preview wording after review withdrew the no-op apply),
+  `fix/r18-client` (DG-1..DG-8, AO-6, AO-7). Bug bash 5: developer and gateway 8 findings, admin and operations 8;
+  live security test (237 requests) and code security review of release 17: no findings.
+- Reviews: both fix branches BLOCKed once, fixed, then PASS (Coder, QA). Open: BB5-H2 (HTTP/2 request bodies without
+  `Content-Length` have no gateway size bound; APIM behaviour unverified).
+
 ## Bug bash 5 staged driver
 
 **Active packet:** G-R18-STAGED-REVIEW — COMPLETE; coordinator re-review/integration pending.

@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-10-27 — Release 18
+
+- Central India deployments: `stage1.foundry.location` puts the Foundry account in a region that offers Claude while the
+  rest stays in the deployment region; a region-and-failover page (paired region, Cosmos DB second region, outage and
+  drill steps). Fixes from bug bash 5 (sections below).
+
 ## Bug bash 5 — staged deployment
 
 - AO-1: Stage 1 apply reruns after Stage 5 verify the saved settings without a null-array failure.
