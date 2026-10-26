@@ -32,7 +32,7 @@ test("reader-facing pages carry no internal packet or unknown IDs", () => {
 });
 
 test("get-started and operate pages stay short (15 KB)", () => {
-  const big = [...dir("docs/get-started"), ...dir("docs/operate")].filter((p) => statSync(path.join(root, p)).size > 15 * 1024);
+  const big = [...dir("docs/get-started"), ...dir("docs/operate")].filter((p) => Buffer.byteLength(read(p).replace(/\r\n/g, "\n")) > 15 * 1024); // LF size: the same on a Windows (CRLF) and a Linux checkout
   assert.deepEqual(big, []);
 });
 

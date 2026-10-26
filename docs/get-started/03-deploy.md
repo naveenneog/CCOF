@@ -1,7 +1,7 @@
 # 3. Deploy: Stages 0–8
 
-Nine stages, run in order from Azure Cloud Shell (PowerShell) or from PowerShell 7 (`pwsh`) on your own Windows
-or macOS computer ([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
+Nine stages, run in order from Azure Cloud Shell or from PowerShell 7 (`pwsh`) on Windows or macOS
+([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
 the same command with `-Apply` makes the change and then reads it back. A stage that fails its read-back stops
 with `verify_failed: <reason>` and records nothing, so it can be run again.
 
@@ -11,8 +11,7 @@ real ones, in the same format. Every setting and the Portal way of each stage: [
 
 ## Before Stage 0: get the code and write the configuration
 
-On your own computer, start `pwsh` and sign in first with `az login --tenant '<tenant-id>'` (a browser window
-opens). Cloud Shell is already signed in.
+On your own computer, sign in first in `pwsh`: `az login --tenant '<tenant-id>'`. Cloud Shell is already signed in.
 
 ```powershell
 cd $HOME; git clone https://github.com/naveenneog/CCOF.git ccof; cd ccof
@@ -25,8 +24,7 @@ $cfg = "$HOME/ccof-private/staged.config.json"
 $run = "infra/staged/Invoke-StagedDeployment.ps1"
 ```
 
-`code` opens the file in Cloud Shell's editor or in VS Code. On a Mac without VS Code, use
-`nano $HOME/ccof-private/staged.config.json` instead (save with Ctrl+O, exit with Ctrl+X).
+Without VS Code on a Mac, use `nano $HOME/ccof-private/staged.config.json` (Ctrl+O saves, Ctrl+X exits).
 
 Set the main deployment values first:
 
@@ -162,11 +160,9 @@ pwsh -File $run -Stage 4 -ConfigPath $cfg -Apply
 ```
 
 **Expected:** one line per application (`reuse existing …` or `created …`) and `stage 4 completed and verified in … s`.
-For each reused application the preview prints what the apply would change, for example
-`preview: admin application 'CCOF Admin' (…): add SPA redirect https://<prefix>-…-admin.azurewebsites.net/api/console; …`,
-or `no change`. It also names a scope whose type, enabled state or consent text the apply rewrites, a service
-principal it creates (`create service principal`), and `require user assignment` for the admin application. Review
-these lines with the application's owner before `-Apply`: Stage 4 merges lists and never removes entries.
+For each reused application the preview lists what the apply changes (redirect URIs, rewritten scopes,
+`create service principal`, `require user assignment`) or prints `no change`. Review it with the application's owner
+before `-Apply`; Stage 4 never removes entries.
 
 ![Expected Stage 4 output](../evidence/2026-10-24-demo/terminal-stage4.png)
 
@@ -217,10 +213,9 @@ pwsh -File $run -Stage 6 -ConfigPath $cfg -Apply
 the backend and the groups in the configuration, **applies** a membership snapshot, and writes the developer
 client file. One Stage 7 at a time per checkout.
 
-Before building or publishing, preview and apply try a bounded, read-only lookup of configured group documents in the
-`projects` container. When the operator can reach Cosmos DB, drift output names each group and differing field; without
-`stage7.keepDifferingGroups: true` an apply refuses before publishing. If the private endpoint is unreachable or the
-read is denied, Stage 7 warns and continues; the seed step still checks for drift after publishing.
+Before publishing, Stage 7 tries a short read-only check of the group documents. When the operator can reach Cosmos DB
+and a group differs, the apply stops before publishing unless `stage7.keepDifferingGroups: true`. Otherwise it warns
+and continues; the seed step still checks for drift after publishing.
 
 ```powershell
 pwsh -File $run -Stage 7 -ConfigPath $cfg          # preview
