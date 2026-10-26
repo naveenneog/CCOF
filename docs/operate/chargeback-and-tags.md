@@ -31,3 +31,11 @@ Diagnostics. **Export CSV** downloads the current tab with the field name as the
 
 Costs are list price at the approved rate card (100 CCU = USD 1), less any recorded private-offer discount; they are
 not an Azure invoice. Power BI and the workbook: [CHARGEBACK.md](../CHARGEBACK.md).
+
+## History beyond Log Analytics retention
+
+The reports, their **Export CSV** button and the workbook read the usage ledger in Log Analytics, so they cover only
+the workspace retention: `audit.workspaceRetentionDays` if set, else `stage1.retentionInDays` (30 in the template).
+For older months, turn on chargeback history: the reconciler keeps daily totals per tag value (the person's user
+tag, or the group's chargeback ID), group, person and model in Cosmos DB, and the usage export API reads them. How
+to turn it on, download an old month, check it and its cost: [chargeback history](chargeback-history.md).

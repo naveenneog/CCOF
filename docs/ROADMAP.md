@@ -20,6 +20,8 @@
 - [x] G-CONFIG-GUIDE: configuration reference page for every staged configuration key, with a test that follows the template.
 - [x] G-CONFIG-GUIDE-2: configuration reference reworked: create-new and reuse-existing JSON per choice, every template key in a table, a validated complete sample.
 - [x] G-RESUME: Stage 1 read-back after lost local state accepts the configured Functions subnet when Stage 6 has no record; troubleshooting rows for Cloud Shell timeout and lost `$HOME`.
+- [x] G-AUDIT: long-term audit — gateway log archive (ADR-0043) and chargeback history in Cosmos DB (ADR-0044), council four rounds, live on a lab; on branch feature/long-term-audit pending the owner's merge decision.
+- [ ] G-AUDIT-FU: mark a month while a per-person history deletion runs and refuse exports until it completes; show in exports that history was redacted.
 | Packet | Status | Acceptance |
 | --- | --- | --- |
 | G0 — Baseline and contract | Complete | ADR-0033 records the baseline model; ADR-0034 records the decision; unknowns logged |

@@ -41,6 +41,7 @@ and the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md). This guide is th
 | Admin console | Function App | Onboards groups, sets budgets and limits, shows chargeback, exports ([ADMIN-V3.md](ADMIN-V3.md)) |
 | Registry | Cosmos DB (capacity mode chosen in section 2.6) | Group documents, entitlements, budget state, admin change record |
 | Telemetry | Log Analytics, Application Insights, workbook | Usage ledger and the chargeback workbook ([CHARGEBACK.md](CHARGEBACK.md)) |
+| Audit archive (optional, Stage 5) | Storage account, diagnostic setting `ccof-gateway-archive` | Long-term copy of the gateway request log ([audit archive](operate/audit-archive.md)) |
 | Models | Microsoft Foundry account with Claude deployments | Existing or created by Stage 1 |
 
 Stage order and what each one needs:
@@ -88,7 +89,7 @@ Several people can share the work; each stage names who runs it.
 | 2 | Platform engineer | Contributor on the Cosmos DB account |
 | 3 | Access administrator | Role Based Access Control Administrator (or Owner) on the resource group, the Cosmos account and each Foundry account |
 | 4 | Entra administrator | Application Administrator (or owner of existing apps) and Groups Administrator (or owner of existing groups) |
-| 5 | Platform engineer | Website Contributor on the Function Apps, API Management Service Contributor, workbook write |
+| 5 | Platform engineer | Website Contributor on the Function Apps, API Management Service Contributor, workbook write. With `audit.archive`: Storage Account Contributor on the resource group and Monitoring Contributor on the API Management service (diagnostic setting); with `audit.workspaceRetentionDays`: Log Analytics Contributor on the workspace |
 | 6 | Network team | Reader (verify mode). Network Contributor and Private DNS Zone Contributor in `existing`/`create` modes |
 | 7 | Platform engineer | Website Contributor (publish); delegated read of the registered groups |
 | 8 | Platform engineer | A gateway caller identity in an onboarded group; Log Analytics Reader |
@@ -400,7 +401,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** creates the `ccof` database and eight containers: `entitlement`, `projects` (group
   documents live here), `subscriptionIndex`, `budgetState`, `aggregateBudgetState`, `syncLease`,
   `reconcilerLease`, `backends`; plus `adminConfig` when the admin app is included
-  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)).
+  ([stage2-schema.bicep](../infra/staged/stage2-schema.bicep)). With `audit.chargebackHistory.enabled: true` it also
+  creates `chargebackDaily` ([chargeback history](operate/chargeback-history.md)).
 - **Who:** platform engineer.
 - **Cloud Shell:** `-Stage 2`, preview then `-Apply`.
 - **Portal:** workbook section 08 (Cosmos DB → Data Explorer).
@@ -412,7 +414,8 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
 - **Does:** gives each managed identity the least access it needs: storage and metrics for each app,
   Cosmos SQL roles per container, Log Analytics Reader for the reconciler and admin, and Cognitive
   Services User for APIM on each Foundry account
-  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)).
+  ([runbook grant list](runbooks/STAGED-DEPLOYMENT-V2.md)). With chargeback history it also grants the reconciler
+  write access to `chargebackDaily` and the admin app read access.
 - **Who:** access administrator.
 - **Cloud Shell:** `-Stage 3`, preview then `-Apply`.
 - **Portal:** workbook section 15 (Access control (IAM) per resource; Cosmos data-plane roles through
@@ -438,14 +441,27 @@ numbers of the [Portal workbook](runbooks/AZURE-PORTAL-DEPLOYMENT.md)), and how 
   Sets `ADMIN_GROUP_SEARCH_ENABLED` from `admin.groupSearchEnabled` and `entra.surfaceClients` from
   `gateway.surfaceClients`. Timer state follows `syncTimerEnabled` and `reconciler.timerEnabled`
   (both `false` in the example). The sync timer is turned on only after its Graph grant
-  ([section 6.1](#61-graph-grants-group-search-names-and-sync)).
+  ([section 6.1](#61-graph-grants-group-search-names-and-sync)). With `audit.archive.enabled: true` (the
+  template's value) it also creates the audit archive account in the API Management region and the gateway's
+  second diagnostic setting `ccof-gateway-archive` (GatewayLogs, GatewayLlmLogs to storage); with
+  `audit.workspaceRetentionDays` it sets the Log Analytics retention, which Stage 1 cannot change on an existing
+  install ([ADR-0043](adr/0043-long-term-audit-archive.md), [audit archive](operate/audit-archive.md)). An existing
+  install gets the archive by adding the `audit.archive` block and rerunning Stage 5, then Stage 7 and Stage 8,
+  which refuse with `stage_dependency_changed` until rerun; Stage 1 is not rerun. With
+  `audit.chargebackHistory.enabled: true` it writes the reconciler's and admin app's history settings; history needs
+  `reconciler.timerEnabled: true` (the example has both `false`; Stage 0 refuses history without the timer). An existing install turns history on with Stages 2, 3, 5, 7 and 8 in that order,
+  from an updated checkout ([chargeback history](operate/chargeback-history.md#turn-on-in-an-existing-deployment)).
 - **Who:** platform engineer.
-- **Cloud Shell:** `-Stage 5`, preview then `-Apply`.
+- **Cloud Shell:** `-Stage 5`, preview then `-Apply`. The preview prints one `audit archive:` line (account,
+  region, retention, immutability, SKU, workspace retention, or `off`); the apply adds the archive's network mode
+  (`public-enabled`, or `public-disabled` when a storage policy turned public network access off).
 - **Portal:** workbook sections 17 (Function Apps → Environment variables, Authentication), 19 (APIM →
   APIs, Policies, Backends), 20 (Diagnostic settings and workbook).
 - **Worked when:** each app lists its settings, the resolver answers `401` without a token, the
   API path and policy hash match, and the operation `get-my-usage` (`GET /ccof/me/usage`) exists with its
-  policy hash recorded in `stage5.verify.json`.
+  policy hash recorded in `stage5.verify.json`. With the archive, `stage5.verify.json` `audit` records the
+  account; the read-back checked its firewall, Shared Key, TLS, lifecycle rule, immutability and the diagnostic
+  setting's destination and categories.
 
 ### Stage 6: network
 

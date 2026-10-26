@@ -14,6 +14,7 @@ Claude Code, and every request is charged to a cost code for chargeback.
 | **Reconciled dollar budgets** — configurable warning, throttling and refusal; reporting lag can cause overshoot | [How](docs/operate/budgets-and-guard.md) |
 | **`/usage` in Claude Code** — each person's own spend, budget and warnings | [How](docs/get-started/05-developer-setup.md#4-check-your-own-budget-usage) |
 | **Chargeback per person** — your field name (for example *WBS ID*) in filters and CSV exports | [How](docs/operate/chargeback-and-tags.md) |
+| **Long-term audit** — a storage archive of the gateway request log, and chargeback history beyond the Log Analytics retention | [Archive](docs/operate/audit-archive.md) · [History](docs/operate/chargeback-history.md) |
 | **Private backends** — private endpoints, managed identities and Entra sign-in | [Architecture](docs/ARCHITECTURE.md) |
 
 ## Start here

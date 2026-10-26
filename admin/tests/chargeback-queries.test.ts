@@ -5,7 +5,7 @@ import { buildWorkbook } from "../../analytics/workbooks/build.ts";
 import { buildChargebackWorkbook } from "../../analytics/workbooks/chargeback.ts";
 import { chargebackQueries, reconcilerQueryBase } from "../../analytics/workbooks/chargeback-queries.ts";
 import { workbookAnswers } from "../../tests/helpers/workbook-fixtures.ts";
-import { buildChargebackQuery, prepareRateCard, readChargebackFilters } from "../src/chargeback.ts";
+import { buildChargebackQuery, prepareRateCard, readChargebackFilters, readChargebackSettings } from "../src/chargeback.ts";
 
 const card = JSON.parse(await readFile(new URL("../../config/rate-card.json", import.meta.url), "utf8"));
 const ledger = await readFile(new URL("../../analytics/ledger.kql", import.meta.url), "utf8");
@@ -79,4 +79,18 @@ test("packaged KQL copies are identical to the workbook sources", async () => {
     try { copy = await readFile(new URL(packaged, import.meta.url), "utf8"); } catch { continue; } // built by npm run build
     assert.equal(copy, await readFile(new URL(source, import.meta.url), "utf8"), packaged);
   }
+});
+
+// ADR-0043: after retention is raised, the console flags a period the workspace does not hold yet as retention_truncated.
+test("the retention flag starts at the later of now - retention and ADMIN_LOG_RETENTION_HELD_FROM", () => {
+  const env = { ADMIN_WORKSPACE_ID: "11111111-2222-4333-8444-555555555555", ADMIN_GATEWAY_RESOURCE_ID: answers.gatewayResourceId, ADMIN_LOG_RETENTION_DAYS: "90" };
+  const raised = readChargebackSettings({ ...env, ADMIN_LOG_RETENTION_HELD_FROM: "2026-09-10T00:00:00.000Z" });
+  assert.ok(raised.ok && raised.value.retentionHeldFrom === "2026-09-10T00:00:00.000Z");
+  assert.deepEqual(readChargebackSettings({ ...env, ADMIN_LOG_RETENTION_HELD_FROM: "yesterday" }).ok, false);
+  const unchanged = readChargebackSettings(env);
+  assert.ok(unchanged.ok && unchanged.value.retentionHeldFrom === null);
+  const f = readChargebackFilters(new URLSearchParams("period=previous"), NOW, 62);
+  const query = (s: typeof raised) => buildChargebackQuery("totals", f, (s as { value: Parameters<typeof buildChargebackQuery>[2] }).value, { ledger, pricing, budgets }, prepareRateCard(card), []);
+  assert.match(query(raised), /let RetentionTruncated = RangeValid and FromTime < max_of\(ReportNow - 90 \* 1d, datetime\(2026-09-10T00:00:00\.000Z\)\);/);
+  assert.match(query(unchanged), /let RetentionTruncated = RangeValid and FromTime < ReportNow - 90 \* 1d;/);
 });

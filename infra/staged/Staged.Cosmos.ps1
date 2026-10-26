@@ -68,6 +68,7 @@ function Get-StgCosmosProblems {
     elseif ($c.Contains('maxStalenessPrefix') -or $c.Contains('maxIntervalInSeconds')) {
         'stage1.cosmosConsistency: maxStalenessPrefix and maxIntervalInSeconds apply only to BoundedStaleness'
     }
+    Get-StgChargebackHistoryProblems $Cfg
 }
 
 # Compares az cosmosdb show output with the configuration. Region names there are display names ("East US 2");
@@ -106,4 +107,57 @@ function Get-StgCosmosDnsProblems {
     foreach ($name in @($account) + @($Regions | ForEach-Object { "$account-$($_.ToLowerInvariant())" })) {
         if ($have -notcontains "$name.privatelink.documents.azure.com") { "Cosmos private endpoint has no DNS name '$name' in privatelink.documents.azure.com" }
     }
+}
+
+# Chargeback history (ADR-0044): audit.chargebackHistory { enabled, closeAfterDays, ttlDays }. Absent, or enabled false
+# with no other key: off, and no stage input changes. closeAfterDays 1-7 matches RECONCILER_HISTORY_CLOSE_AFTER_DAYS;
+# ttlDays is null (no expiry) or more days than the workspace keeps the ledger (Get-StgLogRetentionDays), at most 24855
+# (defaultTtl is a 32-bit number of seconds). History is written only by the reconciler's timer run, so enabled history
+# needs reconciler.timerEnabled.
+$script:ChargebackTtlMaxDays = 24855
+function Get-StgChargebackHistoryProblems {
+    param($Cfg)
+    $audit = $Cfg.audit
+    if ($audit -isnot [Collections.IDictionary] -or -not $audit.Contains('chargebackHistory') -or $null -eq $audit.chargebackHistory) { return }
+    $h = $audit.chargebackHistory
+    $whole = { param($v) $v -is [int] -or $v -is [long] }
+    $retention = Get-StgLogRetentionDays $Cfg
+    $usage = "audit.chargebackHistory needs enabled (true or false), closeAfterDays (1-7) and ttlDays (null, or $($retention + 1)-$($script:ChargebackTtlMaxDays) whole days: more than the $retention days the workspace keeps the ledger, audit.workspaceRetentionDays or else stage1.retentionInDays, and at most the 32-bit defaultTtl) (ADR-0044)"
+    if ($h -isnot [Collections.IDictionary] -or $h.enabled -isnot [bool] -or @($h.Keys | Where-Object { $_ -cnotin 'enabled', 'closeAfterDays', 'ttlDays' }).Count) { return $usage }
+    if (-not $h.enabled) { return }
+    if (-not (& $whole $h.closeAfterDays) -or $h.closeAfterDays -lt 1 -or $h.closeAfterDays -gt 7) { return $usage }
+    if (-not $h.Contains('ttlDays') -or ($null -ne $h.ttlDays -and (-not (& $whole $h.ttlDays) -or $h.ttlDays -le $retention -or $h.ttlDays -gt $script:ChargebackTtlMaxDays))) { return $usage }
+    if ($Cfg.reconciler.timerEnabled -ne $true) { return 'audit.chargebackHistory.enabled is true but reconciler.timerEnabled is not: history is written only by the reconciler timer run; set reconciler.timerEnabled to true or audit.chargebackHistory.enabled to false (ADR-0044)' }
+}
+
+# What Stages 2, 3 and 5 receive: $null when history is off.
+function Get-StgChargebackHistory {
+    param($Cfg)
+    $h = if ($Cfg.audit -is [Collections.IDictionary]) { $Cfg.audit.chargebackHistory } else { $null }
+    if ($h -isnot [Collections.IDictionary] -or $h.enabled -ne $true) { return $null }
+    return @{ enabled = $true; closeAfterDays = [int]$h.closeAfterDays; ttlDays = $h.ttlDays; logRetentionDays = (Get-StgLogRetentionDays $Cfg) }
+}
+
+# Stage 2 read-back: the container's defaultTtl is ttlDays in seconds, or absent when ttlDays is null.
+function Test-StgChargebackTtl {
+    param($Cfg, $DefaultTtl)
+    $ttl = (Get-StgChargebackHistory $Cfg).ttlDays
+    return $(if ($null -eq $ttl) { $null -eq $DefaultTtl } else { $DefaultTtl -eq [long]$ttl * 86400 })
+}
+
+# ADR-0044 decision 10 (council round 3): ttlDays between null and a number on an existing chargebackDaily is refused.
+# Without defaultTtl the documents carry no ttl and the coverage records say they never expire, so a new defaultTtl
+# would let Cosmos DB delete documents the export still reports as covered; removing defaultTtl stops all expiry
+# (item ttl is ignored without it) while the coverage records still say the months expire, so the export would refuse
+# them. $Containers: az cosmosdb sql container list. Returns the refusal, or $null.
+function Get-StgChargebackTtlTransitionProblem {
+    param($Cfg, $Containers)
+    $h = Get-StgChargebackHistory $Cfg
+    $existing = @($Containers | Where-Object { $_.name -ceq 'chargebackDaily' })[0]
+    if (-not $h -or -not $existing) { return $null }
+    $had = $existing.resource.defaultTtl
+    if (($null -eq $had) -eq ($null -eq $h.ttlDays)) { return $null }
+    $procedure = "See 'Changing ttlDays between null and a number' in docs/operate/chargeback-history.md (ADR-0044 decision 10)."
+    if ($null -eq $had) { return "chargeback_history_ttl_transition: chargebackDaily has no time to live, so its months are recorded as never expiring; ttlDays $($h.ttlDays) would let Cosmos DB delete documents the export reports as covered. Keep audit.chargebackHistory.ttlDays null, or start the history again. $procedure" }
+    return "chargeback_history_ttl_transition: chargebackDaily has a time to live of $([long]$had / 86400) days; ttlDays null would stop expiry while the months are recorded as expiring, and the export would refuse them. To keep history longer, raise ttlDays (at most $($script:ChargebackTtlMaxDays)). $procedure"
 }

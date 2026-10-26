@@ -37,7 +37,7 @@ export const MAX_RATE_CARD_BYTES = 1024 * 1024;
 export const LIST_PRICE_BASIS = "List price at the approved rate card (100 CCU = USD 1); not an Azure invoice.";
 
 export interface V3Dependencies {
-  userTagStore?: import("./user-tags.ts").UserTagStore | null;
+  userTagStore?: import("./user-tags.ts").UserTagStore | null; chargebackHistory?: import("./history.ts").HistoryStore | null;
   authenticate: Authenticator | null;
   projects: ProjectStore | null;
   catalogStore: CatalogStore | null;

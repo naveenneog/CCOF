@@ -156,3 +156,37 @@ test("a partial or out-of-range budget guard is refused, naming the setting", ()
     assert.equal(!result.ok && result.problems[0].setting, name);
   }
 });
+// ADR-0044: chargeback history is optional, the container and the closing delay together or neither.
+const HISTORY = { RECONCILER_HISTORY_CONTAINER: "chargebackDaily", RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "2" };
+test("without the history settings there is no history; with both it is read", () => {
+  const without = readReconcilerSettings(validSettings());
+  assert.ok(without.ok && without.settings.history === undefined);
+  const withHistory = readReconcilerSettings(validSettings(HISTORY));
+  assert.ok(withHistory.ok);
+  if (withHistory.ok) assert.deepEqual(withHistory.settings.history, { container: "chargebackDaily", closeAfterDays: 2, ttlDays: null });
+  const withTtl = readReconcilerSettings(validSettings({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "400" }));
+  assert.ok(withTtl.ok && withTtl.settings.history?.ttlDays === 400);
+});
+
+test("the history time to live is optional, 1-24855 whole days, and only with the history settings", () => {
+  const problems = (overrides: Record<string, string>) => {
+    const result = readReconcilerSettings(validSettings(overrides));
+    return result.ok ? [] : result.problems;
+  };
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24855" }), []);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "0" }), [{ setting: "RECONCILER_HISTORY_TTL_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_TTL_DAYS: "24856" }), [{ setting: "RECONCILER_HISTORY_TTL_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ RECONCILER_HISTORY_TTL_DAYS: "400" }).map((p) => p.setting).sort(), ["RECONCILER_HISTORY_CLOSE_AFTER_DAYS", "RECONCILER_HISTORY_CONTAINER"]);
+});
+
+test("history settings are refused half-set, out of range, or naming another reconciler container", () => {
+  const problems = (overrides: Record<string, string>) => {
+    const result = readReconcilerSettings(validSettings(overrides));
+    return result.ok ? [] : result.problems;
+  };
+  assert.deepEqual(problems({ RECONCILER_HISTORY_CONTAINER: "chargebackDaily" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "missing" }]);
+  assert.deepEqual(problems({ RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "2" }), [{ setting: "RECONCILER_HISTORY_CONTAINER", problem: "missing" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "0" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CLOSE_AFTER_DAYS: "8" }), [{ setting: "RECONCILER_HISTORY_CLOSE_AFTER_DAYS", problem: "out_of_range" }]);
+  assert.deepEqual(problems({ ...HISTORY, RECONCILER_HISTORY_CONTAINER: "budgetState" }), [{ setting: "RECONCILER_HISTORY_CONTAINER", problem: "same_as_other_container" }]);
+});

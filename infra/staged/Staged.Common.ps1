@@ -63,7 +63,7 @@ function Read-StgConfig {
             $problems.Add('reconciler.budgetGuard needs warnPercent 1-99, overshootPercent 1-50 and projectionMinutes 1-60 as whole numbers (ADR-0040)')
         }
     }
-    foreach ($p in @(Get-StgCosmosProblems $c)) { $problems.Add($p) }
+    foreach ($p in @(Get-StgCosmosProblems $c) + @(Get-StgAuditProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {
         if ($b.subscriptionId -ine $c.subscriptionId -or $b.resourceGroup -ine $c.resourceGroup) {
@@ -72,6 +72,7 @@ function Read-StgConfig {
     }
     $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
     foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
+    foreach ($p in @(Get-StgStage7Problems $c)) { $problems.Add($p) }
     if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
@@ -188,6 +189,10 @@ function Get-StgStageInput {
         8 { $input += @{ stage1=$Cfg.stage1; acceptance=$Cfg.acceptance; gateway=$Cfg.gateway; admin=$Cfg.admin } }
         default { throw "invalid stage number $Number" }
     }
+    if ($Number -eq 5 -and ($audit = Get-StgAuditStageInput $Cfg)) { $input.audit = $audit }
+    if ($Number -eq 7 -and $Cfg.Contains('stage7')) { $input.stage7 = $Cfg.stage7 }
+    # ADR-0044: only when configured, so a configuration without it (or with { enabled: false } alone) keeps its earlier hashes.
+    if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory -and -not (Test-StgOffOnly $Cfg.audit.chargebackHistory)) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }
     $canonical = ConvertTo-StgCanonical $input | ConvertTo-Json -Depth 100 -Compress
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant()
 }
@@ -479,7 +484,7 @@ function Get-StgQuickstartParameters {
         registrations = $entra.registrations; backends = @($Cfg.backends); cosmos = $Cfg.cosmos
         resolver = $Cfg.resolver; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         gateway = $Cfg.gateway; rateCard = $rate; workbook = $Cfg.workbook; runner = @{ enabled = $false }
-        logRetentionDays = $Cfg.stage1.retentionInDays
+        logRetentionDays = (Get-StgLogRetentionDays $Cfg)
     }
 }
 
@@ -498,5 +503,5 @@ function Get-StgApimIdentity {
     $apim = Get-StgArm "/subscriptions/$($a.subscriptionId)/resourceGroups/$($a.resourceGroup)/providers/Microsoft.ApiManagement/service/$($a.name)" '2024-05-01'
     $principal = [string]$apim.identity.principalId
     if ($principal -notmatch $script:Guid) { throw "apim_identity_missing: $($a.name) has no system-assigned identity." }
-    return @{ id = $apim.id; principalId = $principal; gatewayUrl = $apim.properties.gatewayUrl; name = $a.name }
+    return @{ id = $apim.id; principalId = $principal; gatewayUrl = $apim.properties.gatewayUrl; name = $a.name; location = $apim.location }
 }
