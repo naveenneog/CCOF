@@ -695,6 +695,19 @@ Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inboun
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
+# With lost local state, Stage 1 may verify its ARM deployment before Stage 5 has been recorded.
+# Stage 5 owns the complete app-settings set, so its settings cannot be used as a Stage 1 mismatch.
+$stage5OnlySettings = @(
+    @{ name = 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING' },
+    @{ name = 'RESOLVER_USAGE_GROUP_TOTALS' })
+Assert-StgStage1AppSettings -Settings $stage5OnlySettings -AppKey 'resolver' -Stage5Record $null -Stage7Record $null
+$script:passed++
+$settingsMismatch = $false
+try {
+    Assert-StgStage1AppSettings -Settings $stage5OnlySettings -AppKey 'resolver' `
+        -Stage5Record @{ outputs = @{ verify = @{ settings = @{ resolver = @('EXPECTED_SETTING') } } } } -Stage7Record $null
+} catch { $settingsMismatch = $_.Exception.Message -match 'application setting names differ' }
+Assert-Contract $settingsMismatch 'When Stage 5 is recorded, Stage 1 must still refuse an app-settings mismatch.'
 # Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
 Assert-Contract ($resText -match "if \(\`$expectedSettings -cnotcontains 'AzureWebJobs\.snapshotApply\.Disabled'\)") 'The Stage 1 recheck must add the snapshot switch only when the Stage 5 record lacks it.'
 
