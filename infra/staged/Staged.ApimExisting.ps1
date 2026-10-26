@@ -127,7 +127,9 @@ function Invoke-StgApimExistingCheck {
     Write-Host "existing API Management $($s.name): $($s.sku.name), system-assigned identity on, $(@($facts.apis).Count) APIs, $(@($facts.diagnosticSettings).Count) diagnostic settings; CCOF adds API $($Cfg.apim.apiId) at /$($Cfg.apim.apiPath)"
     return [ordered]@{ id = $facts.id; sku = $s.sku.name; location = $s.location; virtualNetworkType = "$($s.properties.virtualNetworkType)"
         apis = @($facts.apis | ForEach-Object { $_.name }); diagnosticSettings = @($facts.diagnosticSettings | ForEach-Object { $_.name })
-        globalPolicy = $verdict.globalPolicy; warnings = @($verdict.warnings) }
+        # A policy may hold an inline secret: the state folder keeps its hash, the console shows the text.
+        globalPolicySha256 = (Get-FileHash -InputStream ([IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes($verdict.globalPolicy))) -Algorithm SHA256).Hash.ToLowerInvariant()
+        globalPolicyLength = $verdict.globalPolicy.Length; warnings = @($verdict.warnings) }
 }
 
 function Get-StgGatewayLogCategories {

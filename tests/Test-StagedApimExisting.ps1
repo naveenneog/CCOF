@@ -154,6 +154,19 @@ Assert-Contract (@((Get-Check $f).warnings | Where-Object { $_ -match 'Contribut
 $f = New-Facts; $f.permissions = @{ apim = @(@{ actions = @('*'); notActions = @('Microsoft.Insights/diagnosticSettings/write') }); resourceGroup = @(@{ actions = @('*'); notActions = @() }) }
 Assert-Contract (@((Get-Check $f).warnings | Where-Object { $_ -match 'Monitoring Contributor' }).Count -eq 1) 'notActions must remove a permission.'
 
+# The Stage 0 report (stage0.json) keeps a hash of the global policy, not its text: a policy may hold an inline secret.
+# The text is printed for the operator, who can read it in the Portal with Reader anyway.
+function Get-StgApimExistingFacts { param($Cfg) $script:fakeFacts }
+$script:fakeFacts = New-Facts; $script:fakeFacts.globalPolicy = '<policies><inbound><set-header name="x-key"><value>inline-secret-value</value></set-header></inbound></policies>'
+$report = Invoke-StgApimExistingCheck -Cfg $cfg 6>$null
+$json = $report | ConvertTo-Json -Depth 10
+Assert-Contract (-not $json.Contains('inline-secret-value')) 'stage0.json must not hold the global policy text.'
+Assert-Contract ($report.globalPolicySha256 -match '^[0-9a-f]{64}$' -and $report.globalPolicyLength -eq $script:fakeFacts.globalPolicy.Length) 'stage0.json records the global policy''s SHA-256 and length, so a later change is visible.'
+$script:fakeFacts = New-Facts; $script:fakeFacts.service.identity = @{ type = 'None' }
+$bad = $false; try { $null = Invoke-StgApimExistingCheck -Cfg $cfg 6>$null } catch { $bad = $_.Exception.Message -match 'apim_identity_missing' }
+Assert-Contract $bad 'Stage 0 throws the problems it found.'
+Remove-Item Function:\Get-StgApimExistingFacts
+
 # ---------------------------------------------------------------- Stage 5: gateway logs to CCOF's workspace
 $suitable = @{ name = 'platform-to-ccof'; properties = @{ workspaceId = $ws.ToUpperInvariant(); logAnalyticsDestinationType = 'Dedicated'; logs = @(@{ category = 'GatewayLogs'; enabled = $true }, @{ category = 'GatewayLlmLogs'; enabled = $true }) } }
 $plan = Get-StgGatewayLogPlan -Settings @() -WorkspaceId $ws

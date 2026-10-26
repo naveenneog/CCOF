@@ -18,7 +18,7 @@
   attributed both requests to the group; `claude -p` through the instance answered. The owner's tier, identity,
   networking, other API and its policy, global policy, logger and own diagnostic setting read back unchanged. A
   private Foundry was refused live at Stage 0 (`apim_existing_no_private_route`).
-- Checks: new suite `tests/Test-StagedApimExisting.ps1` (54 checks), mutations 29/29 caught; `npm test`, CI
+- Checks: new suite `tests/Test-StagedApimExisting.ps1` (57 checks), mutations 30/30 caught; Stage 0 keeps a hash of the global policy in `stage0.json`, not its text; `npm test`, CI
   typecheck, build, admin tests, `node .ironclad/gate.mjs --stage packet`.
 - Open: manual removal from the instance; a private Foundry behind a VNet-integrated instance not run live; create
   mode still adds an unused API Management subnet.
