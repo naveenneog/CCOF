@@ -1,5 +1,25 @@
 # Deployment packets
 
+## Bug bash 5 staged driver
+
+- [x] G-R18-STAGED-REVIEW: withdraw AO-3 no-op apply by coordinator decision; always deploy on apply, accurately
+  disclose unchanged configuration/redeployment/restarts in previews, retain AO-4 and verify full checks.
+
+- [x] G-R18-STAGED: reproduce and fix Stage 1 reruns/lost-state recovery; name changed inputs and operator next
+  steps. AO-3 no-op apply was withdrawn by review: always deploy on apply and document Stage 5 restarts.
+- [x] Reader guidance: regional outage and reversible Cosmos drills; Foundry region previews, seed outcomes,
+  Stage 3 duration and backend recovery link. No live applies in this packet.
+- [x] Coordinator integration/publication: release 18 (2026-10-27).
+- [ ] Existing gate debt, outside this bug-fix packet: split oversized UI/deployment files by responsibility
+  and resolve the three unrelated open deployment unknowns. Packet gate passes with these two warning categories.
+
+## Bug bash 5 client fixes
+
+- [x] G-BB5-CLIENT: stable per-user configuration and actionable missing-file diagnostics (DG-1/2);
+  explicit chunking refusal and backend error envelopes (DG-3/4); pacing visibility and explicit reused-debt
+  semantics (DG-5/6); evidence-led triage (DG-7); quiet probes (DG-8); shared admin text guards and
+  complete export prose (AO-6/7). Offline checks and mutation results recorded in STATUS.
+
 ## Group-centric onboarding (ADR-0034)
 
 - [x] G-LIMIT-offline: reproduce budget bypasses, retain the monetary TPM ceiling, add complete-accounting admission,

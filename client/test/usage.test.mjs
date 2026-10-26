@@ -15,6 +15,26 @@ function scope(extra = {}) {
 }
 const usage = (scopes, extra = {}) => ({ schema: 'ccof.usage.v1', period: '2026-10', groupTotals: 'hidden', truncated: false, scopes, ...extra });
 
+test('pacing is visible even with zero recorded spend and no warning', () => {
+  const paced = scope({ spent: { ccu: '0', usd: '0' }, percentUsed: 0, warning: false, projectedPercent: 0, pacingTokensPerMinute: 3 });
+  const [line] = formatUsage(usage([paced]), NOW);
+  assert.match(line, /Budget pacing applies: up to 3 tokens\/minute/);
+  assert.match(line, /requests may wait even at low recorded spend/);
+  assert.match(statusLine(usage([paced])), /budget pacing: 3 tokens\/min/);
+  const [zero] = formatUsage(usage([scope({ pacingTokensPerMinute: 0 })]), NOW);
+  assert.match(zero, /Budget pacing allows no new tokens/);
+  assert.match(statusLine(usage([scope({ pacingTokensPerMinute: 0 })])), /budget pacing: requests refused/);
+  const roundedToZero = scope({ warning: true, projectedPercent: 85, pacingTokensPerMinute: 0 });
+  assert.match(statusLine(usage([roundedToZero])), /requests refused/);
+  assert.doesNotMatch(formatUsage(usage([roundedToZero]), NOW)[0], /requests are now slowed/);
+  for (const invalid of [-1, 1.5, '3', null]) {
+    const malformed = usage([scope({ pacingTokensPerMinute: invalid })]);
+    assert.doesNotMatch(formatUsage(malformed, NOW)[0], /Budget pacing/);
+    assert.doesNotMatch(statusLine(malformed), /budget pacing/);
+  }
+  assert.doesNotMatch(formatUsage(usage([scope()]), NOW)[0], /Budget pacing/);
+});
+
 test('amounts round half-up to cents from the exact decimal string, with thousands separators', () => {
   assert.equal(formatAmount('42.1'), '$42.10');
   assert.equal(formatAmount('100'), '$100.00');

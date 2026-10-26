@@ -35,21 +35,31 @@ The guard controls a rate, not an atomic dollar reservation. Delayed telemetry, 
 requests can still cause overshoot; `overshootPercent` is not a guaranteed maximum.
 
 The gateway applies the guard's rate on its own counter, separate from the configured tokens per minute, keyed by the
-budget's month and amount ([ADR-0047](../adr/0047-budget-pacing-counter.md)). Raising the budget, or a new month,
-starts a new counter, so the wait ends after the next reconciler run and the gateway's cache (a few minutes). The rate
+budget's month and amount ([ADR-0047](../adr/0047-budget-pacing-counter.md)). Raising to an amount not yet used
+this month starts a new counter, so the wait ends after the next reconciler run and the gateway's cache (a few minutes).
+Returning to an earlier amount can resume its remaining wait; this is intentional, not a reset command
+([ADR-0051](../adr/0051-retain-pacing-debt-for-reused-budgets.md)). A new month uses a new key. The rate
 is counted in tokens at the most expensive admitted output price, so with a very small budget one large request can
 make the next requests wait for hours (bug bash 2026-10-26: about 7 hours after one 8,100-token request at USD 0.01).
+
+When checking a budget change, avoid overlapping resolver/reconciler restarts: allow the next cost run
+and gateway cache refresh before judging the outcome. Bug bash 5's intermittent old wait occurred
+only in the restart-confounded run, not its clean repeat ([DG-7 triage](../evidence/2026-10-27-bugbash5-client.md#dg-7-intermittent-old-decisions-after-raising-a-budget)).
 
 ## What people see
 
 | State | `/usage` | Status line |
 | --- | --- | --- |
 | Normal | `$42.10 of $100.00 used (42%), $57.90 left` | `CCOF $42.10/$100.00 (42%)` |
+| Budget pacing (even below warning) | `… Budget pacing applies: up to N tokens/minute; requests may wait even at low recorded spend …` | `… - budget pacing: N tokens/min` |
 | Warning | `… Warning: about 85% of this budget is used or in progress; requests are now slowed …` | `… - warning: about 85% used, slowed` |
 | Reached (projected) | `… Projected spend has reached this budget: new requests are refused …` | `… - budget reached, requests refused` |
 | Used up (recorded) | `… Budget used up: new requests are refused until next month.` | `… - budget used up, requests refused` |
 
 What Claude Code shows from the gateway:
+
+The pacing line is the last cost run's ceiling, not a live wait countdown. Only a gateway refusal's `Retry-After`
+knows the counter's remaining wait ([usage contract](../USAGE.md#budget-warning-adr-0040)).
 
 | State | Answer |
 | --- | --- |

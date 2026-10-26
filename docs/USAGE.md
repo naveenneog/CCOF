@@ -74,6 +74,12 @@ A group is shown by its group ID (the Entra object ID), never by a directory dis
 
 ### Budget warning (ADR-0040)
 
+In `budget-state` mode, a valid stored ceiling is returned as `pacingTokensPerMinute`.
+The client shows `Budget pacing applies: up to N tokens/minute; requests may wait even at low recorded spend`
+and a `budget pacing` status-line suffix below the warning threshold. This is the stored
+ceiling, not live counter debt or a countdown; follow the refusal's `Retry-After`.
+Token-only deployments omit it ([reader](../src/resolver/my-usage.ts), [formatter](../client/src/usage.mjs)).
+
 When the reconciler runs the budget guard (`reconciler.budgetGuard`), each scope also carries
 `"warning": true|false` and `"projectedPercent"`: recorded spend plus the spend of the last five minutes
 projected over the reporting lag, as a percent of the budget. From the warn percent (80 in the example) the

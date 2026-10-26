@@ -92,6 +92,7 @@ function Read-StgConfig {
     }
     if ($fd -and $fd.create) {
         if ($fd.accountName -cnotmatch '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$') { $problems.Add('stage1.foundry.accountName must be 3-64 lowercase letters, digits or -') }
+        if ($null -ne $fd.location -and "$($fd.location)" -cnotmatch '^[a-z][a-z0-9]{2,39}$') { $problems.Add('stage1.foundry.location must be an ARM region name such as eastus2 (az account list-locations --query "[].name"), or left out to use location') }
         if (-not @($fd.deployments).Count -and -not $fd.modelDeploymentsBlocked) { $problems.Add('stage1.foundry.deployments needs at least one model deployment (or modelDeploymentsBlocked with the reason)') }
         $mpd = $fd.modelProviderData
         if (@($fd.deployments).Count -and (-not $mpd -or -not $mpd.organizationName -or "$($mpd.organizationName)" -match '^REPLACE' -or "$($mpd.countryCode)" -cnotmatch '^[A-Z]{2}$' -or -not $mpd.industry)) {
@@ -434,7 +435,7 @@ function Test-StgBicepPreviewNoChange {
     $dependenciesMatch = $null -ne $record.dependencyHashes -and
         @($currentDependencies.Keys | Where-Object { $record.dependencyHashes[$_] -cne $currentDependencies[$_] }).Count -eq 0
     if ($dependenciesMatch) {
-        Write-Host "preview: Stage $StageNumber is verify-only; input and prerequisite hashes match (sha256 $currentHash), no change will be planned."
+        Write-Host "preview: Stage $StageNumber has no configuration change; -Apply redeploys the same template (idempotent; Stage 5 restarts the Function Apps). Input and prerequisite hashes match (sha256 $currentHash)."
         return $true
     }
     Write-Host "preview: Stage $StageNumber input hash matches (sha256 $currentHash), but verified prerequisite outputs changed; review what-if, then apply Stage $StageNumber before dependent stages."
@@ -445,6 +446,19 @@ function Invoke-StgBicep {
     <# what-if (preview) or create (apply) of one stage template; returns the outputs as a hashtable. #>
     param($Cfg, [string]$Template, [string]$Name, [hashtable]$Parameters, [switch]$Apply, [int]$StageNumber = 0)
     if (-not $Apply -and $StageNumber -in 2, 5 -and (Test-StgBicepPreviewNoChange -Cfg $Cfg -StageNumber $StageNumber)) { return $null }
+    $appliedFile = Join-Path $script:StateDir "$Name.applied.parameters.json"
+    if (-not $Apply -and $StageNumber -in 2, 5) {
+        $previousFile = if (Test-Path -LiteralPath $appliedFile) { $appliedFile } else { Join-Path $script:StateDir "$Name.parameters.json" }
+        if (Test-Path -LiteralPath $previousFile) {
+            $previous = (Get-Content -LiteralPath $previousFile -Raw | ConvertFrom-Json -AsHashtable -Depth 100).parameters
+            $changedParameters = @(@($previous.Keys) + @($Parameters.Keys) | Sort-Object -Unique | Where-Object {
+                (ConvertTo-StgCanonical $previous[$_].value | ConvertTo-Json -Depth 100 -Compress) -cne
+                (ConvertTo-StgCanonical $Parameters[$_] | ConvertTo-Json -Depth 100 -Compress)
+            })
+            if ($changedParameters.Count) { Write-Host "preview: changed parameters: $($changedParameters -join ', ') (compared with $(Split-Path $previousFile -Leaf); values are not printed)." }
+            if ($previousFile -cne $appliedFile) { Write-Host 'preview: no applied-parameter snapshot exists yet; comparison uses the last generated parameters, which may be from a preview.' }
+        } else { Write-Host 'preview: no previous parameters available; compare with your saved config before applying.' }
+    }
     $file = Write-StgParameters $Cfg $Name $Parameters
     $common = @('--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--name', $Name, '--template-file', (Join-Path $script:StagedDir $Template), '--parameters', "@$file")
     if (-not $Apply) {
@@ -459,6 +473,7 @@ function Invoke-StgBicep {
     $started = [DateTime]::UtcNow
     $result = Invoke-QsAz (@('deployment', 'group', 'create', '--mode', 'Incremental') + $common + @('--output', 'json'))
     Assert-Stg ($result.properties.provisioningState -ceq 'Succeeded') "$Name provisioning state is $($result.properties.provisioningState)"
+    if ($StageNumber -in 2, 5) { Copy-Item -LiteralPath $file -Destination $appliedFile -Force }
     $out = @{}; foreach ($k in $result.properties.outputs.Keys) { $out[$k] = $result.properties.outputs[$k].value }
     $null = Write-StgEvidence "$Name.deployment.json" ([ordered]@{ name = $Name; startedAt = $started.ToString('o'); completedAt = [DateTime]::UtcNow.ToString('o'); duration = $result.properties.duration; state = $result.properties.provisioningState; outputs = $out })
     Write-Host "deployed $Name ($($result.properties.duration))"

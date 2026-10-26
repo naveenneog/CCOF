@@ -23,7 +23,9 @@ The bug bash found requests the gateway forwarded although the backend could onl
 2. **Content type and size**, after the token and admission checks and before the body is read: a media type other
    than `application/json` is `415 invalid_request_error`; a `Content-Length` above 33,554,432 bytes (32 MB, the
    Messages API limit, [Claude API errors](https://platform.claude.com/docs/en/api/errors)) is
-   `413 request_too_large`. A request without `Content-Length` is not checked by size (UNKNOWNS BB-G3).
+   `413 request_too_large`. Bug bash 5 adds `411 invalid_request_error` for explicit
+   `Transfer-Encoding: chunked`. A request without `Content-Length` alone is not refused or checked
+   by size before buffering: HTTP/2 framing is not proven by header absence (UNKNOWNS BB5-H2).
 3. **Backend refusals.** In the ledger, a forwarded request whose backend answered 4xx other than 429 has zero tokens
    in every category (known, `inputSource` `backend-refused`), so it prices at zero and keeps the month complete. A
    backend `429` keeps unknown tokens. The row stays in the ledger, attributed to the person and group.

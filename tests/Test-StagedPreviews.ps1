@@ -18,7 +18,7 @@ function Assert-Contract([bool]$Condition, [string]$Message) { if (-not $Conditi
 # passed with 7 of 27 DataZoneStandard units free for a capacity of 20; soft-deleted accounts of deleted labs held them).
 $quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence}; arm = ${function:Get-StgArm} }
 try {
-    $script:quotaUsages = @(); $script:quotaDeleted = @(); $script:quotaAccount = $null; $script:quotaArmError = $null
+    $script:quotaUsages = @(); $script:quotaDeleted = @(); $script:quotaAccount = $null; $script:quotaArmError = $null; $script:quotaRegions = @()
     function Get-StgArm { param([string]$Path, [string]$ApiVersion)
         if ($script:quotaArmError) { throw $script:quotaArmError }
         if ($Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct' -and $Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct/deployments') { throw "unexpected ARM read in the Stage 0 quota test: $Path" }
@@ -30,7 +30,9 @@ try {
         $a = $Arguments -join ' '
         if ($a -like 'account show*') { return @{ id = 's'; name = 'sub'; tenantId = 't'; user = @{ name = 'u' } } }
         if ($a -like 'provider show*') { return @{ registrationState = 'Registered' } }
-        if ($a -like 'functionapp list-flexconsumption-locations*') { return @(@{ name = 'East US 2' }) }
+        if ($a -like 'functionapp list-flexconsumption-locations*') { return @(@{ name = 'East US 2' }, @{ name = 'Central India' }) }
+        if ($a -like 'cognitiveservices*') { $script:quotaRegions += , ([regex]::Match($a, '--location (\S+)').Groups[1].Value) }
+        if ($a -like 'cognitiveservices model list*--location centralindia*') { return @(@{ model = @{ format = 'OpenAI'; name = 'gpt-5'; version = '1'; skus = @(@{ name = 'GlobalStandard' }) } }) }
         if ($a -like 'cognitiveservices model list*') { return @(
             @{ model = @{ format = 'Anthropic'; name = 'claude-haiku-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }, @{ name = 'GlobalStandard' }) } },
             @{ model = @{ format = 'Anthropic'; name = 'claude-sonnet-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }) } }) }
@@ -86,6 +88,23 @@ try {
     $script:quotaUsages = @()
     $noLine = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null
     Assert-Contract ($noLine.backends.Count -eq 1) 'A missing quota line is not a refusal (the model list already confirmed the offer).'
+    # Novice run 5 (2026-10-26): Claude is not offered in Central India. A deployment there keeps its Foundry account in
+    # a Claude region (stage1.foundry.location); the refusal names that key, and the model, quota and soft-deleted
+    # checks read the Foundry region, not `location`.
+    $india = New-QuotaCfg @($global); $india.location = 'centralindia'
+    $message = ''; try { $null = Invoke-Stage0 $india 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'not offered in centralindia' -and $message -match 'stage1\.foundry\.location') "A model not offered in the deployment region must be refused naming stage1.foundry.location (got: $message)."
+    $india.stage1.foundry.location = 'eastus2'; $script:quotaRegions = @()
+    $indiaReport = Invoke-Stage0 $india 6>$null
+    Assert-Contract ($indiaReport.backends.Count -eq 1 -and $script:quotaRegions.Count -ge 2 -and -not @($script:quotaRegions | Where-Object { $_ -and $_ -cne 'eastus2' }).Count) "The Foundry checks must read stage1.foundry.location (regions read: $($script:quotaRegions -join ', '))."
+    Assert-Contract ($indiaReport.backends[0].region -ceq 'eastus2') 'N3: Stage 0 report must show the Foundry account region, not only the main deployment region.'
+    $preview = Invoke-Stage1 $india 6>&1 | Out-String
+    Assert-Contract ($preview -match 'Foundry account region: eastus2 \(deployment region: centralindia\)') 'N3: Stage 1 preview must print both Foundry and deployment regions.'
+    $script:quotaUsages = @((New-QuotaLine 'AIServices.GlobalStandard.claude-haiku-5-5.Azure' 70 80))
+    $script:quotaDeleted = @(@{ name = 'old-lab-foundry'; location = 'East US 2' }, @{ name = 'india-foundry'; location = 'Central India' })
+    $message = ''; try { $null = Invoke-Stage0 $india 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'model quota in eastus2' -and $message -match 'old-lab-foundry' -and $message -notmatch 'india-foundry') "The quota refusal must name the Foundry region and its soft-deleted accounts (got: $message)."
+    $script:quotaUsages = @(); $script:quotaDeleted = @()
 } finally {
     ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph;     ${function:Write-StgEvidence} = $quotaSaved.ev; ${function:Get-StgArm} = $quotaSaved.arm
 }

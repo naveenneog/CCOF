@@ -229,7 +229,7 @@ What each layout survives:
 | Two regions with service-managed failover | No, unless zone-redundant | Reads continue from the second region at once (the resolver reads in `COSMOS_PREFERRED_REGIONS` order, set by Stage 5); writes resume after failover |
 | Two zone-redundant regions (example) | Yes | As above |
 
-Choose a second region with availability zones and Cosmos capacity in your subscription. Stage 1 is create-only:
+Choose the second region in the same geography when data residency applies, preferably the [paired region](https://learn.microsoft.com/azure/reliability/regions-paired) (Central India: South India), with `isZoneRedundant: false` for a region without availability zones, and with Cosmos capacity in your subscription ([regions and failover](get-started/region-and-failover.md#3-the-failover-region)). Stage 1 is create-only:
 an account already deployed keeps its layout; a new layout needs a new resource group. Provisioned throughput is
 billed in every region. Zone-redundant regions are charged a premium, which is waived for autoscale throughput, the
 mode used here ([reliability, Cost](https://learn.microsoft.com/en-us/azure/reliability/reliability-cosmos-db);

@@ -28,7 +28,7 @@ Claude Code, and every request is charged to a cost code for chargeback.
 | 5 | [Developer setup](docs/get-started/05-developer-setup.md) | Developers |
 
 Then: [users and groups](docs/operate/users-and-groups.md) · [budgets](docs/operate/budgets-and-guard.md) ·
-[chargeback](docs/operate/chargeback-and-tags.md) · [troubleshooting](docs/operate/troubleshooting.md) ·
+[chargeback](docs/operate/chargeback-and-tags.md) · [regions and failover](docs/get-started/region-and-failover.md) · [troubleshooting](docs/operate/troubleshooting.md) ·
 [all documentation](docs/INDEX.md) · [glossary](docs/GLOSSARY.md).
 
 ## Live acceptance

@@ -80,7 +80,7 @@ test("usage telemetry carries trusted family/group ID without introducing a stre
   assert.match(trace, /ccofClassificationGroupId/);
   assert.match(trace, /new JProperty\("classificationGroupDisplayName",/);
   assert.doesNotMatch(trace, /context\.(Request|Response)\.Body/);
-  assert.equal([...xml.matchAll(/context\.Response\.Body/g)].length, 1, "existing non-streamed reader only");
+  assert.equal([...xml.matchAll(/context\.Response\.Body/g)].length, 2, "non-streamed success and finite backend-error readers only");
 });
 
 

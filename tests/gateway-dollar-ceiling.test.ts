@@ -139,6 +139,8 @@ test("a pacing refusal is classified apart from the configured TPM, says it is t
   assert.equal(pacing.error.type, "rate_limit_error");
   assert.match(pacing.error.message, /budget guard/);
   assert.match(pacing.error.message, /raising the budget/i);
+  assert.match(pacing.error.message, /amount not yet used this month/i);
+  assert.match(pacing.error.message, /Returning to an earlier amount can resume its previous wait/);
   assert.match(pacing.error.message, new RegExp(`group ${group}`));
   assert.doesNotMatch(pacing.error.message, /You have reached your tokens-per-minute limit/);
   assert.equal(configured.error.type, "rate_limit_error");

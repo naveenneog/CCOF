@@ -1,5 +1,54 @@
 # Change log
 
+## 2026-10-27 — Release 18
+
+- Central India deployments: `stage1.foundry.location` puts the Foundry account in a region that offers Claude while the
+  rest stays in the deployment region; a region-and-failover page (paired region, Cosmos DB second region, outage and
+  drill steps). Fixes from bug bash 5 (sections below).
+
+## Bug bash 5 — staged deployment
+
+- AO-1: Stage 1 apply reruns after Stage 5 verify the saved settings without a null-array failure.
+- AO-2: lost-state Stage 1 recovery accepts later resources without marking later stages complete;
+  Stage 2 verifies existing grants remain unchanged. The troubleshooting row covers Stages 0–8.
+- AO-3 (review correction): no-op apply withdrawn by Coder/QA review and coordinator decision. Stage 2/5
+  `-Apply` always deploys the current template, as in release 17; unchanged previews disclose idempotent
+  redeployment and Stage 5 Function App restarts. Removed the withdrawn no-op/force tests and switch, not
+  weakened assertions; AO-4 changed-parameter tests remain in the redeployment regression suite.
+- AO-4: changed previews list parameter names (never values), comparing with the last successful
+  deployment snapshot; older state explicitly labels its last-generated-file fallback.
+- AO-5: the unreachable-Cosmos preflight warning names the admin Groups page and the explicit
+  keep-console-edits option before republishing.
+- AO-8: regional guidance includes outage limits, single-region gateway/Function recovery, and an
+  explicitly mutating Cosmos manual-failover drill with rollback and Microsoft Learn citations.
+- N3: Stage 0 reports each Foundry account's region; Stage 1 prints its planned account and deployment regions.
+- N5: seed polling preserves creation evidence across timer runs of the same seed instead of reporting
+  those documents as already present; later drift or failures still win.
+- N4 / novice docs: Stage 3 estimate is 6–15 minutes; BACKENDS links the existing regional recovery
+  guidance instead of the missing availability page.
+
+## Bug bash 5 client fixes (2026-10-27)
+
+- Review follow-up: configuration publication now follows all setup preflight checks, shares
+  the client snapshot, rolls back on failure and is recovered by Restore. Missing clients change nothing.
+- AO-7: complete the export documentation's interrupted sentence about JSON errors.
+- DG-7: record restart-confounded versus clean budget-change evidence; no reproducible
+  independent cache issue established, so no speculative code change.
+- DG-6: retain pacing debt on revisiting an earlier monthly budget amount (ADR-0051);
+  guides and the refusal no longer promise that every budget edit resets it.
+- DG-8: unattended token and status probes hide Azure CLI's default-profile sign-in message;
+  CCOF's own helper-specific login instruction remains on stderr.
+- AO-6: server and console reject invisible-only names and bidi overrides/isolates; CSV
+  formula protection also covers leading invisible format characters.
+- DG-5: usage and the status line show budget pacing below the warning threshold, using the
+  stored ceiling, without claiming to know the gateway's live wait.
+- DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic
+  backend failures get an Anthropic envelope without exposing backend details.
+- DG-3: explicit chunked requests are refused before body parsing or forwarding; absence
+  of Content-Length alone is allowed for HTTP/2 compatibility (BB5-H2).
+- DG-1/2: setup imports the downloaded configuration into the per-user configuration folder;
+  a missing or invalid configuration names the file and `-ConfigPath`.
+
 ## 2026-10-26 — Release 17
 
 - Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash

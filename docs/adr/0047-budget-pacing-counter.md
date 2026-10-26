@@ -31,11 +31,11 @@ projected spend was refused as "used up … wait for the next period" although i
    state, for example `2026-10_10000`. It is omitted when the state has no valid period or budget.
 2. The gateway applies the configured person limits on `p:<project>:<oid>`, unchanged, and the monetary ceiling on its
    own counter, `pb:<project>:<oid>:<personCeilingKey>` (`-` when absent), policy id `ccof-limit-budget-person`.
-3. Raising the budget, or a new month, gives a new key: the old debt no longer applies. A ceiling that moves with
-   spend keeps the key, so its debt still applies. Lowering the budget also gives a new key, running at once at the
-   lower rate (assumption [BB-G2](../UNKNOWNS.md)).
+3. A new month, or an amount not yet used that month, gives a new key. Returning to an earlier amount can reuse
+   its remaining debt; changing spend keeps the key. This correction to assumption BB-G2 is intentional:
+   [ADR-0051](0051-retain-pacing-debt-for-reused-budgets.md).
 4. A pacing refusal is `429 rate_limit_error` that says it is the budget guard, not the configured tokens-per-minute
-   limit, and that raising the budget lifts it. `Retry-After` is the counter's own value, at most the time until the
+   limit, and that raising to a previously unused amount lifts it. `Retry-After` is the counter's own value, at most the time until the
    key changes at the end of the month plus the allow cache time.
 5. A zero ceiling while recorded spend is under the budget (projected spend or a sub-token remainder) is a new
    gateway refusal, `budget_projected`: `403 permission_error` saying the budget is reached by recent spending and
@@ -45,8 +45,8 @@ projected spend was refused as "used up … wait for the next period" although i
 
 - The `x-ccof-person-tokens-remaining` header shows the configured person limit only; the pacing counter has no
   header. `x-ccof-tokens-consumed` comes from the pacing counter when no configured person limit applies.
-- A raised budget lifts pacing after the next reconciler run and the gateway's allow cache (`allowTtlSeconds`),
-  within a few minutes.
+- A raise to a previously unused amount lifts pacing after the next reconciler run and the gateway's allow cache
+  (`allowTtlSeconds`), within a few minutes; a reused amount can resume its earlier wait.
 - One large request at a very small budget can still block for hours: the pacing rate converts at the most
   expensive admitted output price (ADR-0040). The message and `/usage` now say so plainly.
 - Old cached decisions without `personCeilingKey` stay valid and use the `-` key until refreshed.

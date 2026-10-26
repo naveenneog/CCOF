@@ -1,0 +1,10 @@
+PS /home/alex/repo> pwsh -File $run -Stage 7 -ConfigPath $cfg -Apply
+Deploying the resolver package to ccoflab-x7k2m4q9pabcd-resolver (OneDeploy).
+Deploying the sync package to ccoflab-x7k2m4q9pabcd-sync (OneDeploy).
+Exception: ~/ccof/infra\quickstart\Deploy-Quickstart.ps1:121
+Line |
+ 121 |          throw "az $($Arguments[0..1] -join ' ') failed: $err"
+     |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | az functionapp deployment failed: ERROR: An error occured during deployment. Status Code: 400, Details:
+     | {"error":"BlobUploadFailedException: Failed to upload blob to storage account: Response status code does not
+     | indicate success: 403 (This request is not authorized to perform this operation.)."}

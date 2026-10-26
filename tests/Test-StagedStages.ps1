@@ -510,6 +510,16 @@ try {
     $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'industry' }
     Assert-Contract $bad 'Anthropic model-provider industry must use a supported lowercase value.'
     $c.stage1.foundry.modelProviderData.industry = 'technology'
+    # Novice run 5: the Foundry account may sit in a Claude region other than `location`; the value is an ARM region name.
+    $c.stage1.foundry.location = 'East US 2'
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'stage1\.foundry\.location' }
+    Assert-Contract $bad 'stage1.foundry.location must be refused unless it is an ARM region name such as eastus2.'
+    $c.stage1.foundry.location = 'eastus2'
+    $c | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $tmp -Encoding utf8NoBOM
+    $bad = $false; try { $null = Read-StgConfig $tmp } catch { $bad = $_.Exception.Message -match 'stage1\.foundry\.location' }
+    Assert-Contract (-not $bad) 'An ARM region name in stage1.foundry.location must be accepted.'
+    $c.stage1.foundry.Remove('location')
     # A new Foundry account with public access disabled is reachable from the gateway only through a private endpoint.
     $savedNet = $c.network.mode; $savedBackend = $c.backends[0].Clone(); $savedAccount = $c.stage1.foundry.accountName
     $c.network.mode = 'create'; $c.stage1.foundry.publicNetworkAccess = 'Disabled'; $c.stage1.foundry.accountName = 'labfoundry'

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { handleMyUsageRequest } from "../src/resolver/http-handler.ts";
 import type { ResolverRuntime } from "../src/resolver/http-handler.ts";
 import type { ResolveDependencies } from "../src/resolver/decide.ts";
-import { activeMembership, entitlementWithMembership, fakeReads, RESOLVE_NOW } from "./helpers/resolver-fixtures.ts";
+import { activeMembership, entitlementWithMembership, fakeReads, RESOLVE_NOW, context } from "./helpers/resolver-fixtures.ts";
 import { readResolverConfig, RESOLVER_SETTINGS } from "../src/resolver/config.ts";
 
 const OID = "0f0e0d0c-0b0a-4908-8706-050403020100";
@@ -48,6 +48,15 @@ test("group totals follow the deployment setting", async () => {
   const res = await handleMyUsageRequest({ ...authenticated, body: { personId: OID } }, runtime({ usageGroupTotals: true }));
   assert.equal(res.jsonBody.groupTotals, "shown");
   assert.deepEqual(((res.jsonBody.scopes as Record<string, any>[])[0].group), { remaining: { ccu: "90", usd: "0.9" } });
+});
+
+test("the usage handler passes the enforcement mode so budget pacing is not silently hidden", async () => {
+  const rt = runtime();
+  assert.ok(rt.readiness.ready);
+  rt.readiness.budgetEnforcement = context().budgetEnforcement;
+  const res = await handleMyUsageRequest({ ...authenticated, body: { personId: OID } }, rt);
+  const [scope] = res.jsonBody.scopes as Record<string, unknown>[];
+  assert.equal(scope.pacingTokensPerMinute, 1);
 });
 
 test("the platform gate applies exactly as on /api/resolve", async () => {

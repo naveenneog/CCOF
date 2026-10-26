@@ -395,10 +395,10 @@ describe("rendered policy structure", () => {
   // request/response body logging and response caching. Live, 2026-10-12 (U-new-GW-10, request traces T and X3): a
   // policy whose expression mentions context.Response.Body makes the gateway read the whole reply before the policy
   // runs, even when the read sits behind a run-time check, so only a policy a streamed reply never reaches may do so.
-  test("nothing holds back a streamed reply: only a policy a streamed reply never reaches mentions the response body, and no policy caches, validates, logs or rewrites it", () => {
-    assert.equal([...rendered.policyXml.matchAll(/context\.Response\.Body/g)].length, 1, "the response body is mentioned in one place only");
+  test("nothing holds back a successful streamed reply: body readers and replacements are confined to non-streamed success or finite error branches", () => {
+    assert.equal([...rendered.policyXml.matchAll(/context\.Response\.Body/g)].length, 2, "exactly the success and finite-error readers");
     const readers = descendants(root).filter((e) => e.attributes.some((a) => a.value.includes("context.Response.Body")) || textOf(e).includes("context.Response.Body"));
-    assert.deepEqual(readers.map((e) => `${e.name}:${attr(e, "name")}`), ["set-variable:ccofResponseJson"], "one policy of its own reads the response body");
+    assert.deepEqual(readers.map((e) => `${e.name}:${attr(e, "name")}`), ["set-variable:ccofResponseJson", "set-variable:ccofBackendErrorJson"]);
     assert.equal(attr(readers[0], "value"), "@(context.Response.Body.As<string>(preserveContent: true))");
     const guard = pathTo(readers[0])!.filter((e) => e.name === "when").at(-1)!;
     assert.equal(
@@ -407,13 +407,16 @@ describe("rendered policy structure", () => {
       "the body reader must sit in a branch that a streamed reply never enters",
     );
     assert.deepEqual(guard.children.filter((n): n is XmlElement => n.kind === "element").map((e) => e.name), ["set-variable"], "the not-streamed branch only reads the body");
+    const errorGuard = pathTo(readers[1])!.filter((e) => e.name === "when").at(-1)!;
+    assert.equal(attr(errorGuard, "condition"), "@(context.Response.StatusCode >= 400)", "the other reader is unreachable by successful SSE");
+    assert.equal(attr(readers[1], "value"), "@(context.Response.Body.As<string>(preserveContent: true))");
     const builder = attr(setVariable("ccofUsageTrace", outbound)[0], "value")!;
     assert.doesNotMatch(builder, /context\.Response\.Body/, "the usage trace builder runs for streamed replies too, so it must not mention the response body");
     const bodyMentions = [outbound, onError]
       .flatMap((s) => descendants(s))
       .flatMap((e) => [...e.attributes.map((a) => a.value), textOf(e)])
       .filter((x) => /\.Body\b/.test(x));
-    assert.deepEqual(bodyMentions, [attr(readers[0], "value")], "outbound and on-error mention a body only in the reader: a read under another name (var r = context.Response; r.Body) holds back a stream as well");
+    assert.deepEqual(bodyMentions, readers.map((e) => attr(e, "value")), "no unguarded or aliased body read outside the two exact guards");
     assert.match(builder, /var text = context\.Variables\.GetValueOrDefault<string>\("ccofResponseJson", ""\);/);
     const order = descendants(outbound);
     assert.ok(order.indexOf(readers[0]) < order.indexOf(setVariable("ccofUsageTrace", outbound)[0]), "the body is read before the usage trace is built");
@@ -425,7 +428,7 @@ describe("rendered policy structure", () => {
     }
     const replacements = new Set(descendants(outbound).filter((e) => e.name === "return-response").flatMap((r) => descendants(r)));
     for (const body of descendants(outbound).filter((e) => e.name === "set-body")) {
-      assert.ok(replacements.has(body), "an outbound set-body outside return-response rewrites the backend's body");
+      assert.ok(replacements.has(body) || pathTo(body)!.includes(errorGuard), "successful replies cannot be rewritten outside return-response");
     }
   });
 

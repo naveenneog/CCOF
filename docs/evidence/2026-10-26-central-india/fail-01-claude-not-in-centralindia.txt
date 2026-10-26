@@ -1,0 +1,7 @@
+PS /home/alex/repo> pwsh -File $run -Stage 0 -ConfigPath $cfg
+== stage 0 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-lab-rg; state $HOME/ccof-private/.staged-state
+Exception: ~/ccof/infra\staged\Staged.Common.ps1:396
+Line |
+ 396 |  … ]$Message) if (-not $Condition) { throw "verify_failed: $Message" } }
+     |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | verify_failed: model claude-haiku-5-5@2 (GlobalStandard) is not offered in centralindia for this subscription

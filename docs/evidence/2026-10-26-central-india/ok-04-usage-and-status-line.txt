@@ -1,0 +1,7 @@
+PS /home/alex/repo> usage wrapper and status line
+PS> & "$HOME/.claude/ccof-usage.ps1"
+CCOF budget, group 0b65c63f-4d92-4e52-a492-c5455d71cfda: $0.00 of $100.00 used (0%), $100.00 left, as of 19:48 UTC. Some requests in this period are only partly priced (for example the prompt-cache tokens of streamed replies), so actual spend is higher.
+Figures are from the last cost run and are a lower bound: newer requests, and the prompt-cache tokens of streamed replies, are not included.
+exit 0
+PS> (status line) powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME/devhome/.claude/ccof-usage.ps1" --statusline
+CCOF $0.00/$100.00 (0%)

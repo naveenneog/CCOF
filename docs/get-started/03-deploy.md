@@ -1,13 +1,11 @@
 # 3. Deploy: Stages 0–8
 
-Nine stages, run in order from Azure Cloud Shell or from PowerShell 7 (`pwsh`) on Windows or macOS
-([install the tools](02-prerequisites.md#install-the-tools)). Every stage first **previews** and changes nothing;
-the same command with `-Apply` makes the change and then reads it back. A stage that fails its read-back stops
-with `verify_failed: <reason>` and records nothing, so it can be run again.
+Run nine stages in order in Cloud Shell or PowerShell 7 (`pwsh`) on Windows/macOS
+([tools](02-prerequisites.md#install-the-tools)). **Preview** first; `-Apply` then changes or verifies resources.
+A failed read-back stops with `verify_failed: <reason>`, records nothing, and can be rerun.
 
-The captures on this page come from one demo deployment on 2026-10-24
-([evidence](../evidence/2026-10-24-demo/README.md)). Names and IDs in them are hypothetical replacements of the
-real ones, in the same format. Every setting and the Portal way of each stage: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
+Captures: [demo deployment, 2026-10-24](../evidence/2026-10-24-demo/README.md); names and IDs are hypothetical.
+Settings and Portal steps: [staged guide](../STAGED-DEPLOYMENT-GUIDE.md#4-stages-0-to-8).
 
 ## Before Stage 0: get the code and write the configuration
 
@@ -47,7 +45,7 @@ Set the main deployment values first:
 }
 ```
 
-This is an example of the main choices, not a complete configuration file. Keep the copied template and fill every
+Main choices, not a complete configuration. Keep the copied template and fill every
 applicable `REPLACE-` value, including backend and group settings. With `network.mode: create` the three
 `network.existing` subnet IDs are not used and can keep their `REPLACE-` values. `workbook.resourceName` takes a
 new GUID: `[guid]::NewGuid()`. Use `network.mode: create` only for a lab.
@@ -55,15 +53,16 @@ new GUID: `[guid]::NewGuid()`. Use `network.mode: create` only for a lab.
 **Stage 1 is create-only.** Once Stage 1 has run, its `stage1` values cannot be changed in that resource group;
 a different value means a new resource group. Check these before the first `-Apply`:
 
-| Setting | Template | Lab (2026-10-24 and 2026-10-25 runs) | Why |
+| Setting | Template | Lab runs | Why |
 | --- | --- | --- | --- |
 | `stage1.approveNewPublicApimBootstrap` | `false` | `true`, with `apimPublisherEmail` and `apimPublisherName` | `false` creates no API Management; then `apim.existing` must name one ([existing API Management](existing-api-management.md)). Stage 0 refuses neither or both |
 | `stage1.functionsPublicNetworkAccess` | `Disabled` | `Enabled` | `Disabled` closes the apps and their deployment (SCM) endpoint to the internet ([App Service access restrictions](https://learn.microsoft.com/azure/app-service/overview-access-restrictions)): Stage 7 publishing and the admin console then need a machine on the VNet ([network](../NETWORK.md)) |
-| `stage1.cosmosLocations` | `eastus2` + `centralus`, zone-redundant | `isZoneRedundant: false`, or one region with `cosmosCapacityMode: serverless` | Zone-redundant Cosmos DB capacity was refused in East US 2 ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)) |
+| `stage1.cosmosLocations` | `eastus2` + `centralus`, zone-redundant | `isZoneRedundant: false`, or one region with `cosmosCapacityMode: serverless` | Zone redundancy refused in East US 2 and Central India ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)) |
+| `stage1.foundry.location` | absent | `eastus2` in Central India | No Claude in `location` ([regions](region-and-failover.md)) |
 | `stage1.foundry.deployments` | Claude 4.5 and 5 | Deployments that match free quota ([prerequisites](02-prerequisites.md#microsoft-foundry-models)) | Quota differs per subscription |
 | `backends[].privateEndpoint` (the backend for the new Foundry account) | `false` | `true` | `stage1.foundry.publicNetworkAccess: Disabled` leaves the gateway only a private endpoint to Foundry. Stage 0 refuses the two disagreeing |
 
-These settings are not create-only, but the template's values differ from what the README describes:
+Not create-only, but the template differs from what the README describes:
 
 | Setting | Template | For dollar budgets |
 | --- | --- | --- |
@@ -134,9 +133,12 @@ pwsh -File $run -Stage 2 -ConfigPath $cfg -Apply
 
 ![Expected Stage 2 output](../evidence/2026-10-24-demo/terminal-stage2.png)
 
+Stages 2/5: unchanged configuration skips noisy what-if, not deployment. `-Apply` always redeploys the current
+template (idempotent); Stage 5 restarts the Function Apps.
+
 ## Stage 3 — Runtime role assignments
 
-**Who:** access administrator · **Time:** about 6 minutes · **Creates:** each managed identity's Azure and Cosmos DB
+**Who:** access administrator · **Time:** 6–15 minutes · **Creates:** each managed identity's Azure and Cosmos DB
 roles, and Cognitive Services User for API Management on the Foundry account. Not Microsoft Graph permissions.
 
 ```powershell

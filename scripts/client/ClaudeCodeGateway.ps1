@@ -107,12 +107,14 @@ function New-CcofUsageSkill {
 function Set-CcofClaudeCode {
     param([string]$ConfigPath, [string]$ClaudeHome, [string]$VSCodeSettingsPath, [string]$BackupRoot,
         $Inventory, [string]$NodePath, [string]$TokenEntryPath, [string]$UsageEntryPath, [switch]$UsageStatusLine, [switch]$Confirmed,
-        [ValidateSet('bash', 'powershell')][string]$SkillShell, [bool]$OnWindows = $IsWindows)
+        [ValidateSet('bash', 'powershell')][string]$SkillShell, [bool]$OnWindows = $IsWindows, [string]$InstalledConfigPath)
     Assert-ClientConfirmation -Confirmed:$Confirmed
     if (-not $Inventory.CliVersion -and -not $Inventory.VSCodeVersion) {
         return (@{ event = 'not_installed'; component = 'claude-code' } | ConvertTo-Json -Compress)
     }
     $config = Read-ClientConfiguration $ConfigPath
+    $sourceConfigPath = $ConfigPath
+    if ($InstalledConfigPath) { $ConfigPath = $InstalledConfigPath }
     # ADR-0048: off Windows only the Azure CLI sign-in has a helper; nothing is written for another method.
     if (-not $OnWindows -and $config.signInMethod -cne 'azure-cli') {
         $method = if ($config.signInMethod) { $config.signInMethod } else { 'msal' }
@@ -184,17 +186,19 @@ function Set-CcofClaudeCode {
         $vscode['claudeCode.disableLoginPrompt'] = $true
         $paths += $VSCodeSettingsPath
     }
-    $snapshot = New-ClientSnapshot 'claude-code' $paths $BackupRoot
-    if ($azureCli -and -not $IsWindows) {
-        # The helper's own Azure CLI profile holds its tokens: owner-only, also when it already exists.
-        New-ClientDirectory $azProfile
-        [IO.File]::SetUnixFileMode($azProfile, [IO.UnixFileMode]448)
+    if ($InstalledConfigPath) { $paths += $ConfigPath }
+    $snapshot = Invoke-ClientSetupTransaction 'claude-code' $paths $BackupRoot {
+        if ($azureCli -and -not $IsWindows) {
+            # The helper's own Azure CLI profile holds its tokens: owner-only, also when it already exists.
+            New-ClientDirectory $azProfile
+            [IO.File]::SetUnixFileMode($azProfile, [IO.UnixFileMode]448)
+        }
+        Write-ClientText $helper $shim -UnixMode 448
+        if ($UsageEntryPath) { Write-ClientText $usageShimPath $usageShim; Write-ClientText $skillPath $usageSkill }
+        Write-ClientJson $path $settings
+        if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
+        if ($InstalledConfigPath) { $null = Install-ClientConfiguration $sourceConfigPath -Destination $ConfigPath -Configuration $config -OnWindows $OnWindows }
     }
-    Write-ClientText $helper $shim -UnixMode 448
-    if ($UsageEntryPath) { Write-ClientText $usageShimPath $usageShim; Write-ClientText $skillPath $usageSkill }
-    Write-ClientJson $path $settings
-    if ($Inventory.VSCodeVersion) { Write-ClientJson $VSCodeSettingsPath $vscode }
-    Complete-ClientSnapshot $snapshot
     return (@{ event = 'configured'; component = 'claude-code'; changeId = $snapshot.Manifest.changeId; usageSkill = [bool]$UsageEntryPath; usageSkillShell = $skillShellUsed; statusLine = $statusLineResult
         signInMethod = $(if ($azureCli) { 'azure-cli' } else { 'msal' }); signIn = "$helperCommand login"
         models = [ordered]@{ default = $config.models.default; opus = $config.models.opus; sonnet = $config.models.sonnet; haiku = $config.models.haiku } } | ConvertTo-Json -Compress)

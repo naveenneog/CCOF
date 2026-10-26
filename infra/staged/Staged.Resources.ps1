@@ -30,27 +30,27 @@ function Invoke-Stage0 {
         $fd = $Cfg.stage1.foundry
         if ($fd.create -and $b.accountName -ceq $fd.accountName -and $fd.modelDeploymentsBlocked) {
             Write-Host "WARNING: backend $($b.id): model deployments blocked ($($fd.modelDeploymentsBlocked)); allowed requests cannot succeed." -ForegroundColor Yellow
-            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1, no model deployments)"; blocked = $fd.modelDeploymentsBlocked }
+            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1, no model deployments)"; region = Get-StgFoundryLocation $Cfg; blocked = $fd.modelDeploymentsBlocked }
             continue
         }
         if ($fd.create -and $b.accountName -ceq $fd.accountName) {
             $planned = @($fd.deployments | ForEach-Object { $_.name })
             $missing = @($b.deploymentInferenceGeo.Keys | Where-Object { $planned -cnotcontains $_ })
             Assert-Stg (-not $missing.Count) "backend $($b.id) names deployments that stage1.foundry does not create: $($missing -join ', ')"
-            $models = @(Invoke-StgAzJson @('cognitiveservices', 'model', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+            $models = @(Invoke-StgAzJson @('cognitiveservices', 'model', 'list', '--subscription', $Cfg.subscriptionId, '--location', (Get-StgFoundryLocation $Cfg)))
             foreach ($d in $fd.deployments) {
                 $ok = @($models | Where-Object { $_.model.format -ceq 'Anthropic' -and $_.model.name -ceq $d.model -and $_.model.version -ceq "$($d.version)" -and @($_.model.skus | ForEach-Object name) -contains ($d.sku ?? 'GlobalStandard') })
-                Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $($Cfg.location) for this subscription"
+                Assert-Stg ($ok.Count -ge 1) "model $($d.model)@$($d.version) ($($d.sku ?? 'GlobalStandard')) is not offered in $(Get-StgFoundryLocation $Cfg) for this subscription. Claude is offered only in some regions: set stage1.foundry.location to one that offers it (az cognitiveservices model list -l <region>), or reuse an existing account with stage1.foundry.create false"
             }
             Assert-StgFoundryQuota -Cfg $Cfg -Deployments @($fd.deployments)
-            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
+            $report.backends += [ordered]@{ id = $b.id; account = "$($b.accountName) (created in Stage 1)"; region = Get-StgFoundryLocation $Cfg; deployments = @($fd.deployments | ForEach-Object { "$($_.name)=$($_.model)@$($_.version)" }) }
             continue
         }
         $acct = Get-StgArm "/subscriptions/$($b.subscriptionId)/resourceGroups/$($b.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($b.accountName)" '2024-10-01'
         $deps = @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value | ForEach-Object { $_.name })
         $missing = @($b.deploymentInferenceGeo.Keys | Where-Object { $deps -cnotcontains $_ })
         Assert-Stg (-not $missing.Count) "backend $($b.id) lacks deployments: $($missing -join ', ')"
-        $report.backends += [ordered]@{ id = $b.id; account = $acct.name; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
+        $report.backends += [ordered]@{ id = $b.id; account = $acct.name; region = $acct.location; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
     if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports $report.backends }
     $me = Get-StgGraph 'me?$select=id,userPrincipalName'
@@ -73,11 +73,19 @@ function Get-StgFoundryDeployments {
     return @((Get-StgArm "$($acct.id)/deployments" '2024-10-01').value)
 }
 
+function Get-StgFoundryLocation {
+    # A new Foundry account may sit in a Claude region other than the deployment location (no Claude in Central India).
+    param($Cfg)
+    if ($Cfg.stage1.foundry.location) { return [string]$Cfg.stage1.foundry.location }
+    return [string]$Cfg.location
+}
+
 function Assert-StgFoundryQuota {
     # Each quota line is AIServices.<sku>.<model>.Azure; deployments sharing a line add up. A missing line is not
     # refused: the model list already confirmed the offer, and Stage 1 reports any remaining quota error.
     param($Cfg, [object[]]$Deployments)
-    $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $Cfg.location))
+    $foundryRegion = Get-StgFoundryLocation $Cfg
+    $usages = @(Invoke-StgAzJson @('cognitiveservices', 'usage', 'list', '--subscription', $Cfg.subscriptionId, '--location', $foundryRegion))
     $existing = @(Get-StgFoundryDeployments $Cfg)
     $needed = [ordered]@{}
     foreach ($d in $Deployments) {
@@ -98,10 +106,10 @@ function Assert-StgFoundryQuota {
         if ($needed[$line].capacity -gt $free) { "deployment $($needed[$line].names -join ' + ') needs $($needed[$line].capacity)$more of $line; $free free ($($u.currentValue) of $($u.limit) used)" }
     }
     if (-not @($short).Count) { return }
-    $region = $Cfg.location.Replace(' ', '').ToLowerInvariant()
+    $region = $foundryRegion.Replace(' ', '').ToLowerInvariant()
     $deleted = @(Invoke-StgAzJson @('cognitiveservices', 'account', 'list-deleted', '--subscription', $Cfg.subscriptionId) | Where-Object { ([string]$_.location).Replace(' ', '').ToLowerInvariant() -ceq $region } | ForEach-Object { $_.name })
-    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $($Cfg.location) keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
-    Assert-Stg $false "model quota in $($Cfg.location): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
+    $purge = if ($deleted.Count) { " Soft-deleted Foundry accounts in $foundryRegion keep their quota until purged: $($deleted -join ', ') (az cognitiveservices account list-deleted, then az cognitiveservices account purge)." } else { '' }
+    Assert-Stg $false "model quota in $($foundryRegion): $(@($short) -join '; '). Lower stage1.foundry.deployments[].capacity or free quota before Stage 1.$purge"
 }
 
 # ---------------------------------------------------------------- stage 1: resources only
@@ -159,10 +167,10 @@ function Get-StgStage1StableOutput {
 }
 
 function New-StgStage1Result {
-    param($Cfg, $Out)
+    param($Cfg, $Out, [switch]$AllowLaterStageResources)
     $principals = @{}; $clientIds = @{}
     foreach ($a in $Out.functionApps) { $principals[$a.key] = $a.service.principalId; $clientIds[$a.key] = $a.service.clientId }
-    $verify = Test-Stage1 -Cfg $Cfg -Out $Out
+    $verify = Test-Stage1 -Cfg $Cfg -Out $Out -AllowLaterStageResources:$AllowLaterStageResources
     return @{ names = $Out.names; principals = $principals; clientIds = $clientIds; cosmosEndpoint = $Out.cosmosEndpoint; cosmosAccountId = $Out.cosmosAccountId
         workspaceId = $Out.workspaceId; workspaceCustomerId = $Out.workspaceCustomerId; apimName = $Out.apimName; apimId = $Out.apimId
         apimPrincipalId = $Out.apimPrincipalId; apimGatewayUrl = $Out.apimGatewayUrl; apimStatus = $Out.apimStatus
@@ -188,6 +196,7 @@ function Assert-StgStage1AppSettings {
 
 function Invoke-Stage1 {
     param($Cfg, [switch]$Apply)
+    if ($Cfg.stage1.foundry.create) { Write-Host "Foundry account region: $(Get-StgFoundryLocation $Cfg) (deployment region: $($Cfg.location))" }
     $exists = (Invoke-QsAz @('group', 'exists', '--subscription', $Cfg.subscriptionId, '--name', $Cfg.resourceGroup)) -eq 'true'
     if (-not $exists) {
         if (-not $Apply) { Write-Host "preview: resource group $($Cfg.resourceGroup) does not exist; -Apply creates it in $($Cfg.location) (subscription-scope resourceGroups/write). Stage 1 is create-only: once applied, its stage1 values (Cosmos DB regions, API Management, public access, Foundry deployments) cannot be changed in this resource group, so review them now."; return $null }
@@ -206,7 +215,7 @@ function Invoke-Stage1 {
         Assert-StgStage1Parameters $previous $Cfg
         if (-not $Apply) { Write-Host 'preview: Stage 1 is already verified for this target and config; no resource write will occur.'; return $null }
         Write-Host 'verify-only: Stage 1 is already verified for this target and config; no resource write will occur.'
-        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous)
+        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous) -AllowLaterStageResources
     }
 
     $previous = if ($items.Count) { Get-StgStage1Deployment $Cfg } else { $null }
@@ -234,7 +243,7 @@ function Invoke-Stage1 {
         Assert-StgStage1Parameters $previous $Cfg
         if (-not $Apply) { Write-Host 'preview: matching succeeded Stage 1 deployment found; no resource write will occur.'; return $null }
         Write-Host 'verify-only: matching succeeded Stage 1 deployment found; no resource write will occur.'
-        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous)
+        return New-StgStage1Result -Cfg $Cfg -Out (Get-StgStage1Outputs $previous) -AllowLaterStageResources
     }
 
     if ($items.Count -and -not $Cfg.sharedResourceGroup -and -not $previous) {
@@ -246,7 +255,7 @@ function Invoke-Stage1 {
 }
 
 function Test-Stage1 {
-    param($Cfg, $Out)
+    param($Cfg, $Out, [switch]$AllowLaterStageResources)
     $sub = $Cfg.subscriptionId; $rg = $Cfg.resourceGroup; $v = [ordered]@{ apps = @() }
     $state = Read-StgState $Cfg
     # Stage 1 is also the resource inventory recheck after later stages. Read their saved output only
@@ -255,8 +264,8 @@ function Test-Stage1 {
     $network = if ($networkRecord -and $networkRecord.configHash -ceq (Get-StgStageInput $Cfg 6)) { $networkRecord.outputs } else { $null }
     $schema = if ($schemaRecord -and $schemaRecord.configHash -ceq (Get-StgStageInput $Cfg 2)) { $schemaRecord.outputs } else { $null }
     $grantsStage = if ($grantsRecord -and $grantsRecord.configHash -ceq (Get-StgStageInput $Cfg 3)) { $grantsRecord.outputs } else { $null }
-    $config = if ($configRecord -and $configRecord.configHash -ceq (Get-StgStageInput $Cfg 5)) { $configRecord.outputs } else { $null }
-    $code = if ($codeRecord -and $codeRecord.configHash -ceq (Get-StgStageInput $Cfg 7)) { $codeRecord.outputs } else { $null }
+    $config = if ($configRecord -and $configRecord.configHash -ceq (Get-StgStageInput $Cfg 5)) { $configRecord } else { $null }
+    $code = if ($codeRecord -and $codeRecord.configHash -ceq (Get-StgStageInput $Cfg 7)) { $codeRecord } else { $null }
     foreach ($a in $Out.functionApps) {
         $site = Get-StgSite $Cfg $a.service.name
         $settings = @(Invoke-StgAzJson @('functionapp', 'config', 'appsettings', 'list', '--subscription', $sub, '--resource-group', $rg, '--name', $a.service.name))
@@ -289,7 +298,7 @@ function Test-Stage1 {
     $databases = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'database', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     if ($schema) {
         Assert-Stg (@($databases | Where-Object { $_.name -ceq $schema.databaseName }).Count -eq 1) "Stage 2 database $($schema.databaseName) is missing"
-    } else {
+    } elseif (-not $AllowLaterStageResources) {
         Assert-Stg ($databases.Count -eq 0) 'Cosmos database exists before Stage 2'
     }
     # Only assignments on this deployment's resources count: a shared RG has its own, inherited ones.
@@ -298,10 +307,10 @@ function Test-Stage1 {
         (Test-StgExactResourceScope $_.properties.scope $ownedResourceIds) -and (!$grantsStage -or $_.properties.principalId -ine $grantsStage.apimPrincipalId)
     })
     $expectedGrantCount = if ($grantsStage) { [int]$grantsStage.verify.rgScopedAssignments } else { 0 }
-    Assert-Stg ($grants.Count -eq $expectedGrantCount) "found $($grants.Count) Azure role assignments on this deployment's resources; completed Stage 3 records $expectedGrantCount"
+    if ($grantsStage -or -not $AllowLaterStageResources) { Assert-Stg ($grants.Count -eq $expectedGrantCount) "found $($grants.Count) Azure role assignments on this deployment's resources; completed Stage 3 records $expectedGrantCount" }
     $cosmosRoles = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $sub, '--resource-group', $rg, '--account-name', $cosmos.name))
     $expectedCosmosRoles = if ($grantsStage) { @($grantsStage.verify.cosmos).Count } else { 0 }
-    Assert-Stg ($cosmosRoles.Count -eq $expectedCosmosRoles) "found $($cosmosRoles.Count) Cosmos data assignments; completed Stage 3 records $expectedCosmosRoles"
+    if ($grantsStage -or -not $AllowLaterStageResources) { Assert-Stg ($cosmosRoles.Count -eq $expectedCosmosRoles) "found $($cosmosRoles.Count) Cosmos data assignments; completed Stage 3 records $expectedCosmosRoles" }
     $v.cosmos = @{ name = $cosmos.name; publicNetworkAccess = $cosmos.publicNetworkAccess; localAuthDisabled = $cosmos.disableLocalAuth
         regions = @($cosmos.locations | Sort-Object { [int]$_.failoverPriority } | ForEach-Object { "$($_.locationName)$(if ($_.isZoneRedundant) { ' (zones)' })" })
         automaticFailover = [bool]$cosmos.enableAutomaticFailover; consistency = $cosmos.consistencyPolicy.defaultConsistencyLevel }
@@ -493,6 +502,8 @@ function Invoke-Stage6 {
 function Invoke-Stage2 {
     param($Cfg, [switch]$Apply)
     $s1 = Get-StgStage $Cfg 1
+    $listRoles = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount) | ForEach-Object { $_.id } | Sort-Object) }
+    $rolesBefore = if ($Apply) { & $listRoles } else { @() }
     $listContainers = { @(Invoke-StgAzJson @('cosmosdb', 'sql', 'container', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount, '--database-name', $Cfg.cosmos.databaseName)) }
     if (Get-StgChargebackHistory $Cfg) {
         # A first run has no database yet, so no container to compare.
@@ -513,9 +524,9 @@ function Invoke-Stage2 {
         if ($c.name -ceq 'chargebackDaily') { Assert-Stg (Test-StgChargebackTtl $Cfg $m[0].resource.defaultTtl) "container chargebackDaily defaultTtl $($m[0].resource.defaultTtl)" }
         $v += [ordered]@{ name = $c.name; partitionKey = $c.partitionKey }
     }
-    $docs = @(Invoke-StgAzJson @('cosmosdb', 'sql', 'role', 'assignment', 'list', '--subscription', $Cfg.subscriptionId, '--resource-group', $Cfg.resourceGroup, '--account-name', $s1.names.cosmosAccount))
-    # Before the grants stage this proves Stage 2 granted nothing; a rerun after Stage 3 finds its grants.
-    if (-not (Read-StgState $Cfg).stages['3']) { Assert-Stg ($docs.Count -eq 0) 'Stage 2 found data-role assignments before Stage 3' }
+    # Existing grants can outlive local state. Stage 2 must leave them unchanged, not require none.
+    $rolesAfter = & $listRoles
+    Assert-Stg (($rolesBefore -join '|') -ceq ($rolesAfter -join '|')) 'Stage 2 changed Cosmos data-role assignments'
     $null = Write-StgEvidence 'stage2.verify.json' $v
     return @{ databaseName = $out.databaseName; containers = $v }
 }

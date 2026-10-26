@@ -1,0 +1,3 @@
+PS /home/alex/repo> pwsh -File $run -Stage 8 -ConfigPath $cfg -Apply
+== stage 8 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-lab-rg; state $HOME/ccof-private/.staged-state
+stage 8 completed and verified in 339 s; outputs in $HOME/ccof-private/.staged-state\state.json
