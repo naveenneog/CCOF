@@ -738,6 +738,38 @@ try {
 } finally {
     ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph; ${function:Write-StgEvidence} = $quotaSaved.ev
 }
+# The Stage 4 preview names what the apply would change on each reused registration, and writes nothing (novice run 3:
+# the preview of three shared registrations printed only the generic plan, so the Entra owner could not tell that
+# the apply adds two SPA redirect URIs to a shared admin application).
+$s4Saved = @{ graph = ${function:Get-StgGraph}; send = ${function:Send-StgGraph}; stage = ${function:Get-StgStage} }
+try {
+    $gwApp = @{ id = 'og'; appId = 'gw-app'; displayName = 'Shared Gateway'; identifierUris = @('api://gw-app'); isFallbackPublicClient = $true
+        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-gw'; value = 'access_as_user'; isEnabled = $true })
+                 preAuthorizedApplications = @(@{ appId = 'gw-app'; delegatedPermissionIds = @('sc-gw') }, @{ appId = $script:AzureCliClientId; delegatedPermissionIds = @('sc-gw') }) }
+        publicClient = @{ redirectUris = @('http://localhost', 'ms-appx-web://microsoft.aad.brokerplugin/gw-app') } }
+    $resApp = @{ id = 'or'; appId = 'res-app'; displayName = 'Shared Resolver'; identifierUris = @(); api = @{ requestedAccessTokenVersion = 2 } }
+    $admApp = @{ id = 'oa'; appId = 'adm-app'; displayName = 'Shared Admin'; identifierUris = @('api://adm-app')
+        appRoles = @(@{ value = 'CCOF.Projects.Read' }, @{ value = 'CCOF.Projects.Write' })
+        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @(@{ id = 'sc-adm'; value = 'Projects.Manage'; isEnabled = $true })
+                 preAuthorizedApplications = @(@{ appId = 'adm-app'; delegatedPermissionIds = @('sc-adm') }) }
+        spa = @{ redirectUris = @('https://other-admin.azurewebsites.net/api/console') } }
+    $script:s4Apps = @{ 'gw-app' = $gwApp; 'res-app' = $resApp; 'adm-app' = $admApp }
+    function Get-StgGraph { param([string]$Path)
+        if ($Path -like 'me*') { return @{ id = 'me' } }
+        if ($Path -match "appId eq '([^']+)'") { return @{ value = @($script:s4Apps[$Matches[1]]) } }
+        throw "unexpected Graph read in the Stage 4 preview test: $Path" }
+    function Send-StgGraph { param([string]$Method, [string]$Path, $Body) throw "the Stage 4 preview wrote to Graph: $Method $Path" }
+    function Get-StgStage { param($Cfg, $Stage) @{ names = @{ apps = @{ admin = @{ functionApp = 'lab-admin' } } } } }
+    $s4Cfg = @{ stage1 = @{ includeAdmin = $true }; groups = @(); admin = @{ extraAllowedClientIds = @($script:AzureCliClientId) }
+        entra = @{ allowAzureCliClient = $true; existing = @{ gatewayAppId = 'gw-app'; resolverAppId = 'res-app'; adminAppId = 'adm-app' } } }
+    $s4Out = (Invoke-Stage4 $s4Cfg 6>&1 | Out-String)
+    Assert-Contract ($s4Out -match "gateway application 'Shared Gateway'[^\r\n]*: no change") "The Stage 4 preview must say a fully configured reused gateway app is not changed (got: $s4Out)."
+    Assert-Contract ($s4Out -match "resolver application 'Shared Resolver'[^\r\n]*: add identifier URI api://res-app") "The Stage 4 preview must name a missing identifier URI (got: $s4Out)."
+    Assert-Contract ($s4Out -match "admin application 'Shared Admin'[^\r\n]*add SPA redirect https://lab-admin\.azurewebsites\.net/api/console[;,]" -and $s4Out -match 'add SPA redirect https://lab-admin\.azurewebsites\.net/api/console-v3' -and $s4Out -match "preauthorize $([regex]::Escape($script:AzureCliClientId)) for Projects\.Manage") "The Stage 4 preview must name the redirects and preauthorizations the apply adds to a reused admin app (got: $s4Out)."
+    $gwApp.api.preAuthorizedApplications = @($gwApp.api.preAuthorizedApplications[0])
+    $s4Out = (Invoke-Stage4 $s4Cfg 6>&1 | Out-String)
+    Assert-Contract ($s4Out -match "gateway application 'Shared Gateway'[^\r\n]*: preauthorize $([regex]::Escape($script:AzureCliClientId)) for access_as_user") "The Stage 4 preview must name a missing Azure CLI preauthorization (got: $s4Out)."
+} finally { ${function:Get-StgGraph} = $s4Saved.graph; ${function:Send-StgGraph} = $s4Saved.send; ${function:Get-StgStage} = $s4Saved.stage }
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
 # Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.
