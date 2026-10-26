@@ -752,6 +752,13 @@ try {
     $recordedHash = $previewState.stages['5'].configHash
     $currentHash = Get-StgStageInput $changedCfg 5
     Assert-Contract ($script:previewWhatIfCalls -eq 1 -and $preview.Contains($recordedHash) -and $preview.Contains($currentHash) -and $preview.Contains('apply Stage 5')) 'A changed Stage 5 input must show recorded/current hashes, run what-if and name the next apply.'
+    $changedStage2Cfg = $previewCfg.Clone()
+    $changedStage2Cfg.cosmos = @{ databaseName = 'ccof-new'; capacityMode = 'serverless' }
+    $script:previewWhatIfCalls = 0
+    $preview = Invoke-StgBicep -Cfg $changedStage2Cfg -Template 'unused.bicep' -Name 'stage2-schema' -StageNumber 2 -Parameters @{} *>&1 | Out-String
+    $recordedHash = $previewState.stages['2'].configHash
+    $currentHash = Get-StgStageInput $changedStage2Cfg 2
+    Assert-Contract ($script:previewWhatIfCalls -eq 1 -and $preview.Contains($recordedHash) -and $preview.Contains($currentHash) -and $preview.Contains('apply Stage 2')) 'A changed Stage 2 input must show recorded/current hashes, run what-if and name the next apply.'
 } finally {
     ${function:Read-StgState} = $savedReadState
     ${function:Invoke-QsAz} = $savedQsAzForPreview
