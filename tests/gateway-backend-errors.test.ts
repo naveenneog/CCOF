@@ -50,6 +50,12 @@ test("non-Anthropic backend errors are wrapped; valid Anthropic errors stay inta
 test("only failed backend responses enter the body-reading branch; status and Retry-After are preserved", () => {
   const when = all.find((e) => e.name === "when" && attr(e, "condition") === "@(context.Response.StatusCode >= 400)");
   assert.ok(when, "successful SSE responses must not enter an error-body policy");
+  const guard = attr(when, "condition")!;
+  assert.deepEqual(runExpressions({ ErrorBranch: guard }, [
+    { label: "successful SSE", method: "ErrorBranch", status: 200, vars: { ccofStream: true }, expected: false },
+    { label: "throttle on streamed request", method: "ErrorBranch", status: 429, vars: { ccofStream: true }, expected: true },
+    { label: "finite backend error", method: "ErrorBranch", status: 400, expected: true },
+  ]), [false, true, true]);
   const branch = descendants(when);
   const read = branch.find((e) => e.name === "set-variable" && attr(e, "name") === "ccofBackendErrorJson");
   assert.ok(read);

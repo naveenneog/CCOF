@@ -39,7 +39,6 @@ try {
         if ($_.Exception.Message -notmatch 'missing.json' -or $_.Exception.Message -notmatch '-ConfigPath') {
             throw "Missing configuration must name its path and -ConfigPath: $($_.Exception.Message)"
         }
-        exit 0
     }
     Write-Host 'PASS: downloaded configuration is imported and missing configuration names its remedy'
 } finally {
@@ -48,3 +47,4 @@ try {
     $env:XDG_CONFIG_HOME = $previousXdg
     if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 }
+exit 0
