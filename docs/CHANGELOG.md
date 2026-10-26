@@ -7,6 +7,9 @@
   stayed for hours. A pacing refusal says it is the budget guard, not the tokens-per-minute limit, and its
   `Retry-After` is at most the time to the month's end. A refusal from projected spend says it can clear within
   minutes. Budget and limit messages name the group, not a "CCU budget for project".
+- Variants of `/v1/messages` (trailing slash, `.`, `//`, upper case) are answered 404 by the gateway, before the token
+  check, instead of being forwarded and counted. A body that is not `application/json` is answered `415`, one above
+  32 MB `413 request_too_large`, both from the headers before the body is read ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)).
 
 ## 2026-10-26 — Long-term audit (feature branch)
 

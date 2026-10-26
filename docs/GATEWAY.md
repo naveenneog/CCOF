@@ -102,6 +102,17 @@ handling in Azure API Management policies"; `docs/status/WP-GW.md` AC16). Claude
 at startup, `HEAD /api/hello`, and ignores the answer. Revision 8 answers these requests 500; the 404 comes
 with revision 9.
 
+API Management also matches variants of the path to the operation: `/v1/messages/`, `/v1/messages/.`,
+`/v1/messages//`, `/V1/Messages`. The policy's first step answers these 404 `not_found_error` too, before the token
+check, so nothing is forwarded or counted ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)). Only
+non-empty path segments ending exactly in `/v1/messages` are served.
+
+**Request size.** After the token and admission checks, and before the body is read, a request whose `Content-Type`
+is not `application/json` is answered `415`, and one whose `Content-Length` is above 32 MB (33,554,432 bytes)
+`413 request_too_large`. 32 MB is the Messages API limit ([Claude API errors](https://platform.claude.com/docs/en/api/errors),
+"Request size limits"); Foundry enforces the same limit with its own `413`. A request without `Content-Length` is
+checked by Foundry only.
+
 ## Backends
 
 Two deployment shapes share the same policy (owner, 2026-10-11): **(A)** the core in the Foundry tenant,
@@ -143,7 +154,9 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 | Model not in the person's allow-list (the message lists the allowed models) | 403 | `permission_error` |
 | Group request from a client application whose surface the group does not allow, or that `entra.surfaceClients` does not map (only when the list is non-empty) | 403 | `permission_error` |
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
-| A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500) | 404 | `not_found_error` |
+| `Content-Type` other than `application/json` | 415 | `invalid_request_error` |
+| `Content-Length` above 32 MB | 413 | `request_too_large` |
+| A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500), or a variant of `/v1/messages` such as a trailing slash | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group token quota used up (the message names which, and when it resets) | 403 | `permission_error` |

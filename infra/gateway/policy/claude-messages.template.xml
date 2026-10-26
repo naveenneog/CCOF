@@ -5,14 +5,33 @@
   revision with infra/gateway/Deploy-GatewayRevision.ps1.
   Design: docs/adr/0017-gateway-policy-entitlement-and-limits.md. Operator guide: docs/GATEWAY.md.
 
-  Inbound runs in stages. Each stage after authentication runs only while ccofRefusal is empty; every
-  refusal leaves through the single exit at the end of inbound, in Anthropic's error shape. Errors a
+  Inbound runs in stages. A path the API does not serve is answered 404 first (step 0). Each stage after
+  authentication runs only while ccofRefusal is empty; every refusal leaves through the single exit at the end of
+  inbound, in Anthropic's error shape. Errors a
   policy raises (token validation, admission and token limits, backend credential, forwarding), and a
   request that matches no operation of the API (404), are answered in on-error, in the same shape.
 -->
 <policies>
   <inbound>
     <base />
+    <!-- 0. The path (ADR-0048): API Management matches /v1/messages/, /v1/messages/. and /V1/Messages to the
+         operation too. Only non-empty segments ending exactly in /v1/messages are served; anything else is
+         answered as an unmatched operation, before the token check, with nothing forwarded or counted. -->
+    <set-variable name="ccofPathServed" value="@(System.Text.RegularExpressions.Regex.IsMatch(context.Request.OriginalUrl.Path ?? "", "^(/(?!\\.\\.?(/|$))[^/]+)+/v1/messages\\z"))" />
+    <choose>
+      <when condition="@(!(bool)context.Variables["ccofPathServed"])">
+        <return-response>
+          <set-status code="404" reason="Not Found" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-header name="x-ccof-request-id" exists-action="override">
+            <value>@(context.RequestId.ToString())</value>
+          </set-header>
+          <set-body>@(new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(new JProperty("type", "not_found_error"), new JProperty("message", "This gateway does not serve the requested path or method. Check the endpoint path. Request id: " + context.RequestId.ToString() + ".")))).ToString(Newtonsoft.Json.Formatting.None))</set-body>
+        </return-response>
+      </when>
+    </choose>
     <!-- 1. Authentication: a Microsoft Entra access token for this gateway's API, issued by the
          configured tenant (v1 or v2 issuer), with that tenant in tid. -->
     <validate-jwt id="ccof-jwt" header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" output-token-variable-name="ccofJwt">
@@ -73,7 +92,21 @@
     <!-- 4. The request: the optional project selector (C-1) and the body's model and stream fields.
          The body stays readable for forwarding (preserveContent). -->
     <set-variable name="ccofSelector" value="@(context.Request.Headers.GetValueOrDefault("%%PROJECT_HEADER%%", ""))" />
+    <!-- Content type and size from the headers, before the body is read (ADR-0048): a body that is not JSON, or is
+         larger than the Messages API's 32 MB, is refused without parsing it. -->
+    <set-variable name="ccofRequestRefusal" value="@{
+        var media = context.Request.Headers.GetValueOrDefault("Content-Type", "").Split(';')[0].Trim();
+        if (!string.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)) { return "request_content_type"; }
+        long length;
+        return long.TryParse(context.Request.Headers.GetValueOrDefault("Content-Length", ""), out length) && length > 33554432 ? "request_too_large" : "";
+    }" />
+    <choose>
+      <when condition="@((string)context.Variables["ccofRefusal"] == "" && (string)context.Variables["ccofRequestRefusal"] != "")">
+        <set-variable name="ccofRefusal" value="@((string)context.Variables["ccofRequestRefusal"])" />
+      </when>
+    </choose>
     <set-variable name="ccofRequestFacts" value="@{
+        if ((string)context.Variables["ccofRefusal"] != "") { return ""; }
         try {
             var body = context.Request.Body.As<JObject>(preserveContent: true);
             var model = body["model"];
@@ -709,6 +742,8 @@
                 case "token_scope_missing": case "token_client_not_allowed": case "app_token_not_allowed": case "not_authorized": case "model_family_not_allowed": case "surface_not_allowed": return 403;
                 case "budget_exhausted": case "budget_projected": case "aggregate_budget_exhausted": return 403;
                 case "project_header_invalid": case "request_body_invalid": case "request_model_missing": case "project_selection_required": return 400;
+                case "request_content_type": return 415;
+                case "request_too_large": return 413;
                 default: return 503;
             }
         }" />
@@ -741,6 +776,14 @@
                 case "project_header_invalid":
                     type = "invalid_request_error";
                     message = "The %%PROJECT_HEADER%% header must be a project id: a letter or digit followed by up to 79 letters, digits, '_' or '-'.";
+                    break;
+                case "request_content_type":
+                    type = "invalid_request_error";
+                    message = "The request body must be JSON, sent with the header Content-Type: application/json.";
+                    break;
+                case "request_too_large":
+                    type = "request_too_large";
+                    message = "The request body is larger than 32 MB, the Messages API limit. Send less content, for example fewer or smaller images or documents.";
                     break;
                 case "request_body_invalid":
                     type = "invalid_request_error";
@@ -829,6 +872,8 @@
                       case 400: return "Bad Request";
                       case 401: return "Unauthorized";
                       case 403: return "Forbidden";
+                      case 413: return "Content Too Large";
+                      case 415: return "Unsupported Media Type";
                       default: return "Service Unavailable";
                   }
               }" />
