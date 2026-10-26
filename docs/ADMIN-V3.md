@@ -176,9 +176,9 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/plan` | In-force models by family, geography multipliers, rate card version and source |
 | `POST /api/v3/plan` | Budget assistant: `monthlyBudget {amount, currency USD/CCU}`, `members`, `geography`, `sizing`, `mix`, `families[{family, model?, budgetPercent}]`, working days/hours, burst. Pure; no writes. 422 with `detail` on invalid input. |
 | `POST /api/v3/rate-card/review` | Validates a candidate rate card with the reconciler's parser and the history rules (version must change, recorded entries unchanged, new or closed entries not in the past) and returns added/closed/unchanged. Saving stays `PUT /api/v2/catalog` with If-Match. |
-| `GET /api/v3/version`, `/capabilities` | `3.2.0`; which features are configured (including `changeLog`, `removalLimits`) and the caller's role |
+| `GET /api/v3/version`, `/capabilities` | The admin version (`3.4.0`, from [version.ts](../admin/src/version.ts)); which features are configured (including `changeLog`, `removalLimits`) and the caller's role |
 
-`/api/v2/version` and `/api/health` report 3.2.0. `/api/v2/projects` accepts `tags` (comma-separated, all
+`/api/v2/version` and `/api/health` report 3.4.0. `/api/v2/projects` accepts `tags` (comma-separated, all
 must match, up to 10) and `classification`.
 
 ## Upgrade from the VDI
