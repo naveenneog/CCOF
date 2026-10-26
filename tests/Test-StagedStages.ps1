@@ -693,6 +693,51 @@ $usageText = '<policies><!-- No <base />. --><inbound><rate-limit-by-key counter
 Assert-Contract (Test-StgUsagePolicyDeployed $usageText) 'A usage policy whose comments mention <base /> is the rendered one.'
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace '<inbound>', '<inbound><base />'))) 'A usage policy with a real <base /> inherits the API policy and must be refused.'
 Assert-Contract (-not (Test-StgUsagePolicyDeployed ($usageText -replace 'ccof-usage-person', 'other'))) 'A usage policy without its per-person limit must be refused.'
+# Stage 0 refuses planned Foundry deployments that exceed the free model quota (novice run 3, 2026-10-26: Stage 0
+# passed with 7 of 27 DataZoneStandard units free for a capacity of 20; soft-deleted accounts of deleted labs held them).
+$quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence} }
+try {
+    $script:quotaUsages = @()
+    function Invoke-StgAzJson { param([string[]]$Arguments)
+        $a = $Arguments -join ' '
+        if ($a -like 'account show*') { return @{ id = 's'; name = 'sub'; tenantId = 't'; user = @{ name = 'u' } } }
+        if ($a -like 'provider show*') { return @{ registrationState = 'Registered' } }
+        if ($a -like 'functionapp list-flexconsumption-locations*') { return @(@{ name = 'East US 2' }) }
+        if ($a -like 'cognitiveservices model list*') { return @(
+            @{ model = @{ format = 'Anthropic'; name = 'claude-haiku-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }, @{ name = 'GlobalStandard' }) } },
+            @{ model = @{ format = 'Anthropic'; name = 'claude-sonnet-5-5'; version = '2'; skus = @(@{ name = 'DataZoneStandard' }) } }) }
+        if ($a -like 'cognitiveservices usage list*') { return $script:quotaUsages }
+        throw "unexpected az call in the Stage 0 quota test: $a" }
+    function Invoke-QsAz { param([string[]]$Arguments) 'false' }
+    function Get-StgGraph { param([string]$Path) @{ id = 'o'; userPrincipalName = 'u' } }
+    function Write-StgEvidence { param([string]$Name, $Value) '' }
+    function New-QuotaCfg([object[]]$Deployments) {
+        $geo = [ordered]@{}; foreach ($d in $Deployments) { $geo[$d.name] = 'us' }
+        @{ tenantId = 't'; subscriptionId = 's'; resourceGroup = 'rg'; location = 'eastus2'; groups = @()
+           stage1 = @{ foundry = @{ create = $true; accountName = 'acct'; deployments = $Deployments } }
+           backends = @(@{ id = 'b'; accountName = 'acct'; deploymentInferenceGeo = $geo }) } }
+    function New-QuotaLine([string]$Name, [double]$Used, [double]$Limit) { @{ name = @{ value = $Name }; currentValue = $Used; limit = $Limit } }
+    $haiku = @{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 20 }
+    $sonnet = @{ name = 'claude-sonnet-5-5'; model = 'claude-sonnet-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 20 }
+    $script:quotaUsages = @((New-QuotaLine 'AIServices.DataZoneStandard.claude-haiku-5-5.Azure' 20 27), (New-QuotaLine 'AIServices.DataZoneStandard.claude-sonnet-5-5.Azure' 20 80))
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($haiku, $sonnet)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'quota' -and $message -match 'claude-haiku-5-5' -and $message -match 'needs 20' -and $message -match '7 free' -and $message -match 'list-deleted' -and $message -notmatch 'claude-sonnet-5-5') "Stage 0 must refuse a deployment above the free quota, naming it, the free units and soft-deleted accounts (got: $message)."
+    $okReport = Invoke-Stage0 (New-QuotaCfg @($sonnet)) 6>$null
+    Assert-Contract ($okReport.backends.Count -eq 1) 'Stage 0 must pass a deployment within the free quota.'
+    $half = @{ name = 'haiku-a'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 5 }
+    $otherHalf = @{ name = 'haiku-b'; model = 'claude-haiku-5-5'; version = '2'; sku = 'DataZoneStandard'; capacity = 5 }
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($half, $otherHalf)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'needs 10' -and $message -match '7 free') "Stage 0 must add deployments that share one quota line (got: $message)."
+    $global = @{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; capacity = 20 }
+    $script:quotaUsages = @((New-QuotaLine 'AIServices.GlobalStandard.claude-haiku-5-5.Azure' 70 80))
+    $message = ''; try { $null = Invoke-Stage0 (New-QuotaCfg @($global)) 6>$null } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'AIServices\.GlobalStandard\.claude-haiku-5-5\.Azure' -and $message -match '10 free') "A deployment without sku uses the GlobalStandard quota line (got: $message)."
+    $script:quotaUsages = @()
+    $noLine = Invoke-Stage0 (New-QuotaCfg @($haiku)) 6>$null
+    Assert-Contract ($noLine.backends.Count -eq 1) 'A missing quota line is not a refusal (the model list already confirmed the offer).'
+} finally {
+    ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph; ${function:Write-StgEvidence} = $quotaSaved.ev
+}
 $s1Params = @($s1.parameters.Keys)
 foreach ($k in $c.stage1.Keys) { Assert-Contract ($s1Params -contains $k) "Example stage1.$k is not a Stage 1 template parameter." }
 # Stage 5 now writes AzureWebJobs.snapshotApply.Disabled itself; the Stage 1 recheck must not expect it twice.

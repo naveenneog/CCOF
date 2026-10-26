@@ -62,7 +62,9 @@ in `stage1.foundry.deployments` and one in `backends[].deploymentInferenceGeo`:
 
 `us` (DataZone) usage is priced at 1.1 times `global` in [config/rate-card.json](../../config/rate-card.json).
 
-The `version` comes from the model list; Stage 0 refuses a model, version or `sku` the region does not offer:
+The `version` comes from the model list; Stage 0 refuses a model, version or `sku` the region does not offer, and a
+`capacity` above the free quota (deployments on the same quota line add up). A deleted Foundry account keeps its quota
+until it is purged (`az cognitiveservices account list-deleted`, then `az cognitiveservices account purge`):
 
 ```powershell
 az cognitiveservices model list -l eastus2 -o json | ConvertFrom-Json |
