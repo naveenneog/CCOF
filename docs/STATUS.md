@@ -1,5 +1,13 @@
 # Current work
 
+## Bug bash 5 client packet (2026-10-27)
+
+**Active packet:** G-BB5-CLIENT — DG-1–DG-8 and AO-6/7, branch `fix/r18-client`.
+Acceptance: downloaded config can be deleted after setup; setup errors name the path and option;
+gateway refuses missing lengths and normalizes backend errors; usage states pacing accurately;
+budget-key semantics are explicit; sign-in probes are quiet; admin names are visible and safe.
+No live changes. [ADR-0050](adr/0050-import-client-configuration.md).
+
 ## Release 17 (2026-10-26)
 
 **Active packet:** G-R17 — integrate the bug-bash fixes, the macOS deployer and developer setup, and deployment into an

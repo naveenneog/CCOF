@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 Assert-ClientWindows -Script 'Set-ClaudeDesktopGateway.ps1'
 Assert-ClientConfirmation -Confirmed:$Confirmed
 if (-not $ConfigPath) { $ConfigPath = Get-ClientDefaultConfigPath }
+$ConfigPath = Install-ClientConfiguration $ConfigPath
 if (-not $BackupRoot) { $BackupRoot = Join-Path (Split-Path $ConfigPath -Parent) 'backups' }
 $inventory = Get-CcofClientInventory
 if (-not $inventory.DesktopVersion) {

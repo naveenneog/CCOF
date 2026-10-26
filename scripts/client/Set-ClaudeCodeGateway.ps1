@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ClientInventory.ps1')
 Assert-ClientConfirmation -Confirmed:$Confirmed
 if (-not $ConfigPath) { $ConfigPath = Get-ClientDefaultConfigPath }
+$ConfigPath = Install-ClientConfiguration $ConfigPath
 if (-not $BackupRoot) { $BackupRoot = Join-Path (Split-Path $ConfigPath -Parent) 'backups' }
 # VS Code user settings per platform (code.visualstudio.com/docs/configure/settings#_settings-file-locations).
 $vscodeSettings = if ($IsWindows) { Join-Path $env:APPDATA 'Code\User\settings.json' }

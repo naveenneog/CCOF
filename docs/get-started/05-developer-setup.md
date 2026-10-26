@@ -44,6 +44,8 @@ pwsh -NoProfile -File ./scripts/client/Set-ClaudeCodeGateway.ps1 -Confirmed
 
 Add `-UsageStatusLine` to show the budget continuously in Claude Code's status line.
 
+Setup copies the supplied JSON into the [per-user configuration folder](../CLIENTS.md#macos-and-linux) (`%LOCALAPPDATA%\ClaudeGateway` on Windows); helpers, sign-in cache and default backups use that copy, so the download can be deleted.
+
 **Expected:** one JSON line with `"event":"configured"`, `"usageSkill":true`, `"statusLine":"set"` (with
 `-UsageStatusLine`), a `changeId`, the configuration's `"signInMethod"` and `"signIn"`, the sign-in command for
 step 2, and `"models"`: the deployment each Claude Code model alias runs. The previous settings are backed up under that `changeId`; to undo, see

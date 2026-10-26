@@ -54,8 +54,8 @@ function Write-ClientJson {
 
 function Get-ClientDefaultConfigPath {
     <# Off Windows: $XDG_CONFIG_HOME/ClaudeGateway (when absolute), else ~/.config/ClaudeGateway (ADR-0048, XDG Base Directory). #>
-    param([bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME)
-    if ($env:CCOF_CONFIG_FILE) { return $env:CCOF_CONFIG_FILE }
+    param([bool]$OnWindows = $IsWindows, [string]$HomePath = $HOME, [switch]$IgnoreEnvironment)
+    if (-not $IgnoreEnvironment -and $env:CCOF_CONFIG_FILE) { return $env:CCOF_CONFIG_FILE }
     if (-not $OnWindows) {
         $base = if ($env:XDG_CONFIG_HOME -and [IO.Path]::IsPathFullyQualified($env:XDG_CONFIG_HOME)) { $env:XDG_CONFIG_HOME } else { Join-Path $HomePath '.config' }
         return Join-Path $base 'ClaudeGateway/config.json'
@@ -71,9 +71,19 @@ function Read-ClientConfiguration {
     if (-not $node) { throw 'Node.js is missing. Ask the coordinator before installing it.' }
     $value = & $node.Source (Join-Path $script:ClientRepoRoot 'client\bin\validate-config.mjs') $Path 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $value) {
-        throw 'Client configuration is missing or invalid. Review docs/CLIENTS.md and the administrator answers.'
+        throw "Client configuration is missing or invalid at '$Path'. Supply the administrator-provided file with -ConfigPath '<absolute path to client-config.json>'. Review docs/CLIENTS.md."
     }
     return ($value | ConvertFrom-Json -AsHashtable)
+}
+
+function Install-ClientConfiguration {
+    param([Parameter(Mandatory)][string]$Path)
+    $null = Read-ClientConfiguration $Path
+    $destination = Get-ClientDefaultConfigPath -IgnoreEnvironment
+    if (-not [string]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetFullPath($destination), $(if ($IsWindows) { 'OrdinalIgnoreCase' } else { 'Ordinal' }))) {
+        Write-ClientText $destination ([IO.File]::ReadAllText($Path))
+    }
+    return $destination
 }
 
 function Assert-ClientConfirmation {

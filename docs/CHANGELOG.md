@@ -1,5 +1,10 @@
 # Change log
 
+## Bug bash 5 client fixes (2026-10-27)
+
+- DG-1/2: setup imports the downloaded configuration into the per-user configuration folder;
+  a missing or invalid configuration names the file and `-ConfigPath`.
+
 ## 2026-10-26 — Release 17
 
 - Deployment into an existing API Management, the deployer and Claude Code setup on macOS and Linux, and the bug-bash
