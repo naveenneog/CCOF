@@ -132,6 +132,8 @@
                 if ((string)mode == "budget-state") {
                     if (ceiling.Type != JTokenType.Integer || (long)ceiling < 1 || (long)ceiling > int.MaxValue) { return false; }
                 } else if ((string)mode != "token-limits-only" || ceiling.Type != JTokenType.Null) { return false; }
+                var ceilingKey = body["personCeilingKey"];
+                if (ceilingKey != null && ((string)mode != "budget-state" || ceilingKey.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)ceilingKey, "^[0-9]{4}-(0[1-9]|1[0-2])_[0-9]{1,20}(\\.[0-9]{1,12})?\\z"))) { return false; }
                 var idPattern = "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}\\z";
                 foreach (var field in new string[] { "projectId", "classification", "backendId" }) {
                     var value = body[field];
@@ -224,7 +226,7 @@
       <when condition="@((string)context.Variables["ccofCacheState"] == "fresh-refusal")">
         <set-variable name="ccofRefusal" value="@{
             var code = (string)JObject.Parse((string)context.Variables["ccofCached"])["c"];
-            return code == "project_selection_required" || code == "budget_state_unavailable" || code == "budget_exhausted" || code == "aggregate_budget_exhausted" ? code : "not_authorized";
+            return code == "project_selection_required" || code == "budget_state_unavailable" || code == "budget_exhausted" || code == "budget_projected" || code == "aggregate_budget_exhausted" ? code : "not_authorized";
         }" />
         <set-variable name="ccofProjectId" value="@((string)JObject.Parse((string)context.Variables["ccofCached"])["rp"] ?? "")" />
         <set-variable name="ccofClassification" value="@((string)JObject.Parse((string)context.Variables["ccofCached"])["rc"] ?? "")" />
@@ -312,9 +314,11 @@
                 if ((string)budgetMode == "budget-state") {
                     if (ceiling.Type != JTokenType.Integer || (long)ceiling < 0 || (long)ceiling > int.MaxValue) { return unavailable; }
                     if ((long)ceiling == 0) {
-                        return new JObject(new JProperty("o", "refuse"), new JProperty("r", "refused"), new JProperty("c", "budget_exhausted"), new JProperty("b", budget), new JProperty("rp", refusedProject), new JProperty("rc", refusedClassification)).ToString(Newtonsoft.Json.Formatting.None);
+                        return new JObject(new JProperty("o", "refuse"), new JProperty("r", "refused"), new JProperty("c", "budget_projected"), new JProperty("b", budget), new JProperty("rp", refusedProject), new JProperty("rc", refusedClassification)).ToString(Newtonsoft.Json.Formatting.None);
                     }
                 } else if ((string)budgetMode != "token-limits-only" || ceiling.Type != JTokenType.Null) { return unavailable; }
+                var ceilingKey = body["personCeilingKey"];
+                if (ceilingKey != null && ((string)budgetMode != "budget-state" || ceilingKey.Type != JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)ceilingKey, "^[0-9]{4}-(0[1-9]|1[0-2])_[0-9]{1,20}(\\.[0-9]{1,12})?\\z"))) { return unavailable; }
                 var decision = new JObject();
                 foreach (var field in new string[] { "projectId", "classification", "backendId" }) {
                     var value = body[field];
@@ -371,6 +375,7 @@
                 decision["decisionVersion"] = 3;
                 decision["budgetEnforcement"] = (string)budgetMode;
                 decision["personCeilingTokensPerMinute"] = ceiling;
+                if (ceilingKey != null) { decision["personCeilingKey"] = (string)ceilingKey; }
                 decision["classificationGroupId"] = ((string)groupId).ToLowerInvariant();
                 decision["familyPolicy"] = familyPolicy;
                 var approval = body["restrictedFamiliesApproved"];
@@ -487,11 +492,19 @@
         }" />
         <set-variable name="ccofBackendId" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["backendId"])" />
         <set-variable name="ccofFamilyPolicy" value="@(JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"].ToString(Newtonsoft.Json.Formatting.None))" />
-        <set-variable name="ccofPersonTpm" value="@{
-            var decision = JObject.Parse((string)context.Variables["ccofDecision"]);
-            var configured = (int?)decision["familyPolicy"]["aggregateLimits"]["person"]["tokensPerMinute"] ?? 0;
-            var ceiling = (int?)decision["personCeilingTokensPerMinute"];
-            return ceiling.HasValue ? (configured > 0 ? Math.Min(configured, ceiling.Value) : ceiling.Value) : configured;
+        <!-- The configured person limit, and apart from it the monetary ceiling's pacing counter (ADR-0047). -->
+        <set-variable name="ccofPersonTpm" value="@((int?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokensPerMinute"] ?? 0)" />
+        <set-variable name="ccofPersonCeilingTpm" value="@((int?)JObject.Parse((string)context.Variables["ccofDecision"])["personCeilingTokensPerMinute"] ?? 0)" />
+        <set-variable name="ccofPersonCeilingKey" value="@{
+            var key = JObject.Parse((string)context.Variables["ccofDecision"])["personCeilingKey"];
+            return key != null && key.Type == JTokenType.String ? (string)key : "-";
+        }" />
+        <set-variable name="ccofPersonCeilingResetSeconds" value="@{
+            var match = System.Text.RegularExpressions.Regex.Match((string)context.Variables["ccofPersonCeilingKey"], "^([0-9]{4})-(0[1-9]|1[0-2])_");
+            if (!match.Success) { return 0L; }
+            var end = new DateTime(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+            var left = (long)Math.Ceiling((end - DateTime.UtcNow).TotalSeconds);
+            return (left < 1 ? 1L : left) + %%ALLOW_TTL%%;
         }" />
         <set-variable name="ccofPersonQuota" value="@((long?)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokenQuota"] ?? 0L)" />
         <set-variable name="ccofPersonPeriod" value="@((string)JObject.Parse((string)context.Variables["ccofDecision"])["familyPolicy"]["aggregateLimits"]["person"]["tokenQuotaPeriod"] ?? "")" />
@@ -595,6 +608,17 @@
             <llm-token-limit id="ccof-limit-person-quota" counter-key="@("p:" + (string)context.Variables["ccofProjectId"] + ":" + (string)context.Variables["ccofOid"])" token-quota="@((long)context.Variables["ccofPersonQuota"])" token-quota-period="@((string)context.Variables["ccofPersonPeriod"])" estimate-prompt-tokens="%%ESTIMATE_PROMPT_TOKENS%%" retry-after-variable-name="ccofRetryAfter" remaining-quota-tokens-header-name="%%H_PERSON_QUOTA%%" tokens-consumed-header-name="%%H_TOKENS_CONSUMED%%" />
           </when>
         </choose>
+        <!-- Budget pacing (ADR-0047): the monetary ceiling on its own counter, keyed by the budget period and
+             amount, so a raised budget or a new month starts a new counter. It reports tokens consumed only
+             when no configured person limit does. -->
+        <choose>
+          <when condition="@((int)context.Variables["ccofPersonCeilingTpm"] > 0 && (int)context.Variables["ccofPersonTpm"] == 0 && (long)context.Variables["ccofPersonQuota"] == 0)">
+            <llm-token-limit id="ccof-limit-budget-person-consumed" counter-key="@("pb:" + (string)context.Variables["ccofProjectId"] + ":" + (string)context.Variables["ccofOid"] + ":" + (string)context.Variables["ccofPersonCeilingKey"])" tokens-per-minute="@((int)context.Variables["ccofPersonCeilingTpm"])" estimate-prompt-tokens="%%ESTIMATE_PROMPT_TOKENS%%" retry-after-variable-name="ccofRetryAfter" tokens-consumed-header-name="%%H_TOKENS_CONSUMED%%" />
+          </when>
+          <when condition="@((int)context.Variables["ccofPersonCeilingTpm"] > 0)">
+            <llm-token-limit id="ccof-limit-budget-person" counter-key="@("pb:" + (string)context.Variables["ccofProjectId"] + ":" + (string)context.Variables["ccofOid"] + ":" + (string)context.Variables["ccofPersonCeilingKey"])" tokens-per-minute="@((int)context.Variables["ccofPersonCeilingTpm"])" estimate-prompt-tokens="%%ESTIMATE_PROMPT_TOKENS%%" retry-after-variable-name="ccofRetryAfter" />
+          </when>
+        </choose>
         <choose>
           <when condition="@((int)context.Variables["ccofFamilyGroupTpm"] > 0 && (long)context.Variables["ccofFamilyGroupQuota"] > 0)">
             <llm-token-limit id="ccof-limit-family-group-rate-quota" counter-key="@("gf:" + (string)context.Variables["ccofProjectId"] + ":" + (string)context.Variables["ccofClassificationGroupId"] + ":" + (string)context.Variables["ccofModelFamily"])" tokens-per-minute="@((int)context.Variables["ccofFamilyGroupTpm"])" token-quota="@((long)context.Variables["ccofFamilyGroupQuota"])" token-quota-period="@((string)context.Variables["ccofFamilyGroupPeriod"])" estimate-prompt-tokens="%%ESTIMATE_PROMPT_TOKENS%%" retry-after-variable-name="ccofRetryAfter" />
@@ -683,7 +707,7 @@
             switch ((string)context.Variables["ccofRefusal"]) {
                 case "token_identity_missing": return 401;
                 case "token_scope_missing": case "token_client_not_allowed": case "app_token_not_allowed": case "not_authorized": case "model_family_not_allowed": case "surface_not_allowed": return 403;
-                case "budget_exhausted": case "aggregate_budget_exhausted": return 403;
+                case "budget_exhausted": case "budget_projected": case "aggregate_budget_exhausted": return 403;
                 case "project_header_invalid": case "request_body_invalid": case "request_model_missing": case "project_selection_required": return 400;
                 default: return 503;
             }
@@ -694,6 +718,7 @@
             var classification = context.Variables.GetValueOrDefault<string>("ccofClassification", "");
             var selector = (string)context.Variables["ccofSelector"];
             var model = (string)context.Variables["ccofModel"];
+            var scope = classification == "group" ? "group " + project : (project == "" ? "" : "project " + project);
             string type;
             string message;
             switch (code) {
@@ -735,11 +760,15 @@
                     break;
                 case "budget_exhausted":
                     type = "permission_error";
-                    message = "Your CCU budget" + (project == "" ? "" : " for project " + project) + " is used up for this budget period. Your access is otherwise unchanged; ask your platform team to raise the budget, or wait for the next period.";
+                    message = "Your Claude budget" + (scope == "" ? "" : " in " + scope) + " is used up for this month. Your access is otherwise unchanged; ask your platform team to raise the budget, or wait for the next month (UTC).";
+                    break;
+                case "budget_projected":
+                    type = "permission_error";
+                    message = "Your recent spending" + (scope == "" ? "" : " in " + scope) + " has reached your Claude budget, counting requests not yet recorded. New requests are refused until recorded spend catches up (usually within a few minutes), the budget is raised, or the next month (UTC) starts.";
                     break;
                 case "aggregate_budget_exhausted":
                     type = "permission_error";
-                    message = "The CCU budget shared by classification " + (classification == "" ? "of your group" : classification) + (project == "" ? "" : " in project " + project) + " is used up for this budget period. Your own access is unchanged; ask your platform team to raise the budget, or wait for the next period.";
+                    message = (classification == "group" ? "The Claude budget shared by group " + project : "The Claude budget shared by classification " + (classification == "" ? "of your group" : classification) + (project == "" ? "" : " in project " + project)) + " is used up for this month. Your own access is unchanged; ask your platform team to raise the budget, or wait for the next month (UTC).";
                     break;
                 case "model_family_not_allowed":
                     type = "permission_error";
@@ -986,6 +1015,7 @@
         if (source == "validate-jwt") { return "jwt"; }
         if (policy == "ccof-admission-person") { return "admission_person"; }
         if (policy == "ccof-admission-resolver" || policy == "ccof-admission-resolver-concurrency") { return "admission_resolver"; }
+        if (policy.StartsWith("ccof-limit-budget-person", StringComparison.Ordinal)) { return "budget_pacing"; }
         if (policy.StartsWith("ccof-limit-family-group-", StringComparison.Ordinal)) { return status != 429 && (status == 403 || reason.Contains("Quota")) ? "family_group_quota_exceeded" : "family_group_rate_exceeded"; }
         if (policy.StartsWith("ccof-limit-family-person-", StringComparison.Ordinal)) { return status != 429 && (status == 403 || reason.Contains("Quota")) ? "family_person_quota_exceeded" : "family_person_rate_exceeded"; }
         if (policy.StartsWith("ccof-limit-group", StringComparison.Ordinal)) { return status == 403 || reason.Contains("Quota") ? "group_quota" : "group_rate"; }
@@ -1016,7 +1046,7 @@
     <set-variable name="ccofErrorStatus" value="@{
         var kind = (string)context.Variables["ccofErrorKind"];
         if (kind == "jwt") { return 401; }
-        if (kind == "admission_person" || kind == "admission_resolver" || kind == "group_rate" || kind == "person_rate") { return 429; }
+        if (kind == "admission_person" || kind == "admission_resolver" || kind == "group_rate" || kind == "person_rate" || kind == "budget_pacing") { return 429; }
         if (kind == "family_group_rate_exceeded" || kind == "family_person_rate_exceeded") { return 429; }
         if (kind == "group_quota" || kind == "person_quota") { return 403; }
         if (kind == "family_group_quota_exceeded" || kind == "family_person_quota_exceeded") { return 403; }
@@ -1029,6 +1059,11 @@
     <set-variable name="ccofErrorRetryAfter" value="@{
         var kind = (string)context.Variables["ccofErrorKind"];
         if (kind == "admission_resolver" || kind == "backend_credential") { return "%%RETRY_AFTER%%"; }
+        if (kind == "budget_pacing" && context.Variables.ContainsKey("ccofRetryAfter")) {
+            var retry = Convert.ToInt64(context.Variables["ccofRetryAfter"]);
+            var reset = context.Variables.GetValueOrDefault<long>("ccofPersonCeilingResetSeconds", 0);
+            return Convert.ToString(reset > 0 && reset < retry ? reset : retry);
+        }
         if ((kind == "admission_person" || kind.EndsWith("_rate") || kind.EndsWith("_quota") || kind.EndsWith("_rate_exceeded") || kind.EndsWith("_quota_exceeded")) && context.Variables.ContainsKey("ccofRetryAfter")) {
             return Convert.ToString(context.Variables["ccofRetryAfter"]);
         }
@@ -1039,6 +1074,7 @@
         var reason = context.LastError.Reason ?? "";
         var project = context.Variables.GetValueOrDefault<string>("ccofProjectId", "");
         var classification = context.Variables.GetValueOrDefault<string>("ccofClassification", "");
+        var scope = classification == "group" ? "group " + project : "project " + project;
         var period = kind == "group_quota" ? context.Variables.GetValueOrDefault<string>("ccofGroupPeriod", "") : context.Variables.GetValueOrDefault<string>("ccofPersonPeriod", "");
         var unit = period == "Hourly" ? "hour" : period == "Daily" ? "day" : period == "Weekly" ? "week" : period == "Monthly" ? "month" : period == "Yearly" ? "year" : "period";
         var adjective = period == "" ? "" : period.ToLowerInvariant() + " ";
@@ -1063,19 +1099,23 @@
                 break;
             case "person_rate":
                 type = "rate_limit_error";
-                message = "You have reached your tokens-per-minute limit for project " + project + ". Retry after the time in the Retry-After header.";
+                message = "You have reached your tokens-per-minute limit in " + scope + ". Retry after the time in the Retry-After header.";
+                break;
+            case "budget_pacing":
+                type = "rate_limit_error";
+                message = "Your requests in " + scope + " are slowed by the budget guard: recent spending is high for your Claude budget, so new requests wait. This is not the configured tokens-per-minute limit. Retry after the time in the Retry-After header; raising the budget lifts the wait within a few minutes.";
                 break;
             case "person_quota":
                 type = "permission_error";
-                message = "Your " + adjective + "token quota for project " + project + " is used up. It resets at the start of the next " + unit + " (UTC). Your access is otherwise unchanged.";
+                message = "Your " + adjective + "token quota in " + scope + " is used up. It resets at the start of the next " + unit + " (UTC). Your access is otherwise unchanged.";
                 break;
             case "group_rate":
                 type = "rate_limit_error";
-                message = "The tokens-per-minute limit shared by classification " + classification + " in project " + project + " is reached. Retry after the time in the Retry-After header.";
+                message = (classification == "group" ? "The tokens-per-minute limit shared by group " + project : "The tokens-per-minute limit shared by classification " + classification + " in project " + project) + " is reached. Retry after the time in the Retry-After header.";
                 break;
             case "group_quota":
                 type = "permission_error";
-                message = "The " + adjective + "token quota shared by classification " + classification + " in project " + project + " is used up. It resets at the start of the next " + unit + " (UTC). Your own access is unchanged.";
+                message = (classification == "group" ? "The " + adjective + "token quota shared by group " + project : "The " + adjective + "token quota shared by classification " + classification + " in project " + project) + " is used up. It resets at the start of the next " + unit + " (UTC). Your own access is unchanged.";
                 break;
             case "family_person_rate_exceeded":
                 type = "rate_limit_error";

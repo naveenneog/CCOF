@@ -42,6 +42,7 @@ test("aggregate limits run unchanged before admitted family group/person ceiling
   assert.deepEqual(limits.map((e) => attr(e, "id")), [
     "ccof-limit-group-rate-quota", "ccof-limit-group-rate", "ccof-limit-group-quota",
     "ccof-limit-person-rate-quota", "ccof-limit-person-rate", "ccof-limit-person-quota",
+    "ccof-limit-budget-person-consumed", "ccof-limit-budget-person",
     "ccof-limit-family-group-rate-quota", "ccof-limit-family-group-rate", "ccof-limit-family-group-quota",
     "ccof-limit-family-person-rate-quota", "ccof-limit-family-person-rate", "ccof-limit-family-person-quota",
   ]);

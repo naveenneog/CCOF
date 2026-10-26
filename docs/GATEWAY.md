@@ -8,9 +8,13 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 ## Dollar-limit guarantees
 
 `token-limits-only` enforces token quotas, not dollars. In `budget-state` mode APIM also retains the resolver's
-`personCeilingTokensPerMinute` and applies the lower of that ceiling and the configured person TPM. A zero ceiling
-refuses the request; old cached decisions without the mode and ceiling must be refreshed. Group and family token
-quotas still apply independently.
+`personCeilingTokensPerMinute` and applies it on a counter of its own, the budget-pacing counter
+`pb:{projectId}:{oid}:{personCeilingKey}` ([ADR-0047](adr/0047-budget-pacing-counter.md)); the configured person TPM
+keeps its counter. `personCeilingKey` is the budget month and amount (for example `2026-10_10000`), so raising the
+budget or a new month starts a new pacing counter, while a ceiling that moves with spend keeps it. A pacing refusal is
+`429 rate_limit_error` naming the budget guard; its `Retry-After` is at most the time to the end of the month. A zero
+ceiling refuses the request (`403`, "has reached your Claude budget … until recorded spend catches up"); old cached
+decisions without the mode and ceiling must be refreshed. Group and family token quotas still apply independently.
 
 This is **not a strict dollar cap**. Ingestion, reconciliation, caching and in-flight requests can permit overshoot;
 separate entitled groups have separate budgets. `resolver.requireCompleteUsage: true` in the staged configuration
@@ -65,7 +69,8 @@ Contract, tradeoffs and sources: [ADR-0038](adr/0038-budget-admission-acceptance
      not surface-scoped. The client application ID is taken from the validated token, so a client cannot
      choose its surface by header.
 5. **Token limits.** The resolver's `tokenLimits` (C-2): the group's limits on counter
-   `g:{projectId}:{classification}`, then the person's on `p:{projectId}:{oid}`. A `null` limit is not
+   `g:{projectId}:{classification}`, then the person's on `p:{projectId}:{oid}`, then, in `budget-state` mode, the
+   budget-pacing counter (see "Dollar-limit guarantees"). A `null` limit is not
    applied. A rate refusal is 429, a quota refusal 403.
    - The limits count `input_tokens` and `output_tokens` only. Claude's cache writes and reads are not
      counted, streamed or not; a streamed request is counted when its stream ends (live, 2026-10-12;

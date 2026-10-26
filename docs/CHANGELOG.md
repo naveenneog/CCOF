@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-26 — Bug bash fixes: gateway and developer (branch fix/bugbash-gateway)
+
+- Budget pacing has its own gateway counter, keyed by the budget month and amount ([ADR-0047](adr/0047-budget-pacing-counter.md)):
+  raising a budget, or a new month, lifts the guard's wait within minutes; before, a wait computed at a tiny budget
+  stayed for hours. A pacing refusal says it is the budget guard, not the tokens-per-minute limit, and its
+  `Retry-After` is at most the time to the month's end. A refusal from projected spend says it can clear within
+  minutes. Budget and limit messages name the group, not a "CCU budget for project".
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated
