@@ -104,6 +104,17 @@ try {
     $message = ''; try { $null = Invoke-Stage2 $cfg -Apply } catch { $message = $_.Exception.Message }
     Assert-Contract ($message -match 'Stage 2 changed Cosmos data-role assignments') 'AO-2: Stage 2 must still detect an added grant during schema deployment.'
     $null = Invoke-Stage1 $cfg -Apply
+    $grantsOut = @{ verify = @{ rgScopedAssignments = 1; cosmos = @(@{}, @{}) } }
+    Save-StgStage $cfg 3 $grantsOut
+    $null = Invoke-Stage1 $cfg -Apply
+    $grantsOut.verify.rgScopedAssignments = 2
+    Save-StgStage $cfg 3 $grantsOut
+    $message = ''; try { $null = Invoke-Stage1 $cfg -Apply } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'Azure role assignments.*completed Stage 3 records 2') 'AO-2: recovery must still enforce a recorded Stage 3 Azure grant count.'
+    $grantsOut.verify.rgScopedAssignments = 1; $grantsOut.verify.cosmos = @(@{})
+    Save-StgStage $cfg 3 $grantsOut
+    $message = ''; try { $null = Invoke-Stage1 $cfg -Apply } catch { $message = $_.Exception.Message }
+    Assert-Contract ($message -match 'Cosmos data assignments.*completed Stage 3 records 1') 'AO-2: recovery must still enforce a recorded Stage 3 Cosmos grant count.'
 } finally {
     Remove-Item -LiteralPath $script:StateDir -Recurse -Force
 }
