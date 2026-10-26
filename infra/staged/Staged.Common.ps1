@@ -73,7 +73,8 @@ function Read-StgConfig {
     $backendIds = @($c.backends | ForEach-Object { [string]$_.id })
     foreach ($g in @($c.groups)) { foreach ($p in @(Get-StgGroupEntryProblems $g -BackendIds $backendIds)) { $problems.Add($p) } }
     foreach ($p in @(Get-StgStage7Problems $c)) { $problems.Add($p) }
-    if ($full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
+    # The state folder next to the config reaches az as @<file> arguments; only az.cmd re-parses them.
+    if (($script:StgOnWindows ?? $IsWindows) -and $full -match '[&|<>^()]') { $problems.Add('config path holds a cmd.exe metacharacter') }
     # Entra names travel in Graph $filter URLs through az.cmd (cmd.exe): letters, digits, space . _ - only.
     $existingApps = $c.entra.existing ?? @{}
     $entraNames = @(
