@@ -200,6 +200,26 @@ request. The JSON echoes every applied filter.
 A custom range (`from` and `to` as UTC timestamps, `to` excluded) must start before the current time and
 end at most 31 days after it, so the current month always fits and a range in the future is refused with
 `400 range_out_of_bounds` rather than answered as zero usage. The same rule applies to the chargeback views. Both formats return
+
+Export errors. Each error body is JSON with `error` and `requestId` (quote the request ID when asking for help):
+
+| Code | Meaning and fix |
+| --- | --- |
+| `400 invalid_format` | `format` is not `json` or `csv` (lower case) |
+| `400 invalid_period` | `period` is not `month`, `previous` or `custom` |
+| `400 from_to_require_custom_period` | `from` or `to` was sent without `period=custom` |
+| `400 custom_period_requires_utc_from_and_to` | `period=custom` needs both `from` and `to` as UTC timestamps such as `2026-10-01T00:00:00Z` (no date-only value, no offset like `+05:30`) |
+| `400 invalid_custom_range` | `from` is not before `to`, or a date does not exist (for example month 13) |
+| `400 range_exceeds_max_query_days` | The range is longer than `ADMIN_CHARGEBACK_MAX_QUERY_DAYS` (default 62): split it |
+| `400 range_out_of_bounds` | The range starts now or later, ends more than 31 days ahead, or starts more than 12 years ago |
+| `400 unknown_parameter`, `400 repeated_parameter` | A parameter the export does not apply, or one sent twice |
+| `400 invalid_project_filter`, `invalid_group_filter`, `invalid_developer_filter`, `invalid_model_filter`, `invalid_backend_filter`, `invalid_family_filter`, `invalid_classification_filter`, `invalid_chargeback_filter` | A filter value has the wrong shape: group and developer are Object IDs; family is `haiku`, `sonnet`, `opus`, `fable` or `mythos` |
+| `404 export_not_found` | The dataset is not `usage` or `groups` |
+| `503 project_store_not_configured` | `export/groups` without the registry settings |
+| `503 user_tags_not_configured`, `500 user_tag_settings_unavailable` | A CSV needs the user-tag label: set `ADMIN_CONFIG_CONTAINER`, or retry when Cosmos DB answers; JSON still works |
+| `503 export_unavailable` | The chargeback source is not configured or failed; `capability` says which |
+
+History refusals (`history_*`, `backend_filter_not_in_history`, `chargeback_history_*`) are listed below. Both formats return
 `x-ccof-truncated` (`true` when more than 5,000 rows matched; the JSON also has `truncated`) and
 `x-ccof-row-limit`. A truncated export understates totals: narrow the period or filters.
 

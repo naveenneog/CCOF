@@ -164,6 +164,7 @@ test("a missing rate card is reported as export_unavailable with the capability"
   const res = await call("export/usage?period=month&format=csv");
   assert.equal(res.status, 503);
   assert.equal((res.jsonBody as Doc).error, "export_unavailable");
+  assert.equal((res.jsonBody as Doc).requestId, "req-1", "ADMIN-3: requestId as on every error");
 });
 
 test("export refuses an unknown format or view, and reports an unavailable source as 503", async () => {
@@ -175,4 +176,20 @@ test("export refuses an unknown format or view, and reports an unavailable sourc
   assert.equal(unavailable.status, 503);
   assert.equal((unavailable.jsonBody as Doc).error, "export_unavailable");
   assert.equal(((unavailable.jsonBody as Doc).capability as Doc).state, "unavailable");
+});
+
+// ADMIN-3: every code export/usage or export/groups can return is documented with the export, so a novice who
+// mistypes a date finds the code. Filters the export refuses as unknown_parameter (paging, interval, tags) never
+// reach their own checks.
+test("every export and custom-range error code is documented in ADMIN-API.md (ADMIN-3)", async () => {
+  const source = (name: string) => readFile(new URL(`../src/${name}`, import.meta.url), "utf8");
+  const chargeback = await source("chargeback.ts");
+  const periodAndFilters = chargeback.slice(chargeback.indexOf("function readPeriod"), chargeback.indexOf("const renderParams"));
+  const text = [await source("export.ts"), await source("history.ts"), periodAndFilters].join("\n");
+  const unreachable = new Set(["invalid_page", "invalid_interval", "invalid_tags_filter"]);
+  const codes = [...new Set([...text.matchAll(/(?:ApiError\(\d{3}, |error: )["`]([a-z_]+)["`]|"(invalid_[a-z_]+_filter)"/g)].map((m) => m[1] ?? m[2]))].filter((c) => !unreachable.has(c));
+  assert.ok(codes.length >= 25, codes.join(", "));
+  const docs = await readFile(new URL("../../docs/ADMIN-API.md", import.meta.url), "utf8");
+  const section = docs.slice(docs.indexOf("### Export for Power BI"), docs.indexOf("## Sign-in"));
+  assert.deepEqual(codes.filter((c) => !section.includes(`\`${c}\``) && !section.includes(` ${c}\``)), []);
 });
