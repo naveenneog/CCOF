@@ -254,3 +254,10 @@ test("after retention is raised, the months the workspace never held are exporte
   assert.equal(json.status, 200, JSON.stringify(json.jsonBody));
   assert.deepEqual([timespans, reads.map((r) => r.month)], [[], ["2026-09"]]);
 });
+
+test("troubleshooting says the chargeback-history export errors were confirmed live (ADMIN-11)", async () => {
+  const page = await readFile(new URL("../../docs/operate/troubleshooting.md", import.meta.url), "utf8");
+  const section = page.slice(page.indexOf("## Chargeback history"));
+  assert.doesNotMatch(section, /not yet from a live deployment/);
+  assert.match(section, /confirmed live on 2026-10-26/);
+});

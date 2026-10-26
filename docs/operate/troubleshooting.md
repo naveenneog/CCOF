@@ -47,10 +47,10 @@ Each row was met in a live deployment or test; the evidence column links to wher
 
 ## Chargeback history
 
-Usage export of an old month and the reconciler's history step ([chargeback history](chargeback-history.md)). These
-rows come from the code and its tests ([admin/tests/history.test.ts](../../admin/tests/history.test.ts),
-[tests/reconciler-history-run.test.ts](../../tests/reconciler-history-run.test.ts),
-[tests/reconciler-history.test.ts](../../tests/reconciler-history.test.ts)), not yet from a live deployment.
+Usage export of an old month and the reconciler's history step ([chargeback history](chargeback-history.md)). The
+`409 history_not_covered`, `400 history_range_not_whole_days` and `400 backend_filter_not_in_history` rows were
+confirmed live on 2026-10-26; the others come from the tests
+([admin/tests/history.test.ts](../../admin/tests/history.test.ts)).
 
 Export responses ([admin/src/export.ts](../../admin/src/export.ts), [admin/src/history.ts](../../admin/src/history.ts)):
 
