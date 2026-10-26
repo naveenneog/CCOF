@@ -77,9 +77,12 @@ function Read-ClientConfiguration {
 }
 
 function Install-ClientConfiguration {
-    param([Parameter(Mandatory)][string]$Path)
-    $null = Read-ClientConfiguration $Path
-    $destination = Get-ClientDefaultConfigPath -IgnoreEnvironment
+    param([Parameter(Mandatory)][string]$Path, [bool]$OnWindows = $IsWindows)
+    $config = Read-ClientConfiguration $Path
+    if (-not $OnWindows -and $config.signInMethod -cne 'azure-cli') {
+        throw 'unsupported_sign_in_method: on macOS and Linux Claude Code setup supports signInMethod azure-cli only; nothing was changed.'
+    }
+    $destination = Get-ClientDefaultConfigPath -OnWindows $OnWindows -IgnoreEnvironment
     if (-not [string]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetFullPath($destination), $(if ($IsWindows) { 'OrdinalIgnoreCase' } else { 'Ordinal' }))) {
         Write-ClientText $destination ([IO.File]::ReadAllText($Path))
     }
