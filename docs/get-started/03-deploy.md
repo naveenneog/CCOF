@@ -138,7 +138,7 @@ Stages 2/5: unchanged hashes mean read-back only on `-Apply`; drift fails. For r
 
 ## Stage 3 — Runtime role assignments
 
-**Who:** access administrator · **Time:** about 6 minutes · **Creates:** each managed identity's Azure and Cosmos DB
+**Who:** access administrator · **Time:** 6–15 minutes · **Creates:** each managed identity's Azure and Cosmos DB
 roles, and Cognitive Services User for API Management on the Foundry account. Not Microsoft Graph permissions.
 
 ```powershell

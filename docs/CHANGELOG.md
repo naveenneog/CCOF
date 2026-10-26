@@ -16,6 +16,8 @@
 - N3: Stage 0 reports each Foundry account's region; Stage 1 prints its planned account and deployment regions.
 - N5: seed polling preserves creation evidence across timer runs of the same seed instead of reporting
   those documents as already present; later drift or failures still win.
+- N4 / novice docs: Stage 3 estimate is 6–15 minutes; BACKENDS links the existing regional recovery
+  guidance instead of the missing availability page.
 
 ## 2026-10-26 — Release 17
 

@@ -25,6 +25,14 @@ test("regional outage guidance includes a reversible Cosmos drill and single-reg
   assert.match(regions, /new Cosmos.*account/i);
 });
 
+test("novice operations guidance gives realistic grant timing and a real backend availability link", () => {
+  const stage3 = read("docs/get-started/03-deploy.md").split("## Stage 3")[1]?.split("\n## ")[0] ?? "";
+  assert.match(stage3, /Time:\*\* 6[–-]15 minutes/, "N4: Stage 3 time estimate must cover the observed 6–15 minute range");
+  const backends = read("docs/BACKENDS.md");
+  assert.doesNotMatch(backends, /AVAILABILITY\.md/, "novice Low: BACKENDS must not name the missing AVAILABILITY page");
+  assert.match(backends, /\[[^\]]+\]\(get-started\/region-and-failover\.md\)/);
+});
+
 test("every relative link and image on the reader-facing pages resolves", () => {
   const missing: string[] = [];
   for (const page of pages) {
