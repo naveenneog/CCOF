@@ -8,16 +8,22 @@ Evidence, availability settings and failure modes: [WP-GW status](status/WP-GW.m
 ## Dollar-limit guarantees
 
 `token-limits-only` enforces token quotas, not dollars. In `budget-state` mode APIM also retains the resolver's
-`personCeilingTokensPerMinute` and applies the lower of that ceiling and the configured person TPM. A zero ceiling
-refuses the request; old cached decisions without the mode and ceiling must be refreshed. Group and family token
-quotas still apply independently.
+`personCeilingTokensPerMinute` and applies it on a counter of its own, the budget-pacing counter
+`pb:{projectId}:{oid}:{personCeilingKey}` ([ADR-0047](adr/0047-budget-pacing-counter.md)); the configured person TPM
+keeps its counter. `personCeilingKey` is the budget month and amount (for example `2026-10_10000`), so raising the
+budget or a new month starts a new pacing counter, while a ceiling that moves with spend keeps it. A pacing refusal is
+`429 rate_limit_error` naming the budget guard; its `Retry-After` is at most the time to the end of the month. A zero
+ceiling refuses the request (`403`, "has reached your Claude budget … until recorded spend catches up"); old cached
+decisions without the mode and ceiling must be refreshed. Group and family token quotas still apply independently.
 
 This is **not a strict dollar cap**. Ingestion, reconciliation, caching and in-flight requests can permit overshoot;
 separate entitled groups have separate budgets. `resolver.requireCompleteUsage: true` in the staged configuration
 sets `RESOLVER_REQUIRE_COMPLETE_USAGE=true`: missing or partial personal accounting, or partial accounting in a strict
 group, gives a classified 503 instead of renewing permission based on a known lower bound. The setting defaults false
 for compatibility and requires `budget-state`. It can block usage after streamed requests because the current trace
-does not capture their cache categories. It does not fix ingestion delay or implement atomic reservations.
+does not capture their cache categories. A request Foundry refuses before inference (`4xx` other than `429`) counts
+as zero tokens and does not make the month partial ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)); a
+Foundry `429` still has unknown tokens. It does not fix ingestion delay or implement atomic reservations.
 
 Contract, tradeoffs and sources: [ADR-0038](adr/0038-budget-admission-acceptance.md).
 
@@ -65,7 +71,8 @@ Contract, tradeoffs and sources: [ADR-0038](adr/0038-budget-admission-acceptance
      not surface-scoped. The client application ID is taken from the validated token, so a client cannot
      choose its surface by header.
 5. **Token limits.** The resolver's `tokenLimits` (C-2): the group's limits on counter
-   `g:{projectId}:{classification}`, then the person's on `p:{projectId}:{oid}`. A `null` limit is not
+   `g:{projectId}:{classification}`, then the person's on `p:{projectId}:{oid}`, then, in `budget-state` mode, the
+   budget-pacing counter (see "Dollar-limit guarantees"). A `null` limit is not
    applied. A rate refusal is 429, a quota refusal 403.
    - The limits count `input_tokens` and `output_tokens` only. Claude's cache writes and reads are not
      counted, streamed or not; a streamed request is counted when its stream ends (live, 2026-10-12;
@@ -96,6 +103,17 @@ A request whose method and path match no operation of the API never reaches step
 handling in Azure API Management policies"; `docs/status/WP-GW.md` AC16). Claude Code sends one such request
 at startup, `HEAD /api/hello`, and ignores the answer. Revision 8 answers these requests 500; the 404 comes
 with revision 9.
+
+API Management also matches variants of the path to the operation: `/v1/messages/`, `/v1/messages/.`,
+`/v1/messages//`, `/V1/Messages`. The policy's first step answers these 404 `not_found_error` too, before the token
+check, so nothing is forwarded or counted ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)). Only
+non-empty path segments ending exactly in `/v1/messages` are served.
+
+**Request size.** After the token and admission checks, and before the body is read, a request whose `Content-Type`
+is not `application/json` is answered `415`, and one whose `Content-Length` is above 32 MB (33,554,432 bytes)
+`413 request_too_large`. 32 MB is the Messages API limit ([Claude API errors](https://platform.claude.com/docs/en/api/errors),
+"Request size limits"); Foundry enforces the same limit with its own `413`. A request without `Content-Length` is
+checked by Foundry only.
 
 ## Backends
 
@@ -134,15 +152,17 @@ with the gateway request id at the end of the message and in the `x-ccof-request
 |---|---|---|
 | No token, invalid, expired, other audience or tenant | 401 | `authentication_error` |
 | Token without the scope; a person's token from a client application not in `entra.delegatedClientAppIds`; an application token that is not a test identity or lacks the app role | 403 | `permission_error` |
-| Not entitled (no active membership for the project) | 403 | `permission_error` |
+| Not entitled (no active membership for the project); the message tells no selector, a group Object ID (compared in lower case) and a value that is not one apart | 403 | `permission_error` |
 | Model not in the person's allow-list (the message lists the allowed models) | 403 | `permission_error` |
 | Group request from a client application whose surface the group does not allow, or that `entra.surfaceClients` does not map (only when the list is non-empty) | 403 | `permission_error` |
 | Invalid project header; body not JSON or without `model`; more than one project and no selector | 400 | `invalid_request_error` |
-| A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500) | 404 | `not_found_error` |
+| `Content-Type` other than `application/json` | 415 | `invalid_request_error` |
+| `Content-Length` above 32 MB | 413 | `request_too_large` |
+| A method or path the gateway does not serve, for example Claude Code's `HEAD /api/hello` probe, `GET /v1/models` or `/v1/messages/count_tokens` (from revision 9; revision 8 answers 500), or a variant of `/v1/messages` such as a trailing slash | 404 | `not_found_error` |
 | Too many requests from one person; gateway busy checking access | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group tokens-per-minute reached | 429 + `Retry-After` | `rate_limit_error` |
 | Person or group token quota used up (the message names which, and when it resets) | 403 | `permission_error` |
-| Person's or classification's CCU budget used up (C-7; the message names which) | 403 | `permission_error` |
+| Person's or group's budget used up (C-7; the message names which), or reached by recorded plus recent spend | 403 | `permission_error` |
 | Access cannot be confirmed (resolver unavailable, no last-known-good) or budget state stale | 503 + `Retry-After` | `api_error` |
 | Backend credential unavailable; backend not configured; backend unreachable or slow | 503 / 502 / 504 | `api_error` |
 

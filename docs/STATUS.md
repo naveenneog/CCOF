@@ -54,6 +54,19 @@
 - Not verified on a real Mac: everything above (UNKNOWNS MAC-2); macOS developer setup (MAC-1, G-MACOS-CLIENT).
 - Checks (Windows): `npm test` 1305/0 plus every PowerShell suite, CI typecheck, build, 41 Bicep templates, admin
   183/0, `node .ironclad/gate.mjs --stage packet`.
+
+### G-BUGBASH-GW — gateway and developer bug-bash fixes (branch `fix/bugbash-gateway`, 2026-10-26)
+
+- Scope: findings DEV-3, DEV-5..DEV-16 and GW-1..GW-6 of the 2026-10-26 bug bash (DEV-1, DEV-2, DEV-4 are on
+  `fix/macos`). Decisions: [ADR-0047](adr/0047-budget-pacing-counter.md) (budget pacing on its own counter keyed by
+  budget and month), [ADR-0048](adr/0048-request-checks-and-backend-refusals.md) (path, content-type and size checks
+  before forwarding; backend 4xx other than 429 priced at zero). Unknowns BB-G1..BB-G7.
+- Commits: 902a94a (DEV-3, DEV-6, DEV-7), f5cee9e (GW-2, GW-3, GW-4), 43b441d (GW-1, GW-5, DEV-8, DEV-10, DEV-15),
+  d972cdc (GW-6), 75ee895 (DEV-9, DEV-13, DEV-14), d99e5d9 (DEV-5, DEV-11, DEV-12, DEV-16).
+- Proof so far: offline only (tests, compiled policy C#, mutation checks on every new guard). Not applied to a lab:
+  live proof of the pacing counter after a budget raise (BB-G1) is the coordinator's decision.
+- Not fixed: DEV-9's unpriced cache tokens of streamed replies (needs a non-buffering SSE usage reader, COST-MODEL
+  U-17); documented as a lower bound.
 **Previous packet:** G-RESUME — Stage 1 read-back after lost local state (complete; [ROADMAP](ROADMAP.md)).
 
 ### G-RESUME — Stage 1 read-back after lost local state (complete, 2026-10-25)

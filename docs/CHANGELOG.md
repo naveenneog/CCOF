@@ -26,6 +26,30 @@
   interactive only and cannot show a refused budget; the status line and the wrapper can.
 - The offline test suites run under PowerShell 7 on Linux as well as Windows.
 
+## 2026-10-26 — Bug bash fixes: gateway and developer (branch fix/bugbash-gateway)
+
+- Budget pacing has its own gateway counter, keyed by the budget month and amount ([ADR-0047](adr/0047-budget-pacing-counter.md)):
+  raising a budget, or a new month, lifts the guard's wait within minutes; before, a wait computed at a tiny budget
+  stayed for hours. A pacing refusal says it is the budget guard, not the tokens-per-minute limit, and its
+  `Retry-After` is at most the time to the month's end. A refusal from projected spend says it can clear within
+  minutes. Budget and limit messages name the group, not a "CCU budget for project".
+- Variants of `/v1/messages` (trailing slash, `.`, `//`, upper case) are answered 404 by the gateway, before the token
+  check, instead of being forwarded and counted. A body that is not `application/json` is answered `415`, one above
+  32 MB `413 request_too_large`, both from the headers before the body is read ([ADR-0048](adr/0048-request-checks-and-backend-refusals.md)).
+- The `x-ccof-project` header compares a group Object ID in lower case. The not-entitled message tells no membership,
+  an unknown group ID and a value that is not a group ID apart, and no longer asks a member to join their own group.
+  A model refusal lists the group's allowed models. CLIENTS.md's multiple-group section matches the group selection rule.
+- The ledger prices a request Foundry refused before inference (`4xx` other than `429`) at zero tokens, so a typo no
+  longer makes the month's usage partial or, with `resolver.requireCompleteUsage`, blocks the person. Workbook and
+  admin queries change with the ledger (Stages 5 and 7 redeploy them).
+- `/usage` and the status line show a budget under USD 1 to four decimals, and say plainly that figures are a lower
+  bound because the prompt-cache tokens of streamed replies are never priced. USAGE.md explains why, and the usage
+  endpoint's approximate limit.
+- Developer setup prints `models`, the deployment each Claude Code alias runs, so an Opus alias mapped to another model
+  is visible. The Azure CLI helper's `status` no longer prints the Azure CLI's own `Please run 'az login'`. Stage 7 names
+  the Desktop profile after the group. The developer page explains Claude Code's `Failed to authenticate` on a gateway
+  `403`.
+
 ## 2026-10-26 — Long-term audit (feature branch)
 
 - Gateway log archive (`audit.archive`, Stage 5): API Management gateway logs are also written to a dedicated

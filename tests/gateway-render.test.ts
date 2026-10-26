@@ -249,7 +249,7 @@ describe("rendered policy structure", () => {
   });
 
   test("person and group token limits use the contract's counter keys and the resolver's values", () => {
-    const limits = descendants(inbound).filter((e) => e.name === "llm-token-limit" && !attr(e, "id")!.startsWith("ccof-limit-family-"));
+    const limits = descendants(inbound).filter((e) => e.name === "llm-token-limit" && !attr(e, "id")!.startsWith("ccof-limit-family-") && !attr(e, "id")!.startsWith("ccof-limit-budget-"));
     assert.deepEqual(limits.map((e) => attr(e, "id")), [
       "ccof-limit-group-rate-quota", "ccof-limit-group-rate", "ccof-limit-group-quota",
       "ccof-limit-person-rate-quota", "ccof-limit-person-rate", "ccof-limit-person-quota",
@@ -330,9 +330,9 @@ describe("rendered policy structure", () => {
     const classify = attr(setVariable("ccofResolverResult")[0], "value")!;
     assert.match(classify, /if \(outcome == "refused" && response\.StatusCode == 403 && \(error == "budget_exhausted" \|\| error == "aggregate_budget_exhausted"\)\) \{/);
     const status = attr(setVariable("ccofRefusalStatus")[0], "value")!;
-    assert.match(status, /case "budget_exhausted": case "aggregate_budget_exhausted": return 403;/);
+    assert.match(status, /case "budget_exhausted": case "budget_projected": case "aggregate_budget_exhausted": return 403;/);
     const message = attr(setVariable("ccofRefusalBody")[0], "value")!;
-    for (const code of ["budget_exhausted", "aggregate_budget_exhausted"]) {
+    for (const code of ["budget_exhausted", "budget_projected", "aggregate_budget_exhausted"]) {
       const at = message.indexOf(`case "${code}":`);
       assert.ok(at >= 0, `${code} has no message`);
       const branch = message.slice(at, message.indexOf("break;", at));

@@ -694,8 +694,9 @@ figures need `reconciler.timerEnabled: true`; whether a person also sees their g
 this mode is not a dollar-spend cap.** Select the enforcement mode explicitly before onboarding.
 
 With `budgetEnforcement: budget-state`, APIM retains the resolver's mode and
-`personCeilingTokensPerMinute` and uses the smaller of the static aggregate person TPM and the
-monetary ceiling. A zero ceiling is refused as `budget_exhausted`. Old cached decisions without the
+`personCeilingTokensPerMinute` and applies the monetary ceiling on its own budget-pacing counter, keyed by the budget
+month and amount; the static aggregate person TPM keeps its own counter ([ADR-0047](adr/0047-budget-pacing-counter.md)).
+A zero ceiling is refused (`budget_projected`, or `budget_exhausted` from the resolver). Old cached decisions without the
 new fields are rejected, not silently treated as unconstrained decisions. Deploy the matching
 resolver and gateway policy before claiming this behavior on an existing installation; a local
 source/test pass does not update a deployed policy.

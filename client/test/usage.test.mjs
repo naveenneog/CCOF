@@ -27,7 +27,7 @@ test('amounts round half-up to cents from the exact decimal string, with thousan
 test('the owner example: project and classification, used, percent, left, as of HH:MM UTC', () => {
   assert.deepEqual(formatUsage(usage([scope()]), NOW), [
     'CCOF budget, project PILOT1 / STD: $42.10 of $100.00 used (42%), $57.90 left, as of 10:42 UTC.',
-    'Figures are from the last cost run; requests not yet priced are not included.',
+    'Figures are from the last cost run and are a lower bound: newer requests, and the prompt-cache tokens of streamed replies, are not included.',
   ]);
 });
 
@@ -50,7 +50,7 @@ test('used up, partial, not yet computed and unavailable figures are each stated
     scope({ projectId: 'P4', status: 'invalid', spent: null, budget: null, remaining: null, percentUsed: null, exhausted: null, asOf: null, completeness: null }),
   ]), NOW);
   assert.equal(lines[0], 'CCOF budget, project PILOT1 / STD: $105.00 of $100.00 used (105%), $0.00 left, as of 10:42 UTC. Budget used up: new requests are refused until next month.');
-  assert.match(lines[1], /as of 10:42 UTC\. Some requests in this period are not yet priced\.$/);
+  assert.match(lines[1], /as of 10:42 UTC\. Some requests in this period are only partly priced \(for example the prompt-cache tokens of streamed replies\), so actual spend is higher\.$/);
   assert.equal(lines[2], 'CCOF budget, project P3 / STD: no figures for 2026-10 yet.');
   assert.equal(lines[3], 'CCOF budget, project P4 / STD: figures unavailable; ask your platform team.');
 });
@@ -204,4 +204,18 @@ test('azure-cli mode: /usage takes the token from CCOF_TOKEN_HELPER and its 401 
     for (const [key, name] of [['config', 'CCOF_CONFIG_FILE'], ['helper', 'CCOF_TOKEN_HELPER']]) { if (saved[key] === undefined) delete process.env[name]; else process.env[name] = saved[key]; }
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// Bug bash DEV-13: at a budget under $1, cents hid the remainder ("$0.01 of $0.01 used (63%), $0.00 left").
+test('a budget under $1 is shown to four decimals, so the amounts agree with the percent', () => {
+  assert.equal(formatAmount('0.0037', 4), '$0.0037');
+  assert.equal(formatAmount('0.00189398', 4), '$0.0019');
+  assert.equal(formatAmount('0.01', 4), '$0.0100');
+  assert.equal(formatAmount('0.99995', 4), '$1.0000');
+  const tiny = scope({ projectId: G1, classification: 'group', spent: { ccu: '0.63', usd: '0.0063' }, budget: { ccu: '1', usd: '0.01' }, remaining: { ccu: '0.37', usd: '0.0037' }, percentUsed: 63 });
+  const [line] = formatUsage(usage([tiny]), NOW);
+  assert.equal(line, `CCOF budget, group ${G1}: $0.0063 of $0.0100 used (63%), $0.0037 left, as of 10:42 UTC.`);
+  assert.equal(statusLine(usage([tiny])), 'CCOF $0.0063/$0.0100 (63%)');
+  const [normal] = formatUsage(usage([scope({ budget: { ccu: '100', usd: '1' } })]), NOW);
+  assert.match(normal, /\$42\.10 of \$1\.00 used/);
 });

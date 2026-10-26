@@ -57,8 +57,8 @@ documents, which existed before but were read by nothing except the resolver's b
 - `status` is `current`, `not_computed` (no figure for this UTC month yet: no `budgetState`, or one from an
   earlier month) or `invalid` (the stored figure failed its checks, or names another person or project; it is
   not shown).
-- `asOf` is the reconciler's `computedAt`. `completeness: "partial"` means some requests in the period were
-  not yet priced.
+- `asOf` is the reconciler's `computedAt`. `completeness: "partial"` means some requests in the period are only
+  partly priced or not priced, most often the prompt-cache tokens of streamed replies, which are never priced (below).
 - `group` is present only when group totals are allowed: `{ "remaining": { "ccu", "usd" } }`, the group's remaining budget only; `{ "remaining": null }` when the group has no shared cap (auto-scale); `null`
   when this month's total is not available (none yet, or the stored one is from an earlier month). It carries no
   spend, cap, mode, member count or other person's figure.
@@ -67,7 +67,7 @@ Claude Code shows it as, for example:
 
 ```text
 CCOF budget, project PILOT1 / STD: $42.10 of $100.00 used (42%), $57.90 left, as of 10:42 UTC.
-Figures are from the last cost run; requests not yet priced are not included.
+Figures are from the last cost run and are a lower bound: newer requests, and the prompt-cache tokens of streamed replies, are not included.
 ```
 
 A group is shown by its group ID (the Entra object ID), never by a directory display name: the output is placed in the model's context, and a display name is directory text that could carry instructions. The admin console shows which group an ID is. With group totals allowed, a second line reads `Group remaining: $7,500.00.` or `Group: no shared cap.`
@@ -93,7 +93,13 @@ show it: `/usage` needs a model request through the gateway ([Claude Code](#clau
 
 - As of the reconciler's last run (`asOf`). The staged example runs it every 2 minutes
   (`reconciler.schedule`), so figures are usually a few minutes old.
-- Requests not yet priced are not included, so spend is a lower bound.
+- Spend is a lower bound. Requests after the last run are not included. The prompt-cache reads and writes of a
+  streamed request are never priced: the gateway does not read a streamed reply, and API Management's LLM log has
+  prompt and completion tokens only ([table reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/apimanagementgatewayllmlog);
+  UNKNOWNS BB-G5). Claude Code streams and reuses a large cached prompt, so its spend can be many times the figure:
+  in the 2026-10-26 bug bash one turn had 9 priced tokens and 38,086 unpriced cache-read tokens. `/cost` shows Claude
+  Code's own estimate for the session.
+- A budget under USD 1 is shown to four decimals, for example `$0.0063 of $0.0100 used (63%)`.
 - Figures are refreshed only while the reconciler runs (`reconciler.timerEnabled: true`). With the timer off,
   figures already written for this month stay as they were at their `asOf` time; a scope with none shows
   "no figures for this month yet", and every scope does once the month changes.
@@ -116,7 +122,10 @@ show it: `/usage` needs a model request through the gateway ([Claude Code](#clau
   `aggregateBudgetState` read per scope. All are point reads: entitlement and `budgetState` in the person's
   partition (`/personId`), `aggregateBudgetState` in the scope's (`/scopeId`).
 - Per person: `admission.usage` (default 10 calls per 60 seconds, its own counter), separate from the
-  `/v1/messages` admission limit.
+  `/v1/messages` admission limit. The v2 tiers of API Management count with a token bucket and never exactly
+  ([rate-limit-by-key](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)): after a burst
+  of about 10 calls, about one more is admitted every 6 seconds, so `Retry-After` is short (1 s in the bug bash, which
+  saw 18 answers in the first minute).
 - The status line caches its line for 60 seconds next to the client configuration
   (`usage-statusline.json`, the line and its time only).
 

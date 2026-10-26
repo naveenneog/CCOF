@@ -31,10 +31,10 @@ Each row was met in a live deployment or test; the evidence column links to wher
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `401 authentication_error` | No token, an expired token, or a token for another audience | Sign in again with the CCOF helper ([CLIENTS.md](../CLIENTS.md)) |
-| `403` "You are not entitled …" | The person is not a direct member of an onboarded group, or the sync has not run since they were added | Add them to the Entra group; wait for the sync (timer) or apply a snapshot |
-| `403` "The requested model family is not available …" | The model is not in the group's admitted models | Use an admitted model, or add the family in the group's **Access and models** |
-| `403` "Your CCU budget … is used up" | Recorded or projected spend reached the person's budget | Raise the budget in the admin console, or wait for the next month |
-| `429` with `Retry-After` | A token limit (per person, group or family) or the budget guard's rate limit | Wait; check `/usage` for a warning; raise the limit or `overshootPercent` if appropriate |
+| `403` "not a member of a Claude group" or "not an active member of Claude group <ID>" | Not in an onboarded group, the sync has not run since, or the header names another group | Add them to the Entra group; wait for the sync or apply a snapshot; check the `x-ccof-project` ID |
+| `403` "Model … is not available in group …" | Not an admitted model; the message lists the admitted ones | Use one, or add the family in **Access and models** |
+| `403` "Your Claude budget … is used up" or "… has reached your Claude budget" | Recorded (or recorded plus recent) spend reached the budget | Raise the budget, or wait (the second clears in minutes) |
+| `429` with `Retry-After` | A token limit, or "slowed by the budget guard" | Wait; a higher budget ends the guard's wait in minutes |
 | A new user tag does not appear on requests | With `sync.mode: delegated-snapshot` the tag reaches requests when a snapshot is applied | Apply a [fresh complete snapshot](users-and-groups.md#snapshot-mode-after-console-changes), or turn on the sync timer after the Graph grants |
 | `/usage` shows "no figures for this month yet" | The reconciler has not run for this person this month, or its timer is off | Set `reconciler.timerEnabled: true` and rerun Stage 5 |
 
@@ -42,7 +42,7 @@ Each row was met in a live deployment or test; the evidence column links to wher
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Developer row shows "unpriced usage" while Foundry throttled | A request Foundry refused with `429` is counted with unknown tokens (an open question recorded in [UNKNOWNS](../UNKNOWNS.md): whether Foundry bills such requests) | None needed for budgets (spend is a lower bound) |
+| Developer row shows "unpriced usage" | A request Foundry answered `429` has unknown tokens (billing open, [UNKNOWNS](../UNKNOWNS.md)); other `4xx` answers count as zero ([ADR-0048](../adr/0048-request-checks-and-backend-refusals.md)) | None for budgets (spend is a lower bound) |
 | Spend stays at zero for groups | Older ledger query: group IDs are typed `guid` in Log Analytics | Update the checkout and rerun Stages 5 and 7 ([CHANGELOG](../CHANGELOG.md)) |
 
 ## Chargeback history

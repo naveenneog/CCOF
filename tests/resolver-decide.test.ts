@@ -36,6 +36,24 @@ test("resolves a valid person+subscription to routing and budget info", async ()
   assert.equal(result.personCeilingTokensPerMinute, 4200);
 });
 
+// ADR-0047: the gateway's budget-pacing counter restarts only when the budget or the month changes.
+test("a budget-state decision names its pacing counter by budget period and amount, not by the ceiling", async () => {
+  const keyOf = async (state: Record<string, unknown>) => {
+    const result = await resolveRequest({ personId: "person-1", subscriptionId: "sub-abc" },
+      fakeReads({ readBudgetState: async () => ({ ...activeBudgetState, ...state }) as never }), context());
+    assert.equal(result.refused, false);
+    return (result as unknown as Record<string, unknown>).personCeilingKey;
+  };
+  assert.equal(await keyOf({ period: "2026-10", budgetCcu: "10000" }), "2026-10_10000");
+  assert.equal(await keyOf({ period: "2026-10", budgetCcu: "1", realtimeCeilingTokensPerMinute: 3 }), "2026-10_1");
+  assert.equal(await keyOf({ period: "2026-10", budgetCcu: "1", realtimeCeilingTokensPerMinute: 900 }), "2026-10_1");
+  assert.equal(await keyOf({ period: "2026-11", budgetCcu: "0.5" }), "2026-11_0.5");
+  for (const bad of [{}, { period: "2026-10" }, { budgetCcu: "1" }, { period: "2026-10:x", budgetCcu: "1" }, { period: "2026-10", budgetCcu: "-1" },
+    { period: "2026-10", budgetCcu: "1e5" }, { period: "2026-10", budgetCcu: 10000 }, { period: "2026-10", budgetCcu: "1".repeat(31) }]) {
+    assert.equal(await keyOf(bad), undefined, JSON.stringify(bad));
+  }
+});
+
 test("refuses with 403 unknown_subscription when the subscriptionIndex key does not exist", async () => {
   const result = await resolveRequest(
     { personId: "person-1", subscriptionId: "sub-does-not-exist" },

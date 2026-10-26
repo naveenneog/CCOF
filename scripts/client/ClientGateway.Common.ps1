@@ -220,7 +220,7 @@ function New-ClientAzureCliTokenShim {
         '>&2 echo Signed in. Claude Code and Claude Desktop now use this sign-in.'
         'exit /b 0'
         ':status'
-        'call "%AZ%" account show --query user.name --output tsv --only-show-errors'
+        'call "%AZ%" account show --query user.name --output tsv --only-show-errors 2>nul'
         'if errorlevel 1 goto notsignedin'
         'exit /b 0'
         ':notsignedin'

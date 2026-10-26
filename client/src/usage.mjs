@@ -13,16 +13,24 @@ const DECIMAL = /^(\d+)(?:\.(\d+))?$/;
 
 export class UsageError extends Error {}
 
-// "$1,234.57": exact half-up rounding to cents from the gateway's decimal string, no floating point.
-export function formatAmount(value) {
+// "$1,234.57": exact half-up rounding from the gateway's decimal string, no floating point; `decimals` digits
+// after the point (2, or 4 for a budget under $1).
+export function formatAmount(value, decimals = 2) {
   const match = DECIMAL.exec(String(value));
   if (!match) return '$?';
-  const fraction = (match[2] ?? '').padEnd(3, '0');
-  let cents = BigInt(match[1]) * 100n + BigInt(fraction.slice(0, 2));
-  if (Number(fraction[2]) >= 5) cents += 1n;
-  const dollars = (cents / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `$${dollars}.${(cents % 100n).toString().padStart(2, '0')}`;
+  const scale = 10n ** BigInt(decimals);
+  const fraction = (match[2] ?? '').padEnd(decimals + 1, '0');
+  let units = BigInt(match[1]) * scale + BigInt(fraction.slice(0, decimals) || '0');
+  if (Number(fraction[decimals]) >= 5) units += 1n;
+  const whole = (units / scale).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `$${whole}.${(units % scale).toString().padStart(decimals, '0')}`;
 }
+
+// Cents hide what is left of a budget under $1 (bug bash DEV-13); such a budget's figures get four decimals.
+const decimalsFor = (budgetUsd) => {
+  const match = DECIMAL.exec(String(budgetUsd));
+  return match && match[1].replace(/^0+/, '') === '' ? 4 : 2;
+};
 
 const percentText = (value) => (typeof value === 'number' && Number.isFinite(value) ? `${Math.floor(value)}%` : '');
 
@@ -50,12 +58,13 @@ function scopeLine(scope, period, now) {
   if (scope.status === 'not_computed') return `${head}: no figures for ${period} yet.`;
   if (scope.status !== 'current' || !scope.spent || !scope.budget || !scope.remaining) return `${head}: figures unavailable; ask your platform team.`;
   const pct = percentText(scope.percentUsed);
-  let line = `${head}: ${formatAmount(scope.spent.usd)} of ${formatAmount(scope.budget.usd)} used${pct ? ` (${pct})` : ''}, `
-    + `${formatAmount(scope.remaining.usd)} left, as of ${asOfText(scope.asOf, now)}.`;
+  const d = decimalsFor(scope.budget.usd);
+  let line = `${head}: ${formatAmount(scope.spent.usd, d)} of ${formatAmount(scope.budget.usd, d)} used${pct ? ` (${pct})` : ''}, `
+    + `${formatAmount(scope.remaining.usd, d)} left, as of ${asOfText(scope.asOf, now)}.`;
   if (scope.exhausted) line += ' Budget used up: new requests are refused until next month.';
   else if (scope.warning === true && Number(scope.projectedPercent) >= 100) line += ' Projected spend has reached this budget: new requests are refused until recorded spend catches up or the budget is raised.';
   else if (scope.warning === true) line += ` Warning: about ${percentText(scope.projectedPercent) ?? 'most'} of this budget is used or in progress; requests are now slowed so the budget is not exceeded.`;
-  if (scope.completeness === 'partial') line += ' Some requests in this period are not yet priced.';
+  if (scope.completeness === 'partial') line += ' Some requests in this period are only partly priced (for example the prompt-cache tokens of streamed replies), so actual spend is higher.';
   return line;
 }
 
@@ -72,7 +81,7 @@ export function formatUsage(usage, now = new Date()) {
     lines.push(scopeLine(scope, usage.period, now));
     if (Object.hasOwn(scope, 'group')) lines.push(groupLine(scope.group));
   }
-  if (usage.scopes.some((s) => s.status === 'current')) lines.push('Figures are from the last cost run; requests not yet priced are not included.');
+  if (usage.scopes.some((s) => s.status === 'current')) lines.push('Figures are from the last cost run and are a lower bound: newer requests, and the prompt-cache tokens of streamed replies, are not included.');
   if (usage.truncated) lines.push(`Only the first ${usage.scopes.length} budgets are shown.`);
   return lines;
 }
@@ -87,7 +96,8 @@ export function statusLine(usage) {
     : top.warning !== true ? ''
     : Number(top.projectedPercent) >= 100 ? ' - budget reached, requests refused'
     : ` - warning: about ${percentText(top.projectedPercent) ?? 'most'} used, slowed`;
-  return `CCOF ${formatAmount(top.spent.usd)}/${formatAmount(top.budget.usd)}${pct ? ` (${pct})` : ''}${warn}`;
+  const d = decimalsFor(top.budget.usd);
+  return `CCOF ${formatAmount(top.spent.usd, d)}/${formatAmount(top.budget.usd, d)}${pct ? ` (${pct})` : ''}${warn}`;
 }
 
 export async function fetchUsage({ gatewayUrl, token, fetchImpl = fetch, timeoutMs = 15_000, signIn = 'run ccof-token login' }) {
