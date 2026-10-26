@@ -97,6 +97,20 @@ test("budget-exhausted evidence describes the current status-line output", () =>
   assert.doesNotMatch(onboarding, /console-03-access-models\.png/);
 });
 
+test("developer /usage page separates the interactive skill, claude -p and a refused budget (DEV-1, DEV-2, DEV-4)", () => {
+  const setup = read("docs/get-started/05-developer-setup.md");
+  const step = setup.split("## 4. Check your own budget")[1]?.split("\n## ")[0] ?? "";
+  assert.match(step, /interactive Claude Code session/i);
+  assert.match(step, /`claude -p "\/usage"`[^.]*built-in/);
+  assert.match(step, /Once requests are refused, `\/usage` cannot show it/);
+  assert.match(step, /status line/);
+  assert.match(step, /& "\$HOME\/\.claude\/ccof-usage\.ps1"/);
+  assert.doesNotMatch(step, /usage-03-refused\.png/, "a refused budget is not shown by /usage");
+  const usage = read("docs/USAGE.md");
+  assert.match(usage, /Shell command permission check failed/);
+  assert.match(usage, /allowed-tools/);
+});
+
 test("developer setup starts by getting the code and names the folder to run from", () => {
   const setup = read("docs/get-started/05-developer-setup.md");
   assert.match(setup, /git clone https:\/\/github\.com\/naveenneog\/CCOF\.git ccof/);
