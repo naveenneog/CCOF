@@ -73,6 +73,8 @@ function Invoke-Stage5 {
     $auditLocked = if (Get-StgAuditArchive $Cfg) { Get-StgAuditLockedContainers "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Storage/storageAccounts/$(Get-StgAuditArchiveName $s1.names)" } else { @() }
     $audit = Get-StgAuditDeployment -Cfg $Cfg -Names $s1.names -ApimLocation $ctx.Apim.location -LockedContainers $auditLocked
     Write-Host (Format-StgAuditPreview -Deployment $audit -WorkspaceRetentionDays $Cfg.audit.workspaceRetentionDays)
+    # Existing API Management (ADR-0045): its gateway logs go to CCOF's workspace; its own logger is not rewritten.
+    $apimInput = Get-StgStage5ApimInput -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
@@ -82,6 +84,7 @@ function Invoke-Stage5 {
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
         workbook = $Cfg.workbook; workbookContent = $report.workbookContent.value; workbookContentTags = $report.contentTags.value
         auditArchive = $(if ($audit) { $audit } else { @{} })
+        gatewayLogs = $apimInput.gatewayLogs; reuseMonitorLogger = $apimInput.reuseMonitorLogger
         chargebackHistory = $history ?? @{}
         logRetention = Get-StgLogRetentionSettings -Cfg $Cfg -HeldFrom $heldFrom
     }
@@ -110,6 +113,7 @@ function Invoke-Stage5 {
     $v.timers = @{ sync = [bool]$Cfg.syncTimerEnabled; reconciler = [bool]$Cfg.reconciler.timerEnabled }
     Set-StgWorkspaceRetention -Cfg $Cfg -Names $s1.names
     $v.audit = Test-StgAuditArchive -Cfg $Cfg -Deployment $audit -Names $s1.names -Apim $ctx.Apim
+    if ($apimInput.plan) { $v.gatewayLogs = Test-StgStage5ApimExisting -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim -Plan $apimInput.plan }
     if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
     $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
     $null = Write-StgEvidence 'stage5.verify.json' $v

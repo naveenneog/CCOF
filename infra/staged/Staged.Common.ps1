@@ -117,6 +117,11 @@ function Read-StgConfig {
     if (-not $c.stage1.approveNewPublicApimBootstrap -and -not ($apimExisting -and $apimExisting.name -and $apimExisting.subscriptionId -and $apimExisting.resourceGroup)) {
         $problems.Add('no API Management: set stage1.approveNewPublicApimBootstrap to true (Stage 1 creates a new one) or name an existing one in apim.existing { name, subscriptionId, resourceGroup }; Stage 1 is create-only, so decide before it runs')
     }
+    # ADR-0045: with both, Stage 1 would create a new instance and silently ignore the existing one.
+    if ($c.stage1.approveNewPublicApimBootstrap -and $apimExisting) {
+        $problems.Add('both a new API Management (stage1.approveNewPublicApimBootstrap true) and apim.existing are set: keep one. To use the existing instance set approveNewPublicApimBootstrap to false; for a new one set apim.existing to null')
+    }
+    if ($apimExisting -and $apimExisting.subscriptionId -and "$($apimExisting.subscriptionId)" -notmatch $script:Guid) { $problems.Add('apim.existing.subscriptionId must be a GUID (the subscription that holds the API Management instance)') }
     if ($problems.Count) { throw "invalid staged configuration:`n  - $($problems -join "`n  - ")" }
     $c.__path = $full
     return $c

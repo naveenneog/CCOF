@@ -51,6 +51,7 @@ function Invoke-Stage0 {
         Assert-Stg (-not $missing.Count) "backend $($b.id) lacks deployments: $($missing -join ', ')"
         $report.backends += [ordered]@{ id = $b.id; account = $acct.name; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
+    if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports $report.backends }
     $me = Get-StgGraph 'me?$select=id,userPrincipalName'
     $report.operator = @{ id = $me.id; upn = $me.userPrincipalName }
     foreach ($g in @($Cfg.groups | Where-Object { $_.groupId })) {
@@ -328,6 +329,7 @@ function Invoke-StgNetworkVerify {
     if (-not $Apply) {
         Write-Host "preview: network.mode verify: no network resource is created or changed."
         Write-Host "preview: -Apply runs $check (read-only) on VNet $(($arguments.VnetResourceId -split '/')[-1]): subnets $(@($arguments.FlexSubnet, $arguments.PeSubnet, $arguments.ApimSubnet | Where-Object { $_ }) -join ', '); $($arguments.FunctionAppIds.Count) Function Apps, $($arguments.StorageAccountIds.Count) storage accounts, Cosmos$(if ($arguments.ApimResourceId) { ', APIM' })$(if ($arguments.FoundryResourceId) { ", $(@($arguments.FoundryResourceId).Count) Foundry account(s)" })."
+        if (Test-StgApimExisting $Cfg) { Write-Host "API Management $($Cfg.apim.existing.name) (apim.existing) is not changed: CCOF does not change the networking of an existing API Management." }
         return $null
     }
     $resultPath = Join-Path $script:StateDir 'network-check.json'
@@ -377,6 +379,7 @@ function Invoke-Stage6 {
         if ($action -eq 'reuse') { Write-Host 'preview: no network deployment; -Apply verifies and reconciles the remaining Stage 6 integrations.'; return $null }
         Write-Host "then: VNet integration, one app at a time, for $($apps -join ', ') (az functionapp vnet-integration add)."
         if ($integrateApim) { Write-Host "then: APIM $($s1.apimName) outbound VNet integration on the APIM subnet (virtualNetworkType External; ingress stays public)." }
+        elseif (Test-StgApimExisting $Cfg) { Write-Host "API Management $($Cfg.apim.existing.name) (apim.existing) is not changed: CCOF does not change the networking of an existing API Management." }
         if ($foundryPrivate.Count) { Write-Host "Foundry private endpoints: $($foundryPrivate -join ', ')" }
         return $null
     }

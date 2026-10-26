@@ -67,10 +67,15 @@ Assert-Contract $caught 'Negative control: an injected role assignment was not r
 
 # Stage 5 (configuration) must never grant: no Authorization resource anywhere, including the reused modules.
 Assert-Contract (-not (@(Get-Resources $arms['infra\staged\stage5-config.bicep']) | Where-Object type -Match 'Authorization|sqlRole')) 'Stage 5 contains a grant.'
-# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): its only one is
-# the audit archive's, with a storage destination (ADR-0043; tests/Test-AuditArchive.ps1).
+# Stage 5 must not repeat Stage 1's resource-log diagnostic settings (Azure Monitor refuses duplicates): the audit
+# archive's has a storage destination (ADR-0043; tests/Test-AuditArchive.ps1); the workspace one, ccof-gateway-logs, is
+# deployed only when gatewayLogs is given, which the driver does only for an existing API Management (ADR-0045;
+# tests/Test-StagedApimExisting.ps1).
 $stage5Diag = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object type -EQ 'Microsoft.Insights/diagnosticSettings')
-Assert-Contract ($stage5Diag.Count -eq 1 -and $stage5Diag[0].name -ceq 'ccof-gateway-archive' -and -not $stage5Diag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
+$archiveDiag = @($stage5Diag | Where-Object { $_.name -ceq 'ccof-gateway-archive' })
+$gatewayLogsModule = @(Get-Resources $arms['infra\staged\stage5-config.bicep'] | Where-Object { $_.type -eq 'Microsoft.Resources/deployments' -and "$($_.name)" -match 'stage5-gateway-logs' })
+Assert-Contract ($stage5Diag.Count -eq 2 -and $archiveDiag.Count -eq 1 -and -not $archiveDiag[0].properties.ContainsKey('workspaceId')) 'Stage 5 repeats a diagnostic setting.'
+Assert-Contract ($gatewayLogsModule.Count -eq 1 -and "$($gatewayLogsModule[0].condition)" -match "empty\(parameters\('gatewayLogs'\)\)") 'Stage 5 deploys ccof-gateway-logs only when gatewayLogs is given (existing API Management).'
 
 # Stage 3 and Stage 4 keep the quickstart's Cosmos data contract.
 $quick = Build-Arm 'infra\quickstart\modules\cosmos-data.bicep'
