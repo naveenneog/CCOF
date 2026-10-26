@@ -96,7 +96,39 @@ The stages create no standby for the other parts. If you need one, plan it yours
 | Part | In the stages | Recovery option (not created by CCOF) |
 | --- | --- | --- |
 | API Management Standard v2 | One region | Multi-region gateways need the Premium (classic) tier ([API Management reliability](https://learn.microsoft.com/azure/reliability/reliability-api-management)); otherwise deploy again in the paired region |
-| Function Apps, storage, Log Analytics | One region | Run the stages again with the same configuration in a new resource group in the paired region; Cosmos DB data is already there |
+| Function Apps, storage, Log Analytics | One region | Wait for regional recovery, then verify networking and run Stage 8. A replacement stack in another region creates a new Cosmos DB account; it does not attach to the surviving replica. Data migration, identities, endpoints and client cutover need a separate recovery plan |
 | Foundry account | One account | A second account in another Claude region (for example `swedencentral` for Global Standard), added as another `backends[]` entry that groups name as their backend (`groups[].backendId`, or the backend chosen in the admin console). The gateway does not switch between accounts by itself. Global and Data Zone deployments are affected when their primary region has an interruption ([deployment types](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types)) |
+
+## 4. Outage and a planned failover drill
+
+If a Cosmos read region fails, the SDK can use the next reachable preferred region. If its write region fails,
+service-managed failover promotes another region; writes can fail until it completes. Session consistency does
+not promise zero data loss in an unplanned regional outage
+([Cosmos DB reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db#region-outage-support)).
+The gateway and Function Apps are single-region: when their region is unavailable the gateway remains unavailable,
+even if Cosmos survives. Check Azure Service Health; after recovery verify the private network (Stage 6 in `verify`
+mode), then run Stage 8. Do not delete the Cosmos account or assume rerunning Stage 1 moves existing services.
+
+For an approved maintenance window on a healthy **two-region, single-write** account, the following commands
+**change the write region**; they are not a preview. Use the account's subscription, resource group and name.
+Include every configured region with a unique priority; priority 0 is the writer
+([CLI reference](https://learn.microsoft.com/cli/azure/cosmosdb#az-cosmosdb-failover-priority-change), checked 2026-10-27).
+
+```powershell
+$sub = '<subscription-id>'; $rg = '<resource-group>'; $account = '<cosmos-account>'
+az cosmosdb show --subscription $sub -g $rg -n $account --query "{state:provisioningState,writes:writeLocations[].locationName,reads:readLocations[].locationName}"
+az cosmosdb failover-priority-change --subscription $sub -g $rg -n $account --failover-policies southindia=0 centralindia=1
+# Wait for Succeeded and confirm writeLocations names South India; run Stage 8 and check a group in the console.
+az cosmosdb show --subscription $sub -g $rg -n $account --query "{state:provisioningState,writes:writeLocations[].locationName}"
+# Switch back only after the drill checks and both regions are healthy.
+az cosmosdb failover-priority-change --subscription $sub -g $rg -n $account --failover-policies centralindia=0 southindia=1
+```
+
+Confirm `Succeeded` and Central India as writer again, then rerun Stage 8. Stage 1's read-back checks the configured
+priority order, so do not run it while the drill has reversed that order. Stage 8 proves end-to-end access but
+does not prove reads used South India: the resolver normally still prefers Central India. To verify read routing, use
+Cosmos DB's **Total Requests**, filtered by region and operation, during an isolated test
+([monitoring](https://learn.microsoft.com/azure/cosmos-db/monitor-reference)); unrelated traffic can share those
+metrics. A healthy manual writer switch is not a simulation of losing the gateway's region.
 
 Next: [deploy](03-deploy.md).

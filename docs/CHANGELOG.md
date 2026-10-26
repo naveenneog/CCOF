@@ -11,6 +11,8 @@
   deployment snapshot; older state explicitly labels its last-generated-file fallback.
 - AO-5: the unreachable-Cosmos preflight warning names the admin Groups page and the explicit
   keep-console-edits option before republishing.
+- AO-8: regional guidance includes outage limits, single-region gateway/Function recovery, and an
+  explicitly mutating Cosmos manual-failover drill with rollback and Microsoft Learn citations.
 
 ## 2026-10-26 — Release 17
 
