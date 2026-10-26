@@ -215,7 +215,8 @@ request. The JSON echoes every applied filter.
 
 A custom range (`from` and `to` as UTC timestamps, `to` excluded) must start before the current time and
 end at most 31 days after it, so the current month always fits and a range in the future is refused with
-`400 range_out_of_bounds` rather than answered as zero usage. The same rule applies to the chargeback views. Both formats return
+`400 range_out_of_bounds` rather than answered as zero usage. The same rule applies to the chargeback views.
+Both formats return JSON error bodies for the refusals below ([export handler](../admin/src/export.ts)).
 
 Export errors. Each error body is JSON with `error` and `requestId` (quote the request ID when asking for help):
 

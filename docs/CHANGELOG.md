@@ -2,6 +2,7 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- AO-7: complete the export documentation's interrupted sentence about JSON errors.
 - DG-7: record restart-confounded versus clean budget-change evidence; no reproducible
   independent cache issue established, so no speculative code change.
 - DG-6: retain pacing debt on revisiting an earlier monthly budget amount (ADR-0051);
