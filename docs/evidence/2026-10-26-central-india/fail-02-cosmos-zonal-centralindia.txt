@@ -1,0 +1,11 @@
+PS /home/alex/repo> pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
+Exception: ~/ccof/infra\quickstart\Deploy-Quickstart.ps1:120
+Line |
+ 120 |  … $summary) { throw "az $($Arguments[0..1] -join ' ') failed: $summary` …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | az deployment group failed: Microsoft.DocumentDB/databaseAccounts/ccoflab-x7k2m4q9pabcd-cosmos:
+     | ServiceUnavailable: Sorry, we are currently experiencing high demand in Central India region for the zonal
+     | redundant (Availability Zones) accounts, and cannot fulfill your request at this time Mon, 26 Oct 2026 18:20:34
+     | GMT. To request region access for your subscription, please follow this link https://aka.ms/cosmosdbquota for
+     | more details on how to create a region access request. Full error: ERROR:
+     | {"status":"Failed","error":{"code":"DeploymentFailed","target":"/subscriptions/ca73539b-d4ce-4fbe-ac06-321c19cbc7d0/resourceGroups/ccof-lab-rg/providers/Microsoft.Resources/deployments/stage1-services","message":"At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details. Correlatio …

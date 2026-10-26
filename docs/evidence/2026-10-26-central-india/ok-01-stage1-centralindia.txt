@@ -1,0 +1,4 @@
+PS /home/alex/repo> pwsh -File $run -Stage 1 -ConfigPath $cfg -Apply
+guarded preview: 21 existing resources; no unrelated Modify or Delete.
+deployed stage1-services (PT6M8.6088287S)
+stage 1 completed and verified in 571 s; outputs in $HOME/ccof-private/.staged-state\state.json

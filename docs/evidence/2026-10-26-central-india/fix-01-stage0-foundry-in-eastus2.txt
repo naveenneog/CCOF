@@ -1,0 +1,13 @@
+PS /home/alex/repo> pwsh -File $run -Stage 0 -ConfigPath $cfg
+      "deployments": [
+        "claude-haiku-5-5=claude-haiku-5-5@2",
+        "claude-sonnet-5-5=claude-sonnet-5-5@2"
+      ]
+    }
+  ],
+  "operator": {
+    "upn": "alex.admin@contoso.com",
+    "id": "b03f7e1e-ac2e-46ad-8982-d953b99234fa"
+  }
+}
+stage 0 completed and verified in 134 s; outputs in $HOME/ccof-private/.staged-state\state.json

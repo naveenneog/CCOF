@@ -75,7 +75,7 @@ az cognitiveservices usage list -l eastus2 -o json | ConvertFrom-Json |
   Select-Object @{ n = 'quota'; e = { $_.name.value } }, currentValue, limit
 ```
 
-Each line is `AIServices.<sku>.<model>.Azure`; free capacity is `limit` minus `currentValue`. It maps to one entry
+Use the Foundry account's region: `location`, or `stage1.foundry.location` where `location` offers no Claude models ([regions](region-and-failover.md)). Each line is `AIServices.<sku>.<model>.Azure`; free capacity is `limit` minus `currentValue`. It maps to one entry
 in `stage1.foundry.deployments` and one in `backends[].deploymentInferenceGeo`:
 
 | Quota line | `model` | `sku` | `capacity` | `deploymentInferenceGeo` |
@@ -138,7 +138,7 @@ Stage 4 creates them, or merges its settings into existing ones (`entra.existing
 | How membership is read | **Automatic** (Graph permission granted, sync timer on) or **snapshot** (an operator applies changes) | `sync`, `syncTimerEnabled`; [guide 6.1](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync) |
 | Dollar budgets enforced | `budget-state` (enforced) or `token-limits-only` | `resolver.budgetEnforcement` |
 | Budget guard | Example: warn at 80%, rate allowance 5% per projection window; not a strict cap | `reconciler.budgetGuard`; [budgets](../operate/budgets-and-guard.md) |
-| Cosmos DB redundancy | One region, or two regions with failover | `stage1.cosmosLocations`; [guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy) |
+| Region and failover region | `location` for everything; a Foundry account in a Claude region when `location` has none (`stage1.foundry.location`); Cosmos DB in one region, or two with failover (provisioned) | `location`, `stage1.foundry.location`, `stage1.cosmosLocations`; [regions and failover](region-and-failover.md) |
 | Developer sign-in | `msal` (default: the CCOF helper, Node.js on each machine) or `azure-cli` (interactive `az login` through a helper; the Azure CLI on each machine). Before Stage 4 | `client.signInMethod`, and `entra.allowAzureCliClient: true` for `azure-cli`; [guide 6.6](../STAGED-DEPLOYMENT-GUIDE.md#66-azure-cli-developer-sign-in) |
 | Long-term audit archive of the gateway log | On (template) or off. A storage account and a second diagnostic setting; about USD 0.25 per GB of LLM log exported, once, plus about USD 0.02 per GB per month kept (Hot LRS) | `audit.archive`; [audit archive](../operate/audit-archive.md) |
 | Chargeback history beyond the Log Analytics retention | Off (template) or on. On needs `reconciler.timerEnabled: true`, which the template also leaves off; set both to `true` together. A Cosmos DB container; for 1,000 active people, under USD 2 a month in writes on serverless plus USD 0.25 per GB per month stored | `audit.chargebackHistory`; [chargeback history](../operate/chargeback-history.md) |

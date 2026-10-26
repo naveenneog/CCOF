@@ -1,0 +1,30 @@
+PS /home/alex/repo> az (Cosmos regions, throughput, Foundry location)
+PS> az cosmosdb show -g ccof-lab-rg -n <cosmos> --query "{regions:locations[].{name:locationName,priority:failoverPriority,zoneRedundant:isZoneRedundant},automaticFailover:enableAutomaticFailover}"
+{
+  "automaticFailover": true,
+  "regions": [
+    {
+      "name": "Central India",
+      "priority": 0,
+      "zoneRedundant": false
+    },
+    {
+      "name": "South India",
+      "priority": 1,
+      "zoneRedundant": false
+    }
+  ]
+}
+PS> az cosmosdb sql database throughput show -g ccof-lab-rg -a <cosmos> -n ccof --query "resource.autoscaleSettings"
+{
+  "auto": {
+    "autoUpgradePolicy": null,
+    "maxThroughput": 1000,
+    "targetMaxThroughput": null
+  },
+  "current": 100
+}
+PS> az network private-endpoint show -g ccof-lab-rg -n <foundry>-account-pe --query location
+centralindia
+PS> az cognitiveservices account show -g ccof-lab-rg -n <foundry> --query location
+eastus2
