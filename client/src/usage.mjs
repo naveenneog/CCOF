@@ -64,6 +64,11 @@ function scopeLine(scope, period, now) {
   if (scope.exhausted) line += ' Budget used up: new requests are refused until next month.';
   else if (scope.warning === true && Number(scope.projectedPercent) >= 100) line += ' Projected spend has reached this budget: new requests are refused until recorded spend catches up or the budget is raised.';
   else if (scope.warning === true) line += ` Warning: about ${percentText(scope.projectedPercent) ?? 'most'} of this budget is used or in progress; requests are now slowed so the budget is not exceeded.`;
+  if (!scope.exhausted && Number.isSafeInteger(scope.pacingTokensPerMinute) && scope.pacingTokensPerMinute >= 0) {
+    line += scope.pacingTokensPerMinute === 0
+      ? ' Budget pacing allows no new tokens; requests may be refused until the next cost run or a budget increase.'
+      : ` Budget pacing applies: up to ${scope.pacingTokensPerMinute} tokens/minute; requests may wait even at low recorded spend. Follow the gateway Retry-After; this is separate from your configured token limit.`;
+  }
   if (scope.completeness === 'partial') line += ' Some requests in this period are only partly priced (for example the prompt-cache tokens of streamed replies), so actual spend is higher.';
   return line;
 }
@@ -92,10 +97,13 @@ export function statusLine(usage) {
   if (!current.length) return '';
   const top = current.reduce((a, b) => (Number(b.spent.ccu) > Number(a.spent.ccu) ? b : a));
   const pct = percentText(top.percentUsed);
-  const warn = top.exhausted ? ' - budget used up, requests refused'
+  let warn = top.exhausted ? ' - budget used up, requests refused'
     : top.warning !== true ? ''
     : Number(top.projectedPercent) >= 100 ? ' - budget reached, requests refused'
     : ` - warning: about ${percentText(top.projectedPercent) ?? 'most'} used, slowed`;
+  if (!top.exhausted && top.warning !== true && Number.isSafeInteger(top.pacingTokensPerMinute) && top.pacingTokensPerMinute >= 0) {
+    warn = top.pacingTokensPerMinute === 0 ? ' - budget pacing: requests refused' : ` - budget pacing: ${top.pacingTokensPerMinute} tokens/min`;
+  }
   const d = decimalsFor(top.budget.usd);
   return `CCOF ${formatAmount(top.spent.usd, d)}/${formatAmount(top.budget.usd, d)}${pct ? ` (${pct})` : ''}${warn}`;
 }

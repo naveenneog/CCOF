@@ -2,6 +2,8 @@
 
 ## Bug bash 5 client fixes (2026-10-27)
 
+- DG-5: usage and the status line show budget pacing below the warning threshold, using the
+  stored ceiling, without claiming to know the gateway's live wait.
 - DG-4: backend throttles explain the shared Foundry deployment limit; other non-Anthropic
   backend failures get an Anthropic envelope without exposing backend details.
 - DG-3: requests without a valid length are refused before body parsing or forwarding.

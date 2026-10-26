@@ -45,11 +45,15 @@ make the next requests wait for hours (bug bash 2026-10-26: about 7 hours after 
 | State | `/usage` | Status line |
 | --- | --- | --- |
 | Normal | `$42.10 of $100.00 used (42%), $57.90 left` | `CCOF $42.10/$100.00 (42%)` |
+| Budget pacing (even below warning) | `… Budget pacing applies: up to N tokens/minute; requests may wait even at low recorded spend …` | `… - budget pacing: N tokens/min` |
 | Warning | `… Warning: about 85% of this budget is used or in progress; requests are now slowed …` | `… - warning: about 85% used, slowed` |
 | Reached (projected) | `… Projected spend has reached this budget: new requests are refused …` | `… - budget reached, requests refused` |
 | Used up (recorded) | `… Budget used up: new requests are refused until next month.` | `… - budget used up, requests refused` |
 
 What Claude Code shows from the gateway:
+
+The pacing line is the last cost run's ceiling, not a live wait countdown. Only a gateway refusal's `Retry-After`
+knows the counter's remaining wait ([usage contract](../USAGE.md#budget-warning-adr-0040)).
 
 | State | Answer |
 | --- | --- |
