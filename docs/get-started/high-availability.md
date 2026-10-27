@@ -8,7 +8,7 @@ Stage 1: the resource stage is create-only.
 
 | Component | Configuration | Protection and cost |
 | --- | --- | --- |
-| API Management | `ha.apim.zoneRedundant: true`; `stage1.apimSku: StandardV2` or `PremiumV2` | Azure distributes units automatically across zones; do not specify numbered zones. Two units are recommended for surviving-zone capacity, not required. Going from one to two units adds one unit's hourly price |
+| API Management | `ha.apim.zoneRedundant: true`; `stage1.apimSku: StandardV2` or `PremiumV2` | Azure distributes units automatically across zones; do not specify numbered zones. Two units are recommended for surviving-zone capacity, not required. Going from one to two units adds an additional-unit hourly charge, which can differ from the first unit's price |
 | All Function Apps, including admin | `ha.functions.zoneRedundant: true` and ZRS/GZRS storage | Flex Consumption distributes instances across zones. Azure maintains and bills **at least two always-ready instances per scaling function/group**, even if you have not configured always-ready instances. This creates a running compute cost instead of scaling entirely to zero |
 | Function host and deployment storage | `stage1.storageSku: Standard_ZRS` or `Standard_GZRS` | ZRS copies synchronously across zones. GZRS also copies asynchronously to another region; regional recovery still needs a storage failover plan. Both cost more than LRS |
 | Cosmos DB | `stage1.cosmosLocations[].isZoneRedundant: true` per supported region | Replicas across zones in that region. Autoscale's zone premium is waived. A second region still adds that region's throughput and storage charges |
@@ -17,8 +17,10 @@ Sources, checked 2026-10-27: [API Management reliability](https://learn.microsof
 [Functions reliability](https://learn.microsoft.com/azure/reliability/reliability-functions),
 [storage redundancy](https://learn.microsoft.com/azure/storage/common/storage-redundancy),
 [Cosmos DB reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db).
-For example, one Standard v2 unit in Central India was about USD 0.96/hour on 2026-10-26; two are about USD
-1.92/hour, before Functions, private endpoints, storage, Cosmos and logs. Check current prices and your agreement
+For example, the Central India USD list meters on 2026-10-27 were `Standard v2 Unit` USD 0.95890/hour and
+`Standard v2 Secondary Unit` USD 0.68493/hour. Two units total about USD 1.64/hour, not twice the first-unit rate
+([Retail Prices API](https://prices.azure.com/api/retail/prices?$filter=serviceName%20eq%20%27API%20Management%27%20and%20armRegionName%20eq%20%27centralindia%27%20and%20skuName%20eq%20%27Standard%20v2%27)).
+This excludes Functions, private endpoints, storage, Cosmos and logs. Check current prices and your agreement
 in the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/).
 The [regions page](region-and-failover.md) gives provisioned Cosmos examples.
 
