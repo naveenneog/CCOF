@@ -115,6 +115,8 @@ if ($Case -in 'all', 'wiring') {
     $out.functionApps=@(); $out.names.apps=@{resolver=@{storageAccount='host'}}
     function Invoke-StgAzJson { return @(@{name='host';sku=@{name='Standard_LRS'}}) }
     Refuses { Test-Stage1 $c $out } 'host.*storage SKU'
+    $c.Remove('ha')
+    Refuses { Test-Stage1 $c $out } 'host.*storage SKU'
 }
 if ($Case -in 'all', 'template') {
     $bicep = Join-Path $HOME '.azure\bin\bicep.exe'

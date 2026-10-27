@@ -293,7 +293,7 @@ function Test-Stage1 {
     $storageItems = @(Invoke-StgAzJson @('storage', 'account', 'list', '--subscription', $sub, '--resource-group', $rg) | Where-Object { $ownedStorage -contains $_.name })
     Assert-Stg ($storageItems.Count -eq $ownedStorage.Count) "found $($storageItems.Count) deployed storage accounts; expected $($ownedStorage.Count)"
     foreach ($s in $storageItems) {
-        if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -eq 'Standard_GZRS') { Assert-StgHaStorage $Cfg $s }
+        if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -in 'Standard_ZRS', 'Standard_GZRS') { Assert-StgHaStorage $Cfg $s }
         Assert-Stg ($s.publicNetworkAccess -ceq $Cfg.stage1.storagePublicNetworkAccess) "$($s.name) storage PNA is $($s.publicNetworkAccess)"
         Assert-Stg ($s.allowSharedKeyAccess -eq $false -and $s.allowBlobPublicAccess -eq $false) "$($s.name) storage keys/blob public access are enabled"
         Assert-Stg ($s.networkRuleSet.defaultAction -ceq 'Deny' -and $s.networkRuleSet.bypass -ceq 'None') "$($s.name) storage firewall is not deny/none"
@@ -362,7 +362,7 @@ function Test-Stage1 {
         if ($null -ne $Cfg.ha.apim) { $v.apim.zoneRedundant = [bool]$apim.properties.zoneRedundant; $v.apim.units = $apim.sku.capacity }
     }
     $v.apimStatus = $Out.apimStatus
-    if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -eq 'Standard_GZRS') { $v.storage = @($storageItems | ForEach-Object { @{name=$_.name;sku=$_.sku.name} }) }
+    if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -in 'Standard_ZRS', 'Standard_GZRS') { $v.storage = @($storageItems | ForEach-Object { @{name=$_.name;sku=$_.sku.name} }) }
     $null = Write-StgEvidence 'stage1.verify.json' $v
     return $v
 }
