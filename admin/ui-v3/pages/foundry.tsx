@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { human } from "../lib/format.ts";
-import { href, scopePath } from "../lib/router.ts";
+import { ScopeLink } from "../components/scope-link.tsx";
+import { isGroupId } from "../lib/groups.ts";
 import { Button, CapabilityNotice, DataTable, ErrorNote, Loading, PageHeader, Section, StatePill } from "../components/ui.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
@@ -18,17 +19,12 @@ function Deployments({ resourceId }: { resourceId: string }) {
 }
 
 function LinkedScopes({ backendId }: { backendId: string }) {
-  const q = useQuery(`/api/v2/projects${qs({ backendId, limit: 100 })}`);
   const groups = useQuery("/api/groups");
-  if ((q.loading && !q.data) || (groups.loading && !groups.data)) return <span className="muted">…</span>;
-  if (q.error || groups.error) return <ErrorNote error={q.error ?? groups.error} retry={() => { q.reload(); groups.reload(); }} />;
-  const list = [
-    ...(groups.data?.groups ?? []).filter((g: { backendId: string }) => g.backendId === backendId)
-      .map((g: { groupId: string; displayName: string }) => ({ id: g.groupId, label: g.displayName, path: scopePath(g.groupId) })),
-    ...(q.data?.projects ?? []).map((p: { projectId: string }) => ({ id: p.projectId, label: p.projectId, path: `/projects/${encodeURIComponent(p.projectId)}` })),
-  ];
+  if (groups.loading && !groups.data) return <span className="muted">…</span>;
+  if (groups.error) return <ErrorNote error={groups.error} retry={groups.reload} />;
+  const list = (groups.data?.groups ?? []).filter((g: { backendId: string; groupId: string }) => g.backendId === backendId && isGroupId(g.groupId));
   if (!list.length) return <span className="muted">none</span>;
-  return <span className="tag-list">{list.slice(0, 8).map((p) => <a key={p.id} className="tag tag-link" href={href(p.path)}>{p.label}</a>)}{(list.length > 8 || q.data?.cursor) && <span className="muted">{list.length > 8 ? `+${list.length - 8}${q.data?.cursor ? "+" : ""}` : "more"}</span>}</span>;
+  return <span className="tag-list">{list.slice(0, 8).map((g: { groupId: string; displayName: string }) => <ScopeLink key={g.groupId} id={g.groupId}>{g.displayName}</ScopeLink>)}{list.length > 8 && <span className="muted">+{list.length - 8}</span>}</span>;
 }
 
 export function Foundry() {
@@ -41,13 +37,13 @@ export function Foundry() {
   const missing = accounts.filter((a: any) => a.lifecycle === "not_found");
   return (
     <div className="page">
-      <PageHeader title="Foundry" subtitle="Accounts, gateway backends and model deployments, with the groups and legacy projects that route to each backend." observedAt={inv.observedAt} onRefresh={inv.reload} busy={inv.loading} />
+      <PageHeader title="Foundry" subtitle="Accounts, gateway backends and model deployments, with the groups that route to each backend." observedAt={inv.observedAt} onRefresh={inv.reload} busy={inv.loading} />
       {inv.error ? <ErrorNote error={inv.error} retry={inv.reload} /> : !data ? <CapabilityNotice cap={inv.data} what="Resource inventory" /> : (
         <>
           {missing.length > 0 && (
             <div className="notice notice-danger" role="alert">
-              <div><p><strong>{missing.length} configured Foundry account{missing.length === 1 ? " was" : "s were"} not found.</strong> Groups and legacy projects routed to {missing.length === 1 ? "its" : "their"} backends will fail.</p>
-                {missing.map((m: any) => <p key={m.id}><code>{m.name}</code>: affected groups and legacy projects {m.backendIds.length ? m.backendIds.map((b: string) => <LinkedScopes key={b} backendId={b} />) : <LinkedScopes backendId={m.name} />}</p>)}</div>
+              <div><p><strong>{missing.length} configured Foundry account{missing.length === 1 ? " was" : "s were"} not found.</strong> Groups routed to {missing.length === 1 ? "its" : "their"} backends will fail.</p>
+                {missing.map((m: any) => <p key={m.id}><code>{m.name}</code>: affected groups {m.backendIds.length ? m.backendIds.map((b: string) => <LinkedScopes key={b} backendId={b} />) : <LinkedScopes backendId={m.name} />}</p>)}</div>
             </div>
           )}
           {data.truncated && <p className="notice notice-warn">The inventory is partial: some resources could not be read. {data.warnings.join(" ")}</p>}
@@ -63,12 +59,12 @@ export function Foundry() {
             ]} />
             {open && <div className="subpanel"><h3>Deployments in {open.split("/").at(-1)}</h3><Deployments resourceId={open} /></div>}
           </Section>
-          <Section title="Gateway backends" description="APIM backends and the groups and legacy projects routed to each. A group's backend is set on its Groups page.">
+          <Section title="Gateway backends" description="APIM backends and the groups routed to each. A group's backend is set on its Groups page.">
             <DataTable caption="Gateway backends" rows={data.backends} rowKey={(r) => r.backendId} columns={[
               { key: "backendId", label: "Backend ID", render: (r: any) => <code>{r.backendId}</code> },
               { key: "host", label: "Host", render: (r: any) => r.host ? <code className="wrap">{r.host}</code> : <span className="muted">invalid URL</span> },
               { key: "account", label: "Account", render: (r: any) => { const a = accounts.find((x: any) => x.backendIds.includes(r.backendId)); return a ? <span>{a.name} <StatePill state={a.lifecycle} /></span> : <span className="muted">not matched</span>; } },
-              { key: "projects", label: "Groups / legacy projects", render: (r: any) => <LinkedScopes backendId={r.backendId} /> },
+              { key: "groups", label: "Groups", render: (r: any) => <LinkedScopes backendId={r.backendId} /> },
             ]} />
           </Section>
           <Section title="API Management">

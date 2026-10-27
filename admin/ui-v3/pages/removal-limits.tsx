@@ -85,7 +85,7 @@ export function RemovalLimits() {
             <div><dt>Last changed</dt><dd>{saved.updatedAt ? when(saved.updatedAt) : "—"}</dd></div>
             <div><dt>Changed by</dt><dd><UserIdentity objectId={saved.updatedBy} /></dd></div>
           </dl>}
-          <p className="muted">{data?.fallback} Removals are held back only when a run exceeds both limits. Retiring a project is not counted against them.
+          <p className="muted">{data?.fallback} Removals are held back only when a run exceeds both limits. Retiring a group is not counted against them.
             {" "}<a href={href("/audit?operation=v3/sync/removal-limits")}>Change history</a></p>
         </Section>
         {!data?.editable && data?.reason ? <CapabilityNotice cap={{ state: "disabled", permission: data.reason }} what="Saving removal limits" /> : editable && (

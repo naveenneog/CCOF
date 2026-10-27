@@ -22,8 +22,13 @@ the group's chargeback ID.
 ## Reports
 
 Admin console → **Chargeback**: filter by period, group, model, family, developer or the tag field; the breakdown
-tabs are Groups, Developers, the tag field (for example **WBS ID**), Models, Families, Projects, Unpriced and
+tabs are Groups, Developers, the tag field (for example **WBS ID**), Models, Families, Unpriced and
 Diagnostics. **Export CSV** downloads the current tab with the field name as the column header.
+
+Ranking and cost breakdowns are group-only. There is no project-tag filter,
+classification drill-down or Groups/Projects toggle. Historical non-GUID scope IDs
+remain visible as text, but do not link to a removed management page. Older
+screenshots may still show controls that have been removed.
 
 ![Chargeback, Developers tab with the WBS ID column](../evidence/2026-10-24-demo/console-09-chargeback.png)
 

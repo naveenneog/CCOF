@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { ago, human, int, usd, when } from "../lib/format.ts";
 import { CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Section, StatePill } from "../components/ui.tsx";
-import { PagerLite } from "./project-detail.tsx";
+import { PagerLite } from "../components/records.tsx";
 import { SnapshotTable } from "./budgets.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
@@ -10,7 +10,7 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function Reconciler() {
   const runs = useQuery("/api/v3/reconciler/runs");
-  const [f, setF] = useState({ period: "month", scope: "", project: "", classification: "", person: "", state: "", budgetState: "" });
+  const [f, setF] = useState({ period: "month", scope: "", project: "", person: "", state: "", budgetState: "" });
   const [person, setPerson] = useState("");
   const [offset, setOffset] = useState(0);
   useEffect(() => setOffset(0), [JSON.stringify(f)]);
@@ -49,7 +49,7 @@ export function Reconciler() {
         <div className="filter-bar" role="search" aria-label="Snapshot filters">
           <Field label="Period">{(id) => <select id={id} className="input" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })}><option value="month">This month</option><option value="previous">Previous month</option></select>}</Field>
           <Field label="Scope">{(id) => <select id={id} className="input" value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}><option value="">Person and group</option><option value="person">Person</option><option value="group">Group</option></select>}</Field>
-          <Field label="Group or legacy project">{(id) => <input id={id} className="input" value={f.project} placeholder="Any" onChange={(e) => setF({ ...f, project: e.target.value.trim() })} />}</Field>
+          <Field label="Group">{(id) => <input id={id} className="input" value={f.project} placeholder="Any" onChange={(e) => setF({ ...f, project: e.target.value.trim() })} />}</Field>
           <Field label="Person" error={person && !GUID.test(person) ? "Object ID (GUID)" : null}>{(id, d) => <input id={id} aria-describedby={d} className="input mono" value={person} placeholder="Object ID" onChange={(e) => { const v = e.target.value.trim(); setPerson(v); if (!v || GUID.test(v)) setF({ ...f, person: v }); }} />}</Field>
           <Field label="Snapshot state">{(id) => <select id={id} className="input" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })}><option value="">Any</option>{["current", "expired", "historical", "invalid_event"].map((s) => <option key={s} value={s}>{human(s)}</option>)}</select>}</Field>
           <Field label="Budget state">{(id) => <select id={id} className="input" value={f.budgetState} onChange={(e) => setF({ ...f, budgetState: e.target.value })}><option value="">Any</option>{["available", "exhausted", "no_cap", "unknown"].map((s) => <option key={s} value={s}>{human(s)}</option>)}</select>}</Field>
