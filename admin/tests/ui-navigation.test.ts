@@ -111,6 +111,18 @@ for (const name of ["Budgets", "Reconciler", "Overview", "Audit"]) {
   });
 }
 
+test("shared group screens show no Classification field or column for group records; the legacy pages keep it", async () => {
+  const src = (p: string) => readFile(new URL(`../ui-v3/${p}`, import.meta.url), "utf8");
+  for (const page of ["pages/chargeback.tsx", "pages/reconciler.tsx"]) {
+    assert.doesNotMatch(await src(page), /<Field label="Classification">/, `${page}: no free-text classification filter`);
+  }
+  const html = ui.renderPage("Budgets", { ...replies, "/api/v3/reconciler/snapshots": cap([budgets[0]]) });
+  assert.ok(!/<th[^>]*>[^<]*(classification|Classification)[^<]*<\/th>/.test(html) && !/<th[^>]*>Group<\/th>/.test(html), "snapshot table has no classification column for groups");
+  assert.ok(!html.includes(">group<"), "the internal 'group' scope code is not shown as data");
+  assert.match(await src("pages/projects.tsx"), /label="Classification"/, "legacy projects keep their classification filter");
+  assert.match(await src("pages/new-project.tsx"), /label="Classification"/, "legacy project creation keeps classification codes");
+});
+
 test("Chargeback's project table and ranking share the group-aware route", async () => {
   const { scopePath } = await import("../ui-v3/lib/router.ts");
   assert.equal(scopePath(GROUP), `/groups/${GROUP}`);

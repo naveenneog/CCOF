@@ -157,8 +157,6 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
           <ChoiceInput id={id} value={f.project} options={(projects.data?.projects ?? []).map((p: { projectId: string }) => p.projectId)}
             onChange={(project) => setF({ ...f, project: project.trim() })} emptyLabel="All projects" manualLabel="Enter a project ID…" />
         )}</Field>
-        <Field label="Classification">{(id) => <input id={id} className="input input-short" value={f.classification} placeholder="STD"
-          onChange={(e) => setF({ ...f, classification: e.target.value.trim().toUpperCase() })} autoComplete="off" spellCheck={false} />}</Field>
         <Field label={tagLabel} hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
           invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
           onChange={(v) => { setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} />}</Field>

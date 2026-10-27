@@ -6,6 +6,9 @@
   Groups rather than requesting a legacy project with the same ID (`project_not_found`).
 - Budgets loads group details from the group API for burn-down charts. Missing details and query errors are shown.
 - Foundry lists linked groups as well as legacy projects. Legacy project detail and budget/activity links are retained.
+- Chargeback and Reconciler no longer show a Classification filter, and the Budgets snapshot table shows a
+  classification column only when legacy projects are listed. Groups have no classification (internally they all carry
+  the scope code `group`); the Legacy projects pages keep theirs.
 
 ## 2026-10-27 — Release 20: high availability options
 

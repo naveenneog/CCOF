@@ -16,7 +16,7 @@ export function SnapshotTable({ rows, scope }: { rows: any[]; scope: string }) {
       empty={<p className="empty-inline">No snapshots match. The reconciler writes them on its timer; none means no state yet, not zero spend.</p>}
       columns={[
         { key: "projectId", label: "Group / legacy project", render: (r) => <a href={href(scopePath(r.projectId, "budgets"))}>{r.projectId}</a> },
-        { key: "classification", label: "Group" },
+        ...(rows.some((r) => !isGroupId(String(r.projectId))) ? [{ key: "classification", label: "Legacy classification", render: (r: any) => isGroupId(String(r.projectId)) ? <span className="muted">—</span> : r.classification }] : []),
         ...(scope !== "group" ? [{ key: "personId", label: "Person", render: (r: any) => r.personId ? <UserIdentity objectId={r.personId} /> : <span className="muted">group</span> }] : []),
         { key: "spentCcu", label: "Spent", align: "end", render: (r) => <span title={`${r.spentCcu ?? "—"} CCU`}>{usd(r.spentUsd)}</span> },
         { key: "budgetCcu", label: "Budget", align: "end", render: (r) => r.budgetCcu === null ? <span className="muted">no cap</span> : <span title={`${r.budgetCcu} CCU`}>{usd(r.budgetUsd)}</span> },
