@@ -16,8 +16,9 @@ function Assert-Contract([bool]$Condition, [string]$Message) { if (-not $Conditi
 
 # Stage 0 refuses planned Foundry deployments that exceed the free model quota (novice run 3, 2026-10-26: Stage 0
 # passed with 7 of 27 DataZoneStandard units free for a capacity of 20; soft-deleted accounts of deleted labs held them).
-$quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence}; arm = ${function:Get-StgArm} }
+$quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}; graph = ${function:Get-StgGraph}; ev = ${function:Write-StgEvidence}; arm = ${function:Get-StgArm}; aliases = ${function:Assert-StgClientAliases} }
 try {
+    function Assert-StgClientAliases { param($Cfg) }
     $script:quotaUsages = @(); $script:quotaDeleted = @(); $script:quotaAccount = $null; $script:quotaArmError = $null; $script:quotaRegions = @()
     function Get-StgArm { param([string]$Path, [string]$ApiVersion)
         if ($Path -ceq '/subscriptions/s/locations') { return @{ value = @(@{ name = 'eastus2'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }, @{ name = 'centralindia'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }) } }
@@ -107,7 +108,7 @@ try {
     Assert-Contract ($message -match 'model quota in eastus2' -and $message -match 'old-lab-foundry' -and $message -notmatch 'india-foundry') "The quota refusal must name the Foundry region and its soft-deleted accounts (got: $message)."
     $script:quotaUsages = @(); $script:quotaDeleted = @()
 } finally {
-    ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph;     ${function:Write-StgEvidence} = $quotaSaved.ev; ${function:Get-StgArm} = $quotaSaved.arm
+    ${function:Invoke-StgAzJson} = $quotaSaved.az; ${function:Invoke-QsAz} = $quotaSaved.qs; ${function:Get-StgGraph} = $quotaSaved.graph;     ${function:Write-StgEvidence} = $quotaSaved.ev; ${function:Get-StgArm} = $quotaSaved.arm; ${function:Assert-StgClientAliases} = $quotaSaved.aliases
 }
 # The Stage 4 preview names what the apply would change on each reused registration, and writes nothing (novice run 3:
 # the preview of three shared registrations printed only the generic plan, so the Entra owner could not tell that

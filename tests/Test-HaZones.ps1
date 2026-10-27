@@ -200,6 +200,7 @@ if ($Case -in 'all', 'apim-wiring') {
     Refuses { Test-Stage1 $c $out } 'APIM zoneRedundant'
 }
 if ($Case -in 'all', 'stage0') {
+    function Assert-StgClientAliases { param($Cfg) }
     $c=Config; $c.backends=@(); $c.groups=@()
     function Invoke-QsAz { return 'false' }
     function Get-StgGraph { return @{id='operator';userPrincipalName='operator@contoso.com'} }

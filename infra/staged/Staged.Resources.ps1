@@ -4,6 +4,7 @@
 
 function Invoke-Stage0 {
     param($Cfg)
+    Assert-StgClientAliases $Cfg
     $report = [ordered]@{}
     $account = Invoke-StgAzJson @('account', 'show', '--subscription', $Cfg.subscriptionId)
     Assert-Stg ($account.tenantId -ieq $Cfg.tenantId) "subscription $($Cfg.subscriptionId) is in tenant $($account.tenantId), not $($Cfg.tenantId)"

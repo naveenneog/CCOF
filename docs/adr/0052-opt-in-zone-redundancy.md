@@ -65,3 +65,13 @@ The prior stage-template regression pinned exactly BasicV2/StandardV2. The reque
 that exact set to BasicV2/StandardV2/PremiumV2, while StandardV2 remains the default. Update the equality contract,
 not its strictness: deleting PremiumV2 or admitting classic Premium must both fail the suite. This reconciles
 the old assertion with the accepted feature; it is not permission to accept arbitrary SKUs or bypass the gate.
+
+## Client aliases before publication
+
+The lab's first Stage 7 published successfully but spent 1,368 seconds before export rejected copied Sonnet
+aliases on a Haiku-only backend. Extract the existing exact alias/admission guard for reuse, retaining its call
+at export. Stage 0 and Stage 7 validate configured selection/aliases before Azure reads, context construction or
+publishing, including preview mode. Admission remains the selected group's family models intersected with the
+selected backend's configured deployment names, ordinal/case-sensitive. Baseline project/classification selectors
+retain their one-backend default; named group selectors do not need Stage 4 resolution for this pure check.
+Refusals retain the existing error prefix/message and append aliases plus admitted deployment names.

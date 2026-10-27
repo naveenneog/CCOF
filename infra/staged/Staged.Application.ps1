@@ -124,6 +124,7 @@ function Invoke-Stage5 {
 
 function Invoke-Stage7 {
     param($Cfg, [switch]$Apply)
+    Assert-StgClientAliases $Cfg
     $s1 = Get-StgStage $Cfg 1; $null = Get-StgStage $Cfg 6; $null = Get-StgStage $Cfg 5; $entra = Get-StgStage $Cfg 4
     $ctx = New-StgQsContext $Cfg
     $ctx.PollSeconds = 15
