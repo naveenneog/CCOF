@@ -199,6 +199,19 @@ function Invoke-StgFailoverEndpoints {
     }
 }
 
+function ConvertTo-StgBreakerCanonical {
+    param($Breaker)
+    if (-not $Breaker) { return '' }
+    $copy = $Breaker | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
+    try {
+        foreach ($rule in @($copy.rules)) {
+            $rule.tripDuration = [Xml.XmlConvert]::ToTimeSpan($rule.tripDuration).Ticks
+            $rule.failureCondition.interval = [Xml.XmlConvert]::ToTimeSpan($rule.failureCondition.interval).Ticks
+        }
+    } catch { return 'invalid-duration' }
+    return ConvertTo-StgCanonical $copy | ConvertTo-Json -Depth 20 -Compress
+}
+
 function Test-StgApimFailover {
     param($Cfg, $Apim)
     $root = "/subscriptions/$($Apim.subscriptionId)/resourceGroups/$($Apim.resourceGroup)/providers/Microsoft.ApiManagement/service/$($Apim.name)/backends"
@@ -212,10 +225,10 @@ function Test-StgApimFailover {
                 Assert-Stg ($member.properties.url -ceq $m.url) "APIM failover member $($m.id) URL differs"
                 $service = @($services | Where-Object { $_.id -ieq "$root/$($m.id)" })[0]
                 Assert-Stg ($service -and $service.priority -eq $m.priority) "APIM failover member $($m.id) priority differs"
-                Assert-Stg ((ConvertTo-StgCanonical $member.properties.circuitBreaker | ConvertTo-Json -Depth 20 -Compress) -ceq (ConvertTo-StgCanonical $b.circuitBreaker | ConvertTo-Json -Depth 20 -Compress)) "APIM failover member $($m.id) breaker differs"
+                Assert-Stg ((ConvertTo-StgBreakerCanonical $member.properties.circuitBreaker) -ceq (ConvertTo-StgBreakerCanonical $b.circuitBreaker)) "APIM failover member $($m.id) breaker differs"
             }
         } else {
-            Assert-Stg ((ConvertTo-StgCanonical $pool.properties.circuitBreaker | ConvertTo-Json -Depth 20 -Compress) -ceq (ConvertTo-StgCanonical $b.circuitBreaker | ConvertTo-Json -Depth 20 -Compress)) "APIM backend $($b.id) breaker differs"
+            Assert-Stg ((ConvertTo-StgBreakerCanonical $pool.properties.circuitBreaker) -ceq (ConvertTo-StgBreakerCanonical $b.circuitBreaker)) "APIM backend $($b.id) breaker differs"
         }
         @{ id = $b.id; failover = [bool]$b.failover; verified = $true }
     }

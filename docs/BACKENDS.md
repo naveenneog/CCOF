@@ -119,7 +119,7 @@ tells each member the client settings for their project's dialect.
 [apim-genai]: https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities
 [cc-env]: https://code.claude.com/docs/en/env-vars
 [cc-gw]: https://code.claude.com/docs/en/llm-gateway-protocol
-# Account failover
+## Account failover
 
 For automatic priority routing between two accounts without changing a group's backend ID, see
 [Add Foundry account failover](get-started/foundry-failover.md). It covers existing deployments,

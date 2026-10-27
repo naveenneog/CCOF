@@ -48,7 +48,7 @@ foreach ($case in @(
     @{ key = 'failover-shape'; change = { param($x) $x.backends[0].failover = 'account' }; match = 'account object' },
     @{ key = 'backend-id'; change = { param($x) $x.backends[0].id = 'bad/id' }; match = 'safe characters' },
     @{ key = 'resource-group'; change = { param($x) $x.backends[0].failover.resourceGroup = 'bad/group' }; match = 'resourceGroup' },
-    @{ key = 'account-name'; change = { param($x) $x.backends[0].failover.accountName = 'BAD' }; match = 'accountName' },
+    @{ key = 'account-name'; change = { param($x) $x.backends[0].failover.accountName = 'BAD' }; match = 'failover\.accountName is invalid' },
     @{ key = 'same-account'; change = { param($x) $x.backends[0].failover.accountName = 'primary' }; match = 'different account' },
     @{ key = 'private-type'; change = { param($x) $x.backends[0].failover.privateEndpoint = 'true' }; match = 'privateEndpoint must be a boolean' },
     @{ key = 'recursive'; change = { param($x) $x.backends[0].failover.failover = @{} }; match = 'recursive' },
@@ -141,11 +141,15 @@ function Get-StgArm($Id, $Version) {
         ) } } }
     }
     $url = if ($Id.EndsWith('-primary')) { $backendPlan.url } else { $backendPlan.failover.url }
+    $breaker = $backendPlan.circuitBreaker | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
+    if ($script:fault -ceq 'normalized-duration') { $breaker.rules[0].tripDuration = 'PT1M'; $breaker.rules[0].failureCondition.interval = 'PT1M' }
     return @{ properties = @{ url = $(if ($script:fault -ceq 'url') { 'https://wrong' } else { $url })
-        circuitBreaker = $(if ($script:fault -ceq 'breaker') { @{ rules = @() } } else { $backendPlan.circuitBreaker }) } }
+        circuitBreaker = $(if ($script:fault -ceq 'breaker') { @{ rules = @() } } else { $breaker }) } }
 }
 $apim = @{ subscriptionId = $sub; resourceGroup = 'contoso-rg'; name = 'gateway' }
 Check (@(Test-StgApimFailover -Cfg $c -Apim $apim).Count -eq 1) 'Stage 5 must verify the live pool'
+$script:fault = 'normalized-duration'
+Check (@(Test-StgApimFailover -Cfg $c -Apim $apim).Count -eq 1) 'Stage 5 must accept equivalent ARM-normalized ISO durations'
 foreach ($case in @(@{ fault = 'pool'; match = 'two-member pool' }, @{ fault = 'priority'; match = 'priority differs' }, @{ fault = 'url'; match = 'URL differs' }, @{ fault = 'breaker'; match = 'breaker differs' })) {
     $script:fault = $case.fault; $message = ''
     try { $null = Test-StgApimFailover -Cfg $c -Apim $apim } catch { $message = $_.Exception.Message }
