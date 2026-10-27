@@ -21,7 +21,7 @@ function Get-StgHaProblems {
 
 function Get-StgHaCheck {
     param($Cfg)
-    $regions = @(Invoke-StgAzJson @('account', 'list-locations', '--subscription', $Cfg.subscriptionId))
+    $regions = @((Get-StgArm "/subscriptions/$($Cfg.subscriptionId)/locations" '2022-12-01').value)
     $flexZones = @(Invoke-StgAzJson @('functionapp', 'list-flexconsumption-locations', '--subscription', $Cfg.subscriptionId, '--zone-redundant=true') |
         ForEach-Object { ([string]$_.name).Replace(' ', '').ToLowerInvariant() })
     $region = $regions | Where-Object { $_.name -ieq $Cfg.location } | Select-Object -First 1

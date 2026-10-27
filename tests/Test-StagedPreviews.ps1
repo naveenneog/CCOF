@@ -20,6 +20,7 @@ $quotaSaved = @{ az = ${function:Invoke-StgAzJson}; qs = ${function:Invoke-QsAz}
 try {
     $script:quotaUsages = @(); $script:quotaDeleted = @(); $script:quotaAccount = $null; $script:quotaArmError = $null; $script:quotaRegions = @()
     function Get-StgArm { param([string]$Path, [string]$ApiVersion)
+        if ($Path -ceq '/subscriptions/s/locations') { return @{ value = @(@{ name = 'eastus2'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }, @{ name = 'centralindia'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }) } }
         if ($script:quotaArmError) { throw $script:quotaArmError }
         if ($Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct' -and $Path -cne '/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct/deployments') { throw "unexpected ARM read in the Stage 0 quota test: $Path" }
         if (-not $script:quotaAccount) { throw "az rest failed: (ResourceNotFound) The Resource 'Microsoft.CognitiveServices/accounts/acct' under resource group 'rg' was not found." }
@@ -29,7 +30,6 @@ try {
     function Invoke-StgAzJson { param([string[]]$Arguments)
         $a = $Arguments -join ' '
         if ($a -like 'account show*') { return @{ id = 's'; name = 'sub'; tenantId = 't'; user = @{ name = 'u' } } }
-        if ($a -like 'account list-locations*') { return @(@{ name = 'eastus2'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }, @{ name = 'centralindia'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }) }
         if ($a -like 'provider show*') { return @{ registrationState = 'Registered' } }
         if ($a -like 'functionapp list-flexconsumption-locations*') { return @(@{ name = 'East US 2' }, @{ name = 'Central India' }) }
         if ($a -like 'cognitiveservices*') { $script:quotaRegions += , ([regex]::Match($a, '--location (\S+)').Groups[1].Value) }

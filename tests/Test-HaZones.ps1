@@ -58,11 +58,15 @@ if ($Case -in 'all', 'hash') {
     foreach ($n in 0..8) { Check ((Get-StgStageInput $c $n) -ceq $old[$n]) "Absent HA changed Stage $n hash" }
 }
 function Invoke-StgAzJson($Arguments) {
-    if ($Arguments[0] -eq 'account') { return @(
+    if ($Arguments[0] -eq 'account') { throw 'Region lookup must use target-subscription ARM locations; account list-locations has no --subscription argument' }
+    return @(@{name='Central India'})
+}
+function Get-StgArm($Path, $ApiVersion) {
+    Check ($Path -ceq '/subscriptions/00000000-0000-4000-8000-000000000002/locations') 'Region lookup must target the configured subscription'
+    return @{value=@(
         @{name='centralindia';displayName='Central India';availabilityZoneMappings=@(@{logicalZone='1'},@{logicalZone='2'},@{logicalZone='3'});metadata=@{pairedRegion=@(@{name='southindia'})}},
         @{name='southindia';displayName='South India';availabilityZoneMappings=@();metadata=@{pairedRegion=@(@{name='centralindia'})}}
-    ) }
-    return @(@{name='Central India'})
+    )}
 }
 if ($Case -in 'all', 'regions') {
     $c = Config; $c.ha = @{apim=@{zoneRedundant=$true};functions=@{zoneRedundant=$true}}; $c.stage1.storageSku='Standard_ZRS'
@@ -74,7 +78,7 @@ if ($Case -in 'all', 'regions') {
     $c.location='centralindia'; $c.stage1.cosmosLocations[1].isZoneRedundant=$true
     Refuses { Get-StgHaCheck $c } 'southindia.*no availability zones.*isZoneRedundant'
     $c.stage1.cosmosLocations[1].isZoneRedundant=$false
-    function Invoke-StgAzJson($Arguments) { if ($Arguments[0] -eq 'account') { return @(@{name='centralindia';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},@{name='southindia';availabilityZoneMappings=@();metadata=@{}}) }; return @() }
+    function Invoke-StgAzJson($Arguments) { return @() }
     Refuses { Get-StgHaCheck $c } 'Flex.*centralindia.*not supported.*ha.functions'
 }
 if ($Case -in 'all', 'readback') {
