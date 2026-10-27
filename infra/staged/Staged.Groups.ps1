@@ -134,7 +134,7 @@ function New-StgSelectionQuery {
     param([string[]]$RequestIds)
     foreach ($id in $RequestIds) { if ($id -notmatch '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$') { throw "request_id_invalid: $id" } }
     $list = (@($RequestIds | ForEach-Object { "'$_'" })) -join ','
-    return "ApiManagementGatewayLogs | where TimeGenerated > ago(2h) | where tolower(tostring(CorrelationId)) in ($list) | mv-expand t = TraceRecords | where tostring(t.source) == 'ccof.usage.v1' | extend p = parse_json(tostring(t.message)) | summarize projectIds = make_set(tostring(p.projectId)), requests = dcount(CorrelationId)"
+    return "ApiManagementGatewayLogs | where TimeGenerated > ago(2h) | where tolower(tostring(CorrelationId)) in ($list) | mv-expand t = TraceRecords | where tostring(t.source) == 'ccof.usage.v1' | extend p = parse_json(tostring(t.message)) | summarize projectIds = make_set(tostring(p.projectId)), groupIds = make_set(tostring(p.classificationGroupId)), scopeCodes = make_set(tostring(p.classification)), requests = dcount(CorrelationId)"
 }
 
 function Assert-StgSelectedGroup {
@@ -142,6 +142,15 @@ function Assert-StgSelectedGroup {
     # The Log Analytics query API returns a dynamic column (make_set) as JSON text.
     $set = if ($Row.projectIds -is [string]) { @([string]$Row.projectIds | ConvertFrom-Json) } else { @($Row.projectIds) }
     $ids = @($set | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    $scopeCodes = @(if ($Row.scopeCodes -is [string]) { [string]$Row.scopeCodes | ConvertFrom-Json } else { $Row.scopeCodes })
+    if ($scopeCodes.Count -ne 1 -or $scopeCodes[0] -cne 'group') {
+        throw "verify_failed: selection evidence is not one group scope ($($scopeCodes -join ', '))"
+    }
+    $groupSet = if ($Row.groupIds -is [string]) { @([string]$Row.groupIds | ConvertFrom-Json) } else { @($Row.groupIds) }
+    $groupIds = @($groupSet | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    if ($groupIds.Count -ne 1 -or $groupIds[0] -cne $ExpectedGroupId.ToLowerInvariant()) {
+        throw "verify_failed: requests were charged to group IDs $($groupIds -join ', '), expected group $ExpectedGroupId"
+    }
     if ([int]$Row.requests -ne $Requests -or $ids.Count -ne 1 -or $ids[0] -cne $ExpectedGroupId.ToLowerInvariant()) {
         throw "verify_failed: requests without a selector were charged to $($ids -join ', ') ($($Row.requests) of $Requests traced), expected group $ExpectedGroupId"
     }

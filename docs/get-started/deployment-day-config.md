@@ -26,13 +26,13 @@ Claude requires approved inference outside India. [Regions](region-and-failover.
 {"stage1":{"approveNewPublicApimBootstrap":true,"apimPublisherEmail":"alex.admin@contoso.com","apimPublisherName":"Contoso AI","apimSku":"StandardV2","apimUnits":4},"apim":{"existing":null}}
 ```
 
-**Existing:** IDs: APIM → JSON view. Owner owns HA/network; **remove `ha.apim`**:
+**Existing:** IDs: APIM → JSON view. Owner manages HA/network; **remove `ha.apim`**:
 
 ```json
 {"stage1":{"approveNewPublicApimBootstrap":false},"apim":{"existing":{"name":"contoso-apim","subscriptionId":"00000000-0000-4000-8000-000000000002","resourceGroup":"gateway-rg"}}}
 ```
 
-Keep other `apim` fields. [Approvals](existing-api-management.md).
+Keep `apim` fields. [Approvals](existing-api-management.md).
 
 ## Network — who builds private paths?
 
@@ -58,7 +58,7 @@ IDs: Virtual networks → Subnets / Private DNS zones → JSON view:
 {"stage1":{"functionsPublicNetworkAccess":"Disabled"}}
 ```
 
-Approved internet-connected **lab** only (public Functions/SCM/admin; still authenticated):
+Approved public **lab** only (Functions/SCM/admin; still authenticated):
 
 ```json
 {"stage1":{"functionsPublicNetworkAccess":"Enabled"}}
@@ -130,7 +130,7 @@ Keep retention; budgets need the reconciler.
 ## Groups — which teams, models and budgets?
 
 Entra → Groups → **Object ID**; approve budget/models/cost code.
-One group: remove second; more: duplicate with unique ID. **Automatic** or **snapshot**:
+One: remove second; more: add unique IDs. **Automatic** (large groups) or **snapshot** (pilot/approved transport):
 
 ```json
 {"sync":{"mode":"application-permission"},"syncTimerEnabled":true}
@@ -229,9 +229,9 @@ Capacities are **not enterprise sizing**. Workbook ID: `[guid]::NewGuid()`.
   ],
   "client":{"group":"00000000-0000-4000-8000-000000000007","signInMethod":"azure-cli","models":{"default":"claude-sonnet-5-5","sonnet":"claude-sonnet-5-5","haiku":"claude-haiku-5-5","opus":"claude-sonnet-5-5"}},
   "resolver":{"budgetEnforcement":"budget-state","requireCompleteUsage":false,"cosmosRequestTimeoutMs":2000,"cosmosRetryAttempts":2,"cosmosRetryMaxWaitSeconds":2,"requestDeadlineMs":4000,"usageGroupTotals":false},
-  "sync":{"mode":"delegated-snapshot","schedule":"0 */1 * * * *","leaseSeconds":300,"maxRemovalsPerRun":5,"maxRemovalFraction":"0.1","memberTypes":"user","graphMaxRetries":3,"graphMaxRetryAfterSeconds":30,"graphTimeoutSeconds":30,"writeMode":"apply"},
-  "syncTimerEnabled":false,
-  "reconciler":{"timerEnabled":true,"schedule":"0 */2 * * * *","validitySeconds":600,"leaseSeconds":300,"ledgerTimeoutSeconds":60,"ledgerMaxRows":100000,"maxStates":10000,"writeConcurrency":8,"logAnalyticsEndpoint":"https://api.loganalytics.io","budgetGuard":{"warnPercent":80,"overshootPercent":5,"projectionMinutes":5}},
+  "sync":{"mode":"application-permission","schedule":"0 */1 * * * *","leaseSeconds":300,"maxRemovalsPerRun":5,"maxRemovalFraction":"0.1","memberTypes":"user","graphMaxRetries":3,"graphMaxRetryAfterSeconds":30,"graphTimeoutSeconds":30,"writeMode":"apply"},
+  "syncTimerEnabled":true,
+  "reconciler":{"timerEnabled":true,"schedule":"0 */2 * * * *","validitySeconds":600,"leaseSeconds":300,"ledgerTimeoutSeconds":60,"ledgerMaxRows":500000,"maxStates":100000,"writeConcurrency":8,"logAnalyticsEndpoint":"https://api.loganalytics.io","budgetGuard":{"warnPercent":80,"overshootPercent":5,"projectionMinutes":5}},
   "budgetState":{"graceSeconds":900,"hardLimitSeconds":3600},
   "gateway":{"configurationId":"ccof-day-gateway","surfaceClients":[],"admission":{"perPerson":{"calls":120,"renewalPeriodSeconds":60},"resolverMisses":{"calls":200,"renewalPeriodSeconds":1,"maxConcurrent":100},"usage":{"calls":10,"renewalPeriodSeconds":60}},
     "resolverTimeoutSeconds":10,"projectHeaderName":"x-ccof-project","keyVersion":1,"entitlementCache":{"cachingType":"internal","allowTtlSeconds":120,"refusalTtlSeconds":30,"lastKnownGoodGraceSeconds":3600,"refreshBackoffSeconds":30,"unavailableRetryAfterSeconds":5},

@@ -158,6 +158,15 @@ Vendor pages checked **2026-10-27**; [evidence boundary](../adr/0054-deployment-
 Pilot it before fleet assignment. Device installation can be bulk; **per-user interactive sign-in cannot**.
 Never run one admin's `az login` and copy its cache to 25,000 devices.
 
+### Large-group membership — not timed; finish the access plan first
+
+Intune installs software; it does not admit members to CCOF. Prefer approved automatic Graph sync for large
+groups, or an approved large-snapshot runner/transport ([sync](../SYNC.md)). The app-settings helper accepts
+only **7,000 base64** characters on Windows (96 KiB helper limit elsewhere); never omit people to fit it.
+New managed identities appear in Stage 1; Graph grants can take up to 24 hours to become effective.
+For a hard 2–3 hour window, pre-provision core resources/consent early or approve a tested alternative.
+The live two-membership snapshot was a pilot, not 25,000-member transport proof.
+
 ### Device payload — not timed
 
 1. Use Intune **Win32 app/Platform scripts** to install approved Claude Code, Node.js 22+, PowerShell 7,

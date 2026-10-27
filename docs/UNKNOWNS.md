@@ -17,6 +17,9 @@
 | DAY-4 | RESOLVED | The complete HA JSON example exposed valid explicit circuit-breaker ranges being refused: `ConvertFrom-Json -AsHashtable` reads JSON integers as Int64, while the range guard only accepted Int32. Accept both integral types, consistent with the other breaker fields; keep numeric bounds and negative tests. |
 | DAY-5 | RESEARCHED | Current vendor Cowork/Office/Desktop capabilities are broader than this repository's installer/live evidence. Keep CCOF support limits distinct from vendor capability; resolve the console's general Cowork statement explicitly in [ADR-0054](adr/0054-deployment-day-evidence-boundary.md). Intune/Office/native Desktop/Cowork were not exercised in this lab. |
 | DAY-6 | RESOLVED | After console-only onboarding, Stage 8 correctly detected a different higher-spend default group, but rejected that group's explicit ID because it was not a Stage 4 seed. Accept GUID expectations directly as trace assertions, preserving selector/attribution checks and all Stage 1–7 input hashes. |
+| DAY-7 | RESOLVED | Explicit GUID expectations also need actual group scope and charged-group evidence: a GUID-shaped legacy project could match `projectId` alone. Added metadata/cardinality guards and verified the real successful receipt read-only, without another model call or changing its stored record. |
+| DAY-8 | RESEARCHED | The Windows app-settings snapshot transport is limited to 7,000 base64 characters ([sync](SYNC.md)); the template's 10,000-state guard is below 25,000 developers' scopes (`src/reconciler/run.ts`). The large example chooses automatic sync and 100,000 state/500,000 ledger-row guards within runtime bounds; consent/warm-up and measured processing capacity remain prerequisites ([sizing](operate/sizing.md)). |
+
 ## Group-only console (G-GROUPS-ONLY)
 
 | ID | State | Question / evidence |

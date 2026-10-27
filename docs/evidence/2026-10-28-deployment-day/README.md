@@ -1,6 +1,6 @@
 # Deployment-day screens
 
-Real terminal output and read-only console captures, prepared 2026-10-27 for deployment on 2026-10-28.
+Real terminal output and read-only console captures, prepared on the night of 2026-10-27/28.
 **All identities, GUIDs and resource names are hypothetical replacements.** The private mapping/evidence is
 not shipped. Terminal screenshots are rendered from the adjacent `.txt` excerpts, not photographs of a terminal.
 Preview and apply excerpts share a screen where they differ. Durations are measured **successful applies**;
@@ -22,19 +22,20 @@ previews were not separately timed in this HA run. Planning allowances in the gu
 | [Developer setup](developer-setup.png) | Central India novice lab, 2026-10-27, recorded setup output | Setup not timed; associated model probe 15 s |
 | [Two-group onboarding](two-group-onboarding.png) | Tonight's live Central India HA lab, 2026-10-27 | POST 201 in 0.271 s; snapshot server run 561 ms; explicit calls 200 in 3.845/2.075 s, denied model 403 in 0.146 s; default 200 in 2.786 s after upstream-error retries |
 | [Usage and status line](usage-and-status.png) | Usage-skill response: novice lab, 2026-10-26; wrapper/status line: Central India novice lab, 2026-10-27 | Both real earlier captures, combined and rerendered; not timed. No new interactive `/usage` run is claimed |
-| [Groups list](console-groups.png) | Current console build served locally with tonight's **live HA API data**, 2026-10-27 | Both onboarded groups; not timed |
-| [Onboarding form](console-onboard.png) | Same current console/live APIs | Form only; no extra group submitted; not timed |
-| [Group detail](console-group-detail.png) | Same current console/live APIs | Data Science's stored policy/budget; not timed |
-| [Budgets snapshots](console-budgets.png) | Same current console/live APIs | Both snapshot links open the correct group; not timed |
-| [Chargeback by group](console-chargeback.png) | Same current console/live APIs | Actual telemetry; failed/unpriced requests are not converted to zero; not timed |
+| [Groups list](console-groups.png) | **Live HA console**, released source updated before capture, night 2026-10-27/28 | Both onboarded groups; not timed |
+| [Onboarding form](console-onboard.png) | Same live console/API | Form only; no extra group submitted; not timed |
+| [Group detail](console-group-detail.png) | Same live console/API | Data Science's stored policy/budget; not timed |
+| [Budgets snapshots](console-budgets.png) | Same live console/API | Both actual snapshot links open the correct group; not timed |
+| [Chargeback by group](console-chargeback.png) | Same live console/API | Actual telemetry; failed/unpriced requests are not converted to zero; not timed |
 
 ## Authentication and proof boundary
 
-The deployed HA lab still had an older console bundle: its snapshot links opened Legacy projects. The published
-source already fixes this. The five shipped console screenshots therefore use the **current source build served
-on localhost**, with a read-only proxy to the **real HA lab API**, not synthetic demo fixtures. Both actual
-snapshot links were clicked and opened their group pages. The lab itself still needs that UI update deployed;
-no redeployment was performed for a screenshot.
+The HA lab initially had an older console bundle: its snapshot links opened Legacy projects. The already-released
+source fixes this. First the fix was verified locally against real lab APIs; then **only the admin package** was
+built/tested from that unchanged released source and published through the documented Flex ZIP command.
+The five shipped console screenshots are from the **updated live deployment**, not localhost or synthetic fixtures.
+Both actual snapshot links were clicked and opened their group pages. No app registration, resource, gateway policy,
+resolver/sync package or group seed was changed by this admin update.
 
 To avoid an unattended interactive sign-in, capture
 automation changes **only that browser's fetched sign-in configuration** to demo mode and injects the approved

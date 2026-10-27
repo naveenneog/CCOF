@@ -17,7 +17,7 @@ For terminal, VS Code, Desktop and the unverified bulk/Office paths, use
   gateway, resolver and admin app registrations. Identify the **Privileged Role Administrator** who approves
   Graph application consent if automatic sync, group search or names are wanted
   ([permissions](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync)).
-  Otherwise choose delegated snapshots now. New managed-identity Graph grants can take **24 hours**;
+  Otherwise approve snapshot transport for the group size. New managed-identity Graph grants can take **24 hours**;
   admin role tokens can take **60–90 minutes** to refresh. Do not book these waits inside the window.
 - [ ] **Model/quota owner:** run the [quota and model commands](02-prerequisites.md#microsoft-foundry-models)
   in **each Foundry subscription**, using its account region. Record free quota **per model/version and
@@ -31,8 +31,9 @@ For terminal, VS Code, Desktop and the unverified bulk/Office paths, use
   support is not capacity approval. Without approval, full zonal Cosmos is a **no-go**: arrange an explicit
   owner-approved alternative before the day, not repeated immediate retries
   ([safe recovery](high-availability.md#3-add-the-options-before-stage-1)).
-- [ ] **Network/APIM owners:** finish private endpoints, DNS, routing, deployment-machine access and
-  permissions. Production uses the customer network in `verify` mode; `create` is the lab route.
+- [ ] **Network/APIM owners:** approve network design, DNS/routing, machine access and permissions.
+  In `verify` mode, connect new resources after Stage 1 and before Stage 6; keep the network owner present.
+  Production uses the customer network in `verify` mode; `create` is the lab route.
   A private Foundry standby needs its own approved endpoint/DNS path. An existing APIM owner manages its
   zones, units and VNet and approves CCOF's additions
   ([network](../NETWORK.md), [existing APIM](existing-api-management.md)).

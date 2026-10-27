@@ -111,7 +111,7 @@ The share of input tokens expected to be read from the prompt cache. It shapes t
 
 Cache-read share of input (%)
 
-No suggestion for these surfaces.
+Suggested 85% from code (illustrative). Replace it with the group's observed value from chargeback when available.
 
 Budget assistant
 
@@ -161,7 +161,20 @@ Burst factor
 
 TPM = monthly quota ÷ working minutes × burst.
 
-Every admitted family needs an in-force model price before limits can be applied.
+Suggested limits by family
+Family	$/MTok (blend)	Person / month	Person TPM	Group / month	Group TPM
+haiku
+claude-haiku-5-5
+	0.12	20,000,000	5,682	Unchanged	—
+
+Conservative per-user sizing:
+expected $2.42
+worst case $50.00
+of $50.00 · rate card 2026-10-11
+
+Apply to the group's limits
+
+Suggested token limits only. Monetary budgets are not saved by Apply; review both budget settings and limits before saving.
 
 Save changes
 Back to groups
