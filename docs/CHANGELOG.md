@@ -1,5 +1,31 @@
 # Change log
 
+## 2026-10-28 — Deployment-day and developer onboarding
+
+- Add a linked deployment-day checklist with measured Central India timings, HA/quota/network prerequisites,
+  two-group acceptance and 17 checked, pseudonymised real-output/console captures with source dates and limits.
+- Add decision-led configuration and a complete offline-validated Central India HA example: four APIM units,
+  zonal Functions/ZRS, capacity-gated Cosmos zones plus South India, standby Foundry and two existing groups.
+- Add per-client onboarding and vendor-sourced Intune pilot guidance, explicitly separating unverified
+  Office/Cowork/native Desktop/fleet capabilities from the live terminal/API evidence.
+- Publish a sizing worksheet that makes the one-unit extrapolation and 25,000-developer quota assumptions explicit.
+- Live multi-group rehearsal proves selector attribution, higher-spend default, denied-model guidance and two
+  usage budgets; it is not three-developer acceptance or full-population load proof.
+
+## 2026-10-27 — Deployment configuration breaker ranges
+
+- Accept whole-number circuit-breaker status ranges read from JSON. PowerShell's JSON reader returns
+  64-bit integers; explicit valid `statusCodeRanges` previously failed Stage 0 even though equivalent
+  in-memory ranges and omitted/default ranges worked. Strings, fractions and ranges outside 400–599 remain refused.
+
+## 2026-10-27 — Acceptance after console onboarding
+
+- Stage 8 accepts a console-onboarded group's explicit Object ID as `acceptance.expectedGroup`, without
+  changing/reseeding the original Stage 4 group list. It remains an assertion against this run's usage traces,
+  not a routing or authorization override. Ambiguous names, mixed selectors and wrong/untraced groups still fail.
+- Group proof also requires the actual `group` scope and matching charged Entra group ID, not only a
+  GUID-shaped project ID. A legacy project whose ID is a GUID cannot masquerade as an onboarded group.
+
 ## 2026-10-27 — Group-only admin console (G-GROUPS-ONLY)
 
 - Removed Legacy projects navigation, management pages and help; old project

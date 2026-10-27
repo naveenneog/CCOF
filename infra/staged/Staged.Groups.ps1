@@ -113,18 +113,19 @@ function Get-StgGroupSeedDrift {
     }
 }
 
-# Stage 8: the group a request without a selector must land in. acceptance.expectedGroup names a group
-# entry; otherwise the configuration's single group entry. Null when the acceptance requests name a project.
+# Stage 8 asserts attribution, not routing/access: an explicit Object ID may name a console-added group
+# absent from the Stage 4 seed. Otherwise use a configured name or single entry; null for selected projects.
 function Get-StgExpectedGroupId {
     param($Cfg, [Collections.IDictionary]$EntraGroups)
     $allowed = @($Cfg.acceptance.allowed | Where-Object { $_ })
     $named = @($allowed | Where-Object { $_.project }).Count
     if (-not $allowed.Count -or $named -eq $allowed.Count) { return $null }
     if ($named) { throw 'acceptance_mixed_selectors: allowed requests either all name a project or none do; the selected group is verified for requests without one.' }
-    $entries = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) })
     $name = $Cfg.acceptance.expectedGroup
+    if ($name -is [string] -and $name -match $script:Guid) { return $name.ToLowerInvariant() }
+    $entries = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) })
     if ($name) { $entries = @($entries | Where-Object { $_.groupDisplayName -ceq $name -or ($_.groupId -and ([string]$_.groupId) -ieq [string]$name) }) }
-    if ($entries.Count -ne 1) { throw 'acceptance_group_ambiguous: requests without a project need one group entry, or acceptance.expectedGroup naming one.' }
+    if ($entries.Count -ne 1) { throw 'acceptance_group_ambiguous: requests without a project need one group entry, or acceptance.expectedGroup naming one or its Object ID.' }
     return @(New-StgGroupDocuments -Groups $entries -EntraGroups $EntraGroups)[0].id
 }
 
@@ -133,7 +134,7 @@ function New-StgSelectionQuery {
     param([string[]]$RequestIds)
     foreach ($id in $RequestIds) { if ($id -notmatch '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$') { throw "request_id_invalid: $id" } }
     $list = (@($RequestIds | ForEach-Object { "'$_'" })) -join ','
-    return "ApiManagementGatewayLogs | where TimeGenerated > ago(2h) | where tolower(tostring(CorrelationId)) in ($list) | mv-expand t = TraceRecords | where tostring(t.source) == 'ccof.usage.v1' | extend p = parse_json(tostring(t.message)) | summarize projectIds = make_set(tostring(p.projectId)), requests = dcount(CorrelationId)"
+    return "ApiManagementGatewayLogs | where TimeGenerated > ago(2h) | where tolower(tostring(CorrelationId)) in ($list) | mv-expand t = TraceRecords | where tostring(t.source) == 'ccof.usage.v1' | extend p = parse_json(tostring(t.message)) | summarize projectIds = make_set(tostring(p.projectId)), groupIds = make_set(tostring(p.classificationGroupId)), scopeCodes = make_set(tostring(p.classification)), requests = dcount(CorrelationId)"
 }
 
 function Assert-StgSelectedGroup {
@@ -141,6 +142,15 @@ function Assert-StgSelectedGroup {
     # The Log Analytics query API returns a dynamic column (make_set) as JSON text.
     $set = if ($Row.projectIds -is [string]) { @([string]$Row.projectIds | ConvertFrom-Json) } else { @($Row.projectIds) }
     $ids = @($set | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    $scopeCodes = @(if ($Row.scopeCodes -is [string]) { [string]$Row.scopeCodes | ConvertFrom-Json } else { $Row.scopeCodes })
+    if ($scopeCodes.Count -ne 1 -or $scopeCodes[0] -cne 'group') {
+        throw "verify_failed: selection evidence is not one group scope ($($scopeCodes -join ', '))"
+    }
+    $groupSet = if ($Row.groupIds -is [string]) { @([string]$Row.groupIds | ConvertFrom-Json) } else { @($Row.groupIds) }
+    $groupIds = @($groupSet | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    if ($groupIds.Count -ne 1 -or $groupIds[0] -cne $ExpectedGroupId.ToLowerInvariant()) {
+        throw "verify_failed: requests were charged to group IDs $($groupIds -join ', '), expected group $ExpectedGroupId"
+    }
     if ([int]$Row.requests -ne $Requests -or $ids.Count -ne 1 -or $ids[0] -cne $ExpectedGroupId.ToLowerInvariant()) {
         throw "verify_failed: requests without a selector were charged to $($ids -join ', ') ($($Row.requests) of $Requests traced), expected group $ExpectedGroupId"
     }

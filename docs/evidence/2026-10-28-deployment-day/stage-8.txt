@@ -1,0 +1,6 @@
+== stage 8 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+preview: gateway https://ccofday-x7k2m4q9pabcd-apim.azure-api.net/anthropic: anonymous 401, 1 allowed and 1 denied requests, resolver 401, admin console checks, telemetry query, requests charged to group 0b65c63f-4d92-4e52-a492-c5455d71cfda
+stage 8 preview only: nothing changed. Rerun with -Apply.
+
+== stage 8 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+stage 8 completed and verified in 296 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

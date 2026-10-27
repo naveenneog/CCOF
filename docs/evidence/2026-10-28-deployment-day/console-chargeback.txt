@@ -1,0 +1,153 @@
+Skip to content
+CCOF
+Admin
+Chargeback
+Help
+Light
+Dark
+System
+Demo editor
+Editor
+View as reader
+Overview
+Groups
+Legacy projects
+Chargeback
+User tags
+Budgets
+Reconciler
+Foundry
+Health
+Audit
+Removal limits
+Cost definitions
+Help
+Collapse
+Chargeback
+
+The workbook's figures, computed on the server from the same ledger, pricing and rate card.
+
+Observed 0s ago
+Refresh
+Period
+This month
+Previous month
+Custom (UTC)
+Project
+User tag
+
+Chargeback ID, for example a WBS element
+
+Project tags
+
+All must match
+
+Foundry backend
+All backends
+Model family
+All families
+Sonnet
+Haiku
+Opus
+Fable
+Mythos
+Unknown
+Model
+All models
+claude-fable-5-1
+claude-mythos-5-1
+claude-fable-5
+claude-mythos-5
+claude-opus-5-5
+claude-opus-5
+claude-sonnet-5-5
+claude-sonnet-5
+claude-haiku-5-5
+claude-haiku-4-5
+Entra group
+Developer
+Known list cost
+$0.00
+0 CCU
+Complete cost
+—
+blank: not all usage priced
+Requests
+17
+11 unpriced · 0 unattributed
+Tokens
+—
+cache hits on 0% of requests
+Coverage
+—
+
+01 Oct – 31 Oct UTC · rate card 2026-10-11 (packaged rate card) · read 27 Oct, 19:09 UTC · List price, not an invoice.
+
+Cost over time by model family
+
+Known list cost per day. Hover a bar for its value.
+
+Hour
+Day
+$0.00
+$0.00
+$0.00
+$0.00
+$0.00
+27 Oct
+Haiku
+Data table (2 rows)
+Cost by token category
+
+Input, output and cache categories at their own rates.
+
+Input 93%
+Output 7%
+Cache read
+Cache write 5m
+Cache write 1h
+Data table (5 rows)
+
+Cache reads saved $0.00 against the uncached input rate.
+
+Top access groups
+Groups
+Projects
+Data Science
+$0.00 lower bound
+Engineering
+$0.00 lower bound
+Data table (2 rows)
+Budget burn-down
+
+All capped group budgets, summed. Filter by project for one project.
+
+$0
+$0
+$0
+Day 1
+Day 16
+Day 31
+Spent (cumulative)
+Data table (27 rows)
+Breakdown
+Export CSV
+Groups
+Developers
+User tag
+Models
+Families
+Projects
+Unpriced
+Diagnostics
+Groups
+Entra group	Projects	Requests	Tokens	Known cost	Complete cost	Unpriced	Coverage
+Data Science
+fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
+	fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	14	—	$0.00	—	10	unpriced usage
+Engineering
+0b65c63f-4d92-4e52-a492-c5455d71cfda
+	0b65c63f-4d92-4e52-a492-c5455d71cfda	3	—	$0.00	—	1	unpriced usage
+1–2 of 2
+Previous
+Next

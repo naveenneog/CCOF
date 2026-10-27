@@ -3,7 +3,7 @@
 // quotes are lines the scripts print.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -12,6 +12,151 @@ const root = path.resolve(import.meta.dirname, "..");
 const dir = (d: string) => readdirSync(path.join(root, d)).filter((f) => f.endsWith(".md")).map((f) => `${d}/${f}`);
 const pages = ["README.md", "docs/INDEX.md", "docs/GLOSSARY.md", ...dir("docs/get-started"), ...dir("docs/operate"), ...dir("docs/evidence/2026-10-24-demo")];
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
+
+test("deployment day is linked and gives a timed route through every stage", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  assert.ok(Buffer.byteLength(day.replace(/\r\n/g, "\n")) < 15 * 1024);
+  const start = read("README.md").split("## Start here")[1]?.split("\n## ")[0] ?? "";
+  assert.match(start, /\]\(docs\/get-started\/deployment-day\.md\)/, "README Start here links deployment day");
+  assert.match(read("docs/get-started/02-prerequisites.md"), /\]\(deployment-day\.md\)/);
+  for (let stage = 0; stage <= 8; stage++) {
+    assert.match(day, new RegExp(`^\\| ${stage} \\| [^|]+ \\| \\d+(?:[–-]\\d+)? min \\|`, "m"),
+      `deployment day needs a measured time for Stage ${stage}`);
+  }
+  for (const text of ["-Stage $stage -ConfigPath $cfg", "-Stage $stage -ConfigPath $cfg -Apply",
+    "https://aka.ms/cosmosdbquota", "25,000", '"apimUnits": 4', '"storageSku": "Standard_ZRS"',
+    '"zoneRedundant": true', '"isZoneRedundant": false', "foundry-failover.md",
+    "x-ccof-project", "/ccof/me/usage", "acceptance.expectedGroup", "three developers", "all registered group IDs",
+    "CpuPercent_Gateway", "subscription Owner", "Privileged Role Administrator",
+    "persistent", "Cloud Shell", "Stage 0", "Stage 8", "403", "chargeback"]) {
+    assert.ok(day.includes(text), `deployment day needs ${text}`);
+  }
+  assert.match(day, /not.*25,000.*load test|not.*25,000.*capacity guarantee/i);
+  assert.match(day, /quota.*per model|per.model.*quota/i);
+  assert.match(day, /80[–-]100 minutes/);
+  assert.match(day, /storage.*403.*5 minutes/i);
+  assert.match(day, /new resources after Stage 1 and before Stage 6/, "verify-mode networking must distinguish pre-day design from connecting newly created resources");
+});
+
+test("deployment day quotes only verified script output, not invented success lines", () => {
+  const day = read("docs/get-started/deployment-day.md").replace(/\r\n/g, "\n");
+  const block = day.split("**Script output:**\n\n```text\n")[1]?.split("```")[0] ?? "";
+  assert.ok(block, "deployment day has a script-output checklist");
+  const sources = readdirSync(path.join(root, "infra/staged")).filter((f) => f.endsWith(".ps1"))
+    .map((f) => read(`infra/staged/${f}`)).join("\n");
+  const allowed: Array<[string, RegExp]> = [
+    ["preview only: nothing changed", /Write-Host "[^"\n]*preview only: nothing changed/],
+    ["completed and verified in", /Write-Host "[^"\n]*completed and verified in/],
+    ["HA check:", /Write-Host "HA check:/],
+  ];
+  const lines = block.trim().split("\n");
+  assert.deepEqual(lines, allowed.map(([line]) => line), "deployment-day output checklist must use the real printed fragments");
+  for (const [line, printed] of allowed) assert.match(sources, printed, `staged scripts print ${line}`);
+});
+
+test("deployment day configuration teaches each decision and validates its complete HA example", () => {
+  const page = read("docs/get-started/deployment-day-config.md");
+  assert.match(read("README.md"), /\]\(docs\/get-started\/deployment-day-config\.md\)/);
+  assert.match(read("docs/get-started/deployment-day.md"), /\]\(deployment-day-config\.md\)/);
+  for (const decision of ["Region", "API Management", "Network", "Cosmos", "HA", "Standby", "Audit", "Groups", "Developer sign-in"]) {
+    assert.ok(page.includes(`## ${decision}`), `deployment-day config explains ${decision}`);
+  }
+  for (const match of page.matchAll(/```json\r?\n([\s\S]*?)```/g)) {
+    assert.doesNotThrow(() => JSON.parse(match[1]), "every deployment-day JSON fragment parses");
+  }
+  const section = page.split("## Complete HA example")[1];
+  const sample = section && /```json\r?\n([\s\S]*?)```/.exec(section)?.[1];
+  assert.ok(sample, "deployment-day complete HA example is present");
+  const config = JSON.parse(sample);
+  assert.equal(config.location, "centralindia");
+  assert.equal(config.stage1.foundry.location, "eastus2");
+  assert.equal(config.stage1.apimUnits, 4);
+  assert.equal(config.ha.apim.zoneRedundant, true);
+  assert.equal(config.ha.functions.zoneRedundant, true);
+  assert.equal(config.stage1.storageSku, "Standard_ZRS");
+  assert.deepEqual(config.stage1.cosmosLocations, [
+    { locationName: "centralindia", isZoneRedundant: true },
+    { locationName: "southindia", isZoneRedundant: false },
+  ]);
+  assert.equal(config.groups.length, 2);
+  const maximumMemberships = 25_000 * config.groups.length;
+  assert.ok(config.reconciler.maxStates >= maximumMemberships + config.groups.length,
+    "large-rollout example must not retain the 10,000-state guard below 25,000 developers' scopes");
+  assert.ok(config.reconciler.ledgerMaxRows > maximumMemberships * Object.keys(config.backends[0].deploymentInferenceGeo).length,
+    "large-rollout ledger guard needs headroom for the configured model/member scopes");
+  assert.equal(config.sync.mode, "application-permission", "large enrollment must not imply that the small app-settings snapshot transport is a fleet transport");
+  assert.equal(config.syncTimerEnabled, true);
+  assert.equal(config.acceptance.expectedGroup, config.groups[0].groupId);
+  assert.notEqual(config.groups[0].groupId, config.groups[1].groupId);
+  assert.ok(config.backends[0].failover, "HA example includes a standby backend");
+  assert.notEqual(config.backends[0].subscriptionId, config.backends[0].failover.subscriptionId);
+  const scratch = path.join(root, ".env.day-config-test");
+  // Keep the sample on the persistent worktree; no OS temporary folder or signed-in Azure profile is needed.
+  const file = path.join(scratch, "staged.config.json");
+  try {
+    mkdirSync(scratch, { recursive: true });
+    writeFileSync(file, sample);
+    const script = `. '${path.join(root, "infra/staged/Invoke-StagedDeployment.ps1")}' -DotSourceOnly; $null = Read-StgConfig '${file}'; 'HA example accepted'`;
+    assert.match(execFileSync("pwsh", ["-NoProfile", "-Command", script], { cwd: root, encoding: "utf8" }), /HA example accepted/);
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+});
+
+test("deployment day illustrates every timed step and inventories every real-run capture", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  const evidence = "docs/evidence/2026-10-28-deployment-day";
+  const index = read(`${evidence}/README.md`);
+  for (const step of [...Array.from({ length: 9 }, (_, i) => `Stage ${i}`), "Developer setup", "Two-group onboarding"]) {
+    assert.match(day, new RegExp(`^### ${step} [—–-] [^\\n]*(?:seconds|minutes)`, "m"), `${step} has a duration next to its capture`);
+  }
+  const names = [...Array.from({ length: 9 }, (_, i) => `stage-${i}.png`),
+    "developer-setup.png", "two-group-onboarding.png", "usage-and-status.png",
+    "console-groups.png", "console-onboard.png", "console-group-detail.png", "console-budgets.png", "console-chargeback.png"];
+  for (const name of names) {
+    assert.ok(existsSync(path.join(root, evidence, name)), `${name} exists`);
+    assert.ok(day.includes(`../evidence/2026-10-28-deployment-day/${name})`), `guide embeds ${name}`);
+    assert.ok(index.includes(`(${name})`), `capture index lists ${name}`);
+  }
+  for (const image of readdirSync(path.join(root, evidence)).filter((name) => name.endsWith(".png"))) {
+    assert.ok(index.includes(`(${image})`), `capture index inventories ${image}`);
+  }
+  assert.match(index, /2026-10-27/);
+  assert.match(index, /2026-10-26/);
+  assert.match(index, /demo|live/i);
+});
+
+test("deployment day users distinguishes captured clients from unverified fleet and Office routes", () => {
+  const users = read("docs/get-started/deployment-day-users.md");
+  assert.match(read("README.md"), /\]\(docs\/get-started\/deployment-day-users\.md\)/);
+  assert.match(read("docs/get-started/deployment-day.md"), /\]\(deployment-day-users\.md\)/);
+  for (const section of ["Claude Code", "VS Code", "Claude Desktop", "Cowork and Microsoft 365", "Bulk onboarding"]) {
+    assert.match(users, new RegExp(`^## \\d\\. ${section} [—–-] (?:[^\\n]*minutes|not timed)`, "m"), `${section} has timing`);
+  }
+  const setup = read("scripts/client/Set-ClaudeCodeGateway.ps1") + read("scripts/client/ClaudeCodeGateway.ps1");
+  for (const key of ["apiKeyHelper", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "claudeCode.disableLoginPrompt"]) {
+    assert.ok(users.includes(key), `users guide explains ${key}`);
+    assert.ok(setup.includes(key), `setup writes ${key}`);
+  }
+  for (const script of ["Set-ClaudeCodeGateway.ps1", "Set-ClaudeDesktopGateway.ps1"]) {
+    assert.ok(users.includes(script), `users guide quotes ${script}`);
+    assert.ok(read(`scripts/client/${script}`).includes("$ConfigPath"), `${script} accepts ConfigPath`);
+    assert.ok(read(`scripts/client/${script}`).includes("$Confirmed"), `${script} accepts Confirmed`);
+  }
+  for (const text of ["ccof-token.cmd", "~/.claude/ccof-token login", "claude -p", "/usage", "/status",
+    "not verified", "no Intune tenant", "surfaceClients", "surfaces", "gateway.surfaceClients",
+    "C:\\Program Files\\ClaudeCode\\managed-settings.json", "/Library/Application Support/ClaudeCode/managed-settings.json",
+    "https://code.claude.com/docs/en/managed-settings", "https://github.com/anthropics/claude-code/tree/main/examples/mdm"]) {
+    assert.ok(users.includes(text), `users guide needs ${text}`);
+  }
+  assert.match(users, /macOS.*not supported|not supported.*macOS/i);
+  assert.match(users, /per.user.*sign.in|sign.in.*per.user/i);
+  assert.match(users, /7,000 base64/, "bulk onboarding must warn about the small Windows snapshot transport");
+  assert.match(users, /Stage 1.*24 hours|24 hours.*Stage 1/, "fresh managed identities need an explicit consent/warm-up plan");
+  const windows = users.split("### Windows —")[1]?.split("### macOS/Linux")[0] ?? "";
+  const desktop = users.split("## 3. Claude Desktop")[1]?.split("## 4.")[0] ?? "";
+  assert.match(windows, /```powershell title="Windows only"/, "Windows helper commands must be labelled, not presented as portable deployer commands");
+  assert.match(desktop, /```powershell title="Windows only"/, "Windows-only Desktop commands must be labelled");
+  for (const block of users.matchAll(/```json\r?\n([\s\S]*?)```/g)) assert.doesNotThrow(() => JSON.parse(block[1]));
+});
 
 test("high availability guide shows opt-in settings, cost, checks and create-only migration", () => {
   const ha = read("docs/get-started/high-availability.md");

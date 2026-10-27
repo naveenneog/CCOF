@@ -103,7 +103,7 @@ Read by [infra/gateway/config.ts](../../infra/gateway/config.ts) (schema: `gatew
 | `acceptance.denied[].model` | Yes | `claude-opus-5-5` | Model that must be refused | Stage 8 |
 | `acceptance.denied[].expectedStatus` | Yes | `403` | HTTP status expected | Stage 8 |
 | `acceptance.denied[].reason` | No | text | Comment | none |
-| `acceptance.expectedGroup` | If several groups | absent | `groupDisplayName` or `groupId` charged for the requests | [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file) |
+| `acceptance.expectedGroup` | If several groups | absent | Configured `groupDisplayName`, or expected group Object ID (also console-added groups). Asserts no-selector attribution; does not choose routing | [guide 3.3](../STAGED-DEPLOYMENT-GUIDE.md#33-configuration-file) |
 
 
 ## Audit

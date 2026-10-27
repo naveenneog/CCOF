@@ -414,24 +414,52 @@ $two = @($groupEntry, ($groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json
 $ambiguous = $false
 try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $exampleCfg.acceptance; groups = $two } -EntraGroups $entraGroups } catch { $ambiguous = $_.Exception.Message -match 'acceptance_group_ambiguous' }
 Assert-Contract $ambiguous 'Two group entries without acceptance.expectedGroup must be refused.'
+$consoleGroup = '0000000B-0000-4000-8000-0000000000BB'
+$consoleAcceptance = @{ allowed = @(@{ model = 'm' }); expectedGroup = $consoleGroup }
+Assert-Contract ((Get-StgExpectedGroupId -Cfg @{ acceptance = $consoleAcceptance; groups = $exampleCfg.groups } -EntraGroups $entraGroups) -ceq $consoleGroup.ToLowerInvariant()) 'Stage 8 must accept an explicit console-onboarded group Object ID without reseeding groups.'
+foreach ($unknownName in @('unknown-group', "x') | take 1 //")) {
+    $unknownRefused = $false
+    try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = @{ allowed = @(@{ model = 'm' }); expectedGroup = $unknownName }; groups = $exampleCfg.groups } -EntraGroups $entraGroups }
+    catch { $unknownRefused = $_.Exception.Message -match 'acceptance_group_ambiguous' }
+    Assert-Contract $unknownRefused 'An unknown non-GUID expected group must still be refused.'
+}
+$mixedWithExplicitGroup = $mixedAcceptance.Clone(); $mixedWithExplicitGroup.expectedGroup = $consoleGroup
+$mixedRefused = $false
+try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $mixedWithExplicitGroup; groups = $exampleCfg.groups } -EntraGroups $entraGroups } catch { $mixedRefused = $_.Exception.Message -match 'acceptance_mixed_selectors' }
+Assert-Contract $mixedRefused 'An explicit expected group must not bypass mixed-selector refusal.'
 $reqId = '11111111-2222-4333-8444-555555555555'
 Assert-Contract ((New-StgSelectionQuery -RequestIds @($reqId)) -match "in \('$reqId'\)" -and (New-StgSelectionQuery -RequestIds @($reqId)) -match "ccof\.usage\.v1") 'The selection query must filter this run''s request IDs in the usage trace.'
+Assert-Contract ((New-StgSelectionQuery -RequestIds @($reqId)) -match 'scopeCodes.*p\.classification' -and (New-StgSelectionQuery -RequestIds @($reqId)) -match 'groupIds.*p\.classificationGroupId') 'Selection evidence must include the actual scope code and charged group ID.'
 $injection = $false
 try { $null = New-StgSelectionQuery -RequestIds @("x') | take 1 //") } catch { $injection = $_.Exception.Message -match 'request_id_invalid' }
 Assert-Contract $injection 'A non-GUID request ID must not reach the query text.'
-Assert-StgSelectedGroup -Row @{ requests = 1; projectIds = @('0000000A-0000-4000-8000-0000000000AA') } -ExpectedGroupId $expected -Requests 1
+Assert-StgSelectedGroup -Row @{ requests = 1; projectIds = @('0000000A-0000-4000-8000-0000000000AA'); scopeCodes = @('group'); groupIds = @('0000000A-0000-4000-8000-0000000000AA') } -ExpectedGroupId $expected -Requests 1
 $script:passed++
 # The Log Analytics query API returns a dynamic column (make_set) as JSON text (live Stage 8, 2026-10-24).
-Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa"]' } -ExpectedGroupId $expected -Requests 2
+Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa"]'; scopeCodes = '["group"]'; groupIds = '["0000000a-0000-4000-8000-0000000000aa"]' } -ExpectedGroupId $expected -Requests 2
 $script:passed++
 $wrongText = $false
-try { Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa","0000000b-0000-4000-8000-0000000000bb"]' } -ExpectedGroupId $expected -Requests 2 } catch { $wrongText = $_.Exception.Message -match 'verify_failed' }
+try { Assert-StgSelectedGroup -Row @{ requests = 2; projectIds = '["0000000a-0000-4000-8000-0000000000aa","0000000b-0000-4000-8000-0000000000bb"]'; scopeCodes = @('group'); groupIds = @($expected) } -ExpectedGroupId $expected -Requests 2 } catch { $wrongText = $_.Exception.Message -match 'verify_failed' }
 Assert-Contract $wrongText 'Stage 8 must refuse JSON text naming two groups.'
 foreach ($row in @(@{ requests = 1; projectIds = @('0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 2; projectIds = @($expected, '0000000b-0000-4000-8000-0000000000bb') }, @{ requests = 0; projectIds = @() })) {
+    $row.scopeCodes = @('group'); $row.groupIds = @($expected)
     $wrong = $false
     try { Assert-StgSelectedGroup -Row $row -ExpectedGroupId $expected -Requests $row.requests } catch { $wrong = $_.Exception.Message -match 'verify_failed' }
     if ($row.requests -eq 0) { $wrong = $false; try { Assert-StgSelectedGroup -Row $row -ExpectedGroupId $expected -Requests 1 } catch { $wrong = $_.Exception.Message -match 'verify_failed' } }
     Assert-Contract $wrong "Stage 8 must refuse requests charged to another group or untraced ($($row.projectIds -join ','))."
+}
+foreach ($case in @(
+    @{ scopes = @('STD'); groups = @($expected); label = 'legacy project with a GUID ID' },
+    @{ scopes = @('group', 'STD'); groups = @($expected); label = 'mixed scopes' },
+    @{ scopes = @('group'); groups = @('0000000b-0000-4000-8000-0000000000bb'); label = 'different charged group' },
+    @{ scopes = @('group'); groups = @($expected, '0000000b-0000-4000-8000-0000000000bb'); label = 'multiple charged groups' },
+    @{ scopes = @(); groups = @($expected); label = 'missing scope' },
+    @{ scopes = @('group'); groups = @(); label = 'missing charged group' }
+)) {
+    $refused = $false
+    try { Assert-StgSelectedGroup -Row @{ requests = 1; projectIds = @($expected); scopeCodes = $case.scopes; groupIds = $case.groups } -ExpectedGroupId $expected -Requests 1 }
+    catch { $refused = $_.Exception.Message -match 'verify_failed' }
+    Assert-Contract $refused "Stage 8 group evidence must refuse $($case.label), even when projectId matches."
 }
 $priorResourceId = '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/shared/providers/Microsoft.Storage/storageAccounts/prefix-owned/blobServices/default'
 $changes = @(

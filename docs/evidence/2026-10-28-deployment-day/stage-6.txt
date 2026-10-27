@@ -1,0 +1,10 @@
+== stage 6 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+stage 6 preview only: nothing changed. Rerun with -Apply.
+
+== stage 6 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+deployed stage6-network (PT10M12.1687838S)
+ccofday-x7k2m4q9pabcd-admin integrated with snet-functions
+ccofday-x7k2m4q9pabcd-reconciler integrated with snet-functions
+ccofday-x7k2m4q9pabcd-resolver integrated with snet-functions
+ccofday-x7k2m4q9pabcd-sync integrated with snet-functions
+stage 6 completed and verified in 879 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

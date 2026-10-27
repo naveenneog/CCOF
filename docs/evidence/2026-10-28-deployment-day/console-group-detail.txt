@@ -1,0 +1,186 @@
+Skip to content
+CCOF
+Admin
+Groups
+fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
+Help
+Light
+Dark
+System
+Demo editor
+Editor
+View as reader
+Overview
+Groups
+Legacy projects
+Chargeback
+User tags
+Budgets
+Reconciler
+Foundry
+Health
+Audit
+Removal limits
+Cost definitions
+Help
+Collapse
+Data Science
+
+fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
+
+active
+Budget
+
+Each member gets the per-user budget every month. Auto-scale has no group total; a cap shares one monthly total across the group.
+
+Per-user budget (monthly)
+USD
+CCU
+Group total
+ Auto-scale: grows with every member added
+ Cap: a fixed monthly total for the whole group
+
+Member count unavailable: the estimate needs the group directory (ADMIN_GROUP_SEARCH_ENABLED).
+
+Access
+
+Which applications the group may use, its chargeback ID and its precedence.
+
+Allowed surfaces
+ Claude Code
+ Chat
+ Microsoft 365 (Claude Office add-ins)
+ Cowork · Runs on Anthropic's servers; not routed through this gateway.
+ Design · Placeholder: no Foundry path yet.
+Chargeback ID
+
+Optional. For example a WBS element; shown per developer in chargeback and exports.
+
+Priority
+
+When a person is in several groups and sends no project header, the group where they have spent the most this month applies; with equal spend, the lower number.
+
+Models and rate limits
+ Restricted families (Fable, Mythos) are approved for this group
+Token limits for group
+Scope	TPM	Quota	Period
+All Families · Person
+—
+Hourly
+Daily
+Weekly
+Monthly
+Yearly
+
+All Families · Group
+—
+Hourly
+Daily
+Weekly
+Monthly
+Yearly
+
+Haiku · Person
+—
+Hourly
+Daily
+Weekly
+Monthly
+Yearly
+
+Haiku · Group
+—
+Hourly
+Daily
+Weekly
+Monthly
+Yearly
+Admitted models
+Haiku
+claude-haiku-5-5
+Add model…
+claude-haiku-4-5
+Admit sonnet
+Admit opus
+
+Empty TPM or quota means no limit at that scope. Fable and Mythos can be admitted only when restricted families are approved for this group.
+
+Expected cache reads
+
+The share of input tokens expected to be read from the prompt cache. It shapes the budget assistant's estimate; it is not enforced.
+
+Cache-read share of input (%)
+
+Suggested 85% from code (illustrative). Replace it with the group's observed value from chargeback when available.
+
+Budget assistant
+
+Suggests quotas and TPM from the per-user budget and the expected cache reads; Apply fills the limits above for review.
+
+Per-user budget
+Monthly budget per user
+USD
+CCU
+
+Each user gets this allowance. Group size is not needed.
+
+Geography
+Global
+US data zone
+Sizing
+Expected mix
+Conservative
+
+Sizes quotas at the highest token price across the selected model's prompt tiers. This is a sizing estimate, not a guarantee of invoice or dollar-budget enforcement.
+
+Optional whole-group budget
+ Also size whole-group limits
+
+Independent cap shared by the group, never divided among users. When off, applying preserves existing group token limits.
+
+Traffic mix
+Output share of tokens
+20%
+Cache reads (of input)
+85%
+Cache writes 5 m (of input)
+10%
+Cache writes 1 h (of input)
+0%
+Budget split by family
+Haiku
+100%
+haiku model priced
+claude-haiku-5-5 (base tier)
+claude-haiku-4-5
+Rate limits
+Working days
+Hours a day
+Burst factor
+3×
+
+TPM = monthly quota ÷ working minutes × burst.
+
+Suggested limits by family
+Family	$/MTok (blend)	Person / month	Person TPM	Group / month	Group TPM
+haiku
+claude-haiku-5-5
+	0.12	20,000,000	5,682	Unchanged	—
+
+Conservative per-user sizing:
+expected $2.42
+worst case $50.00
+of $50.00 · rate card 2026-10-11
+
+Apply to the group's limits
+
+Suggested token limits only. Monetary budgets are not saved by Apply; review both budget settings and limits before saving.
+
+Save changes
+Back to groups
+Retire this group
+
+One way. The next entitlement sync removes access for every member; the Entra group itself is not changed.
+
+Type the group's Object ID to confirm
+Retire group

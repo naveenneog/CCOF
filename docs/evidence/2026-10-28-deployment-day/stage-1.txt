@@ -1,0 +1,6 @@
+== stage 1 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+stage 1 preview only: nothing changed. Rerun with -Apply.
+
+== stage 1 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+deployed stage1-services (PT5M54.922869S)
+stage 1 completed and verified in 538 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

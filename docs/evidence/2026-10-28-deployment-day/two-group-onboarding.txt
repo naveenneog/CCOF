@@ -1,0 +1,20 @@
+Real live rehearsal: existing group added through POST /api/groups: HTTP 201 (0.271 seconds).
+
+{"schema":"ccof.sync.run.v1","outcome":"succeeded","counts":{"groupsRead":2,"membersAdmitted":2,"writeFailures":0},"durationMs":561}
+
+data-science-selected: HTTP 200; 3.845 seconds; selector fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
+{"model":"claude-haiku-5-5","usage":{"input_tokens":2517,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":8,"output_tokens_details":{"thinking_tokens":8},"service_tier":"standard","inference_geo":"global","speed":"standard"}}
+
+engineering-final-selected: HTTP 200; 2.075 seconds; selector 0b65c63f-4d92-4e52-a492-c5455d71cfda
+{"model":"claude-haiku-5-5","usage":{"input_tokens":14,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":4,"output_tokens_details":{"thinking_tokens":0},"service_tier":"standard","inference_geo":"global","speed":"standard"}}
+
+default-final-128: HTTP 200; 2.786 seconds; selector (none)
+{"model":"claude-haiku-5-5","usage":{"input_tokens":14,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":4,"output_tokens_details":{"thinking_tokens":0},"service_tier":"standard","inference_geo":"global","speed":"standard"}}
+
+data-science-denied-sonnet: HTTP 403; 0.146 seconds; selector fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
+{"type":"error","error":{"type":"permission_error","message":"Model claude-sonnet-5-5 is not available in group fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9. Allowed models: claude-haiku-5-5. Choose one of them (in Claude Code: /model), or ask your platform team to admit the model. Request id: cc077faf-ef10-44e3-8114-4b9f08d50890."}}
+
+usage-later: HTTP 200; 1.35 seconds; selector (none)
+{"schema":"ccof.usage.v1","scopes":[{"projectId":"fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9","spent":"0.0002557","budget":"50"},{"projectId":"0b65c63f-4d92-4e52-a492-c5455d71cfda","spent":"0.0000062","budget":"100"}]}
+
+Coverage: one signed-in developer; three-developer proof NOT complete. Upstream 408/500 retries recorded separately.
