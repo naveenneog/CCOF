@@ -1,0 +1,15 @@
+PS /home/alex/repo> node --test --test-name-pattern "deployment-day network decision|scripted two-group onboarding" tests\docs-reader-pages.test.ts
+✖ deployment-day network decision covers deployment-machine access before create-only Stage 1 (4.0893ms)
+✖ scripted two-group onboarding links to executable admin sign-in and authenticated call (2.9411ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 196.3271
+✖ failing tests:
+test at tests\docs-reader-pages.test.ts:115:1
+✖ deployment-day network decision covers deployment-machine access before create-only Stage 1 (4.0893ms)
+  AssertionError [ERR_ASSERTION]: the network decision must ask whether the deployment machine can reach SCM

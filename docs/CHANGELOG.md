@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-10-28 — Rehearsal reader fixes
+
+- Configuration asks whether the deployment machine can reach private SCM/admin endpoints before
+  the create-only resource stage; the public alternative is explicitly an approved lab decision.
+- The linked admin sign-in section now shows token acquisition and authenticated group/backend reads,
+  with reviewed onboarding syntax and a warning never to print tokens.
+
 ## 2026-10-28 — Deployment-day and developer onboarding
 
 - Add a linked deployment-day checklist with measured Central India timings, HA/quota/network prerequisites,

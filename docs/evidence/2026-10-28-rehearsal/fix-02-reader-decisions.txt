@@ -1,0 +1,11 @@
+PS /home/alex/repo> node --test tests\docs-reader-pages.test.ts
+✔ a region without Claude, provisioned Cosmos DB cost and the failover region are on the reader's route (novice run 5) (4.476ms)
+✔ Foundry failover has an upgrade path and a verifiable drill on the reader's route (3.375ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4386.3688

@@ -112,6 +112,26 @@ test("deployment day illustrates every timed step and inventories every real-run
   assert.match(index, /demo|live/i);
 });
 
+test("deployment-day network decision covers deployment-machine access before create-only Stage 1", () => {
+  const page = read("docs/get-started/deployment-day-config.md");
+  const network = page.split("## Network")[1]?.split("\n## ")[0] ?? "";
+  assert.match(network, /functionsPublicNetworkAccess/, "the network decision must ask whether the deployment machine can reach SCM");
+  assert.match(network, /"functionsPublicNetworkAccess"\s*:\s*"Disabled"/);
+  assert.match(network, /"functionsPublicNetworkAccess"\s*:\s*"Enabled"/);
+  assert.match(network, /before Stage 1/i);
+  assert.match(network, /SCM/);
+  assert.match(network, /public.*admin|admin.*public/i);
+});
+
+test("scripted two-group onboarding links to executable admin sign-in and authenticated call", () => {
+  const signin = read("docs/ADMIN-API.md").split("## Sign-in")[1]?.split("\n## ")[0] ?? "";
+  assert.match(signin, /az account get-access-token[\s\S]*?--scope/);
+  assert.match(signin, /Projects\.Manage/);
+  assert.match(signin, /Invoke-RestMethod[\s\S]*?\/api\/groups/);
+  assert.match(signin, /Authorization\s*=\s*"Bearer \$token"/);
+  assert.match(signin, /never print|do not print/i);
+});
+
 test("deployment day users distinguishes captured clients from unverified fleet and Office routes", () => {
   const users = read("docs/get-started/deployment-day-users.md");
   assert.match(read("README.md"), /\]\(docs\/get-started\/deployment-day-users\.md\)/);

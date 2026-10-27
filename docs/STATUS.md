@@ -1,5 +1,23 @@
 # Current work
 
+## Novice deployment-day rehearsal (2026-10-28)
+
+**Active packet:** G-DAY-REHEARSAL — isolated deployment from the decision-led guide.
+
+- Acceptance: new lab, preserved HA settings, two registered groups and one developer request charged
+  correctly; report missing three-person/native-client coverage rather than infer it.
+- Reader fixes: ask about deployment-machine SCM access before create-only Stage 1; provide the
+  authenticated Azure CLI admin API example linked by the day guide.
+- RED: both new reader contracts failed on the missing decisions/commands. GREEN: 31/31 reader tests;
+  both scoped documentation mutations caught, restored baseline green. No runtime change.
+- Council (direct, no nested agents): Architect PASS (existing configuration/API contract);
+  Coder PASS (small documentation changes); QA PASS (failing-first reader contracts and mutations);
+  UX PASS-WITH-NOTES (live rollout remains conditional); Security PASS (no token printing, shared
+  registration changes or weakened authentication; public Functions option labelled lab-only).
+- Live Stage 0 PASS (108 s). Initial Stage 1 refused zonal Cosmos capacity in Central India.
+  Stopped at the documented owner-approval boundary; no successful Stage 1 state and no later apply.
+  Private chronology and exact failures: session `files/rehearsal/progress.md` and `novice-log.md`.
+
 ## Deployment-day readiness (2026-10-27)
 
 **Active packet:** G-DAY — novice HA deployment-day checklist and live multi-group rehearsal.

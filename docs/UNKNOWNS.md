@@ -1,5 +1,12 @@
 # Current deployment unknowns
 
+## Novice deployment-day rehearsal
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| REH-1 | RESEARCHED | Stage 1 returned Central India zonal Cosmos ServiceUnavailable as the guide predicts. The failed-new-account recovery needs explicit owner approval for nonzonal Cosmos; collect deployment-creation failure, null endpoint and absent Stage 1/2 completion evidence before any deletion. No approval is inferred from quota/cost consent. |
+| REH-2 | RESOLVED | The config decision page omitted deployment-machine access despite private Functions/SCM defaults; the linked deployment guide's lab option is now offered before Stage 1. The admin API sign-in route now supplies the token/header/read commands it prescribed. Two reader mutations caught. |
+
 ## Deployment day (G-DAY)
 
 | ID | State | Question / evidence |
