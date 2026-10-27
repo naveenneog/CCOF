@@ -103,8 +103,32 @@ Its `stage1.verify.json` evidence records the read-back.
 **If Cosmos returns `ServiceUnavailable` about high demand for zonal accounts:** stop at Stage 1. Regional zone
 support does not reserve capacity. Inspect the failed deployment's operations in the Portal and follow Azure's
 [region access request](https://aka.ms/cosmosdbquota). Keep the requested settings; do not mark Stage 1 complete or
-run later applies against a failed account. A retry may still be refused. Choosing a different region or explicitly
-accepting no Cosmos zone protection is a separate owner decision, not an automatic fallback.
+run later applies against a failed account. Request capacity or retry later; repeated immediate attempts can still
+be refused. India South Central is an alternative with zones, subject to its own capacity and the region-pair
+trade-off above. Choosing another region or accepting no Cosmos zone protection needs an explicit owner decision.
+
+**Approved fallback after a failed first deployment only:** if Stage 1 never succeeded, the new Cosmos account is
+`Failed`, and you have verified it holds no database/data, save the failed deployment's evidence and your config.
+Do not delete an existing or healthy account. With approval to keep Cosmos nonzonal, delete only that failed empty
+account, then change `stage1.cosmosLocations` to Central India and South India with `isZoneRedundant: false` on both.
+Keep APIM zones/units, Functions zones and ZRS storage unchanged:
+
+```powershell
+az cosmosdb show -g '<new-resource-group>' -n '<failed-new-cosmos-name>' --query "{state:provisioningState,regions:locations}"
+az cosmosdb sql database list -g '<new-resource-group>' -a '<failed-new-cosmos-name>' --query "[].name"
+# Only for the verified Failed, empty NEW account, after owner approval:
+az cosmosdb delete -g '<new-resource-group>' -n '<failed-new-cosmos-name>' --yes
+pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 0 -ConfigPath .env.staged\staged.config.json
+pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 1 -ConfigPath .env.staged\staged.config.json
+pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 1 -ConfigPath .env.staged\staged.config.json -Apply
+```
+
+Use the **same state folder**. Stage 1's guarded preview must show no unrelated Modify/Delete; it may resume the
+resources recorded by the failed deployment. Stop if that guard refuses. After Stage 1 succeeds and verifies,
+continue Stages 2–8. This recovery exception does not let you change a previously succeeded Stage 1 deployment.
+Stage 0 still prints `suggestion: cosmos zones: centralindia has zones but capacity may be refused`; the warning
+does not undo your approved nonzonal choice. Two Cosmos regions still protect against a region outage, with the
+recovery limits in the [outage guide](region-and-failover.md#4-outage-and-a-planned-failover-drill).
 
 ## 4. Check an existing deployment
 

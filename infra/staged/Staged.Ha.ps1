@@ -77,7 +77,7 @@ function Get-StgHaCheck {
         $r.cosmos += @{region=$c.locationName; available=$hasZones; configured=[bool]$c.isZoneRedundant; pairedRegion=$pairName; pairedRegionHasZones=$pairZones}
         Write-Host "HA check: cosmos $($c.locationName) zones available=$hasZones configured=$($c.isZoneRedundant); paired region=$pairName zones=$pairZones"
         if ($c.isZoneRedundant) { Assert-Stg $hasZones "$($c.locationName) has no availability zones; set stage1.cosmosLocations[].isZoneRedundant false for that region or choose another region" }
-        elseif ($hasZones) { Write-Host "suggestion: cosmos zones: set stage1.cosmosLocations isZoneRedundant true for $($c.locationName) if capacity permits; autoscale zone premium is waived" }
+        elseif ($hasZones) { Write-Host "suggestion: cosmos zones: $($c.locationName) has zones but capacity may be refused; set stage1.cosmosLocations isZoneRedundant true if capacity permits; autoscale zone premium is waived" }
     }
     return $r
 }

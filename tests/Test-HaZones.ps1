@@ -206,4 +206,9 @@ if ($Case -in 'all', 'stage0') {
     $c.location='southindia'; $c.ha=@{apim=@{zoneRedundant=$true}}
     Refuses { Invoke-Stage0 $c } 'southindia.*no availability zones'
 }
+if ($Case -in 'all', 'suggestions') {
+    $c=Config; $c.stage1.cosmosLocations[0].isZoneRedundant=$false
+    $messages=(& { $null=Get-StgHaCheck $c } 6>&1 | Out-String)
+    Check ($messages -match 'suggestion: cosmos zones: centralindia has zones but capacity may be refused') 'Cosmos suggestion must distinguish regional availability from subscription capacity'
+}
 Write-Host "HA zones: $passed checks PASS"
