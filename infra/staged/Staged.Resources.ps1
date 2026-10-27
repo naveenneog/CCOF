@@ -131,6 +131,9 @@ function Get-StgStage1Deployment {
 function Assert-StgStage1Parameters {
     param($Deployment, $Cfg)
     $expected = Get-Stage1Parameters $Cfg
+    if ($null -eq $Cfg.ha -and $Deployment.properties.parameters.ContainsKey('ha') -and $Deployment.properties.parameters.ha.value.Count -gt 0) {
+        throw 'stage1_parameters_changed: ha was removed from the succeeded Stage 1 deployment; restore the original config or use a new prefix/RG.'
+    }
     foreach ($key in $expected.Keys) {
         if (-not $Deployment.properties.parameters.ContainsKey($key)) { throw "stage1_parameters_missing: previous deployment does not record parameter '$key'; use a new empty resource group or supply a reviewed migration." }
         $actualJson = ConvertTo-StgCanonical $Deployment.properties.parameters[$key].value | ConvertTo-Json -Depth 100 -Compress

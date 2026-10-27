@@ -42,6 +42,12 @@ if ($Case -in 'all', 'config') {
     Refuses { ReadConfig $c } 'ha.apim.*new.*owner'
     $c = Config; $c.ha = @{function=@{zoneRedundant=$true}}
     Refuses { ReadConfig $c } 'ha.*unknown'
+    $c = Config; $c.ha = 'enabled'
+    Refuses { ReadConfig $c } 'ha must be an object'
+    $c.ha = @{apim='enabled'}
+    Refuses { ReadConfig $c } 'ha.apim must be an object'
+    $c.ha = @{apim=@{zoneRedundant=$false;zones=@('1','2')}}
+    Refuses { ReadConfig $c } 'ha.apim.*unknown'
 }
 if ($Case -in 'all', 'hash') {
     $c = Config
@@ -56,6 +62,7 @@ if ($Case -in 'all', 'hash') {
     $c.ha.apim.zoneRedundant = $false
     Refuses { Assert-StgStage1Parameters $d $c } 'stage1_parameters_changed.*ha'
     $c.Remove('ha')
+    Refuses { Assert-StgStage1Parameters $d $c } 'stage1_parameters_changed.*ha'
     foreach ($n in 0..8) { Check ((Get-StgStageInput $c $n) -ceq $old[$n]) "Absent HA changed Stage $n hash" }
     $legacy = [ordered]@{tenantId=$c.tenantId;subscriptionId=$c.subscriptionId;resourceGroup=$c.resourceGroup;location=$c.location;tags=$c.tags;sharedResourceGroup=$c.sharedResourceGroup;stage1=$c.stage1}
     $canonical = ConvertTo-StgCanonical $legacy | ConvertTo-Json -Depth 100 -Compress
