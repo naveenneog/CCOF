@@ -49,6 +49,12 @@ if ($Case -in 'all', 'config') {
     $c.ha = @{apim=@{zoneRedundant=$false;zones=@('1','2')}}
     Refuses { ReadConfig $c } 'ha.apim.*unknown'
 }
+if ($Case -in 'all', 'component-casing') {
+    foreach ($component in 'Functions','APIM') {
+        $c=Config; $c.ha=@{}; $c.ha[$component]=@{zoneRedundant=$true}
+        Refuses { ReadConfig $c } "ha has unknown component '$component'"
+    }
+}
 if ($Case -in 'all', 'hash') {
     $c = Config
     $old = @{}; 0..8 | ForEach-Object { $old[$_] = Get-StgStageInput $c $_ }

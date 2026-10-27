@@ -4,7 +4,7 @@ function Get-StgHaProblems {
     if ($null -eq $Cfg.ha) { return }
     if ($Cfg.ha -isnot [Collections.IDictionary]) { 'ha must be an object'; return }
     foreach ($key in $Cfg.ha.Keys) {
-        if ($key -notin 'apim', 'functions') { "ha has unknown component '$key'"; continue }
+        if ($key -cnotin 'apim', 'functions') { "ha has unknown component '$key'"; continue }
         $part = $Cfg.ha[$key]
         if ($part -isnot [Collections.IDictionary]) { "ha.$key must be an object"; continue }
         foreach ($setting in $part.Keys) { if ($setting -cne 'zoneRedundant') { "ha.$key has unknown setting '$setting'" } }
