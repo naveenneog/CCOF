@@ -1,0 +1,6 @@
+PS> npm ci --prefix .\client --no-audit --no-fund
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+PS> pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -UsageStatusLine -Confirmed
+{"signIn":"\"C:\Users\alex\\.claude\\ccof-token.cmd\" login","signInMethod":"azure-cli","changeId":"20261026T194513150Z-c83644c4b39c4a918db268610e906657","usageSkillShell":"bash","component":"claude-code","usageSkill":true,"statusLine":"set","event":"configured","models":{"default":"claude-sonnet-5-5","opus":"claude-sonnet-5-5","sonnet":"claude-sonnet-5-5","haiku":"claude-haiku-5-5"}}
+exit 0

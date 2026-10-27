@@ -19,6 +19,11 @@ Claude Code, and every request is charged to a cost code for chargeback.
 
 ## Start here
 
+Deploying with a team? Use the [deployment-day HA checklist](docs/get-started/deployment-day.md):
+advance approvals, a 2–3 hour working window and two-group onboarding checks.
+First [fill in your configuration by decision](docs/get-started/deployment-day-config.md), with a complete HA example.
+Then [set up developers and plan bulk onboarding](docs/get-started/deployment-day-users.md), with client-specific checks.
+
 | Step | Page | Who |
 | --- | --- | --- |
 | 1 | [What CCOF is](docs/get-started/01-what-it-is.md) | Everyone |

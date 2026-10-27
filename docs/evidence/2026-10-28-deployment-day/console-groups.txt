@@ -1,0 +1,39 @@
+Skip to content
+CCOF
+Admin
+Groups
+Help
+Light
+Dark
+System
+Demo editor
+Editor
+View as reader
+Overview
+Groups
+Legacy projects
+Chargeback
+User tags
+Budgets
+Reconciler
+Foundry
+Health
+Audit
+Removal limits
+Cost definitions
+Help
+Collapse
+Groups
+
+Entra groups onboarded to Claude. Each group has its own budget, models, surfaces and chargeback ID.
+
+Observed 0s ago
+Refresh
+Usage CSV (this month)
+Groups CSV
+Onboard a group
+Onboarded groups
+Onboarded groups
+Group	Status	Chargeback ID	Budget	Surfaces	Priority
+Data Science	active	CC-DS-2001	Auto-scale	Code	200
+Engineering	active	CC-ENG-1001	Auto-scale	Code	100

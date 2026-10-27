@@ -1,5 +1,31 @@
 # Current work
 
+## Deployment-day readiness (2026-10-27)
+
+**Active packet:** G-DAY — novice HA deployment-day checklist and live multi-group rehearsal.
+
+- Acceptance: a linked guide below 15 KiB covers advance approvals, each stage and measured timing,
+  HA settings, two-group onboarding and explicit go/no-go checks; reader contracts fail first and mutations fail.
+- Live evidence stays outside the repository. Never claim three-developer or 25,000-developer load proof
+  from a single signed-in identity. No shared registration changes or console source edits.
+- Checks: reader tests, full tests, explicit typecheck, build, admin tests and packet gate.
+- Independent council review remains with the coordinator; no nested agents are authorized.
+- Implemented: deployment-day timeline/screens, decision-led configuration with a complete offline-validated HA
+  example, client/fleet onboarding and sizing worksheet. All three day pages stay below 15 KiB LF.
+- RED: missing day/config/users/evidence pages; valid JSON breaker ranges refused; a console-added expected group
+  refused by Stage 8. Fix commits: `09b3490` (JSON integer ranges), `929ec0b` (console group trace assertion).
+- Targeted GREEN: 29 reader tests, 75 Foundry failover checks, 537 staged checks; 35/35 scoped mutations killed.
+- Live: second group onboarded/synced; both explicit selectors and the higher-spend default returned 200,
+  group-specific denial returned 403 with allowed models, usage shows both budgets, and Stage 8 passed in 285 s.
+  One identity only; provider 408/500 failures make rollout readiness conditional, not a clean enterprise acceptance.
+- Seventeen pseudonymised images are checked and visually reviewed. Console screens use the current build with
+  live lab API data; the old deployed bundle's snapshot links were stale. Capture provenance is explicit.
+- Self-review: Architect PASS (assertion is not routing/access); Coder PASS (small guarded changes);
+  QA PASS-WITH-NOTES (negative/mutation coverage; one-identity/live-client limits); UX PASS-WITH-NOTES
+  (timed decisions/screens, explicit unverified paths); Security PASS-WITH-NOTES (no new dependencies or grants,
+  checked pseudonyms and per-user sign-in; existing dependency advisories are not waived).
+- Full validation and committed-head packet gate follow; independent coordinator review/publication remains required.
+
 ## Admin group navigation (2026-10-27)
 
 **Active packet:** G-ADMIN-NAV — group budget snapshots and other shared console links open Groups, not Legacy projects.
