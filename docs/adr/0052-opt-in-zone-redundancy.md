@@ -58,3 +58,10 @@ nonzonal Central India + South India Cosmos while preserving APIM/Flex/ZRS zone 
 Requesting zonal capacity or retrying later remains the path to zonal Cosmos; India South Central is an alternative
 with zones, not a capacity guarantee. This is a documented platform limit and explicit operator choice, not
 automatic HA downgrading. See [the customer recovery steps](../get-started/high-availability.md).
+
+## Exact APIM SKU regression contract
+
+The prior stage-template regression pinned exactly BasicV2/StandardV2. The requested PremiumV2 support expands
+that exact set to BasicV2/StandardV2/PremiumV2, while StandardV2 remains the default. Update the equality contract,
+not its strictness: deleting PremiumV2 or admitting classic Premium must both fail the suite. This reconciles
+the old assertion with the accepted feature; it is not permission to accept arbitrary SKUs or bypass the gate.
