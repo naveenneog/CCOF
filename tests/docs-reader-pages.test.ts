@@ -35,6 +35,7 @@ test("deployment day is linked and gives a timed route through every stage", () 
   assert.match(day, /quota.*per model|per.model.*quota/i);
   assert.match(day, /80[–-]100 minutes/);
   assert.match(day, /storage.*403.*5 minutes/i);
+  assert.match(day, /new resources after Stage 1 and before Stage 6/, "verify-mode networking must distinguish pre-day design from connecting newly created resources");
 });
 
 test("deployment day quotes only verified script output, not invented success lines", () => {

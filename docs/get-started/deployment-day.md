@@ -31,8 +31,9 @@ For terminal, VS Code, Desktop and the unverified bulk/Office paths, use
   support is not capacity approval. Without approval, full zonal Cosmos is a **no-go**: arrange an explicit
   owner-approved alternative before the day, not repeated immediate retries
   ([safe recovery](high-availability.md#3-add-the-options-before-stage-1)).
-- [ ] **Network/APIM owners:** finish private endpoints, DNS, routing, deployment-machine access and
-  permissions. Production uses the customer network in `verify` mode; `create` is the lab route.
+- [ ] **Network/APIM owners:** approve network design, DNS/routing, machine access and permissions.
+  In `verify` mode, connect new resources after Stage 1 and before Stage 6; keep the network owner present.
+  Production uses the customer network in `verify` mode; `create` is the lab route.
   A private Foundry standby needs its own approved endpoint/DNS path. An existing APIM owner manages its
   zones, units and VNet and approves CCOF's additions
   ([network](../NETWORK.md), [existing APIM](existing-api-management.md)).
