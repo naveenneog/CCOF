@@ -9,6 +9,9 @@ are shown as complete JSON fragments of the configuration root. All values are h
 
 `backends[]` lists the Foundry accounts the gateway calls. `groups[].backendId` names one by `backends[].id`.
 
+For an optional second account behind the same ID, see [Foundry account failover](foundry-failover.md):
+`backends[].failover`, circuit-breaker settings, new-account creation and the existing-deployment upgrade path.
+
 **Create new** (Stage 1 creates the account and the deployments). `stage1.foundry.accountName` equals
 `backends[].accountName`; `deploymentInferenceGeo` keys equal the deployment names (`global` for `GlobalStandard`,
 `us` for `DataZoneStandard`). A new account with `publicNetworkAccess: Disabled` in `create` or `existing` network mode

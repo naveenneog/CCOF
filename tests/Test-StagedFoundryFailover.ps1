@@ -1,0 +1,105 @@
+#Requires -Version 7.2
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+. (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
+$passed = 0
+function Check([bool]$ok, [string]$message) { if (-not $ok) { throw $message }; $script:passed++ }
+$sub = '00000000-0000-4000-8000-000000000002'
+function New-Config {
+    @{
+        subscriptionId = $sub; resourceGroup = 'contoso-rg'; tenantId = $sub
+        stage1 = @{ foundry = @{ create = $false } }; network = @{ mode = 'create' }
+        backends = @(@{ id = 'claude'; subscriptionId = $sub; resourceGroup = 'contoso-rg'
+            accountName = 'primary'; url = 'https://primary.services.ai.azure.com/anthropic'
+            deploymentInferenceGeo = @{ 'claude-haiku-5-5' = 'global' }
+            failover = @{ subscriptionId = $sub; resourceGroup = 'contoso-rg'; accountName = 'standby'
+                url = 'https://standby.services.ai.azure.com/anthropic'; privateEndpoint = $true
+                deploymentInferenceGeo = @{ 'claude-haiku-5-5' = 'global' } } })
+    }
+}
+$c = New-Config
+Check (@(Get-StgFailoverProblems $c).Count -eq 0) 'valid failover must be accepted'
+$members = @(Get-StgFoundryMembers $c)
+Check ($members.Count -eq 2 -and $members[0].id -ceq 'claude-primary' -and $members[1].id -ceq 'claude-failover') 'Stage 3 must grant both distinct pool members'
+$plan = @(Get-StgApimBackendPlan $c)
+Check ($plan.Count -eq 1 -and $plan[0].id -ceq 'claude' -and $plan[0].failover.id -ceq 'claude-failover') 'routing must retain the logical backend ID'
+Check ($plan[0].circuitBreaker.rules[0].failureCondition.statusCodeRanges[0].min -eq 429) 'breaker must include backend 429'
+Check ($plan[0].circuitBreaker.rules[0].failureCondition.statusCodeRanges[1].min -eq 500) 'breaker must include 5xx'
+Check ($plan[0].circuitBreaker.rules[0].acceptRetryAfter -eq $true) 'breaker must honour Retry-After by default'
+foreach ($key in 'count', 'intervalSeconds', 'tripDurationSeconds') {
+    $c = New-Config; $c.backends[0].circuitBreaker = @{ $key = 0 }
+    Check ((@(Get-StgFailoverProblems $c) -join ';') -match $key) "reject invalid breaker $key"
+}
+$c = New-Config; $c.backends[0].circuitBreaker = @{ acceptRetryAfter = 'false' }
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'acceptRetryAfter') 'reject non-boolean Retry-After'
+$c = New-Config; $c.backends[0].failover.deploymentInferenceGeo = @{ 'other-model' = 'global' }
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'same deployment') 'refuse mismatched deployment names with a next step'
+$c = New-Config; $c.backends[0].failover.deploymentInferenceGeo['claude-haiku-5-5'] = 'us'
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'geography') 'refuse silent inference-geography change'
+$c = New-Config; $c.backends[0].failover.url = 'https://attacker.example/anthropic'
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'url') 'refuse sending gateway token to an unrelated host'
+$c = New-Config; $c.backends += @{ id = 'claude-primary' }
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'collision') 'refuse generated member ID collision'
+$c = New-Config; $c.backends[0].failover.subscriptionId = 'bad'
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'subscriptionId') 'refuse malformed standby subscription'
+$c = New-Config; $c.backends[0].circuitBreaker = @{ statusCodeRanges = @(@{ min = 500; max = 429 }) }
+Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'statusCodeRanges') 'refuse inverted ranges'
+$c = New-Config
+$legacy = New-Config; $legacy.backends[0].Remove('failover')
+foreach ($n in 0..8) {
+    Check ((Get-StgStageInput $c $n) -ceq (Get-StgStageInput $legacy $n) -or $n -in 0,3,5,6) "failover must not invalidate unrelated stage $n"
+}
+Check ((Get-StgStageInput $c 6) -cne (Get-StgStageInput $legacy 6)) 'Stage 6 must bind the failover endpoint'
+$legacyPlan = @(Get-StgApimBackendPlan $legacy)
+Check (-not $legacyPlan[0].Contains('circuitBreaker') -and -not $legacyPlan[0].Contains('failover')) 'legacy backend must not acquire a breaker or pool'
+$c = New-Config
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/deployments')) { return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ model = @{ name = 'claude-haiku-5-5'; version = '2' } }; sku = @{ name = 'GlobalStandard' } }) } }
+    return @{ id = $Id; name = ($Id -split '/')[-1]; location = 'centralus'; properties = @{ publicNetworkAccess = 'Disabled' } }
+}
+$facts = @(Test-StgFoundryFailover $c)
+Check ($facts.Count -eq 1 -and $facts[0].quotaNote -match 'shares') 'Stage 0 must explain shared quota'
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/deployments')) { return @{ value = @() } }
+    return @{ id = $Id; name = 'standby'; location = 'centralus' }
+}
+$errorText = ''
+try { $null = Test-StgFoundryFailover $c } catch { $errorText = $_.Exception.Message }
+Check ($errorText -match 'deployment' -and $errorText -match 'Create') 'Stage 0 must refuse missing live deployments with a next step'
+$c = New-Config
+$script:StateDir = Join-Path $root '.env.foundry-failover-test'
+New-Item -ItemType Directory -Force $script:StateDir | Out-Null
+$network = @{ privateEndpointSubnetId = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/private"
+    vnetId = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/virtualNetworks/vnet"
+    foundryPrivateDnsZoneIds = @("/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com") }
+$script:captured = $null
+function Invoke-StgBicep($Cfg, $Template, $Name, $Parameters, [switch]$Apply) {
+    $script:captured = $Parameters
+    return @{ id = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/privateEndpoints/claude-failover-pe" }
+}
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/privateDnsZoneGroups')) { return @{ value = @(@{ properties = @{ privateDnsZoneConfigs = @(@{ properties = @{ privateDnsZoneId = $network.foundryPrivateDnsZoneIds[0] } }) } }) } }
+    return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{
+        privateLinkServiceId = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.CognitiveServices/accounts/standby"
+        privateLinkServiceConnectionState = @{ status = 'Approved' }
+    } }) } }
+}
+$endpoints = @(Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply)
+Check ($endpoints.Count -eq 1 -and $captured.accountId.EndsWith('/accounts/standby')) 'Stage 6 must create and read back the standby endpoint'
+$c.backends[0].failover.subscriptionId = '00000000-0000-4000-8000-000000000003'
+$null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network
+Check ($captured.accountId -match '000000000003') 'Stage 6 endpoint must target the other subscription, not the gateway subscription'
+function Get-StgArm($Id, $Version) { return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{ privateLinkServiceConnectionState = @{ status = 'Pending' } } }) } } }
+$message = ''; try { $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply } catch { $message = $_.Exception.Message }
+Check ($message -match 'approval') 'Stage 6 must refuse a pending or wrong-account endpoint'
+$bicep = Join-Path $HOME '.azure\bin\bicep.exe'
+if (-not (Test-Path $bicep)) { $bicep = (Get-Command bicep -ErrorAction Stop).Source }
+$arm = (& $bicep build (Join-Path $root 'infra\staged\stage5-config.bicep') --stdout 2>$null) -join "`n"
+Check ($LASTEXITCODE -eq 0) 'Stage 5 priority pool must compile'
+$template = $arm | ConvertFrom-Json -AsHashtable -Depth 100
+$pool = @($template.resources | ForEach-Object { $_.properties.template.resources } | Where-Object { $_.type -ceq 'Microsoft.ApiManagement/service/backends' -and $_.properties.type -ceq 'Pool' })[0]
+Check ($pool.properties.pool.services.Count -eq 2 -and $pool.properties.pool.services[0].priority -eq 1 -and $pool.properties.pool.services[1].priority -eq 2 -and $arm.Contains('circuitBreaker')) 'compiled deployment must carry priority pools and circuit breakers'
+$privateArm = (& $bicep build (Join-Path $root 'infra\staged\stage6-foundry-failover.bicep') --stdout 2>$null) -join "`n"
+Check ($LASTEXITCODE -eq 0 -and $privateArm.Contains('privateLinkServiceId')) 'standalone endpoint deployment must compile'
+Write-Host "Foundry failover: $passed passed"
+Remove-Item -LiteralPath $script:StateDir -Recurse -Force

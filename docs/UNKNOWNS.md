@@ -139,3 +139,18 @@
 | EXA-5 | RESOLVED | Whose logs reach the CCOF workspace? Live 2026-10-26 (simulated customer instance): three requests to the owner's unrelated API appeared in CCOF's workspace as `ApiManagementGatewayLogs` rows with that API's `ApiId`. A diagnostic setting is per resource, not per API: `ccof-gateway-logs` sends every API's GatewayLogs rows (and GatewayLlmLogs rows of any API with LLM logging on) to CCOF's workspace. The usage ledger keeps only rows with an LLM log row (`analytics/ledger.kql`); another API's LLM rows would appear as unattributed usage (no CCOF trace). Blast radius: workspace ingestion cost for the other APIs' traffic; unattributed rows in chargeback if another LLM API logs on the same instance. Disclosed in the docs; the owner approves. |
 | EXA-6 | RESOLVED | Permissions for Stage 5 on the owner's instance. API Management Service Contributor has `Microsoft.ApiManagement/service/*` and `Microsoft.Resources/deployments/*`; Monitoring Contributor has `Microsoft.Insights/DiagnosticSettings/*` ([integration roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/integration), [monitor roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor), read 2026-10-26). Stage 5 deploys a nested deployment into the instance's resource group, so `Microsoft.Resources/deployments/write` is needed at that resource group. Stage 0 reads the operator's effective permissions and warns (does not refuse: another person may run Stage 5). |
 | EXA-7 | RESOLVED | The `azuremonitor` logger. A new Standard v2 instance already has an `azuremonitor` logger and a service diagnostic using it (live 2026-10-26, simulated customer instance). Redeploying the logger would rewrite the owner's logger description; Stage 5 references an existing one and creates it only when absent. |
+# G-HA-FOUNDRY (2026-10-27)
+
+- HAF-1 RESEARCHED: APIM 2024-05-01 supports Single/Pool backends, ARM backend IDs,
+  priority, one circuit-breaker rule, count/interval/status ranges/tripDuration/acceptRetryAfter.
+  [Schema](https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2024-05-01/service/backends).
+- HAF-2 RESEARCHED: priority failover uses lower-priority members only when higher-priority
+  breakers trip; state is approximate per gateway instance, tripped backends return 503.
+  [Backends](https://learn.microsoft.com/azure/api-management/backends).
+- HAF-3 RESEARCHED: Claude Global Standard shares quota per subscription/model/version across
+  regions, Data Zone per subscription/model/version/data zone; a second account is not more quota.
+  [Quota](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/claude-models-quotas-limits).
+- HAF-4 RESEARCHED: private endpoints may target another region/subscription; permissions and
+  private-link approval still apply. [Private Link](https://learn.microsoft.com/azure/private-link/private-endpoint-overview).
+- HAF-5 ASSUMED: this packet supports accounts in the gateway identity's tenant only; cross-tenant
+  failover would need separate credentials and is refused rather than silently misrouting.
