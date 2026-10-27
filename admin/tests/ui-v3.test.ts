@@ -85,16 +85,16 @@ test("Light and Dark themes keep text at 4.5:1 or better on every surface they u
   }
 });
 
-test("the sidebar names the pre-group project list Legacy projects, after Groups", async () => {
+test("the sidebar and help expose Groups without legacy management pages", async () => {
   const { NAV } = await import("../ui-v3/lib/nav.ts");
   const { HELP } = await import("../ui-v3/help.ts");
   const labels = NAV.map((n: { label: string }) => n.label);
-  assert.ok(!labels.includes("Projects"), labels.join(", "));
-  assert.ok(labels.indexOf("Groups") >= 0 && labels.indexOf("Groups") < labels.indexOf("Legacy projects"), labels.join(", "));
-  assert.equal(HELP.projects.title, "Legacy projects");
-  assert.match(HELP.projects.summary, /Groups/);
-  const page = await readFile(new URL("../ui-v3/pages/projects.tsx", import.meta.url), "utf8");
-  assert.match(page, /PageHeader title="Legacy projects"/);
+  assert.ok(labels.includes("Groups"), labels.join(", "));
+  assert.ok(!labels.includes("Projects") && !labels.includes("Legacy projects"), labels.join(", "));
+  assert.ok(!HELP.projects && !HELP.project && !HELP["new-project"]);
+  const main = await readFile(new URL("../ui-v3/main.tsx", import.meta.url), "utf8");
+  assert.match(main, /no longer managed in the console/);
+  assert.doesNotMatch(main, /import.*(?:NewProject|ProjectDetail|Projects)/);
 });
 
 test("group-facing console text uses group wording, without project-era names or STD/PRM/CYB (ADMIN-6)", async () => {
@@ -104,12 +104,15 @@ test("group-facing console text uses group wording, without project-era names or
   assert.match(main, /Groups, limits, budgets and chargeback/);
   const breakdown = await src("components/cost-breakdown.tsx");
   for (const old of [/STD|PRM|CYB/, /"All projects"|>All projects</, /"By project"/, /"Cost by project"/, /label="Project"/, /The top 7 projects/]) assert.doesNotMatch(breakdown, old);
-  assert.match(breakdown, /href\(group \? `\/groups\/\$\{encodeURIComponent\(project\)\}`/, "a group slice links to its group page");
+  assert.match(breakdown, /<ScopeLink id=\{group\}/, "a group slice links to its group page");
+  assert.doesNotMatch(breakdown, /classification|tag-toggle|\/api\/v2\/projects/);
   const { HELP } = await import("../ui-v3/help.ts");
   const overview = HELP.overview.figures!.map(([, text]: [string, string]) => text).join(" ");
   assert.doesNotMatch(overview, /STD|PRM|CYB|by project/);
   const limits = await src("components/limits.tsx");
-  assert.match(limits, /classification === "group" \? "Fable and Mythos can be admitted only when restricted families are approved for this group\."/);
+  assert.match(limits, /Fable and Mythos can be admitted only when restricted families are approved for this group\./);
+  assert.doesNotMatch(limits, /classification|CYB/);
+  assert.match(limits, /restrictedAllowed === true \|\| !\["fable", "mythos"\]\.includes\(f\)/);
 });
 
 test("a failed Continue or Save moves focus to the first invalid field, else the error summary; loading is aria-busy (ADMIN-8)", async () => {

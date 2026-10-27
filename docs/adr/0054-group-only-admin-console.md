@@ -1,18 +1,20 @@
 # ADR-0054: Manage only groups in the current admin console
 
 Date: 2026-10-27
-Status: Proposed — paused pending expanded migration contract
+Status: Accepted
 Packet: G-GROUPS-ONLY
 
 ## Context
 
-Owner subsequently expanded the decision: all new deployments are group-based,
-and older project-based deployments should be decommissioned rather than
-maintained indefinitely. The coordinator is defining decommission and contract
-scope. The narrower proposal below records the original UI-only brief, not approval
-to retain legacy server support permanently or to delete any Azure resources.
-Implementation is paused until explicit resume. No runtime/server changes have
-been made.
+The owner confirmed that all new deployments and the current UI are group-only.
+Older project-based deployments are being decommissioned, not maintained as a
+second product workflow. On resume the owner explicitly approved the minimal
+scope: remove legacy console management, but preserve server/schema compatibility
+to avoid a schema/runtime rewrite in this packet.
+
+Decommissioning is separately coordinated and restricted to identified obsolete
+test, validation, quickstart, manual and staged deployments. Active application and
+network deployments must remain untouched. This packet authorizes no Azure changes.
 
 New deployments use Entra group registrations exclusively. The console's Legacy
 projects navigation and classification controls suggest a second onboarding model
@@ -35,6 +37,8 @@ Local demo data exercises group registrations rather than legacy documents.
 
 Keep actual API field names, permission identifiers and historical accounting
 values intact. This is a console boundary change, not a storage migration.
+Server compatibility is the minimal safe boundary of this packet, not a reason to
+retain a legacy management interface or a commitment to supporting old deployments.
 
 ## Consequences and follow-up
 

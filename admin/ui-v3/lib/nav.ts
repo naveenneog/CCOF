@@ -1,7 +1,6 @@
 export const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "groups", label: "Groups", icon: "groups" },
-  { id: "projects", label: "Legacy projects", icon: "projects" },
   { id: "chargeback", label: "Chargeback", icon: "chargeback" },
   { id: "user-tags", label: "User tags", icon: "user" },
   { id: "budgets", label: "Budgets", icon: "budgets" },

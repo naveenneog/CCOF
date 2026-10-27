@@ -41,7 +41,7 @@ const replies: Record<string, object> = {
 };
 
 interface Harness {
-  renderPage(name: string, replies: Record<string, object>): string;
+  renderPage(name: string, replies: Record<string, object>, query?: string): string;
   reads: string[];
 }
 let scratch: string;
@@ -65,11 +65,11 @@ before(async () => {
         import { configure, reads } from "./ui-v3/lib/api.ts";
         export { reads };
         const pages = { Budgets, Reconciler, Overview, Audit, Foundry, Chargeback, Page };
-        export function renderPage(name, replies) {
+        export function renderPage(name, replies, query = "source=changes&view=projects") {
           configure(replies);
           globalThis.location = { hash: name === "Page" ? "#/projects/PROJECT01/budgets" : "#/overview" };
           globalThis.matchMedia = () => ({ matches: false });
-          return renderToStaticMarkup(createElement(pages[name], { query: new URLSearchParams("source=changes&view=projects") }));
+          return renderToStaticMarkup(createElement(pages[name], { query: new URLSearchParams(query) }));
         }`,
       resolveDir: fileURLToPath(new URL("../", import.meta.url)),
       loader: "ts",
@@ -141,16 +141,38 @@ test("shared group screens show no classification, project tags or removed page 
     assert.doesNotMatch(await src(page), /label="Classification"|label="Project"|Project tags|\.\/project-detail\.tsx|\.\/projects\.tsx|chargeback\/classifications/, page);
   }
   const html = ui.renderPage("Budgets", { ...replies, "/api/v3/reconciler/snapshots": cap([budgets[0]]) });
-  assert.ok(!/<th[^>]*>[^<]*(classification|Classification)[^<]*<\/th>/.test(html) && !/<th[^>]*>Group<\/th>/.test(html), "snapshot table has no classification column for groups");
+  assert.ok(!/<th[^>]*>[^<]*(classification|Classification)[^<]*<\/th>/.test(html), "snapshot table has no classification column for groups");
+  assert.equal((html.match(/<th[^>]*>Group<\/th>/g) ?? []).length, 1, "Group identifies the scope, not a second classification column");
   assert.ok(!html.includes(">group<"), "the internal 'group' scope code is not shown as data");
 });
 
 test("scope paths only link GUIDs to Groups, never historical IDs", async () => {
   const { scopePath } = await import("../ui-v3/lib/router.ts");
   assert.equal(scopePath(GROUP), `/groups/${GROUP}`);
-  assert.equal(scopePath(GROUP.toUpperCase(), "budgets"), `/groups/${GROUP}`);
-  assert.equal(scopePath(LEGACY, "activity"), null);
+  assert.equal(scopePath(GROUP.toUpperCase()), `/groups/${GROUP}`);
+  assert.equal(scopePath(LEGACY), null);
   assert.equal(scopePath("x/y"), null);
+});
+
+test("Chargeback accepts group deep links and ignores historical classification and tag filters", () => {
+  const html = ui.renderPage("Chargeback", replies, `group=${GROUP}&classification=STD&tags=pilot`);
+  assert.ok(html.includes('value="' + GROUP + '"'));
+  const scoped = ui.reads.filter((p) => p.startsWith("/api/v3/chargeback/"));
+  assert.ok(scoped.length > 0);
+  for (const path of scoped) {
+    const params = new URL(path, "https://example.test").searchParams;
+    assert.equal(params.get("group"), GROUP);
+    assert.equal(params.get("classification"), null);
+    assert.equal(params.get("tags"), null);
+  }
+});
+
+test("Chargeback historical group scopes render as text, never management links", () => {
+  const html = ui.renderPage("Chargeback", { ...replies,
+    "/api/v3/chargeback/groups": cap([{ ...costs[1], groupId: LEGACY, groupNameSnapshots: ["Historical scope"] }]),
+  });
+  assert.ok(html.includes(LEGACY));
+  assert.ok(!html.includes(`href="#/groups/${LEGACY}`) && !html.includes('href="#/projects/'));
 });
 
 test("Budgets uses the group registration API and group ID for the burn-down", () => {
@@ -192,5 +214,29 @@ test("group-only fixtures render Budgets, Overview, Chargeback and Foundry witho
     assert.ok(html.includes(`href="#/groups/${GROUP}"`), name);
     assert.doesNotMatch(html, /Classification|classification|Legacy projects|Project tags|>Projects<|href="#\/projects\//, name);
     assert.ok(!ui.reads.some((p) => /^\/api\/(?:v2\/)?projects/.test(p) || p.includes("/classifications")), name);
+  }
+});
+
+test("the local demo seeds valid group registrations and derives group-only budget telemetry", async () => {
+  const { createDemoGroups } = await import("../dev/demo-groups.ts");
+  const { readGroupRegistration } = await import("../../src/contracts/group-registration.ts");
+  const { createDemoTelemetry } = await import("../dev/demo-data.ts");
+  const docs = createDemoGroups();
+  assert.ok(docs.length > 25, "demo still exercises paging");
+  for (const doc of docs) {
+    const parsed = readGroupRegistration(doc);
+    assert.ok(parsed.ok, JSON.stringify(parsed));
+    assert.equal(doc.projectId, doc.groupId);
+    assert.ok(!("classifications" in doc));
+  }
+  const telemetry = createDemoTelemetry({ version: "test", entries: [] }, docs.map((g) => ({
+    groupId: String(g.groupId), groupName: String(g.displayName), backendId: String(g.backendId),
+    members: 1, personBudgetUsd: 1, groupBudgetUsd: 10, models: ["claude-haiku-4-5"],
+  })));
+  const lines = telemetry.groupBudgetLines();
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    assert.ok(docs.some((doc) => doc.groupId === line.projectId));
+    assert.equal(line.classification, "group");
   }
 });
