@@ -6,6 +6,12 @@
   64-bit integers; explicit valid `statusCodeRanges` previously failed Stage 0 even though equivalent
   in-memory ranges and omitted/default ranges worked. Strings, fractions and ranges outside 400–599 remain refused.
 
+## 2026-10-27 — Acceptance after console onboarding
+
+- Stage 8 accepts a console-onboarded group's explicit Object ID as `acceptance.expectedGroup`, without
+  changing/reseeding the original Stage 4 group list. It remains an assertion against this run's usage traces,
+  not a routing or authorization override. Ambiguous names, mixed selectors and wrong/untraced groups still fail.
+
 ## 2026-10-27 — Group navigation in the admin console
 
 - Budgets and Reconciler snapshots, Overview alerts/activity, Audit and Chargeback now open group records in

@@ -113,18 +113,19 @@ function Get-StgGroupSeedDrift {
     }
 }
 
-# Stage 8: the group a request without a selector must land in. acceptance.expectedGroup names a group
-# entry; otherwise the configuration's single group entry. Null when the acceptance requests name a project.
+# Stage 8 asserts attribution, not routing/access: an explicit Object ID may name a console-added group
+# absent from the Stage 4 seed. Otherwise use a configured name or single entry; null for selected projects.
 function Get-StgExpectedGroupId {
     param($Cfg, [Collections.IDictionary]$EntraGroups)
     $allowed = @($Cfg.acceptance.allowed | Where-Object { $_ })
     $named = @($allowed | Where-Object { $_.project }).Count
     if (-not $allowed.Count -or $named -eq $allowed.Count) { return $null }
     if ($named) { throw 'acceptance_mixed_selectors: allowed requests either all name a project or none do; the selected group is verified for requests without one.' }
-    $entries = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) })
     $name = $Cfg.acceptance.expectedGroup
+    if ($name -is [string] -and $name -match $script:Guid) { return $name.ToLowerInvariant() }
+    $entries = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) })
     if ($name) { $entries = @($entries | Where-Object { $_.groupDisplayName -ceq $name -or ($_.groupId -and ([string]$_.groupId) -ieq [string]$name) }) }
-    if ($entries.Count -ne 1) { throw 'acceptance_group_ambiguous: requests without a project need one group entry, or acceptance.expectedGroup naming one.' }
+    if ($entries.Count -ne 1) { throw 'acceptance_group_ambiguous: requests without a project need one group entry, or acceptance.expectedGroup naming one or its Object ID.' }
     return @(New-StgGroupDocuments -Groups $entries -EntraGroups $EntraGroups)[0].id
 }
 

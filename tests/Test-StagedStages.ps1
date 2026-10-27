@@ -414,6 +414,19 @@ $two = @($groupEntry, ($groupEntry | ConvertTo-Json -Depth 50 | ConvertFrom-Json
 $ambiguous = $false
 try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $exampleCfg.acceptance; groups = $two } -EntraGroups $entraGroups } catch { $ambiguous = $_.Exception.Message -match 'acceptance_group_ambiguous' }
 Assert-Contract $ambiguous 'Two group entries without acceptance.expectedGroup must be refused.'
+$consoleGroup = '0000000B-0000-4000-8000-0000000000BB'
+$consoleAcceptance = @{ allowed = @(@{ model = 'm' }); expectedGroup = $consoleGroup }
+Assert-Contract ((Get-StgExpectedGroupId -Cfg @{ acceptance = $consoleAcceptance; groups = $exampleCfg.groups } -EntraGroups $entraGroups) -ceq $consoleGroup.ToLowerInvariant()) 'Stage 8 must accept an explicit console-onboarded group Object ID without reseeding groups.'
+foreach ($unknownName in @('unknown-group', "x') | take 1 //")) {
+    $unknownRefused = $false
+    try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = @{ allowed = @(@{ model = 'm' }); expectedGroup = $unknownName }; groups = $exampleCfg.groups } -EntraGroups $entraGroups }
+    catch { $unknownRefused = $_.Exception.Message -match 'acceptance_group_ambiguous' }
+    Assert-Contract $unknownRefused 'An unknown non-GUID expected group must still be refused.'
+}
+$mixedWithExplicitGroup = $mixedAcceptance.Clone(); $mixedWithExplicitGroup.expectedGroup = $consoleGroup
+$mixedRefused = $false
+try { $null = Get-StgExpectedGroupId -Cfg @{ acceptance = $mixedWithExplicitGroup; groups = $exampleCfg.groups } -EntraGroups $entraGroups } catch { $mixedRefused = $_.Exception.Message -match 'acceptance_mixed_selectors' }
+Assert-Contract $mixedRefused 'An explicit expected group must not bypass mixed-selector refusal.'
 $reqId = '11111111-2222-4333-8444-555555555555'
 Assert-Contract ((New-StgSelectionQuery -RequestIds @($reqId)) -match "in \('$reqId'\)" -and (New-StgSelectionQuery -RequestIds @($reqId)) -match "ccof\.usage\.v1") 'The selection query must filter this run''s request IDs in the usage trace.'
 $injection = $false
