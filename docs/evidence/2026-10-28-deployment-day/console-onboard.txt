@@ -1,0 +1,59 @@
+Skip to content
+CCOF
+Admin
+Groups
+Onboard a group
+Help
+Light
+Dark
+System
+Demo editor
+Editor
+View as reader
+Overview
+Groups
+Legacy projects
+Chargeback
+User tags
+Budgets
+Reconciler
+Foundry
+Health
+Audit
+Removal limits
+Cost definitions
+Help
+Collapse
+Onboard a group
+
+Four steps. Nothing is saved until you onboard the group on the last step.
+
+1
+Find the group
+2
+Budget
+3
+Access and models
+4
+Review
+Find the group
+Search Entra security groups
+
+Create the group in Microsoft Entra ID first. Search matches the start of words in the display name.
+
+Search
+Entra group Object ID
+
+Filled from the search, or paste it.
+
+Display name
+
+Shown in the console and chargeback.
+
+Foundry backend
+Loading backends…
+
+The backends this deployment configured (ADMIN_BACKENDS).
+
+Continue
+Cancel

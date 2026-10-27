@@ -27,6 +27,7 @@ import { createMemoryLimitsStore } from "../src/sync-limits.ts";
 import { QueryCache } from "../src/chargeback.ts";
 import { createDemoTelemetry } from "./demo-data.ts";
 import type { DemoGroup } from "./demo-data.ts";
+import { createDemoGroups } from "./demo-groups.ts";
 import { handleGroupRequest } from "../src/groups.ts";
 import { createMemoryUserTagStore, handleUserTagRequest } from "../src/user-tags.ts";
 import type { GroupDirectory } from "../src/groups.ts";
@@ -34,8 +35,12 @@ import { readBackendSettings } from "../src/backend-settings.ts";
 
 // Synthetic Entra groups for the demo; the demo never calls Microsoft Graph.
 const DEMO_ENTRA_GROUPS = [
-  { id: "7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", displayName: "Payments engineering", description: "Demo security group", securityEnabled: true, memberCount: 42 },
-  { id: "8b2d3c4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e", displayName: "Payments data science", description: null, securityEnabled: true, memberCount: 7 },
+  ...createDemoGroups().map((g, i) => ({
+    id: String(g.groupId), displayName: String(g.displayName), description: "Demo security group",
+    securityEnabled: true, memberCount: 3 + i % 6,
+  })),
+  { id: "9c3e4d5f-6a7b-4c8d-8e9f-102132435465", displayName: "Research sandbox", description: "Available to onboard", securityEnabled: true, memberCount: 3 },
+  { id: "ad4f5e60-7b8c-4d9e-9f01-213243546576", displayName: "Operations sandbox", description: "Available to onboard", securityEnabled: true, memberCount: 3 },
 ];
 const demoGroupDirectory: GroupDirectory = {
   async search(text) { return { state: "available", groups: DEMO_ENTRA_GROUPS.filter((g) => g.displayName.toLowerCase().includes(text.toLowerCase())).map(({ memberCount: _m, ...g }) => g) }; },
@@ -51,28 +56,6 @@ const PORT = Number(process.env.PORT ?? 7171);
 const UI = fileURLToPath(new URL("../ui-dist/", import.meta.url));
 const UI_V3 = fileURLToPath(new URL("../ui-dist-v3/", import.meta.url));
 const mode = process.env.DEMO_REGISTRY ?? "seeded";
-
-const limit = (tpm: number | null, quota: number | null, period: string | null = quota === null ? null : "Monthly") =>
-  ({ tokensPerMinute: tpm, tokenQuota: quota, tokenQuotaPeriod: period });
-
-function seed(id: string, name: string, classes: Record<string, { group: string; groupName: string; families: Record<string, string[]> }>, extra: Doc = {}): Doc {
-  return {
-    id, projectId: id, displayName: name, status: "active", backendId: "foundry-eus2",
-    designatedSubscriptionId: "3c1d5a0e-8f2b-4c6d-9e1a-7b2f4d8c0a11", supersedes: null, retiredAt: null, ...extra,
-    classifications: Object.fromEntries(Object.entries(classes).map(([code, c]) => [code, {
-      groupId: c.group, classificationGroupDisplayName: c.groupName,
-      familyPolicy: {
-        aggregateLimits: { person: limit(20000, 2000000), group: limit(150000, 40000000) },
-        families: Object.fromEntries(Object.entries(c.families).map(([family, models]) => [family, {
-          models, person: limit(family === "opus" ? 8000 : 20000, family === "opus" ? 500000 : 2000000), group: limit(family === "opus" ? 40000 : 120000, null),
-        }])),
-      },
-      personBudget: { amount: 25, currency: "USD", period: "monthly" },
-      aggregateBudget: { amount: 1500, currency: "USD", period: "monthly" },
-      aggregateMode: "strict", onboardingMode: "block",
-    }])),
-  };
-}
 
 class MemoryStore implements ProjectStore {
   docs = new Map<string, StoredProject>();
@@ -110,42 +93,7 @@ class MemoryStore implements ProjectStore {
 
 const store = new MemoryStore();
 if (mode === "seeded") {
-  for (const doc of [
-    seed("PROJECT01", "Payments platform", {
-      STD: { group: "6f3a2c1e-4b5d-4e8f-9a0b-1c2d3e4f5a6b", groupName: "PROJECT01-STD", families: { sonnet: ["claude-sonnet-4-5"], haiku: ["claude-haiku-4-5"] } },
-      PRM: { group: "7a4b3d2f-5c6e-4f9a-8b1c-2d3e4f5a6b7c", groupName: "PROJECT01-PRM", families: { sonnet: ["claude-sonnet-4-5"], opus: ["claude-opus-4-1"] } },
-      CYB: { group: "9c6d5f4b-7e8a-4b1c-8d3e-4f5a6b7c8d9e", groupName: "PROJECT01-CYB", families: { opus: ["claude-opus-4-1"], sonnet: ["claude-sonnet-4-5"] } },
-    }),
-    seed("PROJECT02", "Customer support copilots", {
-      STD: { group: "8b5c4e3a-6d7f-4a0b-9c2d-3e4f5a6b7c8d", groupName: "PROJECT02-STD", families: { sonnet: ["claude-sonnet-4-5"] } },
-    }),
-  ]) await store.create(doc);
-  // V3 demo: enough projects to page, filter by tag/backend/classification and chart by project.
-  const names = ["Claims automation", "Developer portal", "Fraud analytics", "HR assistant", "Legal review", "Marketing studio", "Network ops",
-    "Procurement", "Quality engineering", "Risk models", "Sales enablement", "Security research", "Supply chain", "Tax engine", "Treasury",
-    "Underwriting", "Vendor onboarding", "Warehouse robotics", "Data platform", "Mobile banking", "Observability", "Pricing service", "Search relevance", "Voice bots"];
-  const hex = (n: number, width: number) => n.toString(16).padStart(width, "0");
-  for (const [i, name] of names.entries()) {
-    const id = `PROJECT${String(i + 3).padStart(2, "0")}`;
-    const classes: Record<string, { group: string; groupName: string; families: Record<string, string[]> }> = {
-      STD: { group: `${hex(0x1a2b0000 + i, 8)}-0000-4000-8000-${hex(i + 1, 12)}`, groupName: `${id}-STD`, families: { sonnet: ["claude-sonnet-4-5"], haiku: ["claude-haiku-4-5"] } },
-    };
-    if (i % 3 === 0) classes.PRM = { group: `${hex(0x2b3c0000 + i, 8)}-0000-4000-8000-${hex(i + 1, 12)}`, groupName: `${id}-PRM`, families: { sonnet: ["claude-sonnet-4-5"], opus: ["claude-opus-4-1"] } };
-    if (i % 4 === 1) classes.CYB = { group: `${hex(0x3c4d0000 + i, 8)}-0000-4000-8000-${hex(i + 1, 12)}`, groupName: `${id}-CYB`, families: { opus: ["claude-opus-4-1"], sonnet: ["claude-sonnet-4-5"] } };
-    await store.create(seed(id, name, classes, {
-      backendId: i === names.length - 1 ? "foundry-wus3" : i % 4 === 0 ? "foundry-swc" : "foundry-eus2",
-      adminTags: [["finance", "pilot"], ["platform"], ["finance"], ["people", "pilot"], ["legal"], ["growth"]][i % 6],
-    }));
-  }
-  // Demo budgets sized to the synthetic usage, so the burn-down and "near limit" views have something to show.
-  for (const p of await store.list()) {
-    const doc = structuredClone(p.doc);
-    for (const [code, c] of Object.entries(doc.classifications as Record<string, Doc>)) {
-      const n = Number(String(doc.projectId).slice(-2));
-      (c.aggregateBudget as Doc).amount = doc.projectId === "PROJECT01" && code === "PRM" ? 40 : 80 + (n % 5) * 40;
-    }
-    await store.replace(doc, p.etag);
-  }
+  for (const doc of createDemoGroups()) await store.create(doc);
 }
 
 const authenticate: Authenticator = async (authorization) => {
@@ -176,25 +124,24 @@ const userTagStore = createMemoryUserTagStore();
 const realOperations = createOperations({}, { getToken: async () => { throw new Error("Demo must not acquire real tokens"); } }, console.log);
 
 // ---- Demo-only synthetic telemetry (dev/demo-data.ts); never used in Azure. ----
-const familyModel: Record<string, string> = { sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5", opus: "claude-opus-5-5" };
-const demoGroups: DemoGroup[] = mode === "seeded" ? (await store.list()).flatMap((p) => Object.entries(p.doc.classifications as Record<string, Doc>).map(([code, c], i) => ({
-  projectId: String(p.doc.projectId), classification: code, groupId: String(c.groupId), groupName: String(c.classificationGroupDisplayName ?? code),
-  members: 3 + (String(p.doc.projectId).charCodeAt(8) + i) % 6, personBudgetUsd: Number((c.personBudget as Doc).amount),
-  groupBudgetUsd: c.aggregateBudget === null ? null : Number((c.aggregateBudget as Doc).amount),
-  backendId: String(p.doc.backendId), models: Object.keys((c.familyPolicy as Doc).families as Doc).map((f) => familyModel[f]).filter(Boolean),
-}))) : [];
+const demoGroups: DemoGroup[] = mode === "seeded" ? (await store.list()).map(({ doc }, i) => ({
+  groupId: String(doc.groupId), groupName: String(doc.displayName), members: 3 + i % 6,
+  personBudgetUsd: Number(((doc.budget as Doc).perUser as Doc).amount),
+  groupBudgetUsd: (doc.budget as Doc).groupCap === null ? null : Number(((doc.budget as Doc).groupCap as Doc).amount),
+  backendId: String(doc.backendId), models: Object.values((doc.familyPolicy as Doc).families as Doc).flatMap((f) => (f as Doc).models as string[]),
+})) : [];
 const telemetry = createDemoTelemetry(rateCard, demoGroups);
 const auditLines: Doc[] = [];
 const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const editorOid = "00000000-0000-4000-8000-0000000000e1";
 if (mode === "seeded") {
   auditLines.push(
-    { at: at(60 * 26), requestId: randomUUID(), operation: "create", outcome: "created", projectId: "PROJECT02", actorOid: editorOid, d: { classifications: ["STD"] } },
-    { at: at(60 * 5), requestId: randomUUID(), operation: "limits", outcome: "updated", projectId: "PROJECT01", actorOid: editorOid,
-      d: { classification: "STD", changes: [{ path: "classifications.STD.familyPolicy.families.sonnet.person.tokensPerMinute", before: 15000, after: 20000 }] } },
-    { at: at(60 * 3), requestId: randomUUID(), operation: "settings", outcome: "updated", projectId: "PROJECT01", actorOid: editorOid,
-      d: { changes: [{ path: "adminTags", before: null, after: ["finance"] }] } },
-    { at: at(50), requestId: randomUUID(), operation: "limits", outcome: "refused", projectId: "PROJECT02", actorOid: "00000000-0000-4000-8000-0000000000a1",
+    { at: at(60 * 26), requestId: randomUUID(), operation: "group.create", outcome: "created", projectId: demoGroups[1].groupId, actorOid: editorOid, d: {} },
+    { at: at(60 * 5), requestId: randomUUID(), operation: "group.update", outcome: "updated", projectId: demoGroups[0].groupId, actorOid: editorOid,
+      d: { changes: [{ path: "familyPolicy.families.sonnet.person.tokensPerMinute", before: 15000, after: 20000 }] } },
+    { at: at(60 * 3), requestId: randomUUID(), operation: "group.update", outcome: "updated", projectId: demoGroups[0].groupId, actorOid: editorOid,
+      d: { changes: [{ path: "chargebackId", before: null, after: "DEMO-1" }] } },
+    { at: at(50), requestId: randomUUID(), operation: "group.update", outcome: "refused", projectId: demoGroups[1].groupId, actorOid: "00000000-0000-4000-8000-0000000000a1",
       d: { status: 403, code: "write_permission_required" } },
   );
 }
@@ -237,7 +184,7 @@ const demoEnv = mode === "seeded" ? {
   ADMIN_GATEWAY_RESOURCE_ID: "/subscriptions/3c1d5a0e-8f2b-4c6d-9e1a-7b2f4d8c0a11/resourceGroups/ccof-rg/providers/Microsoft.ApiManagement/service/ccof-apim",
   ADMIN_LOG_RESOURCE_IDS: "/subscriptions/3c1d5a0e-8f2b-4c6d-9e1a-7b2f4d8c0a11/resourceGroups/ccof-rg/providers/Microsoft.Web/sites/ccof-reconciler",
   ADMIN_RECONCILER_INTERVAL_MINUTES: "5",
-  // Client onboarding downloads (V3 project → Onboarding). Demo values, not a real tenant.
+  // Demo values, not a real tenant.
   ADMIN_TENANT_ID: "0f1e2d3c-4b5a-4968-8776-655443322110",
   ADMIN_CLIENT_ID: "5d6e7f80-9a1b-4c2d-8e3f-405162738495",
   ADMIN_GATEWAY_URL: "https://ccof-apim.azure-api.net/claude",

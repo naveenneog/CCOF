@@ -1,0 +1,7 @@
+== stage 5 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+preview: no previous parameters available; compare with your saved config before applying.
+stage 5 preview only: nothing changed. Rerun with -Apply.
+
+== stage 5 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+deployed stage5-config (PT42.9234095S)
+stage 5 completed and verified in 119 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

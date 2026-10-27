@@ -1,5 +1,22 @@
 # Deployment packets
 
+- [x] G-DAY: publish a short novice deployment-day guide with measured stage times, advance approvals,
+  HA settings and multi-group verification. Prove approved live onboarding where existing identities/models
+  permit it; retain exact private evidence, mutation-check reader contracts and run all required gates.
+
+- [x] G-GROUPS-ONLY: group-only current console, old-bookmark notice, historical IDs
+  as text, group-only demo and documentation (ADR-0054). Owner approved minimal
+  server/schema compatibility boundary; production decommission is independent.
+- [ ] G-LEGACY-SERVER-MIGRATION: inventory existing legacy documents and archived
+  quickstart users, design and validate a migration before removing server project
+  APIs, sync/resolver/reconciler classification support, staged project selection
+  or KQL classification fields. Explicitly outside G-GROUPS-ONLY.
+- [ ] G-OBSOLETE-DEPLOYMENTS: coordinator identifies and decommissions only obsolete
+  test/validation/quickstart/manual/staged deployments; leave active application
+  and network deployments untouched. No Azure operations in G-GROUPS-ONLY.
+- [ ] G-DEPENDENCY-AUDIT: assess the existing two high-severity dependency findings
+  reported by root/admin npm ci; no manifest or lockfile change in G-GROUPS-ONLY.
+
 - [x] G-ADMIN-NAV: route shared console links and budget lookups to group or legacy project records; cover mixed-data navigation.
 
 ## High availability (2026-10-27)

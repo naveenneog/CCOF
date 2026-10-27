@@ -42,10 +42,10 @@ function LimitInputs({ value, onChange, label, readOnly }: { value: Limit; onCha
   );
 }
 
-export function LimitsEditor({ policy, onChange, classification, readOnly, restrictedAllowed }: { policy: FamilyPolicy; onChange: (p: FamilyPolicy) => void; classification: string; readOnly?: boolean; restrictedAllowed?: boolean }) {
+export function LimitsEditor({ policy, onChange, readOnly, restrictedAllowed }: { policy: FamilyPolicy; onChange: (p: FamilyPolicy) => void; readOnly?: boolean; restrictedAllowed?: boolean }) {
   const catalog = useCatalogModels();
   const families = FAMILY_ORDER.filter((f) => policy.families[f]);
-  const addable = FAMILY_ORDER.filter((f) => !policy.families[f] && (classification === "CYB" || restrictedAllowed === true || !["fable", "mythos"].includes(f)));
+  const addable = FAMILY_ORDER.filter((f) => !policy.families[f] && (restrictedAllowed === true || !["fable", "mythos"].includes(f)));
   const set = (fn: (p: FamilyPolicy) => void) => { const next = structuredClone(policy); fn(next); onChange(next); };
   const rows: { key: string; label: string; scope: "person" | "group"; family?: string }[] = [
     { key: "agg-person", label: "All families · person", scope: "person" }, { key: "agg-group", label: "All families · group", scope: "group" },
@@ -55,7 +55,7 @@ export function LimitsEditor({ policy, onChange, classification, readOnly, restr
     <div className="limits-editor">
       <div className="table-wrap" tabIndex={0} role="region" aria-label="Token limits">
         <table className="table table-dense">
-          <caption className="visually-hidden">Token limits for {classification}</caption>
+          <caption className="visually-hidden">Token limits for this group</caption>
           <thead><tr><th scope="col">Scope</th><th scope="col">TPM</th><th scope="col">Quota</th><th scope="col">Period</th></tr></thead>
           <tbody>
             {rows.map((r) => {
@@ -100,7 +100,7 @@ export function LimitsEditor({ policy, onChange, classification, readOnly, restr
           ))}
         </div>
       )}
-      <p className="hint">Empty TPM or quota means no limit at that scope. {classification === "group" ? "Fable and Mythos can be admitted only when restricted families are approved for this group." : "Fable and Mythos can be admitted only for the CYB classification."}</p>
+      <p className="hint">Empty TPM or quota means no limit at that scope. Fable and Mythos can be admitted only when restricted families are approved for this group.</p>
     </div>
   );
 }

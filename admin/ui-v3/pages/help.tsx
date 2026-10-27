@@ -3,7 +3,7 @@ import { href } from "../lib/router.ts";
 import { DataTable, PageHeader, Section } from "../components/ui.tsx";
 
 const PERMISSIONS = [
-  { feature: "Projects, limits, budgets", needs: "Cosmos DB data role on the projects container (COSMOS_ENDPOINT, COSMOS_DATABASE)", without: "Console unavailable" },
+  { feature: "Groups, limits, budgets", needs: "Cosmos DB data role on the registry container (COSMOS_ENDPOINT, COSMOS_DATABASE)", without: "Console unavailable" },
   { feature: "Chargeback, Overview cost", needs: "Log Analytics Reader on the gateway telemetry workspace; ADMIN_GATEWAY_RESOURCE_ID", without: "Chargeback shows its capability state" },
   { feature: "Budgets, reconciler", needs: "Log Analytics Reader on ADMIN_WORKSPACE_ID; ADMIN_LOG_RESOURCE_IDS or ADMIN_RECONCILER_RESOURCE_ID", without: "Budget and reconciler panels disabled" },
   { feature: "Audit, activity", needs: "Log Analytics Reader on the admin app's workspace (ADMIN_AUDIT_WORKSPACE_ID)", without: "Audit disabled" },

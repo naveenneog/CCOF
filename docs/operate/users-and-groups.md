@@ -32,8 +32,11 @@ Only **direct user members** of an onboarded group are counted; nested groups, d
 
 Stage 7 snapshots only the groups stored by Stage 4. A console-added group absent from that list is not included
 by a Stage 7 rerun. The operator instead takes a new snapshot containing **all registered group IDs**, including
-new console groups and any legacy project classification groups still in use. Omitting a group freezes its
-memberships; it does not apply the new group's access or updated models and limits.
+new console groups. The current console manages groups only; obsolete project-based
+deployments are separately decommissioned. Until a deployment is decommissioned,
+its legacy security groups must still be included if taking its snapshot: server
+enforcement has not been removed. Omitting a group freezes its memberships; it does
+not apply the new group's access or updated models and limits.
 
 From the repository, signed in to the deployment's tenant, using the same private configuration directory:
 

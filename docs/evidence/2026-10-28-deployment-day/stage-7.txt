@@ -1,0 +1,10 @@
+== stage 7 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+preview: publish resolver, sync, reconciler, admin packages (OneDeploy), wait for their functions
+preview: seed 0 projects, 1 groups and 1 backends through the sync app's registrySeed function; a group document edited in the admin console stops the stage
+preview: delegated snapshot of 1 groups, applied through the sync app's snapshotApply function
+preview: write the client config.json for group 0b65c63f-4d92-4e52-a492-c5455d71cfda
+stage 7 preview only: nothing changed. Rerun with -Apply.
+
+== stage 7 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+{"schema":"ccof.sync.run.v1","runId":"f4a3b585-0c5a-4164-85fd-5c22d0345935","trigger":"timer","source":"snapshot","snapshotSha256":"68919b6ae048587af097178c2bd565e52548112f7ffae2f1b9a278ab1b0224e5","snapshotReadAt":"2026-10-27T03:54:46.922Z","writeMode":"apply","outcome":"succeeded","reasons":[],"refusals":[],"startedAt":"2026-10-27T03:55:40.271Z","finishedAt":"2026-10-27T03:55:41.075Z","durationMs":804,"timings":{"leaseMs":625,"projectsMs":40,"groupsMs":0,"entitlementsMs":38,"planMs":2,"applyMs":0},"counts":{"projectsRead":1,"projectsValid":1,"projectsFrozen":0,"groupsRead":1,"groupsFailed":0,"membersRead":1,"membersAdmitted":1,"membersDisabled":0,"membersAccountStateUnread":0,"documentsRead":1,"documentsIgnored":0,"created":0,"replaced":0,"upserted":0,"unchanged":1,"removedMemberships":0,"withheldRemovals":0,"emptiedDocuments":0,"writeConflicts":0,"writeFailures":0,"conflicts":0},"snapshotOperationId":"53d0ee718c0b490895917f6bb2226656"}
+stage 7 completed and verified in 1286 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

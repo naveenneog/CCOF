@@ -1,0 +1,8 @@
+== stage 0 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+HA check: centralindia; regional zones available=True (service capacity is not guaranteed)
+HA check: apim zones available=True configured=True
+HA check: functions zones available=True configured=True
+HA check: storage zones available=True configured=True
+HA check: cosmos centralindia zones available=True configured=False; paired region=southindia zones=False
+HA check: cosmos southindia zones available=False configured=False; paired region=centralindia zones=True
+stage 0 completed and verified in 74 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

@@ -1,5 +1,95 @@
 # Current work
 
+## Release 22 (2026-10-28)
+
+**Active packet:** R22 — merge G-GROUPS-ONLY and G-DAY into `release/22` from `main` `e8d9353`.
+
+- Council: security review PASS (no findings); code review PASS-WITH-NOTES, two Low findings fixed test-first
+  (Overview historical budget keys, duplicate ADR number, commit `89d3e2b`). Admin tests 221/0; packet gate rerun after the fixes.
+
+## Deployment-day readiness (2026-10-27)
+
+**Active packet:** G-DAY — novice HA deployment-day checklist and live multi-group rehearsal.
+
+- Acceptance: a linked guide below 15 KiB covers advance approvals, each stage and measured timing,
+  HA settings, two-group onboarding and explicit go/no-go checks; reader contracts fail first and mutations fail.
+- Live evidence stays outside the repository. Never claim three-developer or 25,000-developer load proof
+  from a single signed-in identity. No shared registration changes or console source edits.
+- Checks: reader tests, full tests, explicit typecheck, build, admin tests and packet gate.
+- Independent council review remains with the coordinator; no nested agents are authorized.
+- Implemented: deployment-day timeline/screens, decision-led configuration with a complete offline-validated HA
+  example, client/fleet onboarding and sizing worksheet. All three day pages stay below 15 KiB LF.
+- RED: missing day/config/users/evidence pages; valid JSON breaker ranges refused; a console-added expected group
+  refused by Stage 8. Fix commits: `09b3490` (JSON integer ranges), `929ec0b` (console group trace assertion).
+- Targeted GREEN: 29 reader tests, 75 Foundry failover checks, 544 staged checks, 13 cross-platform checks;
+  47/47 scoped mutations killed. First full-suite failure exposed unqualified Windows-only examples; these
+  now carry explicit platform labels without changing the existing deployer guard.
+- Live: second group onboarded/synced; both explicit selectors and the higher-spend default returned 200,
+  group-specific denial returned 403 with allowed models, usage shows both budgets, and Stage 8 passed in 285 s.
+  One identity only; provider 408/500 failures make rollout readiness conditional, not a clean enterprise acceptance.
+- Seventeen pseudonymised images are checked and visually reviewed. The lab's stale console was updated using
+  the unchanged released admin source only; both deployed snapshot links now open the correct group pages.
+  Final console captures use the live deployment with a documented CLI-auth substitution.
+- Self-review: Architect PASS (assertion is not routing/access); Coder PASS (small guarded changes);
+  QA PASS-WITH-NOTES (negative/mutation coverage; one-identity/live-client limits); UX PASS-WITH-NOTES
+  (timed decisions/screens, explicit unverified paths); Security PASS-WITH-NOTES (no new dependencies or grants,
+  checked pseudonyms and per-user sign-in; existing dependency advisories are not waived).
+- Final validation: `npm test` PASS (401.9 s in the final gate; Node suite has 1,340 pass/0 fail and six
+  existing conditional skips), default typecheck PASS (2.2 s), build PASS (2.9 s). Explicit typecheck also
+  PASS (2.6 s); admin 213/0 PASS (14.6 s). Final packet gate PASS (408.6 s): 23 pass, two existing warnings,
+  zero failures. Final source candidate: `f8711d4`; code fixes `09b3490`, `929ec0b`, `bfc48e1`.
+- Review follow-up requires actual group scope and charged Entra group ID, not only a GUID-shaped project ID.
+  The saved real successful request passes the stronger live query/assertion without replaying inference
+  or changing the saved Stage 8 record (`selection-scope-result.json` in private evidence).
+- Large enrollment is not the small snapshot pilot: the example uses automatic Graph sync and count/row
+  guards above the two-group scope footprint. Consent/warm-up, large snapshot alternatives, RU/memory/query
+  performance and pilot token quotas are explicit prerequisites, not claims of 25,000-developer capacity.
+- Verify-mode network connections to new targets are sequenced after Stage 1 and before Stage 6, not
+  incorrectly required before those resources exist. The network-sequencing regression has its own RED/kill.
+- Independent coordinator review/publication remains required. This packet does not clear customer Cosmos
+  capacity, enterprise quota/load, three-developer acceptance or provider-reliability prerequisites.
+
+## Group-only admin console (2026-10-27)
+
+**Active packet:** G-GROUPS-ONLY — DONE: remove legacy project management and classification
+controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
+
+- **Resumed by owner:** new deployments and UI are group-only; obsolete deployments
+  are separately decommissioned. Preserve server/schema handling as the minimal
+  safe boundary; no Azure, runtime or server changes in this packet.
+- Acceptance: group-only navigation, cost/budget/Foundry controls and demo; historical
+  non-GUID scopes remain visible without management links; old project bookmarks
+  explain the removal and link to Groups.
+- Verification: rendering tests first, guard mutations, Edge demo navigation,
+  admin/root tests and build/typecheck, packet gate and added-line leak scan.
+- Unknowns: GO-1 and GO-2 researched; GO-3 resolved by the owner's minimal-scope approval.
+- RED checkpoint: 13 focused tests load, 2 pass and 11 fail. This is intentionally
+  incomplete test-first work, not a green implementation or completed packet.
+- GREEN: 31 focused tests and all 219 admin tests pass. Removed the four exclusive
+  legacy modules after extracting their shared helpers. ADR-0054 records the
+  approved group-only UI and independently coordinated decommission boundary.
+- Edge: all 12 nav pages and group onboarding load, seven group links open group
+  detail, manual GUID entry works, seven chargeback tabs load and five old bookmark
+  forms lead to Groups. Final 28 checks, zero page errors, no legacy project or
+  classification API reads. Seeded groups resolve in the synthetic directory;
+  spare directory groups remain available for onboarding. Demo process stopped.
+- Commits: RED contract checkpoint `7b94b88`; first GREEN implementation `2683aef`.
+- Mutation verification: six guards caught with all 219 admin tests loaded each
+  time; no suite-load failure counted. Restored baseline passes 219/219.
+- Final checks: admin tests/build, requested root typecheck, root npm test/build
+  and packet gate PASS. Gate: 23 passed, 2 existing warnings (five oversized
+  historical files and G-R3/E2E-01/CC-01), zero failures; lint skipped because no
+  command is declared. Added-line leak scan: zero matches; whitespace diff clean.
+  Evidence (private, kept outside the repository): REPORT, gate, mutation and browser results.
+- Council (direct review; owner forbids additional agents): Architect PASS (shared
+  helpers extracted, ADR boundary and unchanged server/schema); Coder PASS (no
+  deleted-page imports, shared scope links); QA PASS (RED evidence, mixed/group-only
+  fixtures, negative scope checks and six full-suite mutations); UX PASS (12 nav
+  pages, old-bookmark notice, manual-entry regression fixed, preserved accessible
+  labels and empty/error/loading states); Security PASS-WITH-NOTES (GUID guards,
+  React escaping and existing authorization unchanged; existing dependency findings
+  tracked as G-DEPENDENCY-AUDIT, no new dependencies).
+
 ## Admin group navigation (2026-10-27)
 
 **Active packet:** G-ADMIN-NAV — group budget snapshots and other shared console links open Groups, not Legacy projects.

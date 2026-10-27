@@ -10,7 +10,7 @@ import type { Doc } from "../src/validation.ts";
 
 interface Rates { input: number; output: number; cacheRead: number; cacheWrite5m: number; cacheWrite1h: number }
 interface Card { version: string; entries: { model: string; effectiveFrom: string; effectiveTo: string | null; inferenceGeoMultipliers: Record<string, string>; promptTiers: { rates: Record<string, string> }[] }[] }
-export interface DemoGroup { projectId: string; classification: string; groupId: string; groupName: string; members: number; personBudgetUsd: number; groupBudgetUsd: number | null; backendId: string; models: string[] }
+export interface DemoGroup { groupId: string; groupName: string; members: number; personBudgetUsd: number; groupBudgetUsd: number | null; backendId: string; models: string[] }
 interface Row {
   at: number; projectId: string; classification: string; groupId: string; groupName: string; personId: string; model: string; family: string;
   backendId: string; geo: string; requests: number; input: number; output: number; cacheRead: number; cacheWrite5m: number; cacheWrite1h: number;
@@ -26,7 +26,7 @@ const usd = (n: number) => n.toFixed(6).replace(/\.?0+$/, "") || "0";
 
 export function createDemoTelemetry(card: Card, groups: DemoGroup[], now = new Date()) {
   const r = rng(20261019);
-  const people = new Map(groups.map((g) => [`${g.projectId}:${g.classification}`, Array.from({ length: g.members }, () => guid(r))]));
+  const people = new Map(groups.map((g) => [g.groupId, Array.from({ length: g.members }, () => guid(r))]));
   const rateFor = (model: string, geo: string, at: number): Rates | null => {
     const e = card.entries.find((x) => x.model === model && Date.parse(x.effectiveFrom) <= at && (x.effectiveTo === null || Date.parse(x.effectiveTo) > at));
     const m = e?.inferenceGeoMultipliers[geo];
@@ -43,7 +43,7 @@ export function createDemoTelemetry(card: Card, groups: DemoGroup[], now = new D
     const weekday = new Date(day).getUTCDay();
     const intensity = weekday === 0 || weekday === 6 ? 0.15 : 1;
     for (const g of groups) {
-      const persons = people.get(`${g.projectId}:${g.classification}`) ?? [];
+      const persons = people.get(g.groupId) ?? [];
       persons.forEach((personId, pi) => {
         const heavy = pi === 0 ? 2.4 : pi === 1 ? 1.5 : 1;
         for (const model of g.models) {
@@ -57,7 +57,7 @@ export function createDemoTelemetry(card: Card, groups: DemoGroup[], now = new D
             const rate = rateFor(model, geo, at);
             const cost = rate ? { input: input * rate.input / 1e6, output: output * rate.output / 1e6, cacheRead: cacheRead * rate.cacheRead / 1e6, cacheWrite5m: cacheWrite5m * rate.cacheWrite5m / 1e6, cacheWrite1h: cacheWrite1h * rate.cacheWrite1h / 1e6 } : null;
             const reason = rate ? null : card.entries.some((x) => x.model === model && Date.parse(x.effectiveFrom) <= at) ? "geography_not_in_rate_card" : "no_rate_in_force";
-            rows.push({ at, projectId: g.projectId, classification: g.classification, groupId: g.groupId, groupName: g.groupName, personId, model, family: family(model),
+            rows.push({ at, projectId: g.groupId, classification: "group", groupId: g.groupId, groupName: g.groupName, personId, model, family: family(model),
               backendId: g.backendId, geo, requests: 3 + Math.floor(r() * 30 * scale), input, output, cacheRead, cacheWrite5m, cacheWrite1h,
               failed: r() > 0.93 ? 1 : 0, priced: rate !== null, reason, cost });
           }
@@ -180,20 +180,20 @@ export function createDemoTelemetry(card: Card, groups: DemoGroup[], now = new D
     const out: Doc[] = [];
     const period = { period: new Date(monthStart).toISOString().slice(0, 7), periodStart: new Date(monthStart).toISOString(), periodEnd: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString() };
     for (const g of groups) {
-      const mine = month.filter((x) => x.projectId === g.projectId && x.classification === g.classification);
+      const mine = month.filter((x) => x.groupId === g.groupId);
       const spend = (l: Row[]) => l.reduce((s, x) => s + (x.cost ? x.cost.input + x.cost.output + x.cost.cacheRead + x.cost.cacheWrite5m + x.cost.cacheWrite1h : 0), 0) * 100;
       const partial = mine.some((x) => !x.priced);
       const gs = spend(mine), gb = g.groupBudgetUsd === null ? null : g.groupBudgetUsd * 100;
-      out.push({ scope: "group", scopeId: `${g.projectId}:${g.classification}`, projectId: g.projectId, classification: g.classification, personId: "", ...period,
+      out.push({ scope: "group", scopeId: g.groupId, projectId: g.groupId, classification: "group", personId: "", ...period,
         spentCcu: usd(gs), budgetCcu: gb === null ? null : usd(gb), budgetState: gb === null ? "no_cap" : gs >= gb ? "exhausted" : "available",
         exhausted: gb !== null && gs >= gb, mode: "strict", completeness: partial ? "partial" : "complete",
         pricedRequests: mine.filter((x) => x.priced).length, partialRequests: 0, unpricedRequests: mine.filter((x) => !x.priced).length,
         activeMemberCount: g.members, computedAt, validUntil, snapshotAgeSeconds: 240, eventDeliverySeconds: 35, snapshotState: "current",
         rateCardVersion: card.version, rateCardMismatch: false, runId });
-      for (const personId of people.get(`${g.projectId}:${g.classification}`) ?? []) {
+      for (const personId of people.get(g.groupId) ?? []) {
         const pl = mine.filter((x) => x.personId === personId);
         const ps = spend(pl), pb = g.personBudgetUsd * 100;
-        out.push({ scope: "person", scopeId: `${personId}:${g.projectId}`, projectId: g.projectId, classification: g.classification, personId, ...period,
+        out.push({ scope: "person", scopeId: `${personId}:${g.groupId}`, projectId: g.groupId, classification: "group", personId, ...period,
           spentCcu: usd(ps), budgetCcu: usd(pb), budgetState: ps >= pb ? "exhausted" : "available", exhausted: ps >= pb, mode: "strict",
           completeness: pl.some((x) => !x.priced) ? "partial" : "complete", pricedRequests: pl.filter((x) => x.priced).length, partialRequests: 0,
           unpricedRequests: pl.filter((x) => !x.priced).length, activeMemberCount: null, computedAt,

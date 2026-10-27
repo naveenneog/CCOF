@@ -6,7 +6,6 @@ import { errorMessage } from "../lib/api.ts";
 // ---- Icons: one stroke style, 20px grid, currentColor. Decorative unless labelled by their control. ----
 const paths: Record<string, string> = {
   overview: "M3 3h6v8H3zM11 3h6v5h-6zM11 10h6v7h-6zM3 13h6v4H3z",
-  projects: "M3 5h14M3 10h14M3 15h14M3 5v0",
   chargeback: "M10 2v16M14 5.5c0-1.4-1.8-2.5-4-2.5s-4 1.1-4 2.5S7.8 8 10 8.5s4 1.1 4 2.75S12.2 14 10 14s-4-1.1-4-2.5",
   budgets: "M10 3a7 7 0 1 0 7 7h-7z M12 2.5A7 7 0 0 1 17.5 8H12z",
   reconciler: "M4 10a6 6 0 0 1 10.5-4M16 10a6 6 0 0 1-10.5 4M14 2.5V6h-3.5M6 17.5V14h3.5",

@@ -1,0 +1,12 @@
+== stage 4 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+preview: create application 'CCOF Admin' (single tenant)
+preview: gateway app: api://<appId>, access_as_user, v2 tokens, public client (localhost, WAM), self preauthorized and Azure CLI
+preview: resolver app: api://<appId>, v2 tokens, no redirects or secrets
+preview: admin app: Projects.Manage scope, CCOF.Projects.Read/Write roles, SPA redirects /api/console and /api/console-v3, assignment required, self preauthorized and 04b07795-8ddb-461a-bbee-02f9e1bf7b46
+preview: group group/0b65c63f-4d92-4e52-a492-c5455d71cfda: use 0b65c63f-4d92-4e52-a492-c5455d71cfda, members
+preview: gateway application 'CCOF Gateway' (44d58842-1005-4adc-befd-4820cf6b9ad0): no change
+preview: resolver application 'CCOF Resolver API' (6f45123c-3a1b-4a6c-b8bb-ef1be1ba1a31): no change
+stage 4 preview only: nothing changed. Rerun with -Apply.
+
+== stage 4 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+stage 4 completed and verified in 63 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "../lib/api.ts";
+import { isGroupId } from "../lib/groups.ts";
 import { ago, compact, human, int, pct, usd, when } from "../lib/format.ts";
 import { href, scopePath } from "../lib/router.ts";
+import { ScopeLink } from "../components/scope-link.tsx";
 import { CapabilityNotice, DataTable, ErrorNote, Loading, PageHeader, StatePill } from "../components/ui.tsx";
 import { CostBreakdown } from "../components/cost-breakdown.tsx";
 import { StackedColumns } from "../components/charts.tsx";
@@ -28,10 +30,11 @@ export function Overview() {
   const confirmed = ok(budgets.data) && budgets.data.data.groups?.length > 0 &&
     cov?.reportState === "observed_token_usage_complete" && written?.freshness === "on_schedule" &&
     ok(health.data) && Array.isArray(health.data.data) && health.data.data.length > 0;
-  const attention: { key: string; tone: string; text: React.ReactNode; to: string }[] = [];
+  const attention: { key: string; tone: string; text: React.ReactNode; to: string | null }[] = [];
   if (ok(budgets.data)) for (const g of budgets.data.data.groups) {
-    attention.push({ key: `b-${g.projectId}-${g.classification}`, tone: g.exhausted ? "danger" : "warn", to: scopePath(g.projectId, "budgets"),
-      text: <><strong>{g.projectId} · {g.classification}</strong> at {pct(g.usedPercent)} of its monthly budget{g.exhausted ? " — exhausted" : ""}</> });
+    const level = isGroupId(g.projectId) || !g.classification ? "" : ` (${g.classification})`;
+    attention.push({ key: `b-${g.projectId}-${g.classification ?? ""}`, tone: g.exhausted ? "danger" : "warn", to: scopePath(g.projectId),
+      text: <><strong>{g.projectId}</strong>{level} at {pct(g.usedPercent)} of its monthly budget{g.exhausted ? " — exhausted" : ""}</> });
   }
   if (cov && cov.reportState !== "observed_token_usage_complete") attention.push({ key: "coverage", tone: "warn", to: "/chargeback", text: <>Telemetry coverage is <strong>{human(cov.reportState)}</strong>: {int(cov.unpricedRequests)} unpriced, {int(cov.unattributedRequests)} unattributed requests</> });
   if (written && written.freshness !== "on_schedule") attention.push({ key: "rec", tone: "danger", to: "/reconciler", text: <>The reconciler's last written run was {ago(written.latestRunAt)} ({human(written.freshness)})</> });
@@ -68,7 +71,7 @@ export function Overview() {
                 : <DataTable caption="Recent changes" dense rows={audit.data.data.rows} empty={<p className="empty-inline">No changes in the last 31 days.</p>} columns={[
                   { key: "at", label: "When", render: (r: any) => ago(r.at) },
                   { key: "operation", label: "Change", render: (r: any) => human(r.operation) },
-                  { key: "projectId", label: "Group / legacy project", render: (r: any) => r.projectId ? <a href={href(scopePath(r.projectId))}>{r.projectId}</a> : "—" },
+                  { key: "projectId", label: "Group", render: (r: any) => r.projectId ? <ScopeLink id={r.projectId} /> : "—" },
                   { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
                 ]} />}
           </section>
@@ -79,7 +82,7 @@ export function Overview() {
             {budgets.loading && !budgets.data ? <Loading rows={3} /> : attention.length === 0
               ? <p className="empty-inline">{confirmed ? <><span className="ok-text">Nothing needs attention.</span> The available observations show no concerns.</>
                 : "No confirmed alerts from available observations. Some checks have no data or are not configured; overall health is unverified."}</p>
-              : <ul className="attention">{attention.map((a) => <li key={a.key} className={`attention-${a.tone}`}><a href={href(a.to)}>{a.text}</a></li>)}</ul>}
+              : <ul className="attention">{attention.map((a) => <li key={a.key} className={`attention-${a.tone}`}>{a.to ? <a href={href(a.to)}>{a.text}</a> : <span>{a.text}</span>}</li>)}</ul>}
             {budgets.data && !ok(budgets.data) && <CapabilityNotice cap={budgets.data} what="Budgets" />}
           </section>
           <section className="panel">

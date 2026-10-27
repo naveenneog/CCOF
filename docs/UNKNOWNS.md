@@ -1,5 +1,26 @@
 # Current deployment unknowns
 
+## Deployment day (G-DAY)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| DAY-1 | ASSUMED | Stage durations are planning ranges, not a 2–3 hour service guarantee. Prior Central India labs took about 73–80 minutes of successful applies; quota, consent, retries and people add time. Approvals must precede deployment day. |
+| DAY-2 | RESEARCHED | Four gateway units for 25,000 typical developers is a starting estimate, not validated capacity: [sizing](operate/sizing.md). One-unit measurements do not establish linear scale or successful-stream load at 25,000 developers. |
+| DAY-3 | RESEARCHED | The live rehearsal confirmed one developer in two onboarded groups, with one deployed model. Both selectors/default, denial and usage were exercised. Three distinct developers and a successfully served second model were not available; never infer that coverage from repeated calls. |
+| DAY-4 | RESOLVED | The complete HA JSON example exposed valid explicit circuit-breaker ranges being refused: `ConvertFrom-Json -AsHashtable` reads JSON integers as Int64, while the range guard only accepted Int32. Accept both integral types, consistent with the other breaker fields; keep numeric bounds and negative tests. |
+| DAY-5 | RESEARCHED | Current vendor Cowork/Office/Desktop capabilities are broader than this repository's installer/live evidence. Keep CCOF support limits distinct from vendor capability; resolve the console's general Cowork statement explicitly in [ADR-0055](adr/0055-deployment-day-evidence-boundary.md). Intune/Office/native Desktop/Cowork were not exercised in this lab. |
+| DAY-6 | RESOLVED | After console-only onboarding, Stage 8 correctly detected a different higher-spend default group, but rejected that group's explicit ID because it was not a Stage 4 seed. Accept GUID expectations directly as trace assertions, preserving selector/attribution checks and all Stage 1–7 input hashes. |
+| DAY-7 | RESOLVED | Explicit GUID expectations also need actual group scope and charged-group evidence: a GUID-shaped legacy project could match `projectId` alone. Added metadata/cardinality guards and verified the real successful receipt read-only, without another model call or changing its stored record. |
+| DAY-8 | RESEARCHED | The Windows app-settings snapshot transport is limited to 7,000 base64 characters ([sync](SYNC.md)); the template's 10,000-state guard is below 25,000 developers' scopes (`src/reconciler/run.ts`). The large example chooses automatic sync and 100,000 state/500,000 ledger-row guards within runtime bounds; consent/warm-up and measured processing capacity remain prerequisites ([sizing](operate/sizing.md)). |
+
+## Group-only console (G-GROUPS-ONLY)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| GO-1 | RESEARCHED | Can removed legacy pages be deleted outright? `group-fields.tsx` imports applyPatch, other pages import PagerLite/ChangeList/useDebounced. Move these existing helpers to shared components/lib before deleting the four exclusive legacy modules. |
+| GO-2 | RESEARCHED | Does removing UI permit deleting legacy enforcement? No: owner brief preserves legacy APIs, sync, resolver/reconciler, staged selections and KQL. GUID scopes can link to Groups using the existing isGroupId guard; historical non-GUID scopes remain visible as text. ADR-0054 records the boundary and migration prerequisite. |
+| GO-3 | RESOLVED | Owner explicitly resumed G-GROUPS-ONLY and approved group-only UI with unchanged server/schema as the minimal safe boundary. Obsolete test/validation/quickstart/manual/staged deployments are separately coordinated for decommission; active deployments stay untouched. No Azure/runtime/server changes authorized in this packet (ADR-0054). |
+
 ## Admin group navigation (G-ADMIN-NAV)
 
 | ID | State | Question / evidence |

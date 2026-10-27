@@ -69,7 +69,7 @@ test("BB-07: read cache expires, is bounded, and prevents in-flight data repopul
 });
 
 test("BB-01: V3 uses no datalists; dropdown options use the application theme", async () => {
-  for (const page of ["projects", "new-project", "project-detail", "chargeback"]) {
+  for (const page of ["groups", "group-onboard", "group-detail", "chargeback"]) {
     const source = await readFile(new URL(`../ui-v3/pages/${page}.tsx`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /<datalist/);
   }

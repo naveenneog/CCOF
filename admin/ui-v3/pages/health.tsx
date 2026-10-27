@@ -5,7 +5,7 @@ import { useSession } from "../components/shell.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const FEATURE_LABEL: Record<string, string> = {
-  projects: "Project registry (Cosmos DB)", chargeback: "Chargeback (gateway telemetry)", reconciler: "Reconciler logs", audit: "Audit logs",
+  projects: "Group registry (Cosmos DB)", chargeback: "Chargeback (gateway telemetry)", reconciler: "Reconciler logs", audit: "Audit logs",
   queries: "Packaged KQL", catalogStore: "Cost definitions store",
 };
 

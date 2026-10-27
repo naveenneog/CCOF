@@ -26,6 +26,19 @@ Check ($plan.Count -eq 1 -and $plan[0].id -ceq 'claude' -and $plan[0].failover.i
 Check ($plan[0].circuitBreaker.rules[0].failureCondition.statusCodeRanges[0].min -eq 429) 'breaker must include backend 429'
 Check ($plan[0].circuitBreaker.rules[0].failureCondition.statusCodeRanges[1].min -eq 500) 'breaker must include 5xx'
 Check ($plan[0].circuitBreaker.rules[0].acceptRetryAfter -eq $true) 'breaker must honour Retry-After by default'
+$c = New-Config
+$c.backends[0].circuitBreaker = @{ statusCodeRanges = @(@{ min = 429; max = 429 }, @{ min = 500; max = 599 }) }
+$c = $c | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
+Check (@(Get-StgFailoverProblems $c).Count -eq 0) 'JSON-parsed integer breaker ranges must be accepted'
+foreach ($key in 'min', 'max') {
+    foreach ($value in @('500', 500.5, 600, 399)) {
+        $c = New-Config
+        $c.backends[0].circuitBreaker = @{ statusCodeRanges = @(@{ min = 500; max = 599 }) }
+        $c.backends[0].circuitBreaker.statusCodeRanges[0][$key] = $value
+        $c = $c | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
+        Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'statusCodeRanges') "JSON-parsed breaker ranges reject invalid $key $value"
+    }
+}
 foreach ($key in 'count', 'intervalSeconds', 'tripDurationSeconds') {
     $c = New-Config; $c.backends[0].circuitBreaker = @{ $key = 0 }
     Check ((@(Get-StgFailoverProblems $c) -join ';') -match $key) "reject invalid breaker $key"

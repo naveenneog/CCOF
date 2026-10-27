@@ -1,0 +1,6 @@
+== stage 3 (preview) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+stage 3 preview only: nothing changed. Rerun with -Apply.
+
+== stage 3 (apply) subscription ca73539b-d4ce-4fbe-ac06-321c19cbc7d0 RG ccof-day-rg; state C:\Users\alex\ccof-private\.staged-state
+deployed stage3-grants (PT13M23.295264S)
+stage 3 completed and verified in 845 s; outputs in C:\Users\alex\ccof-private\.staged-state\state.json

@@ -3,6 +3,9 @@
 Tick every line before Stage 0. Each item names who provides it. Details and least-privilege roles:
 [staged guide, section 2](../STAGED-DEPLOYMENT-GUIDE.md#2-prerequisites).
 
+For a team deployment, finish the [deployment-day checklist](deployment-day.md) the day before:
+quota, Cosmos zonal capacity, consent and private networking cannot be assumed to fit a 2–3 hour window.
+
 Before Stage 1, [check and add high availability](high-availability.md): zone protection is opt-in and adds
 capacity costs; it does not create a second-region gateway.
 

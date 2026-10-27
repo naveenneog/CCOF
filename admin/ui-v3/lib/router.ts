@@ -22,7 +22,6 @@ export function useRoute(): Route {
 export const navigate = (path: string) => { location.hash = path; };
 export const href = (path: string) => `#${path}`;
 
-export function scopePath(id: string, legacySection?: string): string {
-  return isGroupId(id) ? `/groups/${id.toLowerCase()}`
-    : `/projects/${encodeURIComponent(id)}${legacySection ? `/${legacySection}` : ""}`;
+export function scopePath(id: string): string | null {
+  return isGroupId(id) ? `/groups/${id.toLowerCase()}` : null;
 }
