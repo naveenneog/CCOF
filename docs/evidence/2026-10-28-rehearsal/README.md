@@ -83,7 +83,8 @@ A real Claude Code reply followed; complete native stream pricing did not.
 - The [five deployment-day console captures](../2026-10-28-deployment-day/README.md) were replaced from this
   actual group-only lab, preserving their established pseudonyms. Both budget snapshot links were clicked.
   Captures wait for all loading indicators; zero counts seen during an initial loading frame were not
-  misreported as a product defect.
+  misreported as a product defect. The final images follow an admin-only refresh from merged release-22
+  source; no seed, membership, gateway policy, resolver or sync package was changed by that refresh.
 - Windows setup returned configured/azure-cli, usage skill true and status line set. Real Claude Code
   returned **OK** in about ten seconds. The model-free usage wrapper displayed both budgets.
 

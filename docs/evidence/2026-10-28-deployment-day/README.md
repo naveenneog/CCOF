@@ -22,19 +22,20 @@ previews were not separately timed in this HA run. Planning allowances in the gu
 | [Developer setup](developer-setup.png) | Central India novice lab, 2026-10-27, recorded setup output | Setup not timed; associated model probe 15 s |
 | [Two-group onboarding](two-group-onboarding.png) | Tonight's live Central India HA lab, 2026-10-27 | POST 201 in 0.271 s; snapshot server run 561 ms; explicit calls 200 in 3.845/2.075 s, denied model 403 in 0.146 s; default 200 in 2.786 s after upstream-error retries |
 | [Usage and status line](usage-and-status.png) | Usage-skill response: novice lab, 2026-10-26; wrapper/status line: Central India novice lab, 2026-10-27 | Both real earlier captures, combined and rerendered; not timed. No new interactive `/usage` run is claimed |
-| [Groups list](console-groups.png) | **Live group-only rehearsal console**, 2026-10-28 | Two active groups; no Legacy projects navigation; not timed |
+| [Groups list](console-groups.png) | **Live group-only rehearsal console**, merged release-22 source, 2026-10-28 | Two active groups; no Legacy projects navigation; not timed |
 | [Onboarding form](console-onboard.png) | Same rehearsal console/API | Form only; no extra group submitted; not timed |
 | [Group detail](console-group-detail.png) | Same rehearsal console/API | Data Science's actual **USD 1** lab budget, not the guide's illustrative USD 50; not timed |
-| [Budgets snapshots](console-budgets.png) | Same rehearsal console/API | Two group/two person budgets; both actual snapshot links open the correct group, uncapped notify snapshots current; not timed |
-| [Chargeback by group](console-chargeback.png) | Same rehearsal console/API | Both groups' actual priced telemetry; tiny costs round to USD 0.00. Unpriced/refused rows remain visible; not timed |
+| [Budgets snapshots](console-budgets.png) | Same rehearsal console/API | Two group/two person budgets; both actual snapshot links open the correct group, snapshots current; Engineering's native stream remains partial; not timed |
+| [Chargeback by group](console-chargeback.png) | Same rehearsal console/API | Both groups' actual telemetry; tiny known costs round to USD 0.00. Engineering's incomplete cost stays absent with a partial/lower-bound warning; not timed |
 
 ## Authentication and proof boundary
 
 The five console screenshots replace earlier release-21 HA-console captures which still showed Legacy projects.
 They now come from the **actual live rehearsal deployment's group-only console**, published by its Stage 7,
-not localhost, a locally substituted UI bundle or synthetic fixtures. Both actual snapshot links were clicked
+then admin-only refreshed from the final release-22 source after its merge from `main`.
+These are not localhost, a locally substituted UI bundle or synthetic fixtures. Both actual snapshot links were clicked
 and opened the correct group pages. This capture automation performed no state-changing writes.
-The current deployed group-only build retains the User tags sidebar; it was not hidden or edited out.
+The final release-22 group-only build retains the User tags sidebar; it was not hidden or edited out.
 
 To avoid an unattended interactive sign-in, capture
 automation changes **only that browser's fetched sign-in configuration** to demo mode and injects the approved

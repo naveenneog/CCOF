@@ -26,7 +26,7 @@ Budgets
 
 Today's group and person budgets from the reconciler, and each group's burn-down.
 
-Observed 0s ago
+Observed 1s ago
 Refresh
 Group budgets
 2
@@ -36,7 +36,7 @@ Person budgets
 0 exhausted · 0 expired
 Spent this month
 $0.00
-0 CCU
+0 CCU · lower bound
 Of capped budgets
 —
 $0.00 capped · 2 uncapped
@@ -55,7 +55,7 @@ Day 16
 Day 31
 Spent (cumulative)
 
-Reconciler figure: $0.00 spent, computed 9 min ago. The line uses chargeback's known list cost, which can run ahead of the reconciler's last run.
+Reconciler figure: $0.00 spent, computed 7 min ago. The line uses chargeback's known list cost, which can run ahead of the reconciler's last run.
 
 Data table (27 days)
 Snapshots
@@ -69,10 +69,10 @@ group budget snapshots
 Group	Spent	Budget	Used	State	Mode	Completeness	Snapshot	Computed
 fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	$0.00	no cap
 —
-	no cap	notify	complete	current	9 min ago
+	no cap	notify	complete	current	7 min ago
 0b65c63f-4d92-4e52-a492-c5455d71cfda	$0.00	no cap
 —
-	no cap	notify	complete	current	9 min ago
+	no cap	notify	partial	current	7 min ago
 1–2 of 2
 Previous
 Next

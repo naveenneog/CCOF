@@ -26,7 +26,7 @@ Chargeback
 
 The workbook's figures, computed on the server from the same ledger, pricing and rate card.
 
-Observed 0s ago
+Observed 1s ago
 Refresh
 Period
 This month
@@ -81,7 +81,7 @@ Coverage
 incomplete
 latest request 27 Oct, 21:17 UTC
 
-01 Oct – 31 Oct UTC · rate card 2026-10-11 (packaged rate card) · read 27 Oct, 21:23 UTC · List price, not an invoice.
+01 Oct – 31 Oct UTC · rate card 2026-10-11 (packaged rate card) · read 27 Oct, 21:55 UTC · List price, not an invoice.
 
 Cost over time by model family
 

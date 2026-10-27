@@ -43,6 +43,9 @@
   Reader and scoped mutation checks cover the release-23 plain-language disclosure too.
   Verified `main` and `release/22` both at `30b1a9b` before the final merge; the evidence ADR is now
   ADR-0055 and no old filename references remain. Reader 35/35 and merged admin 220/220 pass.
+- Final live console images follow an admin-only build/publish from the merged release-22 source;
+  no seeding, directory/grant/config changes or other runtime package publish. Both group links still pass;
+  partial native pricing and the actual retained User tags sidebar remain visible.
   Final committed-head full gate follows.
 
 ## Release 22 (2026-10-28)
