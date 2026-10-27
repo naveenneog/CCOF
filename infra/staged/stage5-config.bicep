@@ -115,7 +115,7 @@ module api '../quickstart/modules/apim-api.bicep' = {
     apiId: apim.apiId
     apiPath: apim.apiPath
     apiDisplayName: apim.apiDisplayName
-    backends: [for b in backends: { id: b.id, url: b.url }]
+    backends: backends
     policyXml: policyXml
     usagePolicyXml: usagePolicyXml
     policyFragments: policyFragments

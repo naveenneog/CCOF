@@ -113,7 +113,7 @@ try {
 
 # Drift refusal must precede any package build/publish; keepDifferingGroups may pass the same guard.
 $savedFunctions = @{}
-foreach ($name in 'Get-StgStage', 'New-StgQsContext', 'New-StgGroupDocuments', 'Assert-StgClientSignInMethod', 'Assert-StgGroupsExist', 'Get-StgGroupSeedDrift', 'Invoke-QsCode', 'Invoke-QsAz') {
+foreach ($name in 'Get-StgStage', 'New-StgQsContext', 'New-StgGroupDocuments', 'Assert-StgClientSignInMethod', 'Assert-StgClientAliases', 'Assert-StgGroupsExist', 'Get-StgGroupSeedDrift', 'Invoke-QsCode', 'Invoke-QsAz') {
     $savedFunctions[$name] = (Get-Item "function:$name").ScriptBlock
 }
 $script:preflightDrift = @([ordered]@{ document = "projects/$g1"; fields = @('budget', 'displayName') })
@@ -123,6 +123,7 @@ try {
     Set-Item function:New-StgQsContext { param($Cfg) $ctx }
     Set-Item function:New-StgGroupDocuments { param($Groups, $EntraGroups) $groupDocs }
     Set-Item function:Assert-StgClientSignInMethod { param($Cfg, [bool]$AzureCliAllowed) }
+    Set-Item function:Assert-StgClientAliases { param($Cfg) }
     Set-Item function:Assert-StgGroupsExist { param($Documents) }
     Set-Item function:Get-StgGroupSeedDrift { param($Endpoint, $DatabaseName, $Documents) $script:preflightDrift }
     Set-Item function:Invoke-QsCode { param($Ctx) $script:publishCalls++; throw 'test_stop_after_publish' }

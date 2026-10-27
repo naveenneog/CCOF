@@ -4,6 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { readBackendSettings } from "../src/backend-settings.ts";
 
 test("ADMIN_BACKENDS is parsed strictly: sorted, de-duplicated, and anything malformed is invalid (ADMIN-1)", () => {
@@ -19,5 +21,13 @@ test("Stage 5 writes ADMIN_BACKENDS from each backend's id and deployment names 
   const stage5 = await readFile(new URL("../../infra/staged/stage5-config.bicep", import.meta.url), "utf8");
   assert.match(stage5, /ADMIN_BACKENDS: string\(map\(backends, b => \{ id: b\.id, deployments: b\.\?deployments \?\? \[\] \}\)\)/);
   const application = await readFile(new URL("../../infra/staged/Staged.Application.ps1", import.meta.url), "utf8");
-  assert.match(application, /backends = @\(\$Cfg\.backends \| ForEach-Object \{ @\{ id = \$_\.id; url = \$_\.url; deployments = @\(if \(\$_\.deploymentInferenceGeo\) \{ \$_\.deploymentInferenceGeo\.Keys \| Sort-Object \}\) \} \}\)/);
+  assert.match(application, /backends = @\(Get-StgApimBackendPlan \$Cfg\)/);
+  const helper = fileURLToPath(new URL("../../infra/staged/Staged.FoundryFailover.ps1", import.meta.url)).replaceAll("'", "''");
+  const output = execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command",
+    `$ErrorActionPreference='Stop'; . '${helper}'; $cfg=@{backends=@(@{id='logical';url='https://primary';deploymentInferenceGeo=@{'m-2'='global';'m-1'='global'};failover=@{url='https://standby'}})}; @(Get-StgApimBackendPlan $cfg) | ConvertTo-Json -AsArray -Depth 20`
+  ], { encoding: "utf8" });
+  const plan = JSON.parse(output);
+  assert.equal(plan[0].failover.id, "logical-failover");
+  assert.deepEqual(readBackendSettings({ ADMIN_BACKENDS: JSON.stringify(plan.map(({ id, deployments }: { id: string; deployments: string[] }) => ({ id, deployments }))) }),
+    { state: "configured", backends: [{ id: "logical", deployments: ["m-1", "m-2"] }] });
 });

@@ -34,7 +34,7 @@ function Read-StgConfig {
                 $problems.Add("network.existing.privateDnsZoneIds.$key must be a full Private DNS zone resource ID")
             }
         }
-        if (@($c.backends | Where-Object privateEndpoint).Count) {
+        if (@(Get-StgFoundryMembers $c | Where-Object privateEndpoint).Count) {
             $foundryZones = $c.network.existing.privateDnsZoneIds.foundry ?? @{}
             foreach ($key in 'cognitiveServices', 'openAi', 'aiServices') {
                 $id = $foundryZones[$key]
@@ -63,7 +63,8 @@ function Read-StgConfig {
             $problems.Add('reconciler.budgetGuard needs warnPercent 1-99, overshootPercent 1-50 and projectionMinutes 1-60 as whole numbers (ADR-0040)')
         }
     }
-    foreach ($p in @(Get-StgCosmosProblems $c) + @(Get-StgAuditProblems $c)) { $problems.Add($p) }
+    foreach ($p in @(Get-StgCosmosProblems $c) + @(Get-StgAuditProblems $c) + @(Get-StgHaProblems $c)) { $problems.Add($p) }
+    foreach ($p in @(Get-StgFailoverProblems $c)) { $problems.Add($p) }
     foreach ($b in @($c.backends)) { foreach ($k in 'id', 'subscriptionId', 'resourceGroup', 'accountName', 'url') { if (-not $b[$k]) { $problems.Add("backends[$($b.id)].$k is required") } } }
     foreach ($b in @($c.backends | Where-Object { $_.privateEndpoint -and $c.network.mode -ne 'verify' })) {
         if ($b.subscriptionId -ine $c.subscriptionId -or $b.resourceGroup -ine $c.resourceGroup) {
@@ -196,7 +197,9 @@ function Get-StgStageInput {
         8 { $input += @{ stage1=$Cfg.stage1; acceptance=$Cfg.acceptance; gateway=$Cfg.gateway; admin=$Cfg.admin } }
         default { throw "invalid stage number $Number" }
     }
+    if ($Number -in 0, 1 -and $null -ne $Cfg.ha) { $input.ha = $Cfg.ha }
     if ($Number -eq 5 -and ($audit = Get-StgAuditStageInput $Cfg)) { $input.audit = $audit }
+    if ($Number -eq 6 -and @($Cfg.backends | Where-Object failover).Count) { $input.foundryFailover = @($Cfg.backends | Where-Object failover | ForEach-Object { @{ id = $_.id; failover = $_.failover } }) }
     if ($Number -eq 7 -and $Cfg.Contains('stage7')) { $input.stage7 = $Cfg.stage7 }
     # ADR-0044: only when configured, so a configuration without it (or with { enabled: false } alone) keeps its earlier hashes.
     if ($Number -in 2, 3, 5 -and $Cfg.audit -is [Collections.IDictionary] -and $null -ne $Cfg.audit.chargebackHistory -and -not (Test-StgOffOnly $Cfg.audit.chargebackHistory)) { $input.chargebackHistory = $Cfg.audit.chargebackHistory }

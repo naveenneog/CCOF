@@ -75,9 +75,15 @@ the kept groups in `evidence/stage7.verify.json` (`seed.kept`). Other differing 
 | --- | --- | --- | --- | --- |
 | `client.group` | Yes | `CCOF-PILOT01` | One `groups[]` entry, by `groupDisplayName` or `groupId` | `Staged.Groups.ps1` |
 | `client.signInMethod` | No | `msal` | `msal` or `azure-cli`; `azure-cli` needs `entra.allowAzureCliClient: true` | `Assert-StgClientSignInMethod` |
-| `client.models.default` | Yes | `claude-sonnet-5` | Deployment name Claude Code uses by default | Stage 7 |
-| `client.models.sonnet` | Yes | `claude-sonnet-5` | Deployment name for the Sonnet alias | Stage 7 |
-| `client.models.haiku` | Yes | `claude-haiku-4-5` | Deployment name for the Haiku alias | Stage 7 |
-| `client.models.opus` | Yes | `claude-sonnet-5` | Deployment name for the Opus alias | Stage 7 |
+| `client.models.default` | Yes | `claude-sonnet-5` | Deployment name Claude Code uses by default | Stage 0, Stage 7 |
+| `client.models.sonnet` | Yes | `claude-sonnet-5` | Deployment name for the Sonnet alias | Stage 0, Stage 7 |
+| `client.models.haiku` | Yes | `claude-haiku-4-5` | Deployment name for the Haiku alias | Stage 0, Stage 7 |
+| `client.models.opus` | Yes | `claude-sonnet-5` | Deployment name for the Opus alias | Stage 0, Stage 7 |
+
+Stage 0 and the Stage 7 preview/apply reject invalid aliases **before publishing anything**. Each value must be
+an exact, case-sensitive deployment name in both the selected group's family policy and its backend's
+`deploymentInferenceGeo`. The error lists the configured aliases and admitted names; client export checks again.
+For a Haiku-only backend, point all four aliases at that Haiku deployment. Alias labels do not deploy models or
+grant access to another family.
 
 Next: [resolver, sync, gateway and reports](configuration-reference-3.md).

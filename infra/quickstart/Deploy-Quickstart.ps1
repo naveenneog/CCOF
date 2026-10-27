@@ -784,15 +784,12 @@ function Invoke-QsClient {
     return New-QsClientFiles -Ctx $Ctx -ProjectId $selection.projectId -FamilyPolicy $group[0].familyPolicy -BackendId $project[0].backendId -Aliases $selection.models
 }
 
-function New-QsClientFiles {
-    <# The client configuration for one selection: the project selector value, its family policy, its backend and the explicit aliases. Also used by the staged deployment for a group (infra/staged/Staged.Groups.ps1). #>
-    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] [string]$ProjectId, [Parameter(Mandatory)] $FamilyPolicy, [Parameter(Mandatory)] [string]$BackendId, $Aliases, [string]$ProfileName = 'Claude gateway (quick-start)')
-    $p = $Ctx.P; $r = $p.registrations
-    $backend=@($p.backends | Where-Object {$_.id -ceq $BackendId})[0]
+function Assert-QsClientAliases {
+    param($FamilyPolicy, $Backend, $Aliases)
     $admitted=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach($family in $FamilyPolicy.families.Values) {
         foreach($model in $family.models) {
-            if(@($backend.deploymentInferenceGeo.Keys | Where-Object {$_ -ceq $model}).Count -eq 1) {[void]$admitted.Add($model)}
+            if(@($Backend.deploymentInferenceGeo.Keys | Where-Object {$_ -ceq $model}).Count -eq 1) {[void]$admitted.Add($model)}
         }
     }
     $aliases=$Aliases
@@ -802,9 +799,22 @@ function New-QsClientFiles {
     }
     foreach($alias in @('default','opus','sonnet','haiku')) {
         if($aliases[$alias] -isnot [string] -or -not $admitted.Contains($aliases[$alias])) {
-            throw 'client_alias_not_admitted: every alias must name an exact admitted deployment on the selected backend.'
+            $choices=@('default','opus','sonnet','haiku' | ForEach-Object {"$_=$($aliases[$_])"}) -join ', '
+            $names=@($admitted | Sort-Object -CaseSensitive) -join ', '
+            if(-not $names){$names='<none>'}
+            throw "client_alias_not_admitted: every alias must name an exact admitted deployment on the selected backend. Aliases: $choices. Admitted deployments: $names."
         }
     }
+    return ,$admitted
+}
+
+function New-QsClientFiles {
+    <# The client configuration for one selection: the project selector value, its family policy, its backend and the explicit aliases. Also used by the staged deployment for a group (infra/staged/Staged.Groups.ps1). #>
+    param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] [string]$ProjectId, [Parameter(Mandatory)] $FamilyPolicy, [Parameter(Mandatory)] [string]$BackendId, $Aliases, [string]$ProfileName = 'Claude gateway (quick-start)')
+    $p = $Ctx.P; $r = $p.registrations
+    $backend=@($p.backends | Where-Object {$_.id -ceq $BackendId})[0]
+    $admitted=Assert-QsClientAliases -FamilyPolicy $FamilyPolicy -Backend $backend -Aliases $Aliases
+    $aliases=$Aliases
     $config = [ordered]@{
         schemaVersion = 1; tenantId = $p.tenantId; clientId = $r.developerSignIn.appId
         scope = Get-CoreDeveloperScope -Registrations $r -GatewayIdentifierUri $Ctx.State.completed['1'].outputs.gatewayIdentifierUri; gatewayUrl = $Ctx.State.completed['3'].outputs.gatewayUrl

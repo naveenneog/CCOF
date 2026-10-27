@@ -1,5 +1,16 @@
 # Current deployment unknowns
 
+## Zone redundancy (G-HA-ZONES, ADR-0052)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| HAZ-1 | RESEARCHED | APIM Standard v2/Premium v2 enable automatic zone placement with `properties.zoneRedundant` ([ARM 2025-03-01-preview](https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2025-03-01-preview/service)). Explicit `zones` are for classic Premium, not this v2 option. Two units are recommended, not required; v2 zone configuration cannot change after creation ([reliability](https://learn.microsoft.com/azure/reliability/reliability-api-management), retrieved 2026-10-27). |
+| HAZ-2 | RESEARCHED | Flex uses `Microsoft.Web/serverfarms@2024-04-01` `properties.zoneRedundant`, needs zone-redundant host and deployment storage and a supported region ([configuration](https://learn.microsoft.com/azure/azure-functions/functions-zone-redundancy?pivots=flex-consumption-plan)). No additional instance-memory restriction is documented. The platform maintains and bills at least two always-ready instances per scaling function/group even without an always-ready setting ([reliability](https://learn.microsoft.com/azure/reliability/reliability-functions), retrieved 2026-10-27). |
+| HAZ-3 | RESEARCHED | ZRS protects against a zone outage; GZRS also asynchronously replicates to a secondary region, but regional recovery needs a storage failover plan ([storage redundancy](https://learn.microsoft.com/azure/storage/common/storage-redundancy)). Cosmos zones remain per-region; autoscale zone premium is waived ([Cosmos reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db), retrieved 2026-10-27). |
+| HAZ-4 | ASSUMED | Stage 0 uses zone mappings from the target subscription's ARM locations endpoint as a regional capability signal, plus the service-specific Flex zone list. Regional zone support does not guarantee APIM, Cosmos or storage capacity in this subscription. ARM creation/read-back remains authoritative; a refusal must not silently disable HA. |
+| HAZ-5 | RESOLVED (capacity limit) | Two Stage 1 attempts on 2026-10-27 returned Cosmos `ServiceUnavailable`, high demand for zonal accounts in Central India, with [region access request](https://aka.ms/cosmosdbquota); the same refusal occurred on 2026-10-26. Coordinator explicitly approved recovery with nonzonal Central India + South India Cosmos, keeping APIM/Flex/ZRS zones on. Delete only the failed empty new Cosmos account, preserve config/evidence/state, and use the guarded failed-deployment recovery path. Zonal Cosmos capacity remains a platform limit, not a feature claim. |
+| HAZ-6 | RESEARCHED | Early client-alias validation must use exactly the export rule: the selected group's family-policy models intersected, case-sensitively, with the selected backend's `deploymentInferenceGeo` keys ([export](../infra/quickstart/Deploy-Quickstart.ps1), `New-QsClientFiles`; staged selection in `Invoke-StgClient`). Stage 0 cannot require Stage 4 group IDs, so select from configured group name/ID or legacy project/classification without Azure reads. Keep export validation and share its pure admission guard; Stage 0/7 reject bad aliases before any publication. |
+
 ## Bug bash 5 staged driver
 
 | ID | State | Question / evidence |
@@ -139,3 +150,29 @@
 | EXA-5 | RESOLVED | Whose logs reach the CCOF workspace? Live 2026-10-26 (simulated customer instance): three requests to the owner's unrelated API appeared in CCOF's workspace as `ApiManagementGatewayLogs` rows with that API's `ApiId`. A diagnostic setting is per resource, not per API: `ccof-gateway-logs` sends every API's GatewayLogs rows (and GatewayLlmLogs rows of any API with LLM logging on) to CCOF's workspace. The usage ledger keeps only rows with an LLM log row (`analytics/ledger.kql`); another API's LLM rows would appear as unattributed usage (no CCOF trace). Blast radius: workspace ingestion cost for the other APIs' traffic; unattributed rows in chargeback if another LLM API logs on the same instance. Disclosed in the docs; the owner approves. |
 | EXA-6 | RESOLVED | Permissions for Stage 5 on the owner's instance. API Management Service Contributor has `Microsoft.ApiManagement/service/*` and `Microsoft.Resources/deployments/*`; Monitoring Contributor has `Microsoft.Insights/DiagnosticSettings/*` ([integration roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/integration), [monitor roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor), read 2026-10-26). Stage 5 deploys a nested deployment into the instance's resource group, so `Microsoft.Resources/deployments/write` is needed at that resource group. Stage 0 reads the operator's effective permissions and warns (does not refuse: another person may run Stage 5). |
 | EXA-7 | RESOLVED | The `azuremonitor` logger. A new Standard v2 instance already has an `azuremonitor` logger and a service diagnostic using it (live 2026-10-26, simulated customer instance). Redeploying the logger would rewrite the owner's logger description; Stage 5 references an existing one and creates it only when absent. |
+## G-HA-FOUNDRY (2026-10-27)
+
+- HAF-1 RESEARCHED: APIM 2024-05-01 supports Single/Pool backends, ARM backend IDs,
+  priority, one circuit-breaker rule, count/interval/status ranges/tripDuration/acceptRetryAfter.
+  [Schema](https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2024-05-01/service/backends).
+- HAF-2 RESEARCHED: priority failover uses lower-priority members only when higher-priority
+  breakers trip; state is approximate per gateway instance, tripped backends return 503.
+  [Backends](https://learn.microsoft.com/azure/api-management/backends).
+- HAF-3 RESEARCHED: Claude Global Standard shares quota per subscription/model/version across
+  regions, Data Zone per subscription/model/version/data zone; a second account is not more quota.
+  [Quota](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/claude-models-quotas-limits).
+- HAF-4 RESEARCHED: private endpoints may target another region/subscription; permissions and
+  private-link approval still apply. [Private Link](https://learn.microsoft.com/azure/private-link/private-endpoint-overview).
+- HAF-5 ASSUMED: this packet supports accounts in the gateway identity's tenant only; cross-tenant
+  failover would need separate credentials and is refused rather than silently misrouting.
+## Foundry HA review corrections (2026-10-27)
+
+- HAF-6 RESEARCHED: `Invoke-StgBicep` returns no outputs for a what-if, so a first Stage 6 preview
+  cannot consume deployment outputs. Existing-network IDs must come from configuration; unverified
+  create-mode outputs defer the standby what-if. Null DNS entries must be removed before fallback.
+  Evidence: [preview helper](../infra/staged/Staged.Common.ps1), `Invoke-StgBicep`.
+- HAF-7 RESEARCHED: a full Stage 6 hash binds failover descriptors and cannot also identify the
+  unchanged base network. Record the descriptor-free hash inside verification evidence, which
+  [dependency hashing](../infra/staged/Staged.Common.ps1) already excludes from app fingerprints.
+  Old records without this evidence remain conservative: use the last verified configuration to
+  apply Stage 6 once before a subsequent standby change.

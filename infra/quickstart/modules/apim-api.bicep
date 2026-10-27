@@ -57,14 +57,35 @@ resource operation 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' 
   }
 }
 
-resource apimBackends 'Microsoft.ApiManagement/service/backends@2024-05-01' = [for b in backends: {
+var memberSets = [for b in backends: (contains(b, 'failover') ? [
+  { id: '${b.id}-primary', url: b.url, circuitBreaker: b.circuitBreaker }
+  { id: b.failover.id, url: b.failover.url, circuitBreaker: b.circuitBreaker }
+] : [b])]
+var singles = flatten(memberSets)
+
+resource apimBackends 'Microsoft.ApiManagement/service/backends@2024-05-01' = [for b in singles: {
   parent: apim
   name: b.id
-  properties: {
+  properties: union({
     url: b.url
     protocol: 'http'
     tls: { validateCertificateChain: true, validateCertificateName: true }
+  }, contains(b, 'circuitBreaker') ? { circuitBreaker: b.circuitBreaker } : {})
+}]
+
+resource pools 'Microsoft.ApiManagement/service/backends@2024-05-01' = [for b in backends: if (contains(b, 'failover')) {
+  parent: apim
+  name: b.id
+  properties: {
+    type: 'Pool'
+    pool: {
+      services: [
+        { id: resourceId('Microsoft.ApiManagement/service/backends', apimName, '${b.id}-primary'), priority: 1, weight: 1 }
+        { id: resourceId('Microsoft.ApiManagement/service/backends', apimName, b.failover.id), priority: 2, weight: 1 }
+      ]
+    }
   }
+  dependsOn: [apimBackends]
 }]
 
 resource fragments 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = [for f in policyFragments: {
@@ -84,7 +105,7 @@ resource policy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
     format: 'rawxml'
     value: empty(policyXml) ? initialPolicy : policyXml
   }
-  dependsOn: [operation, apimBackends, fragments]
+  dependsOn: [operation, apimBackends, pools, fragments]
 }
 
 // The caller's own budget figures. Its operation policy has no <base />, so the API policy above does

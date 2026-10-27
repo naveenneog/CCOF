@@ -1,5 +1,26 @@
 # Current work
 
+## Release 20 (2026-10-27)
+
+**Active packet:** G-HA — opt-in zone redundancy and Foundry failover with a circuit breaker, configured in the
+configuration file, with Stage 0 suggestions for the admin and a first-time-reader page (owner instruction 2026-10-27:
+"lets build an option of zone redundancy and circuit breaker for foundry with HA option and way to define those in
+the config file and suggestions to admin").
+
+- G-HA-ZONES ([ADR-0052](adr/0052-opt-in-zone-redundancy.md), [page](get-started/high-availability.md)): create-only
+  zone redundancy for API Management (zones and units), Function Apps (Flex Consumption) and storage (ZRS); Stage 0
+  HA check with suggestion lines; read-backs. Live, Central India lab, 2026-10-27: Stages 0-8 passed; ARM read back API
+  Management zones with 2 units, four zone-redundant Flex Consumption plans and five ZRS accounts. Cosmos DB zone
+  redundancy in Central India was refused twice for capacity (also on 2026-10-26); the run used
+  `isZoneRedundant: false` and the page says how to request capacity. Stage 0 and the Stage 7 preview now refuse client
+  model aliases that name no deployment before anything is published.
+- G-HA-FOUNDRY ([ADR-0053](adr/0053-foundry-priority-failover.md), [page](get-started/foundry-failover.md)): a backend
+  can name a standby Foundry account; Stage 5 creates API Management backends with a circuit breaker (429 and 5xx,
+  `Retry-After` honoured) and a priority pool under the same backend ID, so budgets and chargeback are unchanged.
+  Live drill on a lab: the primary returned 429, the breaker tripped, the standby answered 200, and traffic returned to
+  the primary after the trip duration.
+- Reviews: each branch had one Coder/QA BLOCK, fixed test-first, then PASS; security reviews found nothing.
+
 ## Release 18 (2026-10-27)
 
 **Active packet:** G-R18 — first-time-reader deployment in Central India (Foundry in East US 2), provisioned

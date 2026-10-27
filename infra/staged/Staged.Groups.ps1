@@ -191,15 +191,40 @@ function Get-StgStage7Problems {
     }
 }
 
+function Get-StgSelectedClientGroup {
+    param($Cfg)
+    $sel=$Cfg.client
+    if ($sel -isnot [Collections.IDictionary]) { throw 'client_selection_required: configure client.group or projectId/classification and explicit model aliases.' }
+    if ($sel.Contains('group')) {
+        if (@($sel.Keys | Where-Object { $_ -cnotin 'group', 'models', 'signInMethod' }).Count) { throw 'client_selection_invalid: client.group takes only models and signInMethod beside it.' }
+        $entries=@($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) -and ($_.groupDisplayName -ceq $sel.group -or ($_.groupId -and ([string]$_.groupId) -ieq [string]$sel.group)) })
+        if ($entries.Count -ne 1) { throw 'client_selection_invalid: client.group must name exactly one group entry by groupDisplayName or groupId.' }
+    } else {
+        if (@($sel.Keys | Where-Object { $_ -cnotin 'projectId','classification','models' }).Count -or $sel.projectId -isnot [string] -or $sel.classification -isnot [string]) {
+            throw 'client_selection_required: configure client.projectId, classification and explicit model aliases.'
+        }
+        $entries=@($Cfg.groups | Where-Object { $_ -and -not (Test-StgGroupEntry $_) -and $_.projectId -ceq $sel.projectId -and $_.classification -ceq $sel.classification })
+        if ($entries.Count -ne 1) { throw 'client_selection_invalid: select one configured project/classification.' }
+    }
+    return $entries[0]
+}
+
+function Assert-StgClientAliases {
+    param($Cfg)
+    $entry=Get-StgSelectedClientGroup $Cfg
+    $backendId=$entry.backendId
+    if (-not (Test-StgGroupEntry $entry) -and $null -eq $backendId -and @($Cfg.backends).Count -eq 1) { $backendId=$Cfg.backends[0].id }
+    $backend=@($Cfg.backends | Where-Object { $_.id -ceq $backendId })[0]
+    $null=Assert-QsClientAliases -FamilyPolicy $entry.familyPolicy -Backend $backend -Aliases $Cfg.client.models
+}
+
 # Stage 7 client file. client.group names one group entry (groupDisplayName or groupId); the selector
 # value is the group's object ID, which is its scope ID on the wire. Otherwise the quickstart selection.
 function Invoke-StgClient {
     param([Parameter(Mandatory)] $Ctx, [Parameter(Mandatory)] $Cfg, [Collections.IDictionary]$EntraGroups)
     $sel = $Cfg.client
     if ($sel -isnot [Collections.IDictionary] -or -not $sel.Contains('group')) { return Invoke-QsClient $Ctx }
-    if (@($sel.Keys | Where-Object { $_ -cnotin 'group', 'models', 'signInMethod' }).Count) { throw 'client_selection_invalid: client.group takes only models and signInMethod beside it.' }
-    $entry = @($Cfg.groups | Where-Object { $_ -and (Test-StgGroupEntry $_) -and ($_.groupDisplayName -ceq $sel.group -or ($_.groupId -and ([string]$_.groupId) -ieq [string]$sel.group)) })
-    if ($entry.Count -ne 1) { throw 'client_selection_invalid: client.group must name exactly one group entry by groupDisplayName or groupId.' }
+    $entry = @(Get-StgSelectedClientGroup $Cfg)
     $doc = @(New-StgGroupDocuments -Groups $entry -EntraGroups $EntraGroups)[0]
     $restricted = @($doc.familyPolicy.families.Keys | Where-Object { $_ -in 'fable', 'mythos' })
     if ($restricted.Count -and -not $doc.restrictedFamiliesApproved) { throw 'client_selection_invalid: Fable and Mythos need restrictedFamiliesApproved on the group.' }

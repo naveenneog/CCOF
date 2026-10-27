@@ -78,7 +78,7 @@ function Invoke-Stage5 {
     $params = @{
         tenantId = $Cfg.tenantId; location = $Cfg.location; names = $ctx.P.names; cosmosEndpoint = $s1.cosmosEndpoint
         syncClientId = $s1.clientIds.sync; reconcilerClientId = $s1.clientIds.reconciler
-        apim = (Get-StgApim $Cfg); backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; url = $_.url; deployments = @(if ($_.deploymentInferenceGeo) { $_.deploymentInferenceGeo.Keys | Sort-Object }) } }); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
+        apim = (Get-StgApim $Cfg); backends = @(Get-StgApimBackendPlan $Cfg); policyXml = $policyDeployment.apiPolicyXml; policyFragments = @($policyDeployment.fragments); usagePolicyXml = $usagePolicy
         resolver = $resolverSettings; sync = $Cfg.sync; reconciler = $Cfg.reconciler; budgetState = $Cfg.budgetState
         syncTimerEnabled = [bool]$Cfg.syncTimerEnabled; resolverApiAppId = $entra.registrations.resolverApi.appId
         apimIdentityAppId = $apimSp.appId; apimPrincipalId = $ctx.Apim.principalId; admin = $admin
@@ -116,6 +116,7 @@ function Invoke-Stage5 {
     if ($apimInput.plan) { $v.gatewayLogs = Test-StgStage5ApimExisting -Cfg $Cfg -Stage1 $s1 -Apim $ctx.Apim -Plan $apimInput.plan }
     if ($v.audit.network) { Write-Host (Format-StgAuditNetwork -AccountName $v.audit.account -Mode $v.audit.network) }
     $v.logRetention = [ordered]@{ days = $retentionDays; heldFrom = $heldFrom }
+    if (@($Cfg.backends | Where-Object { $_.failover -or $_.circuitBreaker }).Count) { $v.foundryFailover = @(Test-StgApimFailover -Cfg $Cfg -Apim $a) }
     $null = Write-StgEvidence 'stage5.verify.json' $v
     return @{ gatewayUrl = $out.gatewayUrl; settingsWritten = $out.settingsWritten; workbookDeployed = $out.workbookDeployed; apimIdentityAppId = $apimSp.appId; verify = $v }
 }
@@ -124,6 +125,7 @@ function Invoke-Stage5 {
 
 function Invoke-Stage7 {
     param($Cfg, [switch]$Apply)
+    Assert-StgClientAliases $Cfg
     $s1 = Get-StgStage $Cfg 1; $null = Get-StgStage $Cfg 6; $null = Get-StgStage $Cfg 5; $entra = Get-StgStage $Cfg 4
     $ctx = New-StgQsContext $Cfg
     $ctx.PollSeconds = 15

@@ -5,9 +5,16 @@ are shown as complete JSON fragments of the configuration root. All values are h
 `Read-StgConfig` ([Staged.Common.ps1](../../infra/staged/Staged.Common.ps1)) and, against Azure, in Stage 0
 ([Staged.Resources.ps1](../../infra/staged/Staged.Resources.ps1)).
 
+For zone redundancy, costs, create-only settings and read-back commands, see
+[check and add high availability](high-availability.md). The optional root `ha` block controls APIM and Functions;
+`stage1.apimUnits`, `stage1.storageSku` and `stage1.cosmosLocations` remain their resource settings.
+
 ## Foundry and backends
 
 `backends[]` lists the Foundry accounts the gateway calls. `groups[].backendId` names one by `backends[].id`.
+
+For an optional second account behind the same ID, see [Foundry account failover](foundry-failover.md):
+`backends[].failover`, circuit-breaker settings, new-account creation and the existing-deployment upgrade path.
 
 **Create new** (Stage 1 creates the account and the deployments). `stage1.foundry.accountName` equals
 `backends[].accountName`; `deploymentInferenceGeo` keys equal the deployment names (`global` for `GlobalStandard`,

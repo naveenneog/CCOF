@@ -13,6 +13,27 @@ const dir = (d: string) => readdirSync(path.join(root, d)).filter((f) => f.endsW
 const pages = ["README.md", "docs/INDEX.md", "docs/GLOSSARY.md", ...dir("docs/get-started"), ...dir("docs/operate"), ...dir("docs/evidence/2026-10-24-demo")];
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 
+test("high availability guide shows opt-in settings, cost, checks and create-only migration", () => {
+  const ha = read("docs/get-started/high-availability.md");
+  for (const text of ['"ha"', '"zoneRedundant": true', '"storageSku": "Standard_ZRS"', '"apimUnits": 2',
+    '"isZoneRedundant": true', "HA check:", "suggestion:", "Stage 0", "Stage 1", "always-ready",
+    "new prefix", "single-region", "foundry-failover.md"]) assert.ok(ha.includes(text), `HA guide needs ${text}`);
+  assert.match(ha, /re-creat|recreat/i);
+  assert.match(ha, /https:\/\/aka\.ms\/cosmosdbquota/, "HA guide needs a recovery path when zonal Cosmos capacity is refused");
+  assert.match(ha, /Standard v2 Secondary Unit/, "HA cost example must distinguish the additional-unit meter from the first unit");
+  assert.match(ha, /az cosmosdb delete/, "HA guide needs a failed-empty-account recovery command, not a fictional Stage 1 completion");
+  assert.match(ha, /never succeeded.*Stage 1|Stage 1.*never succeeded/i);
+  assert.match(ha, /documentEndpoint/, "Failed-account recovery must explain how to corroborate no initialized data endpoint when database listing is refused");
+  assert.match(ha, /list-flexconsumption-locations --zone-redundant=true/);
+  assert.match(ha, /learn\.microsoft\.com\/azure\/reliability\/reliability-api-management/);
+  for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md", "configuration.md", "configuration-reference.md"]) {
+    assert.ok(read(`docs/get-started/${page}`).includes("(high-availability.md)"), `${page} links the HA guide`);
+  }
+  for (const key of ["ha.apim.zoneRedundant", "ha.functions.zoneRedundant"]) {
+    assert.ok(read("docs/get-started/configuration-reference.md").includes(key), `configuration reference needs ${key}`);
+  }
+});
+
 test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {
   const regions = read("docs/get-started/region-and-failover.md");
   assert.match(regions, /az cosmosdb failover-priority-change.*southindia=0 centralindia=1/, "AO-8: document a planned Cosmos write-region switch");
@@ -330,4 +351,16 @@ test("a region without Claude, provisioned Cosmos DB cost and the failover regio
   const guide = read("docs/STAGED-DEPLOYMENT-GUIDE.md").split("### 2.6")[1].split("\n## ")[0];
   assert.match(guide, /paired region|region pair/i, "guide 2.6 names the paired region");
   assert.match(guide, /residency/i, "guide 2.6 names data residency");
+});
+test("Foundry failover has an upgrade path and a verifiable drill on the reader's route", () => {
+  const page = read("docs/get-started/foundry-failover.md");
+  assert.match(page, /backends\[\]\.failover/);
+  assert.match(page, /Stage 1 is create-only/);
+  assert.match(page, /BackendUrl/);
+  assert.match(page, /429/);
+  assert.match(page, /Retry-After/);
+  assert.match(page, /same subscription/);
+  assert.match(page, /approximate per gateway instance/);
+  assert.match(read("docs/get-started/region-and-failover.md"), /\]\(foundry-failover\.md\)/);
+  assert.match(read("docs/BACKENDS.md"), /\]\(get-started\/foundry-failover\.md\)/);
 });
