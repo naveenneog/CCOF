@@ -44,3 +44,17 @@ prefix/resource group with separate state; migrate data, identities, network and
 cutover plan. Do not delete the original Cosmos account or rerun Stage 1 hoping it changes zones.
 Azure supports some storage/Cosmos migrations, but CCOF does not orchestrate them. APIM v2 zone configuration
 requires recreation; this option is never applied to `apim.existing`.
+
+## Initial-creation capacity refusal
+
+The existing failed-deployment recovery guard is not an in-place migration of a succeeded Stage 1. When first
+creation fails before Cosmos has a data endpoint, no Stage 1/2 completion or Stage 2 deployment exists, and the
+operations corroborate failed account creation, an owner may approve deleting only that new uninitialized failed
+account and retrying an approved layout with the same state folder. The guarded what-if must allow only this
+deployment's recorded resources. Never use a failed database-list call alone as proof that an account is empty.
+
+Central India refused zonal Cosmos twice on 2026-10-27 (also observed on 2026-10-26). The coordinator approved
+nonzonal Central India + South India Cosmos while preserving APIM/Flex/ZRS zone protection for the live proof.
+Requesting zonal capacity or retrying later remains the path to zonal Cosmos; India South Central is an alternative
+with zones, not a capacity guarantee. This is a documented platform limit and explicit operator choice, not
+automatic HA downgrading. See [the customer recovery steps](../get-started/high-availability.md).
