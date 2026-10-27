@@ -19,6 +19,12 @@ function items(rows: any[], key: (r: any) => string, label: (r: any) => string =
 
 export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
   const [group, setGroup] = useState("");
+  const [groupText, setGroupText] = useState("");
+  const chooseGroup = (text: string) => {
+    setGroupText(text);
+    if (!text || isGroupId(text.trim())) setGroup(text.trim().toLowerCase());
+  };
+  const invalid = Boolean(groupText && !isGroupId(groupText.trim()));
   const scope = { period: "month", group };
   const groups = useQuery(`/api/v3/chargeback/groups${qs({ ...scope, limit: 200 })}`);
   const totals = useQuery(`/api/v3/chargeback/totals${qs(scope)}`);
@@ -47,15 +53,15 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
         <a className="btn btn-quiet btn-small" href={href(`/chargeback${qs({ group })}`)}>Open in chargeback</a>
       </div>
       <div className="breakdown-filters" role="group" aria-label="Breakdown filters">
-        <Field label="Group">{(id) => <ChoiceInput id={id} value={group} options={groupOptions} emptyLabel="All groups"
-          onChange={(v) => { if (!v || isGroupId(v.trim())) setGroup(v.trim().toLowerCase()); }} manualLabel="Enter a group ID…" />}</Field>
-        {group && <Button variant="quiet" size="small" onClick={() => setGroup("")}>Clear</Button>}
+        <Field label="Group" error={invalid ? "Object ID (GUID)" : null}>{(id, d) => <ChoiceInput id={id} describedBy={d} value={groupText} options={groupOptions} emptyLabel="All groups"
+          invalid={invalid} onChange={chooseGroup} manualLabel="Enter a group ID…" />}</Field>
+        {groupText && <Button variant="quiet" size="small" onClick={() => chooseGroup("")}>Clear</Button>}
       </div>
       <div className="breakdown-summary">
         <span className="breakdown-total" aria-live="polite">{total ? usd(total.knownListUsd) : totals.loading ? "…" : "—"}</span>
         <span className="hint">known list cost for {scopeText}{total?.listUsd === null && total?.knownListUsd !== null ? " · lower bound, some usage is unpriced" : ""}{total ? ` · ${int(total.requests)} requests` : ""}</span>
         {group && <ol className="crumbs" aria-label="Drill-down">
-          <li><button type="button" onClick={() => setGroup("")}>All groups</button></li>
+          <li><button type="button" onClick={() => chooseGroup("")}>All groups</button></li>
           <li><span aria-current="location">{group}</span></li>
         </ol>}
       </div>
@@ -67,7 +73,7 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
               : main.items.length === 0 ? <p className="empty-inline">No usage observed for {scopeText} this month. That is no data, not zero cost.</p>
                 : <Donut items={topWithOther(main.items)} format={money} label="Cost by group"
                   centerValue={usd(main.items.reduce((s, i) => s + (i.value ?? 0), 0), 0)} centerLabel={group ? "group" : "all groups"}
-                  onSelect={(key) => { if (isGroupId(key)) setGroup(key.toLowerCase()); }} selected={group || undefined} unknownCount={main.unknown} />}
+                  onSelect={(key) => { if (isGroupId(key)) chooseGroup(key.toLowerCase()); }} selected={group || undefined} unknownCount={main.unknown} />}
           {!group && main.items.length > 8 && <p className="hint">The top 7 groups are drawn; the rest are combined. Pick one from Group to see it alone.</p>}
           {group && <p className="hint"><ScopeLink id={group}>Open {group}</ScopeLink> for its budget, limits and models.</p>}
         </div>

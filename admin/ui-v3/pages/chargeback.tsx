@@ -66,7 +66,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
     group: isGroupId(query.get("group") ?? query.get("project") ?? "") ? (query.get("group") ?? query.get("project"))!.toLowerCase() : "", developer: GUID.test(query.get("developer") ?? "") ? query.get("developer")!.toLowerCase() : "",
     model: "", backend: "", family: "", chargeback: CHARGEBACK_ID.test(query.get("chargeback") ?? "") ? query.get("chargeback")! : "", interval: "day",
   });
-  const [draftText, setDraftText] = useState({ developer: f.developer, chargeback: f.chargeback });
+  const [draftText, setDraftText] = useState({ group: f.group, developer: f.developer, chargeback: f.chargeback });
   const fq = useDebounced(f, 250);
   const [view, setView] = useState("groups");
   const [offset, setOffset] = useState(0);
@@ -150,9 +150,10 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
           <Field label="From (UTC)">{(id) => <input id={id} className="input" type="datetime-local" value={toLocalInput(f.from)} onChange={(e) => setF({ ...f, from: fromLocalInput(e.target.value) })} />}</Field>
           <Field label="To (UTC, excluded)">{(id) => <input id={id} className="input" type="datetime-local" value={toLocalInput(f.to)} onChange={(e) => setF({ ...f, to: fromLocalInput(e.target.value) })} />}</Field>
         </>}
-        <Field label="Group" error={f.group && !GUID.test(f.group) ? "Object ID (GUID)" : null}>{(id) => (
-          <ChoiceInput id={id} value={f.group} options={(groups.data?.groups ?? []).map((g: { groupId: string }) => g.groupId)}
-            onChange={(group) => { if (!group || isGroupId(group.trim())) setF({ ...f, group: group.trim().toLowerCase() }); }} emptyLabel="All groups" manualLabel="Enter a group ID…" />
+        <Field label="Group" error={draftText.group && !isGroupId(draftText.group.trim()) ? "Object ID (GUID)" : null}>{(id, d) => (
+          <ChoiceInput id={id} describedBy={d} value={draftText.group} invalid={Boolean(draftText.group && !isGroupId(draftText.group.trim()))}
+            options={(groups.data?.groups ?? []).map((g: { groupId: string }) => g.groupId)}
+            onChange={(group) => { setDraftText({ ...draftText, group }); if (!group || isGroupId(group.trim())) setF({ ...f, group: group.trim().toLowerCase() }); }} emptyLabel="All groups" manualLabel="Enter a group ID…" />
         )}</Field>
         <Field label={tagLabel} hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
           invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
