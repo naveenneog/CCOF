@@ -79,6 +79,13 @@ test("deployment day configuration teaches each decision and validates its compl
     { locationName: "southindia", isZoneRedundant: false },
   ]);
   assert.equal(config.groups.length, 2);
+  const maximumMemberships = 25_000 * config.groups.length;
+  assert.ok(config.reconciler.maxStates >= maximumMemberships + config.groups.length,
+    "large-rollout example must not retain the 10,000-state guard below 25,000 developers' scopes");
+  assert.ok(config.reconciler.ledgerMaxRows > maximumMemberships * Object.keys(config.backends[0].deploymentInferenceGeo).length,
+    "large-rollout ledger guard needs headroom for the configured model/member scopes");
+  assert.equal(config.sync.mode, "application-permission", "large enrollment must not imply that the small app-settings snapshot transport is a fleet transport");
+  assert.equal(config.syncTimerEnabled, true);
   assert.equal(config.acceptance.expectedGroup, config.groups[0].groupId);
   assert.notEqual(config.groups[0].groupId, config.groups[1].groupId);
   assert.ok(config.backends[0].failover, "HA example includes a standby backend");
@@ -142,6 +149,8 @@ test("deployment day users distinguishes captured clients from unverified fleet 
   }
   assert.match(users, /macOS.*not supported|not supported.*macOS/i);
   assert.match(users, /per.user.*sign.in|sign.in.*per.user/i);
+  assert.match(users, /7,000 base64/, "bulk onboarding must warn about the small Windows snapshot transport");
+  assert.match(users, /Stage 1.*24 hours|24 hours.*Stage 1/, "fresh managed identities need an explicit consent/warm-up plan");
   const windows = users.split("### Windows —")[1]?.split("### macOS/Linux")[0] ?? "";
   const desktop = users.split("## 3. Claude Desktop")[1]?.split("## 4.")[0] ?? "";
   assert.match(windows, /```powershell title="Windows only"/, "Windows helper commands must be labelled, not presented as portable deployer commands");

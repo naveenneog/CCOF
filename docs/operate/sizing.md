@@ -49,5 +49,25 @@ An illustrative prerequisite quota line of 80 is not evidence that an enterprise
 Also measure Cosmos RU/s/throttles, sync time, reconciler lag, budget overshoot and telemetry cost.
 Group headcount, per-person budgets and aggregate caps are separate controls, not provider capacity.
 
+## Enrollment and reconciliation limits
+
+Device deployment is not group admission. The small delegated snapshot-through-app-settings helper is **not**
+a 25,000-member transport: Windows is capped at 7,000 base64 characters; other platforms' helper limit is
+96 KiB ([sync transports](../SYNC.md)). Approve automatic Graph sync/consent and its warm-up, or an alternative
+large-snapshot runner. Do not truncate a group to fit. A fresh managed identity exists only after Stage 1;
+allow up to 24 hours after new Graph grants instead of promising a full-population 2–3 hour fresh start.
+
+The template's `reconciler.maxStates: 10000` is below 25,000 developers' budget scopes. With two groups and
+everyone in both, plan for at least **50,002** person/group states. The day example raises the guard to
+**100,000**, and `ledgerMaxRows` to **500,000** for model/member-row headroom. These are row/count guards,
+**not** measured processing capacity: benchmark memory, query duration, Cosmos RU/s and fresh-budget latency
+before broad admission. The smaller example Cosmos maximum still needs workload sizing.
+The [runtime](../../src/reconciler/run.ts) refuses `state_limit_exceeded` before writes;
+[settings](../../src/reconciler/settings.ts) bounds ledger rows at 500,000 and states at 10,000,000.
+More than two groups or models needs a new scope/row estimate.
+Review the per-person/group TPM and token quotas too: the example's **2,000,000-token daily group quota** is
+a pilot guard (only 80 tokens per person if 25,000 people share it), not a full-population allowance.
+Approve those limits with the group owner before expanding; a larger row guard does not raise token/model quotas.
+
 Next: [deployment-day checklist](../get-started/deployment-day.md) ·
 [HA costs and limits](../get-started/high-availability.md).

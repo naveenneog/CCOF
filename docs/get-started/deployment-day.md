@@ -17,7 +17,7 @@ For terminal, VS Code, Desktop and the unverified bulk/Office paths, use
   gateway, resolver and admin app registrations. Identify the **Privileged Role Administrator** who approves
   Graph application consent if automatic sync, group search or names are wanted
   ([permissions](../STAGED-DEPLOYMENT-GUIDE.md#61-graph-grants-group-search-names-and-sync)).
-  Otherwise choose delegated snapshots now. New managed-identity Graph grants can take **24 hours**;
+  Otherwise approve snapshot transport for the group size. New managed-identity Graph grants can take **24 hours**;
   admin role tokens can take **60–90 minutes** to refresh. Do not book these waits inside the window.
 - [ ] **Model/quota owner:** run the [quota and model commands](02-prerequisites.md#microsoft-foundry-models)
   in **each Foundry subscription**, using its account region. Record free quota **per model/version and
