@@ -178,6 +178,17 @@ test("deployment day users distinguishes captured clients from unverified fleet 
   for (const block of users.matchAll(/```json\r?\n([\s\S]*?)```/g)) assert.doesNotThrow(() => JSON.parse(block[1]));
 });
 
+test("deployment-day spend comparison discloses the known streamed prompt-cache lower bound", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  const accounting = (day.split("5. **Account for it:**")[1]?.split("\n6.")[0] ?? "").replace(/\s+/g, " ");
+  assert.match(accounting, /streamed Claude Code|Claude Code.*streamed/i);
+  assert.match(accounting, /excludes prompt-cache writes and reads/i);
+  assert.match(accounting, /lower than the bill/i);
+  assert.match(accounting, /daily (?:billing )?reconciliation/i);
+  assert.match(accounting, /\]\(\.\.\/COST-MODEL\.md(?:#[^)]+)?\)/);
+  assert.match(accounting, /\]\(\.\.\/adr\/0038-budget-admission-acceptance\.md\)/);
+});
+
 test("high availability guide shows opt-in settings, cost, checks and create-only migration", () => {
   const ha = read("docs/get-started/high-availability.md");
   for (const text of ['"ha"', '"zoneRedundant": true', '"storageSku": "Standard_ZRS"', '"apimUnits": 2',
