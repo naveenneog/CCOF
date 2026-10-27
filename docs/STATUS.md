@@ -14,12 +14,15 @@
   example, client/fleet onboarding and sizing worksheet. All three day pages stay below 15 KiB LF.
 - RED: missing day/config/users/evidence pages; valid JSON breaker ranges refused; a console-added expected group
   refused by Stage 8. Fix commits: `09b3490` (JSON integer ranges), `929ec0b` (console group trace assertion).
-- Targeted GREEN: 29 reader tests, 75 Foundry failover checks, 537 staged checks; 35/35 scoped mutations killed.
+- Targeted GREEN: 29 reader tests, 75 Foundry failover checks, 537 staged checks, 13 cross-platform checks;
+  37/37 scoped mutations killed. First full-suite failure exposed unqualified Windows-only examples; these
+  now carry explicit platform labels without changing the existing deployer guard.
 - Live: second group onboarded/synced; both explicit selectors and the higher-spend default returned 200,
   group-specific denial returned 403 with allowed models, usage shows both budgets, and Stage 8 passed in 285 s.
   One identity only; provider 408/500 failures make rollout readiness conditional, not a clean enterprise acceptance.
-- Seventeen pseudonymised images are checked and visually reviewed. Console screens use the current build with
-  live lab API data; the old deployed bundle's snapshot links were stale. Capture provenance is explicit.
+- Seventeen pseudonymised images are checked and visually reviewed. The lab's stale console was updated using
+  the unchanged released admin source only; both deployed snapshot links now open the correct group pages.
+  Final console captures use the live deployment with a documented CLI-auth substitution.
 - Self-review: Architect PASS (assertion is not routing/access); Coder PASS (small guarded changes);
   QA PASS-WITH-NOTES (negative/mutation coverage; one-identity/live-client limits); UX PASS-WITH-NOTES
   (timed decisions/screens, explicit unverified paths); Security PASS-WITH-NOTES (no new dependencies or grants,

@@ -73,16 +73,15 @@ Complete cost
 —
 blank: not all usage priced
 Requests
-13
-8 unpriced · 0 unattributed
+17
+11 unpriced · 0 unattributed
 Tokens
 —
 cache hits on 0% of requests
 Coverage
-incomplete
-latest request 27 Oct, 18:25 UTC
+—
 
-01 Oct – 31 Oct UTC · rate card 2026-10-11 (packaged rate card) · read 27 Oct, 18:31 UTC · List price, not an invoice.
+01 Oct – 31 Oct UTC · rate card 2026-10-11 (packaged rate card) · read 27 Oct, 19:09 UTC · List price, not an invoice.
 
 Cost over time by model family
 
@@ -102,8 +101,8 @@ Cost by token category
 
 Input, output and cache categories at their own rates.
 
-Input 94%
-Output 6%
+Input 93%
+Output 7%
 Cache read
 Cache write 5m
 Cache write 1h
@@ -145,7 +144,7 @@ Groups
 Entra group	Projects	Requests	Tokens	Known cost	Complete cost	Unpriced	Coverage
 Data Science
 fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9
-	fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	10	—	$0.00	—	7	unpriced usage
+	fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	14	—	$0.00	—	10	unpriced usage
 Engineering
 0b65c63f-4d92-4e52-a492-c5455d71cfda
 	0b65c63f-4d92-4e52-a492-c5455d71cfda	3	—	$0.00	—	1	unpriced usage
