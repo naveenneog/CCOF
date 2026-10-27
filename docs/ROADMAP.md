@@ -1,6 +1,6 @@
 # Deployment packets
 
-- [ ] G-GROUPS-ONLY: group-only current console, old-bookmark notice, historical IDs
+- [x] G-GROUPS-ONLY: group-only current console, old-bookmark notice, historical IDs
   as text, group-only demo and documentation (ADR-0054). Owner approved minimal
   server/schema compatibility boundary; production decommission is independent.
 - [ ] G-LEGACY-SERVER-MIGRATION: inventory existing legacy documents and archived

@@ -35,8 +35,12 @@ import { readBackendSettings } from "../src/backend-settings.ts";
 
 // Synthetic Entra groups for the demo; the demo never calls Microsoft Graph.
 const DEMO_ENTRA_GROUPS = [
-  { id: "7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", displayName: "Payments engineering", description: "Demo security group", securityEnabled: true, memberCount: 42 },
-  { id: "8b2d3c4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e", displayName: "Payments data science", description: null, securityEnabled: true, memberCount: 7 },
+  ...createDemoGroups().map((g, i) => ({
+    id: String(g.groupId), displayName: String(g.displayName), description: "Demo security group",
+    securityEnabled: true, memberCount: 3 + i % 6,
+  })),
+  { id: "9c3e4d5f-6a7b-4c8d-8e9f-102132435465", displayName: "Research sandbox", description: "Available to onboard", securityEnabled: true, memberCount: 3 },
+  { id: "ad4f5e60-7b8c-4d9e-9f01-213243546576", displayName: "Operations sandbox", description: "Available to onboard", securityEnabled: true, memberCount: 3 },
 ];
 const demoGroupDirectory: GroupDirectory = {
   async search(text) { return { state: "available", groups: DEMO_ENTRA_GROUPS.filter((g) => g.displayName.toLowerCase().includes(text.toLowerCase())).map(({ memberCount: _m, ...g }) => g) }; },

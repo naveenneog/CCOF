@@ -13,6 +13,7 @@
     "removal-limits: loads without removed controls or destinations",
     "cost-definitions: loads without removed controls or destinations",
     "help: loads without removed controls or destinations",
+    "group onboarding: loads without legacy controls",
     "groups: group link opens editable group detail",
     "overview: group link opens editable group detail",
     "budgets: group link opens editable group detail",

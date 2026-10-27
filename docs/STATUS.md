@@ -2,7 +2,7 @@
 
 ## Group-only admin console (2026-10-27)
 
-**Active packet:** G-GROUPS-ONLY — remove legacy project management and classification
+**Active packet:** G-GROUPS-ONLY — DONE: remove legacy project management and classification
 controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
 
 - **Resumed by owner:** new deployments and UI are group-only; obsolete deployments
@@ -19,12 +19,19 @@ controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
 - GREEN: 31 focused tests and all 219 admin tests pass. Removed the four exclusive
   legacy modules after extracting their shared helpers. ADR-0054 records the
   approved group-only UI and independently coordinated decommission boundary.
-- Edge: all 12 nav pages load, seven group links open group detail, manual GUID
-  entry works, seven chargeback tabs load and five old bookmark forms lead to
-  Groups. 27 checks, zero page errors, no legacy project/classification API reads.
+- Edge: all 12 nav pages and group onboarding load, seven group links open group
+  detail, manual GUID entry works, seven chargeback tabs load and five old bookmark
+  forms lead to Groups. Final 28 checks, zero page errors, no legacy project or
+  classification API reads. Seeded groups resolve in the synthetic directory;
+  spare directory groups remain available for onboarding. Demo process stopped.
 - Commits: RED contract checkpoint `7b94b88`; first GREEN implementation `2683aef`.
 - Mutation verification: six guards caught with all 219 admin tests loaded each
   time; no suite-load failure counted. Restored baseline passes 219/219.
+- Final checks: admin tests/build, requested root typecheck, root npm test/build
+  and packet gate PASS. Gate: 23 passed, 2 existing warnings (five oversized
+  historical files and G-R3/E2E-01/CC-01), zero failures; lint skipped because no
+  command is declared. Added-line leak scan: zero matches; whitespace diff clean.
+  Evidence: `files/groups-only/{REPORT.md,gate-results.json,mutation-results.json,browser-results.json}`.
 - Council (direct review; owner forbids additional agents): Architect PASS (shared
   helpers extracted, ADR boundary and unchanged server/schema); Coder PASS (no
   deleted-page imports, shared scope links); QA PASS (RED evidence, mixed/group-only

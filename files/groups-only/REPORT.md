@@ -17,7 +17,9 @@ No push, merge, main-worktree changes, Azure operations or production deployment
   Browser RED: manual GUID entry returned an empty value instead of the typed GUID.
   Draft/validated state separation fixed Overview and Chargeback. Admin build,
   navigation tests and 27 browser checks passed.
-- Final evidence commit records mutations, council, checks and completion.
+- `73a42d2` — `test(admin): prove group-only guards with six full-suite mutations`.
+- Final demo/evidence commits record the seeded-directory correction, cleanup,
+  checks and completion.
 
 All commits have the required Copilot trailers. ADR-0054 records the accepted
 minimal scope and separately coordinated decommission of obsolete deployments.
@@ -61,6 +63,10 @@ only. Demo seeds 26 validated group registrations and derives group telemetry.
 - `v3-bug-bash.test.ts`: dropdown checks now inspect groups/group-onboard/group-detail
   rather than deleted project pages, plus Chargeback.
 - No server compatibility tests were removed, skipped or weakened.
+- Browser regression: seeded groups must resolve in the synthetic directory.
+  RED was 404 instead of 200; deriving the directory from the group seed fixes
+  detail member lookup and retains unregistered sandbox groups for onboarding.
+- Removed six unused CSS rules for the deleted onboarding grid and project-tag toggles.
 
 ## Mutation checks
 
@@ -85,7 +91,7 @@ case-insensitive historical destination assertion; it is counted once.
 `browser-check.cjs` uses playwright-core supplied via PLAYWRIGHT_DIR and the local
 demo on port 7179. Browser checks use only synthetic data and no real directory.
 
-- All 12 sidebar pages load without page errors, Classification/Legacy projects
+- All 12 sidebar pages and group onboarding load without page errors, Classification/Legacy projects
   controls or project destinations.
 - Seven real group-link paths open editable group detail: Groups, Overview, Budgets,
   Reconciler, Chargeback, Foundry and Audit telemetry.
@@ -93,7 +99,8 @@ demo on port 7179. Browser checks use only synthetic data and no real directory.
 - All seven Chargeback breakdown tabs load; no Projects tab or Rank toggle.
 - Five old bookmark forms (list, new, detail, budgets, activity) show the explanation
   and lead to Groups.
-- 27 checks, zero page errors, zero legacy project/classification API reads.
+- Final 28 checks, zero page errors, zero legacy project/classification API reads.
+- Every seeded group can resolve in the same synthetic directory used by group details.
 - Demo process stopped; port 7179 verified not listening.
 
 Evidence: `browser-results.json`.
@@ -104,8 +111,14 @@ Evidence: `browser-results.json`.
 - Admin tests: 219 passed, 0 failed/skipped.
 - Focused rendering/UI tests: 31 passed; navigation harness: 16 passed.
 - Admin build: passed.
-- Root typecheck/tests and packet gate: final result recorded below on completion.
-- Added-line leak scan and git whitespace checks: final result recorded below.
+- Root requested typecheck (`tsconfig.typecheck.json`): exit 0.
+- Root npm test: PASS through the packet gate, 411.4 seconds.
+- Root default typecheck and build: PASS through the packet gate.
+- Packet gate: PASS, 23 passed / 2 warned / 0 failed / 1 skipped.
+  Existing warnings: five oversized historical files and three unrelated OPEN
+  unknowns (G-R3, E2E-01, CC-01). Lint skipped because no command is declared.
+- Added-line leak scan: zero matches; git whitespace checks pass.
+- Compact gate evidence: `gate-results.json`; raw outputs are disposable local artifacts.
 - Five-role direct council: Architect/Coder/QA/UX PASS; Security PASS-WITH-NOTES for
   existing dependency audit findings. No additional agents launched.
 

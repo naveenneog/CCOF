@@ -15,6 +15,8 @@ async function main() {
   const legacy = await fetch(`${origin}/api/v2/projects`, { headers }).then((r) => r.json());
   assert.deepEqual(legacy.projects, []);
   const group = groups.groups[0];
+  const directory = await fetch(`${origin}/api/groups/directory/${group.groupId}`, { headers });
+  assert.equal(directory.status, 200, "seeded demo groups must resolve in the synthetic directory");
   const browser = await chromium.launch({
     executablePath: join(process.env["ProgramFiles(x86)"], "Microsoft\\Edge\\Application\\msedge.exe"),
     headless: true,
@@ -56,6 +58,9 @@ async function main() {
       assert.ok(!body.includes("Page not found"), id);
       results.push(`${id}: loads without removed controls or destinations`);
     }
+    await open("groups/new");
+    assert.doesNotMatch(await page.locator("body").innerText(), /Classification|Legacy projects|Project tags/);
+    results.push("group onboarding: loads without legacy controls");
     for (const path of ["groups", "overview", "budgets", "reconciler", "chargeback", "foundry", "audit?source=telemetry"]) {
       await open(path);
       const link = page.locator('a[href^="#/groups/"]:not([href="#/groups/new"])').first();
