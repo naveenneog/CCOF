@@ -1,4 +1,4 @@
-# ADR-0054: deployment-day evidence and client support claims
+# ADR-0055: deployment-day evidence and client support claims
 
 Status: accepted, 2026-10-27. Packet: G-DAY.
 

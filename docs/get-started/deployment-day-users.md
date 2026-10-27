@@ -150,7 +150,7 @@ CCOF's surface authorization has automated tests, **not an Office add-in live ac
 No M365 live request/capture was made tonight. Microsoft's
 [Foundry Claude guide](https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-claude)
 verifies Messages API/Entra authentication, not CCOF add-in support.
-Vendor pages checked **2026-10-27**; [evidence boundary](../adr/0054-deployment-day-evidence-boundary.md).
+Vendor pages checked **2026-10-27**; [evidence boundary](../adr/0055-deployment-day-evidence-boundary.md).
 
 ## 5. Bulk onboarding — not timed; no Intune tenant used tonight
 

@@ -1,5 +1,6 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -123,6 +124,22 @@ for (const name of ["Budgets", "Reconciler", "Overview", "Audit", "Chargeback"])
     if (name !== "Chargeback") assert.ok(html.includes(LEGACY), `${name} keeps historical records visible`);
   });
 }
+
+test("Overview keeps historical budget rows per access level distinct", () => {
+  const rows = ["STD", "CYB"].map((classification) => ({ ...budgets[1], classification, usedPercent: "95" }));
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
+  let html: string;
+  try {
+    html = ui.renderPage("Overview", { ...replies, "/api/v2/budgets": { state: "available", data: { groups: [budgets[0], ...rows], totals: {} } } });
+  } finally { console.error = original; }
+  assert.ok(html.includes("STD") && html.includes("CYB"), "each historical access level must be identifiable");
+  assert.ok(!errors.some((e) => e.includes("same key")), errors.join("\n"));
+  assert.ok(!html.includes(`${GROUP}</strong> (group)`), "groups carry no access-level suffix");
+  const source = readFileSync(new URL("../ui-v3/pages/overview.tsx", import.meta.url), "utf8");
+  assert.match(source, /key: `b-\$\{g\.projectId\}-\$\{g\.classification/, "budget alert keys stay unique per access level");
+});
 
 test("legacy bookmarks show a Groups notice and the navigation and help are group-only", async () => {
   const { NAV } = await import("../ui-v3/lib/nav.ts");
