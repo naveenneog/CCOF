@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-param([string]$Case = 'all')
+param([string]$Case = 'all', [string]$BicepPath)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $scratch = Join-Path $root '.env.public-test-scratch\ha-zones'
@@ -119,9 +119,14 @@ if ($Case -in 'all', 'wiring') {
     Refuses { Test-Stage1 $c $out } 'host.*storage SKU'
 }
 if ($Case -in 'all', 'template') {
-    $bicep = Join-Path $HOME '.azure\bin\bicep.exe'
+    if (-not $BicepPath) {
+        $command = Get-Command bicep -ErrorAction SilentlyContinue
+        if ($command) { $BicepPath = $command.Source }
+        else { $BicepPath = @('bicep.exe','bicep' | ForEach-Object { Join-Path $HOME ".azure\bin\$_" } | Where-Object { Test-Path $_ -PathType Leaf })[0] }
+    }
+    if (-not $BicepPath) { throw 'Offline Bicep CLI required; supply -BicepPath. No Azure call or tool install is permitted by this test.' }
     function Arm([string]$file) {
-        $text = & $bicep build (Join-Path $root "infra\staged\$file") --stdout 2>$null
+        $text = & $BicepPath build (Join-Path $root "infra\staged\$file") --stdout 2>$null
         if ($LASTEXITCODE) { throw "Compilation failed: $file" }
         ($text -join "`n") | ConvertFrom-Json -AsHashtable -Depth 100
     }
