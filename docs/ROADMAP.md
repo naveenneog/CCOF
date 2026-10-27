@@ -1,5 +1,11 @@
 # Deployment packets
 
+## High availability (2026-10-27)
+
+- [x] G-HA-ZONES: opt-in zone redundancy for API Management, Function Apps and storage; Stage 0 suggestions (ADR-0052).
+- [x] G-HA-FOUNDRY: standby Foundry account with circuit breaker and priority pool (ADR-0053).
+- [ ] G-HA-COSMOS-ZONES: prove Cosmos DB zone redundancy live in a region with capacity.
+
 ## Bug bash 5 staged driver
 
 - [x] G-R18-STAGED-REVIEW: withdraw AO-3 no-op apply by coordinator decision; always deploy on apply, accurately

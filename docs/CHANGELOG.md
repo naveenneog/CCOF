@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-27 — Release 20: high availability options
+
+- Zone redundancy, opt-in and create-only: API Management zones and units, zone-redundant Function Apps and ZRS storage,
+  with a Stage 0 HA check that suggests settings for the region ([high availability](get-started/high-availability.md)).
+- Foundry failover: a standby Foundry account per backend behind an API Management circuit breaker and priority pool
+  ([Foundry failover](get-started/foundry-failover.md)).
+- Stage 0 and the Stage 7 preview refuse client model aliases that name no configured deployment.
+
 ## 2026-10-27 — Release 18
 
 - Central India deployments: `stage1.foundry.location` puts the Foundry account in a region that offers Claude while the
