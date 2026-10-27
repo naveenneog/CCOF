@@ -19,6 +19,7 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
     '"isZoneRedundant": true', "HA check:", "suggestion:", "Stage 0", "Stage 1", "always-ready",
     "new prefix", "single-region", "foundry-failover.md"]) assert.ok(ha.includes(text), `HA guide needs ${text}`);
   assert.match(ha, /re-creat|recreat/i);
+  assert.match(ha, /https:\/\/aka\.ms\/cosmosdbquota/, "HA guide needs a recovery path when zonal Cosmos capacity is refused");
   assert.match(ha, /list-flexconsumption-locations --zone-redundant=true/);
   assert.match(ha, /learn\.microsoft\.com\/azure\/reliability\/reliability-api-management/);
   for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md"]) {

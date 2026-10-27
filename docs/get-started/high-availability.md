@@ -98,6 +98,12 @@ Run the Stage 1 preview, review units and SKUs, then apply and continue [Stages 
 Stage 1 checks the actual APIM flag/units, each Flex hosting plan, storage SKU and Cosmos region settings.
 Its `stage1.verify.json` evidence records the read-back.
 
+**If Cosmos returns `ServiceUnavailable` about high demand for zonal accounts:** stop at Stage 1. Regional zone
+support does not reserve capacity. Inspect the failed deployment's operations in the Portal and follow Azure's
+[region access request](https://aka.ms/cosmosdbquota). Keep the requested settings; do not mark Stage 1 complete or
+run later applies against a failed account. A retry may still be refused. Choosing a different region or explicitly
+accepting no Cosmos zone protection is a separate owner decision, not an automatic fallback.
+
 ## 4. Check an existing deployment
 
 Replace the placeholders with names from your Stage 1 state. These commands only read:

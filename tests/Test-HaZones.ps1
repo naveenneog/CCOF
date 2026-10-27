@@ -169,4 +169,39 @@ if ($Case -in 'all', 'defaults') {
     Assert-StgHaStorage $c @{name='host';sku=@{name='Standard_LRS'}}
     Check $true 'HA must preserve effective ARM defaults for omitted units/storage SKU'
 }
+if ($Case -in 'all', 'apim-wiring') {
+    $c=Config; $c.ha=@{apim=@{zoneRedundant=$true}}
+    function Read-StgState { return @{stages=@{}} }
+    function Get-StgCosmosAccountProblems { return @() }
+    function Invoke-StgAzJson($Arguments) {
+        if (($Arguments -join ' ') -like 'cosmosdb list*') {
+            return @(@{name='cosmos';publicNetworkAccess='Disabled';disableLocalAuth=$true;locations=@();consistencyPolicy=@{defaultConsistencyLevel='Session'}})
+        }
+        return @()
+    }
+    function Get-StgArm($Path, $ApiVersion) {
+        if ($Path -eq '/apim') { return @{sku=@{name='StandardV2';capacity=1};identity=@{principalId='00000000-0000-4000-8000-000000000001'};properties=@{zoneRedundant=$false;publicNetworkAccess='Enabled'}} }
+        return @{value=@()}
+    }
+    $out=@{functionApps=@();names=@{apps=@{};cosmosAccount='cosmos'};apimId='/apim';apimPrincipalId=$c.tenantId}
+    Refuses { Test-Stage1 $c $out } 'APIM zoneRedundant'
+}
+if ($Case -in 'all', 'stage0') {
+    $c=Config; $c.backends=@(); $c.groups=@()
+    function Invoke-QsAz { return 'false' }
+    function Get-StgGraph { return @{id='operator';userPrincipalName='operator@contoso.com'} }
+    function Write-StgEvidence { return '' }
+    function Invoke-StgAzJson($Arguments) {
+        if ($Arguments[0] -eq 'account') { return @{tenantId='00000000-0000-4000-8000-000000000001';user=@{name='operator'}} }
+        if ($Arguments[0] -eq 'provider') { return @{registrationState='Registered'} }
+        return @(@{name='Central India'},@{name='South India'})
+    }
+    function Get-StgArm { return @{value=@(
+        @{name='centralindia';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
+        @{name='southindia';availabilityZoneMappings=@();metadata=@{}})} }
+    $r=Invoke-Stage0 $c
+    Check ($r.ha.region -eq 'centralindia' -and $r.ha.cosmos.Count -eq 2) 'Stage 0 must include the HA capability report'
+    $c.location='southindia'; $c.ha=@{apim=@{zoneRedundant=$true}}
+    Refuses { Invoke-Stage0 $c } 'southindia.*no availability zones'
+}
 Write-Host "HA zones: $passed checks PASS"
