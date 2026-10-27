@@ -1,5 +1,11 @@
 # Current deployment unknowns
 
+## Admin group navigation (G-ADMIN-NAV)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| NAV-1 | RESEARCHED | Why does Budgets → Snapshots return `project_not_found`? `SnapshotTable` constructs `/projects/<projectId>/budgets` for every row, but group records use their GUID as `projectId` and are served by `/api/groups/<id>`. The same table is used by Reconciler. Overview, Audit and Chargeback also construct legacy-only links. Existing `isGroupId` and CostBreakdown already distinguish GUID group scopes from legacy project codes (`admin/ui-v3/lib/groups.ts`, `components/cost-breakdown.tsx`). |
+
 ## Zone redundancy (G-HA-ZONES, ADR-0052)
 
 | ID | State | Question / evidence |

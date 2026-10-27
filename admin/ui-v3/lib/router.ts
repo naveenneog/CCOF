@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isGroupId } from "./groups.ts";
 
 // Hash routing keeps the Functions route model: /api/console-v3 serves one document; #/path selects the page.
 export interface Route { path: string; parts: string[]; query: URLSearchParams }
@@ -20,3 +21,8 @@ export function useRoute(): Route {
 
 export const navigate = (path: string) => { location.hash = path; };
 export const href = (path: string) => `#${path}`;
+
+export function scopePath(id: string, legacySection?: string): string {
+  return isGroupId(id) ? `/groups/${id.toLowerCase()}`
+    : `/projects/${encodeURIComponent(id)}${legacySection ? `/${legacySection}` : ""}`;
+}

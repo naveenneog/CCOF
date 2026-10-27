@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-10-27 — Group navigation in the admin console
+
+- Budgets and Reconciler snapshots, Overview alerts/activity, Audit and Chargeback now open group records in
+  Groups rather than requesting a legacy project with the same ID (`project_not_found`).
+- Budgets loads group details from the group API for burn-down charts. Missing details and query errors are shown.
+- Foundry lists linked groups as well as legacy projects. Legacy project detail and budget/activity links are retained.
+
 ## 2026-10-27 — Release 20: high availability options
 
 - Zone redundancy, opt-in and create-only: API Management zones and units, zone-redundant Function Apps and ZRS storage,

@@ -1,5 +1,7 @@
 # Deployment packets
 
+- [x] G-ADMIN-NAV: route shared console links and budget lookups to group or legacy project records; cover mixed-data navigation.
+
 ## High availability (2026-10-27)
 
 - [x] G-HA-ZONES: opt-in zone redundancy for API Management, Function Apps and storage; Stage 0 suggestions (ADR-0052).
