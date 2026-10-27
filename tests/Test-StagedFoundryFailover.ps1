@@ -44,6 +44,23 @@ $c = New-Config; $c.backends[0].failover.subscriptionId = 'bad'
 Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'subscriptionId') 'refuse malformed standby subscription'
 $c = New-Config; $c.backends[0].circuitBreaker = @{ statusCodeRanges = @(@{ min = 500; max = 429 }) }
 Check ((@(Get-StgFailoverProblems $c) -join ';') -match 'statusCodeRanges') 'refuse inverted ranges'
+foreach ($case in @(
+    @{ key = 'failover-shape'; change = { param($x) $x.backends[0].failover = 'account' }; match = 'account object' },
+    @{ key = 'backend-id'; change = { param($x) $x.backends[0].id = 'bad/id' }; match = 'safe characters' },
+    @{ key = 'resource-group'; change = { param($x) $x.backends[0].failover.resourceGroup = 'bad/group' }; match = 'resourceGroup' },
+    @{ key = 'account-name'; change = { param($x) $x.backends[0].failover.accountName = 'BAD' }; match = 'accountName' },
+    @{ key = 'same-account'; change = { param($x) $x.backends[0].failover.accountName = 'primary' }; match = 'different account' },
+    @{ key = 'private-type'; change = { param($x) $x.backends[0].failover.privateEndpoint = 'true' }; match = 'privateEndpoint must be a boolean' },
+    @{ key = 'recursive'; change = { param($x) $x.backends[0].failover.failover = @{} }; match = 'recursive' },
+    @{ key = 'breaker-shape'; change = { param($x) $x.backends[0].circuitBreaker = 'rule' }; match = 'must be an object' },
+    @{ key = 'unknown-breaker-key'; change = { param($x) $x.backends[0].circuitBreaker = @{ typo = 1 } }; match = 'unknown key' },
+    @{ key = 'fractional-count'; change = { param($x) $x.backends[0].circuitBreaker = @{ count = 1.5 } }; match = 'whole number' },
+    @{ key = 'duration-limit'; change = { param($x) $x.backends[0].circuitBreaker = @{ tripDurationSeconds = 86401 } }; match = 'whole number' },
+    @{ key = 'empty-ranges'; change = { param($x) $x.backends[0].circuitBreaker = @{ statusCodeRanges = @() } }; match = 'statusCodeRanges' }
+)) {
+    $c = New-Config; & $case.change $c
+    Check ((@(Get-StgFailoverProblems $c) -join ';') -match $case.match) "refuse $($case.key)"
+}
 $c = New-Config
 $legacy = New-Config; $legacy.backends[0].Remove('failover')
 foreach ($n in 0..8) {
@@ -54,11 +71,17 @@ $legacyPlan = @(Get-StgApimBackendPlan $legacy)
 Check (-not $legacyPlan[0].Contains('circuitBreaker') -and -not $legacyPlan[0].Contains('failover')) 'legacy backend must not acquire a breaker or pool'
 $c = New-Config
 function Get-StgArm($Id, $Version) {
-    if ($Id.EndsWith('/deployments')) { return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ model = @{ name = 'claude-haiku-5-5'; version = '2' } }; sku = @{ name = 'GlobalStandard' } }) } }
+    if ($Id.EndsWith('/deployments')) { return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ provisioningState = 'Succeeded'; model = @{ name = 'claude-haiku-5-5'; version = '2' } }; sku = @{ name = 'GlobalStandard' } }) } }
     return @{ id = $Id; name = ($Id -split '/')[-1]; location = 'centralus'; properties = @{ publicNetworkAccess = 'Disabled' } }
 }
 $facts = @(Test-StgFoundryFailover $c)
 Check ($facts.Count -eq 1 -and $facts[0].quotaNote -match 'shares') 'Stage 0 must explain shared quota'
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/deployments')) { return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ provisioningState = 'Failed'; model = @{ name = 'claude-haiku-5-5'; version = '2' } }; sku = @{ name = 'GlobalStandard' } }) } }
+    return @{ id = $Id; name = 'standby'; location = 'centralus' }
+}
+$message = ''; try { $null = Test-StgFoundryFailover $c } catch { $message = $_.Exception.Message }
+Check ($message -match 'Succeeded') 'Stage 0 must refuse an unready standby deployment'
 function Get-StgArm($Id, $Version) {
     if ($Id.EndsWith('/deployments')) { return @{ value = @() } }
     return @{ id = $Id; name = 'standby'; location = 'centralus' }
@@ -67,7 +90,7 @@ $errorText = ''
 try { $null = Test-StgFoundryFailover $c } catch { $errorText = $_.Exception.Message }
 Check ($errorText -match 'deployment' -and $errorText -match 'Create') 'Stage 0 must refuse missing live deployments with a next step'
 $c = New-Config
-$script:StateDir = Join-Path $root '.env.foundry-failover-test'
+$script:StateDir = Join-Path $root ".env.foundry-failover-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force $script:StateDir | Out-Null
 $network = @{ privateEndpointSubnetId = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/private"
     vnetId = "/subscriptions/$sub/resourceGroups/contoso-rg/providers/Microsoft.Network/virtualNetworks/vnet"
@@ -89,7 +112,7 @@ Check ($endpoints.Count -eq 1 -and $captured.accountId.EndsWith('/accounts/stand
 $c.backends[0].failover.subscriptionId = '00000000-0000-4000-8000-000000000003'
 $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network
 Check ($captured.accountId -match '000000000003') 'Stage 6 endpoint must target the other subscription, not the gateway subscription'
-function Get-StgArm($Id, $Version) { return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{ privateLinkServiceConnectionState = @{ status = 'Pending' } } }) } } }
+function Get-StgArm($Id, $Version) { return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{ privateLinkServiceId = $captured.accountId; privateLinkServiceConnectionState = @{ status = 'Pending' } } }) } } }
 $message = ''; try { $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply } catch { $message = $_.Exception.Message }
 Check ($message -match 'approval') 'Stage 6 must refuse a pending or wrong-account endpoint'
 $bicep = Join-Path $HOME '.azure\bin\bicep.exe'
@@ -108,5 +131,33 @@ $c.stage1.foundry.failover = @{ create = $true; accountName = 'standby'; locatio
 function Get-StgArm($Id, $Version) { return @{ properties = @{ disableLocalAuth = $false; publicNetworkAccess = 'Disabled'; provisioningState = 'Succeeded' } } }
 $message = ''; try { $null = Test-StgCreatedFailover $c } catch { $message = $_.Exception.Message }
 Check ($message -match 'local auth') 'Stage 1 must read back keyless authentication for a created standby'
+$c = New-Config; $script:fault = ''
+$script:backendPlan = @(Get-StgApimBackendPlan $c)[0]
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/claude')) {
+        return @{ properties = @{ type = $(if ($script:fault -ceq 'pool') { 'Single' } else { 'Pool' }); pool = @{ services = @(
+            @{ id = "$($Id)-primary"; priority = $(if ($script:fault -ceq 'priority') { 2 } else { 1 }) },
+            @{ id = "$($Id)-failover"; priority = 2 }
+        ) } } }
+    }
+    $url = if ($Id.EndsWith('-primary')) { $backendPlan.url } else { $backendPlan.failover.url }
+    return @{ properties = @{ url = $(if ($script:fault -ceq 'url') { 'https://wrong' } else { $url })
+        circuitBreaker = $(if ($script:fault -ceq 'breaker') { @{ rules = @() } } else { $backendPlan.circuitBreaker }) } }
+}
+$apim = @{ subscriptionId = $sub; resourceGroup = 'contoso-rg'; name = 'gateway' }
+Check (@(Test-StgApimFailover -Cfg $c -Apim $apim).Count -eq 1) 'Stage 5 must verify the live pool'
+foreach ($case in @(@{ fault = 'pool'; match = 'two-member pool' }, @{ fault = 'priority'; match = 'priority differs' }, @{ fault = 'url'; match = 'URL differs' }, @{ fault = 'breaker'; match = 'breaker differs' })) {
+    $script:fault = $case.fault; $message = ''
+    try { $null = Test-StgApimFailover -Cfg $c -Apim $apim } catch { $message = $_.Exception.Message }
+    Check ($message -match $case.match) "Stage 5 must refuse incorrect $($case.fault)"
+}
+$c = New-Config
+$legacy = New-Config; $legacy.backends[0].Remove('failover')
+$script:networkState = @{ stages = @{ '6' = @{ configHash = (Get-StgStageInput $legacy 6); outputs = @{ vnetId = 'original-vnet' } } } }
+function Read-StgState($Cfg) { return $script:networkState }
+Check ((Get-StgFailoverNetworkState $c).vnetId -ceq 'original-vnet') 'Stage 6 upgrade must reuse the original VNet without redeployment'
+$c.network.mode = 'existing'; $message = ''
+try { $null = Get-StgFailoverNetworkState $c } catch { $message = $_.Exception.Message }
+Check ($message -match 'changed beyond adding failover') 'Stage 6 must reject unrelated network changes during upgrade'
 Write-Host "Foundry failover: $passed passed"
 Remove-Item -LiteralPath $script:StateDir -Recurse -Force

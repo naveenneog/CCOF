@@ -118,6 +118,7 @@ function Test-StgFoundryFailover {
         foreach ($n in $b.deploymentInferenceGeo.Keys) {
             $d = @($deps | Where-Object name -CEQ $n)[0]
             Assert-Stg ([bool]$d) "failover account $($f.accountName) lacks deployment $n. Create the same deployment names as the primary, then rerun Stage 0."
+            if (-not $created) { Assert-Stg ($d.properties.provisioningState -ceq 'Succeeded') "failover deployment $n is not Succeeded; wait for its deployment or fix the failed deployment, then rerun Stage 0" }
             $expectedSku = if ($b.deploymentInferenceGeo[$n] -ceq 'us') { 'DataZoneStandard' } else { 'GlobalStandard' }
             Assert-Stg ($d.sku.name -ceq $expectedSku) "failover deployment $n must use $expectedSku to preserve inference geography"
         }
