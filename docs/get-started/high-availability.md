@@ -111,10 +111,16 @@ trade-off above. Choosing another region or accepting no Cosmos zone protection 
 `Failed`, and you have verified it holds no database/data, save the failed deployment's evidence and your config.
 Do not delete an existing or healthy account. With approval to keep Cosmos nonzonal, delete only that failed empty
 account, then change `stage1.cosmosLocations` to Central India and South India with `isZoneRedundant: false` on both.
-Keep APIM zones/units, Functions zones and ZRS storage unchanged:
+Keep APIM zones/units, Functions zones and ZRS storage unchanged.
+
+Azure can refuse the database-list command with `BadRequest` when the account's initial creation failed.
+That error alone does not prove it empty: confirm the deployment operations say **account creation failed**,
+`documentEndpoint` is null, Stage 1 has never succeeded, and neither Stage 2 deployment nor completed state exists.
+If you cannot establish all of that, stop instead of deleting it. Never apply this shortcut to an account that
+was previously healthy. Run the checks first, then the approved deletion and recovery:
 
 ```powershell
-az cosmosdb show -g '<new-resource-group>' -n '<failed-new-cosmos-name>' --query "{state:provisioningState,regions:locations}"
+az cosmosdb show -g '<new-resource-group>' -n '<failed-new-cosmos-name>' --query "{state:provisioningState,endpoint:documentEndpoint,regions:locations}"
 az cosmosdb sql database list -g '<new-resource-group>' -a '<failed-new-cosmos-name>' --query "[].name"
 # Only for the verified Failed, empty NEW account, after owner approval:
 az cosmosdb delete -g '<new-resource-group>' -n '<failed-new-cosmos-name>' --yes

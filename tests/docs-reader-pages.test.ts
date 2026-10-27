@@ -23,6 +23,7 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
   assert.match(ha, /Standard v2 Secondary Unit/, "HA cost example must distinguish the additional-unit meter from the first unit");
   assert.match(ha, /az cosmosdb delete/, "HA guide needs a failed-empty-account recovery command, not a fictional Stage 1 completion");
   assert.match(ha, /never succeeded.*Stage 1|Stage 1.*never succeeded/i);
+  assert.match(ha, /documentEndpoint/, "Failed-account recovery must explain how to corroborate no initialized data endpoint when database listing is refused");
   assert.match(ha, /list-flexconsumption-locations --zone-redundant=true/);
   assert.match(ha, /learn\.microsoft\.com\/azure\/reliability\/reliability-api-management/);
   for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md"]) {
