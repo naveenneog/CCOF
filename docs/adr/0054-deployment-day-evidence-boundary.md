@@ -28,6 +28,8 @@ the researched sources.
 - An explicit `acceptance.expectedGroup` Object ID is an attribution assertion, not a seed/route/access grant.
   Accept a console-onboarded group absent from the original Stage 4 inputs, then require this run's real usage
   traces to match it. Do not force a group reseed or app-registration changes for a read-only acceptance check.
+  Match the actual `group` scope and charged Entra group ID as well as `projectId`; a GUID-shaped legacy
+  project ID is not proof of group attribution.
 
 ## Sources checked 2026-10-27
 

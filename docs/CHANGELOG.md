@@ -23,6 +23,8 @@
 - Stage 8 accepts a console-onboarded group's explicit Object ID as `acceptance.expectedGroup`, without
   changing/reseeding the original Stage 4 group list. It remains an assertion against this run's usage traces,
   not a routing or authorization override. Ambiguous names, mixed selectors and wrong/untraced groups still fail.
+- Group proof also requires the actual `group` scope and matching charged Entra group ID, not only a
+  GUID-shaped project ID. A legacy project whose ID is a GUID cannot masquerade as an onboarded group.
 
 ## 2026-10-27 — Group navigation in the admin console
 
