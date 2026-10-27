@@ -1,5 +1,22 @@
 # Current work
 
+## Group-only admin console (2026-10-27)
+
+**Active packet:** G-GROUPS-ONLY — remove legacy project management and classification
+controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
+
+- **PAUSED by owner:** expanded group-only migration decision received before any
+  production edits. Await coordinator's decommission/contract and explicit resume.
+  No Azure, runtime or server changes are authorized by this checkpoint.
+- Acceptance: group-only navigation, cost/budget/Foundry controls and demo; historical
+  non-GUID scopes remain visible without management links; old project bookmarks
+  explain the removal and link to Groups.
+- Verification: rendering tests first, guard mutations, Edge demo navigation,
+  admin/root tests and build/typecheck, packet gate and added-line leak scan.
+- Unknowns: GO-1 and GO-2 researched; GO-3 OPEN for the expanded migration contract.
+- RED checkpoint: 13 focused tests load, 2 pass and 11 fail. This is intentionally
+  incomplete test-first work, not a green implementation or completed packet.
+
 ## Admin group navigation (2026-10-27)
 
 **Active packet:** G-ADMIN-NAV — group budget snapshots and other shared console links open Groups, not Legacy projects.

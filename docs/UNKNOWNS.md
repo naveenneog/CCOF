@@ -1,5 +1,13 @@
 # Current deployment unknowns
 
+## Group-only console (G-GROUPS-ONLY)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| GO-1 | RESEARCHED | Can removed legacy pages be deleted outright? `group-fields.tsx` imports applyPatch, other pages import PagerLite/ChangeList/useDebounced. Move these existing helpers to shared components/lib before deleting the four exclusive legacy modules. |
+| GO-2 | RESEARCHED | Does removing UI permit deleting legacy enforcement? No: owner brief preserves legacy APIs, sync, resolver/reconciler, staged selections and KQL. GUID scopes can link to Groups using the existing isGroupId guard; historical non-GUID scopes remain visible as text. ADR-0054 records the boundary and migration prerequisite. |
+| GO-3 | OPEN | Owner expanded the objective to group-only deployments and decommissioning older project deployments. Coordinator must define the decommission/contract and explicitly resume work; no Azure or runtime/server changes authorized. The original UI-only compatibility proposal in ADR-0054 is paused, not the final migration contract. |
+
 ## Admin group navigation (G-ADMIN-NAV)
 
 | ID | State | Question / evidence |

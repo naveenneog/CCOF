@@ -1,5 +1,13 @@
 # Deployment packets
 
+- [ ] G-GROUPS-ONLY: group-only current console, old-bookmark notice, historical IDs
+  as text, group-only demo and documentation (ADR-0054). PAUSED: owner expanded the
+  migration decision; await coordinator's contract and explicit resume.
+- [ ] G-LEGACY-SERVER-MIGRATION: inventory existing legacy documents and archived
+  quickstart users, design and validate a migration before removing server project
+  APIs, sync/resolver/reconciler classification support, staged project selection
+  or KQL classification fields. Explicitly outside G-GROUPS-ONLY.
+
 - [x] G-ADMIN-NAV: route shared console links and budget lookups to group or legacy project records; cover mixed-data navigation.
 
 ## High availability (2026-10-27)
