@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { human, when } from "../lib/format.ts";
-import { href } from "../lib/router.ts";
+import { href, scopePath } from "../lib/router.ts";
 import { Button, CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Segmented, StatePill } from "../components/ui.tsx";
 import { ChangeList, PagerLite } from "./project-detail.tsx";
 import { UserIdentity } from "../components/user-identity.tsx";
@@ -49,7 +49,7 @@ export function Audit({ query }: { query: URLSearchParams }) {
               { key: "at", label: "When", render: (r: any) => when(r.at) },
               { key: "operation", label: "Operation", render: (r: any) => human(r.operation) },
               { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
-              { key: "projectId", label: "Project", render: (r: any) => r.projectId ? <a href={href(`/projects/${encodeURIComponent(r.projectId)}/activity`)}>{r.projectId}</a> : "—" },
+              { key: "projectId", label: "Group / legacy project", render: (r: any) => r.projectId ? <a href={href(scopePath(r.projectId, "activity"))}>{r.projectId}</a> : "—" },
               { key: "actorOid", label: "Actor", render: (r: any) => <UserIdentity objectId={r.actorOid} /> },
               { key: "d", label: "Before → after", render: (r: any) => <ChangeList d={r.d} /> },
               { key: "requestId", label: "Request", render: (r: any) => <code className="muted">{String(r.requestId).slice(0, 8)}</code> },

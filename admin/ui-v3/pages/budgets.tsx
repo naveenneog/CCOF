@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { ago, human, int, pct, usd, when } from "../lib/format.ts";
-import { href } from "../lib/router.ts";
+import { href, scopePath } from "../lib/router.ts";
+import { isGroupId } from "../lib/groups.ts";
 import { CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Section, Segmented, StatePill } from "../components/ui.tsx";
 import { BurnDown, Meter } from "../components/charts.tsx";
 import { PagerLite } from "./project-detail.tsx";
@@ -14,8 +15,8 @@ export function SnapshotTable({ rows, scope }: { rows: any[]; scope: string }) {
     <DataTable caption={`${scope} budget snapshots`} rows={rows} rowKey={(r) => `${r.scope}:${r.scopeId}:${r.periodStart}`}
       empty={<p className="empty-inline">No snapshots match. The reconciler writes them on its timer; none means no state yet, not zero spend.</p>}
       columns={[
-        { key: "projectId", label: "Project", render: (r) => <a href={href(`/projects/${encodeURIComponent(r.projectId)}/budgets`)}>{r.projectId}</a> },
-        { key: "classification", label: "Group" },
+        { key: "projectId", label: "Group / legacy project", render: (r) => <a href={href(scopePath(r.projectId, "budgets"))}>{r.projectId}</a> },
+        ...(rows.some((r) => !isGroupId(String(r.projectId))) ? [{ key: "classification", label: "Legacy classification", render: (r: any) => isGroupId(String(r.projectId)) ? <span className="muted">—</span> : r.classification }] : []),
         ...(scope !== "group" ? [{ key: "personId", label: "Person", render: (r: any) => r.personId ? <UserIdentity objectId={r.personId} /> : <span className="muted">group</span> }] : []),
         { key: "spentCcu", label: "Spent", align: "end", render: (r) => <span title={`${r.spentCcu ?? "—"} CCU`}>{usd(r.spentUsd)}</span> },
         { key: "budgetCcu", label: "Budget", align: "end", render: (r) => r.budgetCcu === null ? <span className="muted">no cap</span> : <span title={`${r.budgetCcu} CCU`}>{usd(r.budgetUsd)}</span> },
@@ -40,10 +41,10 @@ export function Budgets() {
   const [selected, setSelected] = useState<string>("");
   const groupRows: any[] = ok(groups.data) ? groups.data.data.groups : [];
   const chosen = groupRows.find((g) => `${g.projectId}:${g.classification}` === selected) ?? groupRows[0];
-  const project1 = useQuery(chosen ? `/api/projects/${encodeURIComponent(chosen.projectId)}` : null);
-  const groupId = project1.data?.classifications?.[chosen?.classification]?.groupId;
+  const registration = useQuery(chosen ? `/api${scopePath(chosen.projectId)}` : null);
+  const groupId = isGroupId(chosen?.projectId ?? "") ? registration.data?.groupId : registration.data?.classifications?.[chosen?.classification]?.groupId;
   const trend = useQuery(chosen && groupId ? `/api/v3/chargeback/trend${qs({ period: "month", project: chosen.projectId, group: groupId, interval: "day" })}` : null);
-  const reload = () => [summary, snaps, groups, trend].forEach((q) => q.reload());
+  const reload = () => [summary, snaps, groups, registration, trend].forEach((q) => q.reload());
   const now = new Date();
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   const daily = new Map<number, number>();
@@ -77,8 +78,10 @@ export function Budgets() {
             )}</Field>
           )}
         </div>
-        {groups.loading && !groups.data ? <Loading chart /> : !chosen ? <p className="empty-inline">No group budgets yet.</p>
-          : trend.loading && !trend.data ? <Loading chart /> : trend.data && !ok(trend.data) ? <CapabilityNotice cap={trend.data} what="Chargeback trend" />
+        {groups.loading && !groups.data ? <Loading chart /> : groups.error ? <ErrorNote error={groups.error} retry={groups.reload} /> : !chosen ? <p className="empty-inline">No group budgets yet.</p>
+          : registration.loading && !registration.data ? <Loading chart /> : registration.error ? <ErrorNote error={registration.error} retry={registration.reload} />
+          : !groupId ? <p className="notice" role="status">No Entra group ID is recorded for this budget. Check its group or legacy project configuration.</p>
+          : trend.loading && !trend.data ? <Loading chart /> : trend.error ? <ErrorNote error={trend.error} retry={trend.reload} /> : trend.data && !ok(trend.data) ? <CapabilityNotice cap={trend.data} what="Chargeback trend" />
             : <BurnDown points={points} budget={chosen.budgetUsd === null ? null : Number(chosen.budgetUsd)} daysInPeriod={daysInMonth} format={(n) => usd(n, 0)} label={`Burn-down for ${chosen.projectId} ${chosen.classification}`} />}
         {chosen && <p className="hint">Reconciler figure: {usd(chosen.spentUsd)} spent{chosen.budgetUsd ? ` of ${usd(chosen.budgetUsd)}` : ""}, computed {ago(chosen.computedAt)}. The line uses chargeback's known list cost, which can run ahead of the reconciler's last run.</p>}
         <details className="data-table"><summary>Data table <span className="muted">({points.length} days)</span></summary>
@@ -88,7 +91,7 @@ export function Budgets() {
       <Section title="Snapshots" description="The reconciler's latest state per budget, this month. Server-side paging, 50 a page."
         actions={<>
           <Segmented label="Scope" value={scope} onChange={setScope} options={[{ value: "group", label: "Groups" }, { value: "person", label: "People" }]} />
-          <Field label={<span className="visually-hidden">Project</span>}>{(id) => <input id={id} className="input input-compact" placeholder="Project ID" value={project} onChange={(e) => setProject(e.target.value.trim())} />}</Field>
+          <Field label={<span className="visually-hidden">Group or legacy project</span>}>{(id) => <input id={id} className="input input-compact" placeholder="Group or project ID" value={project} onChange={(e) => setProject(e.target.value.trim())} />}</Field>
         </>}>
         {snaps.loading && !snaps.data ? <Loading rows={6} /> : snaps.error ? <ErrorNote error={snaps.error} retry={snaps.reload} />
           : !ok(snaps.data) ? <CapabilityNotice cap={snaps.data} what="Budget snapshots" />

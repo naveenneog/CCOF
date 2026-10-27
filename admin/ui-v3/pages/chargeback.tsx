@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, qs, useQuery } from "../lib/api.ts";
 import { compact, day, download, human, int, pct, toCsv, usd, when } from "../lib/format.ts";
-import { href } from "../lib/router.ts";
+import { href, scopePath } from "../lib/router.ts";
 import { Button, ChoiceInput, CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Segmented, StatePill, Tabs, useToast } from "../components/ui.tsx";
 import type { Column } from "../components/ui.tsx";
 import { BurnDown, HBars, SplitBar, StackedColumns } from "../components/charts.tsx";
@@ -36,7 +36,7 @@ const VIEWS: Record<string, { label: string; columns: Column<any>[] }> = {
     { key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
   models: { label: "Models", columns: [{ key: "model", label: "Model", render: (r) => <code>{r.model}</code> }, ...common] },
   families: { label: "Families", columns: [{ key: "modelFamily", label: "Family", render: (r) => <span className="cap">{r.modelFamily}</span> }, ...common] },
-  projects: { label: "Projects", columns: [{ key: "projectLabel", label: "Project", render: (r) => <a href={href(`/projects/${encodeURIComponent(r.projectLabel)}`)}>{r.projectLabel}</a> }, ...common] },
+  projects: { label: "Projects", columns: [{ key: "projectLabel", label: "Group / legacy project", render: (r) => <a href={href(scopePath(r.projectLabel))}>{r.projectLabel}</a> }, ...common] },
   unpriced: { label: "Unpriced", columns: [
     { key: "timestamp", label: "When", render: (r) => when(r.timestamp) }, { key: "projectLabel", label: "Project" }, { key: "model", label: "Model", render: (r) => <code>{r.model}</code> },
     { key: "pricingReason", label: "Reason", render: (r) => <StatePill state="partial" label={human(r.pricingReason)} /> },
@@ -157,8 +157,6 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
           <ChoiceInput id={id} value={f.project} options={(projects.data?.projects ?? []).map((p: { projectId: string }) => p.projectId)}
             onChange={(project) => setF({ ...f, project: project.trim() })} emptyLabel="All projects" manualLabel="Enter a project ID…" />
         )}</Field>
-        <Field label="Classification">{(id) => <input id={id} className="input input-short" value={f.classification} placeholder="STD"
-          onChange={(e) => setF({ ...f, classification: e.target.value.trim().toUpperCase() })} autoComplete="off" spellCheck={false} />}</Field>
         <Field label={tagLabel} hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
           invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
           onChange={(v) => { setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} />}</Field>
@@ -223,7 +221,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
               chart={topQ.loading && !topQ.data ? <Loading rows={5} /> : !ok(topQ.data) ? <CapabilityNotice cap={topQ.data ?? { state: "unavailable" }} what="Ranking" />
                 : topQ.data.data.rows.length ? <HBars label="Top by cost" format={(n) => usd(n)} items={topQ.data.data.rows.map((r: any) => ({
                   key: r.groupId ?? r.projectLabel, value: r.knownListUsd === null ? null : Number(r.knownListUsd),
-                  label: top === "groups" ? <>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown)"}</> : <a href={href(`/projects/${encodeURIComponent(r.projectLabel)}`)}>{r.projectLabel}</a>,
+                  label: top === "groups" ? <>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown)"}</> : <a href={href(scopePath(r.projectLabel))}>{r.projectLabel}</a>,
                   note: r.listUsd === null && r.knownListUsd !== null ? "lower bound" : undefined,
                 }))} /> : <p className="empty-inline">No usage in this period.</p>}
               rows={ok(topQ.data) ? topQ.data.data.rows : []} columns={top === "groups" ? VIEWS.groups.columns : VIEWS.projects.columns} />

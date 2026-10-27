@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "../lib/api.ts";
 import { ago, compact, human, int, pct, usd, when } from "../lib/format.ts";
-import { href } from "../lib/router.ts";
+import { href, scopePath } from "../lib/router.ts";
 import { CapabilityNotice, DataTable, ErrorNote, Loading, PageHeader, StatePill } from "../components/ui.tsx";
 import { CostBreakdown } from "../components/cost-breakdown.tsx";
 import { StackedColumns } from "../components/charts.tsx";
@@ -30,7 +30,7 @@ export function Overview() {
     ok(health.data) && Array.isArray(health.data.data) && health.data.data.length > 0;
   const attention: { key: string; tone: string; text: React.ReactNode; to: string }[] = [];
   if (ok(budgets.data)) for (const g of budgets.data.data.groups) {
-    attention.push({ key: `b-${g.projectId}-${g.classification}`, tone: g.exhausted ? "danger" : "warn", to: `/projects/${g.projectId}/budgets`,
+    attention.push({ key: `b-${g.projectId}-${g.classification}`, tone: g.exhausted ? "danger" : "warn", to: scopePath(g.projectId, "budgets"),
       text: <><strong>{g.projectId} · {g.classification}</strong> at {pct(g.usedPercent)} of its monthly budget{g.exhausted ? " — exhausted" : ""}</> });
   }
   if (cov && cov.reportState !== "observed_token_usage_complete") attention.push({ key: "coverage", tone: "warn", to: "/chargeback", text: <>Telemetry coverage is <strong>{human(cov.reportState)}</strong>: {int(cov.unpricedRequests)} unpriced, {int(cov.unattributedRequests)} unattributed requests</> });
@@ -68,7 +68,7 @@ export function Overview() {
                 : <DataTable caption="Recent changes" dense rows={audit.data.data.rows} empty={<p className="empty-inline">No changes in the last 31 days.</p>} columns={[
                   { key: "at", label: "When", render: (r: any) => ago(r.at) },
                   { key: "operation", label: "Change", render: (r: any) => human(r.operation) },
-                  { key: "projectId", label: "Project", render: (r: any) => r.projectId ? <a href={href(`/projects/${r.projectId}`)}>{r.projectId}</a> : "—" },
+                  { key: "projectId", label: "Group / legacy project", render: (r: any) => r.projectId ? <a href={href(scopePath(r.projectId))}>{r.projectId}</a> : "—" },
                   { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
                 ]} />}
           </section>

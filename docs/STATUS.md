@@ -1,5 +1,25 @@
 # Current work
 
+## Admin group navigation (2026-10-27)
+
+**Active packet:** G-ADMIN-NAV — group budget snapshots and other shared console links open Groups, not Legacy projects.
+
+- Acceptance: Budgets and Reconciler snapshots, Overview alerts/activity, Audit and Chargeback open group IDs on
+  their group pages; legacy project links retain their sections. Budgets reads group details from the group API
+  before requesting its burn-down; Foundry lists linked groups as well as legacy projects.
+- Evidence: a user screenshot showed a group Object ID on a Legacy projects page with `project_not_found`.
+- Verification: focused rendering tests and browser navigation with mixed group/legacy data, followed by the packet gate.
+- Result: shared links now use `scopePath`; the burn-down selects `/api/groups/<id>` for group records and keeps
+  classification lookup for legacy projects. Foundry combines backend-filtered group summaries with legacy projects.
+- Evidence: rendering tests reproduced seven failures before the fix, including the snapshot link and wrong API
+  lookup. Browser checks followed eight group links and a legacy budget link, then loaded the other console pages;
+  no group ID was requested through `/api/projects`. Three isolated mutations caught routing, burn-down and
+  backend-filter regressions with the full test count intact.
+- Council (coordinator): Architect PASS (shared existing GUID convention, no API/schema change); Coder PASS
+  (one route helper); QA PASS (mixed records, preserved legacy routes, rendering and browser checks); UX PASS
+  (correct destination and group wording, explicit missing-data/error states); Security PASS (unchanged API auth,
+  encoded legacy identifiers, GUID-validated group links).
+
 ## Release 20 (2026-10-27)
 
 **Active packet:** G-HA — opt-in zone redundancy and Foundry failover with a circuit breaker, configured in the
