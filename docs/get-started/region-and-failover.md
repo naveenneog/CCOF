@@ -3,6 +3,9 @@
 Read this before Stage 0 when `location` is not a US region, or when you plan a second Cosmos DB region. The worked
 example is a deployment in Central India ([evidence](../evidence/2026-10-26-central-india/README.md)).
 
+To protect services against a zone outage within a region, [check and add high availability](high-availability.md).
+This is separate from the regional recovery guidance below.
+
 ## 1. Where the Claude models run
 
 Claude models in Microsoft Foundry are offered only in some Azure regions, with two deployment types: **Global

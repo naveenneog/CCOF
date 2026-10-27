@@ -17,8 +17,10 @@ param publicNetworkAccess string = 'Disabled'
 @allowed(['Disabled', 'Enabled'])
 param storagePublicNetworkAccess string = 'Disabled'
 
-@allowed(['Standard_LRS', 'Standard_ZRS'])
+@allowed(['Standard_LRS', 'Standard_ZRS', 'Standard_GZRS'])
 param storageSku string = 'Standard_LRS'
+
+param zoneRedundant bool = false
 
 @minValue(40)
 @maxValue(1000)
@@ -74,7 +76,10 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   location: location
   tags: tags
   sku: { name: 'FC1', tier: 'FlexConsumption' }
-  properties: { reserved: true }
+  properties: {
+    reserved: true
+    ...(zoneRedundant ? { zoneRedundant: true } : {})
+  }
 }
 
 resource app 'Microsoft.Web/sites@2024-04-01' = {

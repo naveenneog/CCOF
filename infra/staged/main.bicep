@@ -35,8 +35,11 @@ param storagePublicNetworkAccess string = 'Disabled'
 @allowed(['Disabled', 'Enabled'])
 param functionsPublicNetworkAccess string = 'Disabled'
 
-@allowed(['Standard_LRS', 'Standard_ZRS'])
+@allowed(['Standard_LRS', 'Standard_ZRS', 'Standard_GZRS'])
 param storageSku string = 'Standard_LRS'
+
+@description('Opt-in zone redundancy: { apim: { zoneRedundant: bool }, functions: { zoneRedundant: bool } }. Create-only; no default changes.')
+param ha object = {}
 
 @description('Include the separate new admin service. No Entra application or data grants are created.')
 param includeAdmin bool = true
@@ -50,7 +53,7 @@ param apimPublisherEmail string = ''
 param apimPublisherName string = ''
 
 @description('StandardV2 supports outbound VNet integration (private Foundry). BasicV2 is public-only; use it only where every backend is reachable without a VNet.')
-@allowed(['BasicV2', 'StandardV2'])
+@allowed(['BasicV2', 'StandardV2', 'PremiumV2'])
 param apimSku string = 'StandardV2'
 
 @minValue(1)
@@ -133,6 +136,7 @@ module functionServices 'function-service.bicep' = [for app in apps: {
     storageSku: storageSku
     maximumInstanceCount: maximumInstanceCount
     instanceMemoryMB: instanceMemoryMB
+    zoneRedundant: ha.?functions.?zoneRedundant ?? false
   }
 }]
 
@@ -149,6 +153,7 @@ module apimService 'apim-service.bicep' = if (approveNewPublicApimBootstrap) {
     publisherEmail: apimPublisherEmail
     publisherName: apimPublisherName
     workspaceId: workspace.id
+    zoneRedundant: ha.?apim.?zoneRedundant ?? false
   }
 }
 

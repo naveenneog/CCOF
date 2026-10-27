@@ -17,6 +17,7 @@ if (-not $BicepPath) {
     else { throw 'Offline Bicep CLI required. Supply -BicepPath; this test does not install tools or call Azure.' }
 }
 $passed = 0
+Write-Host 'Staged template suite loaded'
 function Assert-Contract([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message }; $script:passed++ }
 function Build-Arm([string]$Relative) {
     $out = & $BicepPath build (Join-Path $root $Relative) --stdout 2>$null
@@ -132,7 +133,7 @@ Assert-Contract ($example.gateway.ContainsKey('surfaceClients') -and @($example.
 # Stage 1 publishes the names later stages read.
 $s1 = Build-Arm 'infra\staged\main.bicep'
 Assert-Contract ($s1.outputs.ContainsKey('names') -and $s1.outputs.ContainsKey('apimName')) 'Stage 1 must output names and apimName.'
-Assert-Contract (($s1.parameters.apimSku.allowedValues -join ',') -ceq 'BasicV2,StandardV2' -and $s1.parameters.apimSku.defaultValue -ceq 'StandardV2') 'APIM SKU choice changed.'
+Assert-Contract (($s1.parameters.apimSku.allowedValues -join ',') -ceq 'BasicV2,StandardV2,PremiumV2' -and $s1.parameters.apimSku.defaultValue -ceq 'StandardV2') 'APIM SKU choice changed.'
 
 # Driver: parses, every stage has an entry function, no az argument holds a cmd.exe metacharacter,
 # preview is the default, and later stages read earlier stage state.

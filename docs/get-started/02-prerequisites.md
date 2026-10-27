@@ -3,6 +3,9 @@
 Tick every line before Stage 0. Each item names who provides it. Details and least-privilege roles:
 [staged guide, section 2](../STAGED-DEPLOYMENT-GUIDE.md#2-prerequisites).
 
+Before Stage 1, [check and add high availability](high-availability.md): zone protection is opt-in and adds
+capacity costs; it does not create a second-region gateway.
+
 ## Single-subscription lab path
 
 The 2026-10-24 lab used one Azure subscription and `network.mode: create`; Stage 6 created its own VNet and
