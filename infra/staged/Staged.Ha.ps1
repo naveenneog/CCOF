@@ -25,16 +25,23 @@ function Get-StgHaCheck {
     $flexZones = @(Invoke-StgAzJson @('functionapp', 'list-flexconsumption-locations', '--subscription', $Cfg.subscriptionId, '--zone-redundant=true') |
         ForEach-Object { ([string]$_.name).Replace(' ', '').ToLowerInvariant() })
     $region = $regions | Where-Object { $_.name -ieq $Cfg.location } | Select-Object -First 1
-    $available = @($region.availabilityZoneMappings).Count -gt 0
+    $available = Test-StgHaRegionZones $region
     $apimConfigured = $Cfg.ha.apim.zoneRedundant -eq $true
     $functionsConfigured = $Cfg.ha.functions.zoneRedundant -eq $true
     $storageConfigured = $Cfg.stage1.storageSku -in 'Standard_ZRS', 'Standard_GZRS'
     $r = [ordered]@{
         region = $Cfg.location
-        apim = @{ available=$available; configured=$apimConfigured; units=$Cfg.stage1.apimUnits }
+        apim = @{ region=$Cfg.location; available=$available; configured=$apimConfigured; units=$Cfg.stage1.apimUnits }
         functions = @{ available=($flexZones -contains $Cfg.location.ToLowerInvariant()); configured=$functionsConfigured }
         storage = @{ available=$available; configured=$storageConfigured; sku=$Cfg.stage1.storageSku }
         cosmos = @()
+    }
+    if (Test-StgApimExisting $Cfg) {
+        $e = $Cfg.apim.existing
+        $service = Get-StgArm "/subscriptions/$($e.subscriptionId)/resourceGroups/$($e.resourceGroup)/providers/Microsoft.ApiManagement/service/$($e.name)" '2025-03-01-preview'
+        $apimRegions = if ($e.subscriptionId -ieq $Cfg.subscriptionId) { $regions } else { @((Get-StgArm "/subscriptions/$($e.subscriptionId)/locations" '2022-12-01').value) }
+        $apimRegion = $apimRegions | Where-Object { $_.name -ieq $service.location } | Select-Object -First 1
+        $r.apim = @{ region=$service.location; available=(Test-StgHaRegionZones $apimRegion); configured=($service.properties.zoneRedundant -eq $true); units=$service.sku.capacity; ownerManaged=$true }
     }
     Write-Host "HA check: $($Cfg.location); regional zones available=$available (service capacity is not guaranteed)"
     foreach ($component in 'apim', 'functions', 'storage') {
@@ -47,7 +54,7 @@ function Get-StgHaCheck {
         Assert-Stg $r.functions.available "Flex zone redundancy in $($Cfg.location) is not supported; choose a region from functionapp list-flexconsumption-locations --zone-redundant=true or disable ha.functions.zoneRedundant"
     }
     if (Test-StgApimExisting $Cfg) {
-        Write-Host 'suggestion: apim zones: existing API Management is owner-managed; check its region and zone setting with the owner (no change by CCOF)'
+        Write-Host "suggestion: apim zones: existing API Management in $($r.apim.region), units=$($r.apim.units), is owner-managed (no change by CCOF); ask its owner about zone protection and capacity"
     } elseif ($available -and -not $apimConfigured) {
         Write-Host "suggestion: apim zones: $($Cfg.location) has zones; set ha.apim.zoneRedundant true with stage1.apimSku StandardV2 or PremiumV2; recommend stage1.apimUnits 2 (cost +1 unit from 1)"
     } elseif ($apimConfigured -and $Cfg.stage1.apimUnits -lt 2) {
@@ -63,16 +70,21 @@ function Get-StgHaCheck {
     if (-not $cosmosRegions.Count) { $cosmosRegions = @(@{locationName=$Cfg.location;isZoneRedundant=$false}) }
     foreach ($c in $cosmosRegions) {
         $info = $regions | Where-Object { $_.name -ieq $c.locationName -or $_.displayName -ieq $c.locationName } | Select-Object -First 1
-        $hasZones = @($info.availabilityZoneMappings).Count -gt 0
+        $hasZones = Test-StgHaRegionZones $info
         $pairName = @($info.metadata.pairedRegion)[0].name
         $pair = $regions | Where-Object { $_.name -ieq $pairName } | Select-Object -First 1
-        $pairZones = @($pair.availabilityZoneMappings).Count -gt 0
+        $pairZones = Test-StgHaRegionZones $pair
         $r.cosmos += @{region=$c.locationName; available=$hasZones; configured=[bool]$c.isZoneRedundant; pairedRegion=$pairName; pairedRegionHasZones=$pairZones}
         Write-Host "HA check: cosmos $($c.locationName) zones available=$hasZones configured=$($c.isZoneRedundant); paired region=$pairName zones=$pairZones"
         if ($c.isZoneRedundant) { Assert-Stg $hasZones "$($c.locationName) has no availability zones; set stage1.cosmosLocations[].isZoneRedundant false for that region or choose another region" }
         elseif ($hasZones) { Write-Host "suggestion: cosmos zones: set stage1.cosmosLocations isZoneRedundant true for $($c.locationName) if capacity permits; autoscale zone premium is waived" }
     }
     return $r
+}
+
+function Test-StgHaRegionZones {
+    param($Region)
+    return $null -ne $Region.availabilityZoneMappings -and @($Region.availabilityZoneMappings).Count -gt 0
 }
 
 function Assert-StgHaApim {

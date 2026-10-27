@@ -5,6 +5,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $scratch = Join-Path $root '.env.public-test-scratch\ha-zones'
 New-Item -ItemType Directory -Force $scratch | Out-Null
 . (Join-Path $root 'infra\staged\Invoke-StagedDeployment.ps1') -DotSourceOnly
+Write-Host 'HA zones suite loaded'
 $passed = 0
 function Check([bool]$ok, [string]$message) { if (-not $ok) { throw $message }; $script:passed++ }
 function Refuses([scriptblock]$action, [string]$pattern) {
@@ -117,6 +118,11 @@ if ($Case -in 'all', 'template') {
     }
     $main = Arm 'main.bicep'
     Check ($main.parameters.ContainsKey('ha') -and $main.parameters.ha.defaultValue.Count -eq 0) 'HA template default must remain empty'
+    $modules = @($main.resources | Where-Object type -eq 'Microsoft.Resources/deployments')
+    $apimModule = @($modules | Where-Object name -eq 'stage1-apim')[0]
+    $functionModule = @($modules | Where-Object { "$($_.name)" -match "stage1-.*apps" })[0]
+    Check ("$($apimModule.properties.parameters.zoneRedundant.value)" -match "parameters\('ha'\).*'apim'.*'zoneRedundant'") 'APIM HA option is not wired from main'
+    Check ("$($functionModule.properties.parameters.zoneRedundant.value)" -match "parameters\('ha'\).*'functions'.*'zoneRedundant'") 'Functions HA option is not wired from main'
     $apim = Arm 'apim-service.bicep'
     $a = @($apim.resources | Where-Object type -eq 'Microsoft.ApiManagement/service')[0]
     Check ("$($a.properties)" -match 'zoneRedundant' -or ($a.properties | ConvertTo-Json) -match 'zoneRedundant') 'APIM lacks zoneRedundant'
@@ -124,5 +130,29 @@ if ($Case -in 'all', 'template') {
     $p = @($fn.resources | Where-Object type -eq 'Microsoft.Web/serverfarms')[0]
     Check (($p.properties | ConvertTo-Json) -match 'zoneRedundant') 'Flex plan lacks zoneRedundant'
     Check ($fn.parameters.storageSku.allowedValues -contains 'Standard_GZRS') 'GZRS storage unsupported'
+}
+if ($Case -in 'all', 'existing') {
+    $c = Config; $c.stage1.approveNewPublicApimBootstrap=$false
+    $c.apim.existing=@{name='contoso-apim';resourceGroup='contoso';subscriptionId='00000000-0000-4000-8000-000000000003'}
+    function Invoke-StgAzJson { return @(@{name='Central India'}) }
+    function Get-StgArm($Path, $ApiVersion) {
+        if ($Path -like '*/locations') {
+            return @{value=@(@{name='centralindia';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
+                @{name='eastus2';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
+                @{name='southindia';availabilityZoneMappings=@();metadata=@{}})}
+        }
+        Check ($Path -like '/subscriptions/00000000-0000-4000-8000-000000000003/*/contoso-apim') 'Existing APIM HA read used the wrong subscription'
+        return @{location='eastus2';sku=@{name='StandardV2';capacity=3};properties=@{zoneRedundant=$true}}
+    }
+    $c.stage1.cosmosLocations=@(@{locationName='centralindia';isZoneRedundant=$true})
+    $r=Get-StgHaCheck $c
+    Check ($r.apim.configured -and $r.apim.region -eq 'eastus2' -and $r.apim.units -eq 3) 'HA report must read existing APIM zones/region/units without modifying it'
+    Check (-not $r.cosmos[0].pairedRegionHasZones) 'Missing region pair must not imply zone support'
+}
+if ($Case -in 'all', 'missing-region') {
+    $c=Config; $c.ha=@{apim=@{zoneRedundant=$true}}
+    function Invoke-StgAzJson { return @() }
+    function Get-StgArm { return @{value=@(@{name='centralindia';metadata=@{}})} }
+    Refuses { Get-StgHaCheck $c } 'centralindia.*no availability zones'
 }
 Write-Host "HA zones: $passed checks PASS"
