@@ -229,12 +229,23 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
   }
 });
 
-test("the HA Function plan readback queries the CLI's nested ARM property", () => {
+test("the HA Function plan readback reads ARM directly, independent of the Azure CLI output shape", () => {
   const ha = read("docs/get-started/high-availability.md");
-  const command = ha.split(/\r?\n/).find((line) => line.startsWith("az appservice plan show "));
-  assert.ok(command, "the guide supplies a Function plan zone readback");
+  const lines = ha.split(/\r?\n/);
+  const command = lines.find((line) => line.startsWith("az rest ") && line.includes("/providers/Microsoft.Web/serverfarms/"));
+  assert.ok(command, "the guide supplies a Function plan zone readback through ARM");
   assert.match(command, /--query "\{zones:properties\.zoneRedundant\}"/,
-    "Azure CLI returns zoneRedundant inside properties; a top-level query silently prints null");
+    "ARM returns zoneRedundant inside properties");
+  assert.ok(!lines.some((line) => line.startsWith("az appservice plan show ") && line.includes("zoneRedundant")),
+    "az appservice plan show nests or flattens zoneRedundant depending on CLI version");
+});
+
+test("the deployment-day usage check waits for a reconciler run", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  const step = day.split(/\r?\n(?=\d+\. \*\*)/).find((s) => s.includes("/ccof/me/usage"));
+  assert.ok(step, "step 5 checks /ccof/me/usage");
+  assert.match(step, /after a reconciler run/i, "budgets exist only after the reconciler writes budget state");
+  assert.ok(step.includes("not_computed"), "the reader must know not_computed means wait, not failure");
 });
 
 test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {

@@ -196,12 +196,11 @@ Real 2026-10-27 HA logs; previews not timed. [Sources and proof limits](../evide
 4. **Negative test:** request a model admitted by the first group but not the second, selecting the second.
    Expected: **403**, with that group's allowed models. Both groups must also have at least one working model.
    If only one deployment exists, record the missing differential-model coverage; do not invent a deployed model.
-5. **Account for it:** `GET <gateway>/anthropic/ccof/me/usage` must return **200** and both budgets;
-   [developer `/usage`/local helper](05-developer-setup.md#4-check-your-own-budget-usage) must match.
-   Check **Chargeback → by group** and Usage CSV/Log Analytics: every successful request's correlation ID
-   must match its group and cost code ([checks](../operate/chargeback-and-tags.md)).
-   For streamed Claude Code requests, live spend excludes prompt-cache writes and reads, so it reads lower than
-   the bill until daily reconciliation/calibration ([cost model](../COST-MODEL.md#where-the-slop-comes-from),
+5. **Account for it:** after a reconciler run, `GET <gateway>/anthropic/ccof/me/usage` returns **200** and both
+   budgets (`not_computed`: wait for it); [developer `/usage`/local helper](05-developer-setup.md#4-check-your-own-budget-usage) must match.
+   Check **Chargeback → by group** and Usage CSV/Log Analytics: each correlation ID must match its group
+   and cost code ([checks](../operate/chargeback-and-tags.md)). Streamed Claude Code spend excludes prompt-cache
+   writes and reads, so it reads lower than the bill until daily reconciliation ([cost model](../COST-MODEL.md#where-the-slop-comes-from),
    [ADR-0038](../adr/0038-budget-admission-acceptance.md)).
 6. **Console:** Groups lists both; **Budgets → Snapshots** for each opens that **group's** page, not Legacy
    projects; Chargeback by group shows both after telemetry arrives. Repeat successful calls and accounting

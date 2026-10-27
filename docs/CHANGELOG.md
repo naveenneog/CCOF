@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-10-28 — Release 23 review fixes
+
+- Council review of `main..test/rehearsal`: security review found no vulnerabilities; code review found one Medium and one
+  Low issue, both fixed test-first (three mutants caught, 36 reader tests loaded):
+  - Deployment day step 5 checks `/ccof/me/usage` after a reconciler run; `not_computed` means wait, not failure.
+  - The HA Function plan zone readback reads ARM with `az rest`, so the result no longer depends on whether the
+    installed Azure CLI nests or flattens `zoneRedundant`.
+- Recorded (Low, not fixed): the Budgets burn-down axis labels all read `$0` when spend is below one cent.
+
 ## 2026-10-28 — Rehearsal reader fixes
 
 - Configuration asks whether the deployment machine can reach private SCM/admin endpoints before

@@ -1,5 +1,12 @@
 # Current work
 
+## Release 23 (2026-10-28)
+
+**Active packet:** R23 — publish the rehearsal reader fixes (`test/rehearsal`) on top of release 22 (`30b1a9b`).
+
+- Council: security review PASS (no findings); code review PASS-WITH-NOTES, Medium (usage check before the reconciler
+  runs) and Low (CLI-version-dependent zone query) fixed test-first; 36/36 reader tests, three mutants caught.
+
 ## Novice deployment-day rehearsal (2026-10-28)
 
 **Active packet:** G-DAY-REHEARSAL — isolated deployment from the decision-led guide.
