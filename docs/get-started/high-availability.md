@@ -25,7 +25,7 @@ in the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator
 The [regions page](region-and-failover.md) gives provisioned Cosmos examples.
 
 The storage option covers Function host/package accounts, not the separate optional audit archive. Configure
-that account separately with `audit.archive.storageSku` ([archive settings](configuration-reference-2.md)).
+that account separately with `audit.archive.storageSku` ([archive settings](configuration-reference-3.md)).
 Neither storage replication nor Cosmos redundancy backs up data against accidental deletion.
 
 ## 2. Check the region

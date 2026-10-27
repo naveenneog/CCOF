@@ -9,7 +9,7 @@ invalid ones before anything is created. All values on these pages are hypotheti
 Before Stage 1, [check and add high availability](high-availability.md) for optional APIM/Functions zone settings,
 ZRS/GZRS storage, costs and the capacity-refusal recovery path.
 
-**Stage 1 is create-only.** The `stage1` values cannot change after Stage 1 has run in a resource group
+**Stage 1 is create-only.** The `stage1` values cannot change after its resource deployment has succeeded
 (`stage_config_changed`, [Staged.Common.ps1](../../infra/staged/Staged.Common.ps1)); the decisions are in the
 [Stage 1 table](03-deploy.md#before-stage-0-get-the-code-and-write-the-configuration).
 
