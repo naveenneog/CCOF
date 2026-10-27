@@ -29,6 +29,7 @@ try {
     function Invoke-StgAzJson { param([string[]]$Arguments)
         $a = $Arguments -join ' '
         if ($a -like 'account show*') { return @{ id = 's'; name = 'sub'; tenantId = 't'; user = @{ name = 'u' } } }
+        if ($a -like 'account list-locations*') { return @(@{ name = 'eastus2'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }, @{ name = 'centralindia'; availabilityZoneMappings = @(@{ logicalZone = '1' }); metadata = @{} }) }
         if ($a -like 'provider show*') { return @{ registrationState = 'Registered' } }
         if ($a -like 'functionapp list-flexconsumption-locations*') { return @(@{ name = 'East US 2' }, @{ name = 'Central India' }) }
         if ($a -like 'cognitiveservices*') { $script:quotaRegions += , ([regex]::Match($a, '--location (\S+)').Groups[1].Value) }

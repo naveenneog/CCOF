@@ -25,6 +25,7 @@ function Invoke-Stage0 {
     $flex = @(Invoke-StgAzJson @('functionapp', 'list-flexconsumption-locations', '--subscription', $Cfg.subscriptionId)) | ForEach-Object { ([string]$_.name).Replace(' ', '').ToLowerInvariant() }
     Assert-Stg ($flex -contains $Cfg.location.ToLowerInvariant()) "Flex Consumption is not offered in $($Cfg.location)"
     $report.flexConsumptionRegion = $Cfg.location
+    $report.ha = Get-StgHaCheck $Cfg
     $report.backends = @()
     foreach ($b in $Cfg.backends) {
         $fd = $Cfg.stage1.foundry
@@ -117,6 +118,7 @@ function Assert-StgFoundryQuota {
 function Get-Stage1Parameters { param($Cfg)
     $p = [ordered]@{ location = $Cfg.location; tags = $Cfg.tags }
     foreach ($k in $Cfg.stage1.Keys) { $p[$k] = $Cfg.stage1[$k] }
+    if ($null -ne $Cfg.ha) { $p.ha = $Cfg.ha }
     return $p
 }
 
@@ -278,11 +280,17 @@ function Test-Stage1 {
         Assert-StgStage1AppSettings -Settings $settings -AppKey $a.key -Stage5Record $config -Stage7Record $code
         Assert-Stg ($a.service.principalId -match $script:Guid) "$($a.service.name) has no principal"
         $v.apps += [ordered]@{ app = $a.key; name = $a.service.name; publicNetworkAccess = $site.publicNetworkAccess; subnet = $site.virtualNetworkSubnetId; settings = $settings.Count; principalId = $a.service.principalId }
+        if ($null -ne $Cfg.ha.functions) {
+            $plan = Get-StgArm $a.service.planId '2024-04-01'
+            Assert-StgHaPlan $Cfg $plan
+            $v.apps[-1].zoneRedundant = [bool]$plan.properties.zoneRedundant
+        }
     }
     $ownedStorage = @($Out.names.apps.Values | ForEach-Object { $_.storageAccount })
     $storageItems = @(Invoke-StgAzJson @('storage', 'account', 'list', '--subscription', $sub, '--resource-group', $rg) | Where-Object { $ownedStorage -contains $_.name })
     Assert-Stg ($storageItems.Count -eq $ownedStorage.Count) "found $($storageItems.Count) deployed storage accounts; expected $($ownedStorage.Count)"
     foreach ($s in $storageItems) {
+        if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -eq 'Standard_GZRS') { Assert-StgHaStorage $Cfg $s }
         Assert-Stg ($s.publicNetworkAccess -ceq $Cfg.stage1.storagePublicNetworkAccess) "$($s.name) storage PNA is $($s.publicNetworkAccess)"
         Assert-Stg ($s.allowSharedKeyAccess -eq $false -and $s.allowBlobPublicAccess -eq $false) "$($s.name) storage keys/blob public access are enabled"
         Assert-Stg ($s.networkRuleSet.defaultAction -ceq 'Deny' -and $s.networkRuleSet.bypass -ceq 'None') "$($s.name) storage firewall is not deny/none"
@@ -339,15 +347,19 @@ function Test-Stage1 {
         $v.foundry = [ordered]@{ name = $fa.name; publicNetworkAccess = $fa.properties.publicNetworkAccess; localAuthDisabled = $fa.properties.disableLocalAuth; deployments = @($fdeps | ForEach-Object { "$($_.name)=$($_.properties.model.name)@$($_.properties.model.version) $($_.sku.name)/$($_.sku.capacity)" }) }
     }
     if ($Out.apimId) {
-        $apim = Get-StgArm $Out.apimId '2024-05-01'
+        $apimApi = if ($null -ne $Cfg.ha.apim) { '2025-03-01-preview' } else { '2024-05-01' }
+        $apim = Get-StgArm $Out.apimId $apimApi
+        Assert-StgHaApim $Cfg $apim
         Assert-Stg ($apim.properties.publicNetworkAccess -ceq 'Enabled') "New APIM bootstrap PNA is $($apim.properties.publicNetworkAccess), expected Enabled; Stage 6 verifies outbound VNet integration"
         Assert-Stg ($apim.identity.principalId -ieq $Out.apimPrincipalId) 'New APIM system-assigned identity differs from the Stage 1 output'
         Assert-Stg ($apim.sku.name -ceq $Cfg.stage1.apimSku) "APIM SKU is $($apim.sku.name), expected $($Cfg.stage1.apimSku)"
         $diag = @( (Get-StgArm "$($Out.apimId)/providers/Microsoft.Insights/diagnosticSettings" '2021-05-01-preview').value | Where-Object { $_.name -ceq 'ccof-gateway-logs' })
         Assert-Stg ($diag.Count -eq 1 -and $diag[0].properties.workspaceId -ieq $Out.workspaceId) 'APIM gateway diagnostics are missing or target another workspace'
         $v.apim = @{ sku = $apim.sku.name; publicNetworkAccess = $apim.properties.publicNetworkAccess; principalId = $apim.identity.principalId; diagnosticWorkspaceId = $diag[0].properties.workspaceId }
+        if ($null -ne $Cfg.ha.apim) { $v.apim.zoneRedundant = [bool]$apim.properties.zoneRedundant; $v.apim.units = $apim.sku.capacity }
     }
     $v.apimStatus = $Out.apimStatus
+    if ($null -ne $Cfg.ha -or $Cfg.stage1.storageSku -eq 'Standard_GZRS') { $v.storage = @($storageItems | ForEach-Object { @{name=$_.name;sku=$_.sku.name} }) }
     $null = Write-StgEvidence 'stage1.verify.json' $v
     return $v
 }

@@ -7,7 +7,7 @@ targetScope = 'resourceGroup'
 param name string
 param location string
 param tags object
-@allowed(['BasicV2', 'StandardV2'])
+@allowed(['BasicV2', 'StandardV2', 'PremiumV2'])
 param sku string
 @minValue(1)
 param units int
@@ -16,8 +16,9 @@ param publisherEmail string
 @minLength(1)
 param publisherName string
 param workspaceId string
+param zoneRedundant bool = false
 
-resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
+resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: name
   location: location
   tags: tags
@@ -27,6 +28,7 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
     publisherEmail: publisherEmail
     publisherName: publisherName
     publicNetworkAccess: 'Enabled'
+    ...(zoneRedundant ? { zoneRedundant: true } : {})
   }
 }
 

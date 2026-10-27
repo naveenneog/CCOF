@@ -1,5 +1,14 @@
 # Current deployment unknowns
 
+## Zone redundancy (G-HA-ZONES, ADR-0052)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| HAZ-1 | RESEARCHED | APIM Standard v2/Premium v2 enable automatic zone placement with `properties.zoneRedundant` ([ARM 2025-03-01-preview](https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2025-03-01-preview/service)). Explicit `zones` are for classic Premium, not this v2 option. Two units are recommended, not required; v2 zone configuration cannot change after creation ([reliability](https://learn.microsoft.com/azure/reliability/reliability-api-management), retrieved 2026-10-27). |
+| HAZ-2 | RESEARCHED | Flex uses `Microsoft.Web/serverfarms@2024-04-01` `properties.zoneRedundant`, needs zone-redundant host and deployment storage and a supported region ([configuration](https://learn.microsoft.com/azure/azure-functions/functions-zone-redundancy?pivots=flex-consumption-plan)). No additional instance-memory restriction is documented. The platform maintains and bills at least two always-ready instances per scaling function/group even without an always-ready setting ([reliability](https://learn.microsoft.com/azure/reliability/reliability-functions), retrieved 2026-10-27). |
+| HAZ-3 | RESEARCHED | ZRS protects against a zone outage; GZRS also asynchronously replicates to a secondary region, but regional recovery needs a storage failover plan ([storage redundancy](https://learn.microsoft.com/azure/storage/common/storage-redundancy)). Cosmos zones remain per-region; autoscale zone premium is waived ([Cosmos reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db), retrieved 2026-10-27). |
+| HAZ-4 | ASSUMED | Stage 0 uses subscription `account list-locations` zone mappings as a regional capability signal, plus the service-specific Flex zone list. Regional zone support does not guarantee APIM, Cosmos or storage capacity in this subscription. ARM creation/read-back remains authoritative; a refusal must not silently disable HA. |
+
 ## Bug bash 5 staged driver
 
 | ID | State | Question / evidence |
