@@ -154,3 +154,14 @@
   private-link approval still apply. [Private Link](https://learn.microsoft.com/azure/private-link/private-endpoint-overview).
 - HAF-5 ASSUMED: this packet supports accounts in the gateway identity's tenant only; cross-tenant
   failover would need separate credentials and is refused rather than silently misrouting.
+## Foundry HA review corrections (2026-10-27)
+
+- HAF-6 RESEARCHED: `Invoke-StgBicep` returns no outputs for a what-if, so a first Stage 6 preview
+  cannot consume deployment outputs. Existing-network IDs must come from configuration; unverified
+  create-mode outputs defer the standby what-if. Null DNS entries must be removed before fallback.
+  Evidence: [preview helper](../infra/staged/Staged.Common.ps1), `Invoke-StgBicep`.
+- HAF-7 RESEARCHED: a full Stage 6 hash binds failover descriptors and cannot also identify the
+  unchanged base network. Record the descriptor-free hash inside verification evidence, which
+  [dependency hashing](../infra/staged/Staged.Common.ps1) already excludes from app fingerprints.
+  Old records without this evidence remain conservative: use the last verified configuration to
+  apply Stage 6 once before a subsequent standby change.

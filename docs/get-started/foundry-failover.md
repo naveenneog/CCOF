@@ -111,6 +111,13 @@ the connection. A pending connection stops verification with a next step. In `ve
 network owner creates the path; Stage 6 only checks it. An existing API Management instance must
 already route to and resolve **both** accounts; CCOF never changes its network.
 
+In an existing-network preview, Stage 6 takes endpoint/DNS IDs from configuration. On a first
+create-mode preview it prints `preview: Foundry failover endpoints deferred until verified Stage 6
+network outputs exist`; apply provisions the network before its standby endpoints.
+Later additions or replacements use the recorded base-network fingerprint and do not redeploy the
+VNet. Older failover state without that fingerprint needs one Stage 6 apply with its **last verified
+configuration** before you change standby descriptors; the refusal names this recovery step.
+
 No Stage 4 or shared registration changes are needed. Stage 7 is needed only if you also change
 code or seed data. Keep the state folder: later stages may ask you to rerun an earlier stage if
 its verified outputs changed; follow the named stage, not a manual edit to the state.

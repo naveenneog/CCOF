@@ -27,6 +27,15 @@ native circuit breakers and priority pools.
   then rerun Stages 0, 3, 5, 6 and 8. Stage 3 grants account-scoped Cognitive Services User.
 - Stage 6 adds standalone failover private endpoints and DNS groups, including accounts in
   another region/subscription. It never redeploys an existing create-mode VNet to add an endpoint.
+- A network what-if returns no outputs. Existing-network standby previews derive subnet, VNet
+  and DNS IDs from configuration; first-create previews defer the standby what-if until verified
+  network outputs exist. Null DNS entries are discarded before fallback.
+- Stage 6 records `verify.foundryFailoverBaseNetworkHash`, the Stage 6 input hash with all backend
+  failover descriptors removed. Later additions/replacements compare that fingerprint, not the
+  earlier full descriptor-bound hash. Real base-network changes still refuse. Verification-only
+  metadata does not change published-app dependencies. Legacy non-failover records can bootstrap
+  from their full hash; older failover records require applying their last verified configuration
+  once to record the fingerprint before changing standbys.
 - Legacy configurations do not acquire defaults or extra hash inputs. Failover changes invalidate
   Stages 3/5/6. Existing API Management ownership/conflict checks cover generated member names.
 - Gateway logs' BackendUrl identify the serving account; usage traces retain the logical backend

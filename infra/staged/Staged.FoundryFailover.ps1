@@ -155,14 +155,20 @@ function Test-StgCreatedFailover {
     return @{ accountId = $id; region = $a.location; localAuthDisabled = $true; deployments = @($deps.name) }
 }
 
+function Get-StgFailoverBaseNetworkHash {
+    param($Cfg)
+    $base = $Cfg | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+    foreach ($b in $base.backends) { $b.Remove('failover') }
+    return Get-StgStageInput $base 6
+}
+
 function Get-StgFailoverNetworkState {
     param($Cfg)
     $state = Read-StgState $Cfg
     $saved = $state.stages['6']
     if ($saved.configHash -and $saved.configHash -cne (Get-StgStageInput $Cfg 6)) {
-        $legacy = $Cfg | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
-        foreach ($b in $legacy.backends) { $b.Remove('failover') }
-        Assert-Stg ($saved.configHash -ceq (Get-StgStageInput $legacy 6)) 'stage_config_changed: Stage 6 network changed beyond adding failover. Restore its network settings; do not redeploy an existing VNet.'
+        $recordedBase = $saved.outputs.verify.foundryFailoverBaseNetworkHash ?? $saved.configHash
+        Assert-Stg ($recordedBase -ceq (Get-StgFailoverBaseNetworkHash $Cfg)) 'stage_config_changed: Stage 6 network changed beyond adding failover, or its base-network fingerprint is missing. Restore the last verified network/configuration and apply Stage 6 once to record it before changing standbys; do not redeploy an existing VNet.'
         return $saved.outputs
     }
     return Get-StgStage $Cfg 6
@@ -170,20 +176,36 @@ function Get-StgFailoverNetworkState {
 
 function Invoke-StgFailoverEndpoints {
     param($Cfg, $Network, [switch]$Apply)
-    foreach ($b in @($Cfg.backends | Where-Object { $_.failover.privateEndpoint })) {
+    $targets = @($Cfg.backends | Where-Object { $_.failover.privateEndpoint })
+    if (-not $targets.Count) { return }
+    $subnetId = "$($Network.privateEndpointSubnetId)"
+    if (-not $subnetId -and $Cfg.network.mode -ceq 'existing') { $subnetId = "$($Cfg.network.existing.privateEndpointSubnetId)" }
+    $vnetId = "$($Network.vnetId)"
+    if (-not $vnetId -and $subnetId -match '/subnets/[^/]+$') { $vnetId = $subnetId -replace '/subnets/[^/]+$', '' }
+    if (-not $subnetId -or -not $vnetId) {
+        if (-not $Apply -and $Cfg.network.mode -ceq 'create') {
+            Write-Host 'preview: Foundry failover endpoints deferred until verified Stage 6 network outputs exist; -Apply provisions/verifies the network first, then the standby endpoints.'
+            return
+        }
+        throw 'failover_network_unverified: private endpoint subnet/VNet IDs are missing. Set network.existing.privateEndpointSubnetId or apply the prerequisite Stage 6 network and rerun.'
+    }
+    $zoneIds = @($Network.foundryPrivateDnsZoneIds | Where-Object { -not [string]::IsNullOrWhiteSpace("$_") })
+    $createZones = ($Cfg.network.mode -ceq 'create' -and -not $zoneIds.Count)
+    if (-not $zoneIds.Count) {
+        $zoneIds = if ($Cfg.network.mode -ceq 'create') {
+            @('cognitiveservices.azure.com','openai.azure.com','services.ai.azure.com' | ForEach-Object { "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Network/privateDnsZones/privatelink.$_" })
+        } else { @($Cfg.network.existing.privateDnsZoneIds.foundry.Values | Where-Object { -not [string]::IsNullOrWhiteSpace("$_") }) }
+    }
+    Assert-Stg ($zoneIds.Count -gt 0) 'Foundry failover DNS zone IDs are missing; configure network.existing.privateDnsZoneIds.foundry or verify the created network, then rerun Stage 6'
+    foreach ($b in $targets) {
         $f = $b.failover
         $p = @{
             name = "$($b.id)-failover-pe"; location = $Cfg.location; tags = $Cfg.tags
             accountId = "/subscriptions/$($f.subscriptionId)/resourceGroups/$($f.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($f.accountName)"
-            subnetId = $Network.privateEndpointSubnetId
-            zoneIds = @($Network.foundryPrivateDnsZoneIds)
-            createZones = ($Cfg.network.mode -ceq 'create' -and -not @($Network.foundryPrivateDnsZoneIds | Where-Object { $_ }).Count)
-            vnetId = "$($Network.vnetId)"
-        }
-        if (-not $p.zoneIds.Count) {
-            $p.zoneIds = if ($Cfg.network.mode -ceq 'create') {
-                @('cognitiveservices.azure.com','openai.azure.com','services.ai.azure.com' | ForEach-Object { "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.Network/privateDnsZones/privatelink.$_" })
-            } else { @($Cfg.network.existing.privateDnsZoneIds.foundry.Values) }
+            subnetId = $subnetId
+            zoneIds = $zoneIds
+            createZones = $createZones
+            vnetId = $vnetId
         }
         $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage6-foundry-failover.bicep' -Name "stage6-$($b.id)-failover" -Parameters $p -Apply:$Apply
         if ($Apply) {

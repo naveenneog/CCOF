@@ -473,6 +473,7 @@ function Invoke-Stage6 {
     }
     $failoverEndpoints = @(Invoke-StgFailoverEndpoints -Cfg $Cfg -Network $out -Apply)
     $v = [ordered]@{ privateEndpoints = @(); privateDnsLinks = @(); apps = @() }
+    if (@($Cfg.backends | Where-Object failover).Count) { $v.foundryFailoverBaseNetworkHash = Get-StgFailoverBaseNetworkHash $Cfg }
     if ($integrateApim) { $v.apim = [ordered]@{ name = $s1.apimName; sku = $now.sku.name; virtualNetworkType = $now.properties.virtualNetworkType; subnet = ($now.properties.virtualNetworkConfiguration.subnetResourceId -split '/')[-1]; publicNetworkAccess = $now.properties.publicNetworkAccess; identityUnchanged = $true } }
     $dnsTargets = Get-StgNetworkDnsTargets -Cfg $Cfg -Outputs $out -HasFoundry ([bool]$foundryPrivate.Count)
     foreach ($zoneId in $dnsTargets.zoneIds) {
