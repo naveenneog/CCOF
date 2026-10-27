@@ -15,7 +15,7 @@
 - RED: missing day/config/users/evidence pages; valid JSON breaker ranges refused; a console-added expected group
   refused by Stage 8. Fix commits: `09b3490` (JSON integer ranges), `929ec0b` (console group trace assertion).
 - Targeted GREEN: 29 reader tests, 75 Foundry failover checks, 537 staged checks, 13 cross-platform checks;
-  37/37 scoped mutations killed. First full-suite failure exposed unqualified Windows-only examples; these
+  38/38 scoped mutations killed. First full-suite failure exposed unqualified Windows-only examples; these
   now carry explicit platform labels without changing the existing deployer guard.
 - Live: second group onboarded/synced; both explicit selectors and the higher-spend default returned 200,
   group-specific denial returned 403 with allowed models, usage shows both budgets, and Stage 8 passed in 285 s.
@@ -27,7 +27,14 @@
   QA PASS-WITH-NOTES (negative/mutation coverage; one-identity/live-client limits); UX PASS-WITH-NOTES
   (timed decisions/screens, explicit unverified paths); Security PASS-WITH-NOTES (no new dependencies or grants,
   checked pseudonyms and per-user sign-in; existing dependency advisories are not waived).
-- Full validation and committed-head packet gate follow; independent coordinator review/publication remains required.
+- Final validation: `npm test` PASS (449.4 s; Node 1,340 pass/0 fail, six existing conditional skips; all
+  PowerShell suites pass), explicit typecheck PASS (2.7 s), build PASS (3.4 s), admin 213/0 PASS (10.8 s).
+  Packet gate PASS (469.8 s): 23 pass, two existing warnings, zero failures. Source candidate: `fcf2904`;
+  earlier documentation/capture commits `295a342`, `836ebad`, `2f27525`.
+- Verify-mode network connections to new targets are sequenced after Stage 1 and before Stage 6, not
+  incorrectly required before those resources exist. The network-sequencing regression has its own RED/kill.
+- Independent coordinator review/publication remains required. This packet does not clear customer Cosmos
+  capacity, enterprise quota/load, three-developer acceptance or provider-reliability prerequisites.
 
 ## Admin group navigation (2026-10-27)
 

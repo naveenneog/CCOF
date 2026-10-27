@@ -1,6 +1,6 @@
 # Deployment packets
 
-- [ ] G-DAY: publish a short novice deployment-day guide with measured stage times, advance approvals,
+- [x] G-DAY: publish a short novice deployment-day guide with measured stage times, advance approvals,
   HA settings and multi-group verification. Prove approved live onboarding where existing identities/models
   permit it; retain exact private evidence, mutation-check reader contracts and run all required gates.
 
