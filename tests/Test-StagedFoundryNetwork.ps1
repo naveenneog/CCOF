@@ -71,6 +71,19 @@ $cases = [ordered]@{
         $null = Invoke-StgFailoverEndpoints -Cfg $c -Network @{privateEndpointSubnetId="$vnet/subnets/private";vnetId=$vnet;foundryPrivateDnsZoneIds=@($null)}
         Check ($captured.zoneIds.Count -eq 3 -and $captured.createZones) 'null-only create-mode zones must generate the three local Foundry zones'
     }
+    'missing-network' = {
+        $script:calls=0
+        function Invoke-StgBicep { $script:calls++; return $null }
+        $c=New-Config; $c.network.existing.Remove('privateEndpointSubnetId'); $message=''
+        try { $null=Invoke-StgFailoverEndpoints -Cfg $c -Network $null } catch { $message=$_.Exception.Message }
+        Check ($message -match 'failover_network_unverified' -and $calls -eq 0) 'missing configured subnet must refuse before any standby what-if'
+        $c=New-Config; $c.network.mode='create'; $message=''
+        try { $null=Invoke-StgFailoverEndpoints -Cfg $c -Network $null -Apply } catch { $message=$_.Exception.Message }
+        Check ($message -match 'failover_network_unverified' -and $calls -eq 0) 'apply must refuse missing verified network outputs rather than defer'
+        $c=New-Config; $c.network.existing.privateDnsZoneIds.foundry=@{}; $message=''
+        try { $null=Invoke-StgFailoverEndpoints -Cfg $c -Network @{privateEndpointSubnetId="$vnet/subnets/private";vnetId=$vnet;foundryPrivateDnsZoneIds=@($null)} } catch { $message=$_.Exception.Message }
+        Check ($message -match 'DNS zone IDs are missing' -and $calls -eq 0) 'missing DNS fallback must refuse before any standby what-if'
+    }
     'fingerprint-guard' = {
         $old = New-Config; $old.network.mode='create'
         $second = $old.backends[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
