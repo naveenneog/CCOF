@@ -99,6 +99,14 @@ function Test-StgFoundryFailover {
         if ($created) {
             $deps = @($new.deployments | ForEach-Object { @{ name = $_.name; properties = @{ model = @{ name = $_.model; version = "$($_.version)" } }; sku = @{ name = $_.sku } } })
             $region = $new.location
+            $models = @(Invoke-StgAzJson @('cognitiveservices', 'model', 'list', '--subscription', $f.subscriptionId, '--location', $region))
+            foreach ($d in @($new.deployments)) {
+                $offer = @($models | Where-Object { $_.model.format -ceq 'Anthropic' -and $_.model.name -ceq $d.model -and "$($_.model.version)" -ceq "$($d.version)" -and @($_.model.skus | ForEach-Object name) -contains $d.sku })
+                Assert-Stg ($offer.Count -gt 0) "failover model $($d.model)@$($d.version) is not offered in $region; choose stage1.foundry.failover.location from az cognitiveservices model list"
+            }
+            $quotaCfg = $Cfg | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            $quotaCfg.stage1.foundry = $new
+            Assert-StgFoundryQuota -Cfg $quotaCfg -Deployments @($new.deployments)
         } else {
             try {
                 $account = Get-StgArm $scope '2025-06-01'
@@ -128,6 +136,22 @@ function Test-StgFoundryFailover {
         Write-Host "suggestion: preview/apply Stages 3, 5 and 6; run Stage 8 and inspect ApiManagementGatewayLogs.BackendUrl during a failover drill"
         @{ id = $b.id; account = $f.accountName; region = $region; quotaNote = $quota; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
+}
+
+function Test-StgCreatedFailover {
+    param($Cfg)
+    $f = $Cfg.stage1.foundry.failover
+    if (-not $f.create) { return }
+    $id = "/subscriptions/$($Cfg.subscriptionId)/resourceGroups/$($Cfg.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($f.accountName)"
+    $a = Get-StgArm $id '2025-06-01'
+    Assert-Stg ($a.properties.disableLocalAuth -eq $true) 'Foundry failover local auth is enabled; disable local authentication before continuing'
+    Assert-Stg ($a.properties.publicNetworkAccess -ceq $f.publicNetworkAccess -and $a.location -ieq $f.location) 'Foundry failover region or public network access differs'
+    $deps = @((Get-StgArm "$id/deployments" '2025-06-01').value)
+    foreach ($d in @($f.deployments)) {
+        $actual = @($deps | Where-Object name -CEQ $d.name)[0]
+        Assert-Stg ($actual -and $actual.properties.provisioningState -ceq 'Succeeded' -and $actual.properties.model.name -ceq $d.model -and "$($actual.properties.model.version)" -ceq "$($d.version)" -and $actual.sku.name -ceq $d.sku -and $actual.sku.capacity -eq $d.capacity) "Foundry failover deployment $($d.name) differs or is not Succeeded"
+    }
+    return @{ accountId = $id; region = $a.location; localAuthDisabled = $true; deployments = @($deps.name) }
 }
 
 function Get-StgFailoverNetworkState {

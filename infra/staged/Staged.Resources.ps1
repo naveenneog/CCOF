@@ -172,6 +172,7 @@ function New-StgStage1Result {
     $principals = @{}; $clientIds = @{}
     foreach ($a in $Out.functionApps) { $principals[$a.key] = $a.service.principalId; $clientIds[$a.key] = $a.service.clientId }
     $verify = Test-Stage1 -Cfg $Cfg -Out $Out -AllowLaterStageResources:$AllowLaterStageResources
+    if ($Cfg.stage1.foundry.failover.create) { $verify.foundryFailover = Test-StgCreatedFailover $Cfg }
     return @{ names = $Out.names; principals = $principals; clientIds = $clientIds; cosmosEndpoint = $Out.cosmosEndpoint; cosmosAccountId = $Out.cosmosAccountId
         workspaceId = $Out.workspaceId; workspaceCustomerId = $Out.workspaceCustomerId; apimName = $Out.apimName; apimId = $Out.apimId
         apimPrincipalId = $Out.apimPrincipalId; apimGatewayUrl = $Out.apimGatewayUrl; apimStatus = $Out.apimStatus

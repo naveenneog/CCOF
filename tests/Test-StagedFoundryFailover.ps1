@@ -101,5 +101,12 @@ $pool = @($template.resources | ForEach-Object { $_.properties.template.resource
 Check ($pool.properties.pool.services.Count -eq 2 -and $pool.properties.pool.services[0].priority -eq 1 -and $pool.properties.pool.services[1].priority -eq 2 -and $arm.Contains('circuitBreaker')) 'compiled deployment must carry priority pools and circuit breakers'
 $privateArm = (& $bicep build (Join-Path $root 'infra\staged\stage6-foundry-failover.bicep') --stdout 2>$null) -join "`n"
 Check ($LASTEXITCODE -eq 0 -and $privateArm.Contains('privateLinkServiceId')) 'standalone endpoint deployment must compile'
+$c = New-Config
+$c.stage1.foundry.failover = @{ create = $true; accountName = 'standby'; location = 'centralus'
+    publicNetworkAccess = 'Disabled'; deployments = @(@{ name = 'claude-haiku-5-5'; model = 'claude-haiku-5-5'; version = '2'; sku = 'GlobalStandard'; capacity = 1 })
+    modelProviderData = @{ organizationName = 'Contoso'; countryCode = 'US'; industry = 'technology' } }
+function Get-StgArm($Id, $Version) { return @{ properties = @{ disableLocalAuth = $false; publicNetworkAccess = 'Disabled'; provisioningState = 'Succeeded' } } }
+$message = ''; try { $null = Test-StgCreatedFailover $c } catch { $message = $_.Exception.Message }
+Check ($message -match 'local auth') 'Stage 1 must read back keyless authentication for a created standby'
 Write-Host "Foundry failover: $passed passed"
 Remove-Item -LiteralPath $script:StateDir -Recurse -Force

@@ -34,7 +34,7 @@ function Read-StgConfig {
                 $problems.Add("network.existing.privateDnsZoneIds.$key must be a full Private DNS zone resource ID")
             }
         }
-        if (@($c.backends | Where-Object privateEndpoint).Count) {
+        if (@(Get-StgFoundryMembers $c | Where-Object privateEndpoint).Count) {
             $foundryZones = $c.network.existing.privateDnsZoneIds.foundry ?? @{}
             foreach ($key in 'cognitiveServices', 'openAi', 'aiServices') {
                 $id = $foundryZones[$key]
