@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "../lib/api.ts";
+import { isGroupId } from "../lib/groups.ts";
 import { ago, compact, human, int, pct, usd, when } from "../lib/format.ts";
 import { href, scopePath } from "../lib/router.ts";
 import { ScopeLink } from "../components/scope-link.tsx";
@@ -31,8 +32,9 @@ export function Overview() {
     ok(health.data) && Array.isArray(health.data.data) && health.data.data.length > 0;
   const attention: { key: string; tone: string; text: React.ReactNode; to: string | null }[] = [];
   if (ok(budgets.data)) for (const g of budgets.data.data.groups) {
-    attention.push({ key: `b-${g.projectId}`, tone: g.exhausted ? "danger" : "warn", to: scopePath(g.projectId),
-      text: <><strong>{g.projectId}</strong> at {pct(g.usedPercent)} of its monthly budget{g.exhausted ? " — exhausted" : ""}</> });
+    const level = isGroupId(g.projectId) || !g.classification ? "" : ` (${g.classification})`;
+    attention.push({ key: `b-${g.projectId}-${g.classification ?? ""}`, tone: g.exhausted ? "danger" : "warn", to: scopePath(g.projectId),
+      text: <><strong>{g.projectId}</strong>{level} at {pct(g.usedPercent)} of its monthly budget{g.exhausted ? " — exhausted" : ""}</> });
   }
   if (cov && cov.reportState !== "observed_token_usage_complete") attention.push({ key: "coverage", tone: "warn", to: "/chargeback", text: <>Telemetry coverage is <strong>{human(cov.reportState)}</strong>: {int(cov.unpricedRequests)} unpriced, {int(cov.unattributedRequests)} unattributed requests</> });
   if (written && written.freshness !== "on_schedule") attention.push({ key: "rec", tone: "danger", to: "/reconciler", text: <>The reconciler's last written run was {ago(written.latestRunAt)} ({human(written.freshness)})</> });

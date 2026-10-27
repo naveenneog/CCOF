@@ -17,8 +17,8 @@
   Coder PASS (small documentation changes); QA PASS (failing-first reader contracts and mutations);
   UX PASS-WITH-NOTES (live rollout remains conditional); Security PASS (no token printing, shared
   registration changes or weakened authentication; public Functions option labelled lab-only).
-- Live Stage 0 PASS (108 s). Initial Stage 1 refused zonal Cosmos capacity in Central India.
-  Stopped at the documented owner-approval boundary; no successful Stage 1 state and no later apply.
+- Initial checkpoint: Stage 0 PASS (108 s), then Stage 1 refused zonal Cosmos capacity in Central India.
+  Stopped at the documented owner-approval boundary; the later approved recovery is recorded below.
   Private chronology and exact failures: session `files/rehearsal/progress.md` and `novice-log.md`.
 - Merged the day-guide author's `836ebad` as `ea829ec`: explicit Windows-only command labels fix
   the initial full-suite documentation-scanner failure without changing the scanner. Scoped checks:
@@ -41,7 +41,16 @@
 - Reader follow-up: all five day-console captures replaced from the actual group-only lab with the existing
   day pseudonyms; no Legacy projects text, both snapshot links clicked. Failing-first capture/CLI-timeout guards,
   Reader and scoped mutation checks cover the release-23 plain-language disclosure too.
-  Final full suite/gate will run after the promised main/release merge.
+  Verified `main` and `release/22` both at `30b1a9b` before the final merge; the evidence ADR is now
+  ADR-0055 and no old filename references remain. Reader 35/35 and merged admin 220/220 pass.
+  Final committed-head full gate follows.
+
+## Release 22 (2026-10-28)
+
+**Active packet:** R22 — merge G-GROUPS-ONLY and G-DAY into `release/22` from `main` `e8d9353`.
+
+- Council: security review PASS (no findings); code review PASS-WITH-NOTES, two Low findings fixed test-first
+  (Overview historical budget keys, duplicate ADR number, commit `89d3e2b`). Admin tests 221/0; packet gate rerun after the fixes.
 
 ## Deployment-day readiness (2026-10-27)
 
@@ -116,7 +125,7 @@ controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
   and packet gate PASS. Gate: 23 passed, 2 existing warnings (five oversized
   historical files and G-R3/E2E-01/CC-01), zero failures; lint skipped because no
   command is declared. Added-line leak scan: zero matches; whitespace diff clean.
-  Evidence: `files/groups-only/{REPORT.md,gate-results.json,mutation-results.json,browser-results.json}`.
+  Evidence (private, kept outside the repository): REPORT, gate, mutation and browser results.
 - Council (direct review; owner forbids additional agents): Architect PASS (shared
   helpers extracted, ADR boundary and unchanged server/schema); Coder PASS (no
   deleted-page imports, shared scope links); QA PASS (RED evidence, mixed/group-only
