@@ -214,6 +214,10 @@ if ($Case -in 'all', 'stage0') {
         @{name='southindia';availabilityZoneMappings=@();metadata=@{}})} }
     $r=Invoke-Stage0 $c
     Check ($r.ha.region -eq 'centralindia' -and $r.ha.cosmos.Count -eq 2) 'Stage 0 must include the HA capability report'
+    $c.stage1.Remove('cosmosLocations')
+    $c=$c | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+    $defaultReport=Invoke-Stage0 $c
+    Check ($defaultReport.ha.cosmos.Count -eq 1 -and $defaultReport.ha.cosmos[0].region -ceq 'centralindia' -and $defaultReport.ha.cosmos[0].available -and -not $defaultReport.ha.cosmos[0].configured) 'Stage 0 must report the default Cosmos region when cosmosLocations is omitted'
     $c.location='southindia'; $c.ha=@{apim=@{zoneRedundant=$true}}
     Refuses { Invoke-Stage0 $c } 'southindia.*no availability zones'
 }

@@ -66,8 +66,7 @@ function Get-StgHaCheck {
     if ($available -and -not $storageConfigured) {
         Write-Host 'suggestion: storage zones: set stage1.storageSku Standard_ZRS or Standard_GZRS (higher storage cost)'
     }
-    $cosmosRegions = @($Cfg.stage1.cosmosLocations)
-    if (-not $cosmosRegions.Count) { $cosmosRegions = @(@{locationName=$Cfg.location;isZoneRedundant=$false}) }
+    $cosmosRegions = @(Get-StgCosmosRegions $Cfg)
     foreach ($c in $cosmosRegions) {
         $info = $regions | Where-Object { $_.name -ieq $c.locationName -or $_.displayName -ieq $c.locationName } | Select-Object -First 1
         $hasZones = Test-StgHaRegionZones $info
