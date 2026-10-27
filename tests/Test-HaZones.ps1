@@ -147,15 +147,15 @@ if ($Case -in 'all', 'existing') {
     function Get-StgArm($Path, $ApiVersion) {
         if ($Path -like '*/locations') {
             return @{value=@(@{name='centralindia';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
-                @{name='eastus2';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
+                @{name='eastus2';displayName='East US 2';availabilityZoneMappings=@(@{logicalZone='1'});metadata=@{}},
                 @{name='southindia';availabilityZoneMappings=@();metadata=@{}})}
         }
         Check ($Path -like '/subscriptions/00000000-0000-4000-8000-000000000003/*/contoso-apim') 'Existing APIM HA read used the wrong subscription'
-        return @{location='eastus2';sku=@{name='StandardV2';capacity=3};properties=@{zoneRedundant=$true}}
+        return @{location='East US 2';sku=@{name='StandardV2';capacity=3};properties=@{zoneRedundant=$true}}
     }
     $c.stage1.cosmosLocations=@(@{locationName='centralindia';isZoneRedundant=$true})
     $r=Get-StgHaCheck $c
-    Check ($r.apim.configured -and $r.apim.region -eq 'eastus2' -and $r.apim.units -eq 3) 'HA report must read existing APIM zones/region/units without modifying it'
+    Check ($r.apim.configured -and $r.apim.available -and $r.apim.region -eq 'eastus2' -and $r.apim.units -eq 3) 'HA report must read existing APIM zones/region/units without modifying it'
     Check (-not $r.cosmos[0].pairedRegionHasZones) 'Missing region pair must not imply zone support'
 }
 if ($Case -in 'all', 'missing-region') {

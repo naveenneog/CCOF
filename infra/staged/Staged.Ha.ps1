@@ -40,8 +40,8 @@ function Get-StgHaCheck {
         $e = $Cfg.apim.existing
         $service = Get-StgArm "/subscriptions/$($e.subscriptionId)/resourceGroups/$($e.resourceGroup)/providers/Microsoft.ApiManagement/service/$($e.name)" '2025-03-01-preview'
         $apimRegions = if ($e.subscriptionId -ieq $Cfg.subscriptionId) { $regions } else { @((Get-StgArm "/subscriptions/$($e.subscriptionId)/locations" '2022-12-01').value) }
-        $apimRegion = $apimRegions | Where-Object { $_.name -ieq $service.location } | Select-Object -First 1
-        $r.apim = @{ region=$service.location; available=(Test-StgHaRegionZones $apimRegion); configured=($service.properties.zoneRedundant -eq $true); units=$service.sku.capacity; ownerManaged=$true }
+        $apimRegion = $apimRegions | Where-Object { $_.name -ieq $service.location -or $_.displayName -ieq $service.location } | Select-Object -First 1
+        $r.apim = @{ region=($apimRegion.name ?? $service.location); available=(Test-StgHaRegionZones $apimRegion); configured=($service.properties.zoneRedundant -eq $true); units=$service.sku.capacity; ownerManaged=$true }
     }
     Write-Host "HA check: $($Cfg.location); regional zones available=$available (service capacity is not guaranteed)"
     foreach ($component in 'apim', 'functions', 'storage') {
