@@ -82,6 +82,25 @@ function Get-StgArm($Id, $Version) {
 }
 $message = ''; try { $null = Test-StgFoundryFailover $c } catch { $message = $_.Exception.Message }
 Check ($message -match 'Succeeded') 'Stage 0 must refuse an unready standby deployment'
+$script:accountFault = ''
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/deployments')) {
+        $standby = $Id -match '/standby/'
+        return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ provisioningState = 'Succeeded'; model = @{
+            name = 'claude-haiku-5-5'; version = $(if ($standby -and $script:accountFault -ceq 'version') { '1' } else { '2' })
+        } }; sku = @{ name = $(if ($standby -and $script:accountFault -ceq 'sku') { 'DataZoneStandard' } else { 'GlobalStandard' }) } }) }
+    }
+    return @{ id = $Id; name = 'standby'; location = 'centralus'; properties = @{ publicNetworkAccess = 'Disabled' } }
+}
+foreach ($case in @(@{ fault = 'sku'; match = 'GlobalStandard' }, @{ fault = 'version'; match = 'model/version/SKU' })) {
+    $script:accountFault = $case.fault; $message = ''
+    try { $null = Test-StgFoundryFailover $c } catch { $message = $_.Exception.Message }
+    Check ($message -match $case.match) "Stage 0 must refuse standby $($case.fault) mismatch"
+}
+$script:accountFault = ''; $c.backends[0].failover.privateEndpoint = $false
+$message = ''; try { $null = Test-StgFoundryFailover $c } catch { $message = $_.Exception.Message }
+Check ($message -match 'privateEndpoint true') 'Stage 0 must refuse a private account without a private route'
+$c = New-Config
 function Get-StgArm($Id, $Version) {
     if ($Id.EndsWith('/deployments')) { return @{ value = @() } }
     return @{ id = $Id; name = 'standby'; location = 'centralus' }
@@ -115,6 +134,17 @@ Check ($captured.accountId -match '000000000003') 'Stage 6 endpoint must target 
 function Get-StgArm($Id, $Version) { return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{ privateLinkServiceId = $captured.accountId; privateLinkServiceConnectionState = @{ status = 'Pending' } } }) } } }
 $message = ''; try { $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply } catch { $message = $_.Exception.Message }
 Check ($message -match 'approval') 'Stage 6 must refuse a pending or wrong-account endpoint'
+function Get-StgArm($Id, $Version) { return @{ properties = @{ provisioningState = 'Failed' } } }
+$message = ''; try { $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply } catch { $message = $_.Exception.Message }
+Check ($message -match 'not Succeeded') 'Stage 6 must refuse an unready private endpoint'
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/privateDnsZoneGroups')) { return @{ value = @() } }
+    return @{ properties = @{ provisioningState = 'Succeeded'; privateLinkServiceConnections = @(@{ properties = @{
+        privateLinkServiceId = $captured.accountId; privateLinkServiceConnectionState = @{ status = 'Approved' }
+    } }) } }
+}
+$message = ''; try { $null = Invoke-StgFailoverEndpoints -Cfg $c -Network $network -Apply } catch { $message = $_.Exception.Message }
+Check ($message -match 'DNS zones differ') 'Stage 6 must refuse missing private DNS groups'
 $bicep = Join-Path $HOME '.azure\bin\bicep.exe'
 if (-not (Test-Path $bicep)) { $bicep = (Get-Command bicep -ErrorAction Stop).Source }
 $arm = (& $bicep build (Join-Path $root 'infra\staged\stage5-config.bicep') --stdout 2>$null) -join "`n"
@@ -131,6 +161,17 @@ $c.stage1.foundry.failover = @{ create = $true; accountName = 'standby'; locatio
 function Get-StgArm($Id, $Version) { return @{ properties = @{ disableLocalAuth = $false; publicNetworkAccess = 'Disabled'; provisioningState = 'Succeeded' } } }
 $message = ''; try { $null = Test-StgCreatedFailover $c } catch { $message = $_.Exception.Message }
 Check ($message -match 'local auth') 'Stage 1 must read back keyless authentication for a created standby'
+$script:createFault = ''
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/deployments')) { return @{ value = @(@{ name = 'claude-haiku-5-5'; properties = @{ provisioningState = 'Succeeded'; model = @{name='claude-haiku-5-5';version='2'} }; sku = @{name='GlobalStandard';capacity=$(if($script:createFault -ceq 'deployment'){2}else{1})} }) } }
+    return @{ location = $(if($script:createFault -ceq 'region'){'eastus2'}else{'centralus'}); properties = @{ disableLocalAuth = $true; publicNetworkAccess = 'Disabled' } }
+}
+Check ((Test-StgCreatedFailover $c).localAuthDisabled -eq $true) 'Stage 1 must verify the created standby deployment'
+foreach ($case in @(@{ fault='region';match='region or public network access' },@{ fault='deployment';match='differs or is not Succeeded' })) {
+    $script:createFault = $case.fault; $message=''
+    try { $null = Test-StgCreatedFailover $c } catch { $message=$_.Exception.Message }
+    Check ($message -match $case.match) "Stage 1 must refuse created standby $($case.fault) mismatch"
+}
 $c = New-Config; $script:fault = ''
 $script:backendPlan = @(Get-StgApimBackendPlan $c)[0]
 function Get-StgArm($Id, $Version) {
@@ -163,5 +204,20 @@ Check ((Get-StgFailoverNetworkState $c).vnetId -ceq 'original-vnet') 'Stage 6 up
 $c.network.mode = 'existing'; $message = ''
 try { $null = Get-StgFailoverNetworkState $c } catch { $message = $_.Exception.Message }
 Check ($message -match 'changed beyond adding failover') 'Stage 6 must reject unrelated network changes during upgrade'
+$c = New-Config; $c.network.mode = 'existing'
+$script:originalNetwork = @{ vnetId = 'vnet'; functionsSubnetId = 'subnet'; privateEndpointSubnetId = 'private'
+    storagePrivateEndpointIds = @(); cosmosPrivateEndpointId = 'cosmos-pe'; foundryPrivateEndpointIds = @() }
+function Get-StgStage($Cfg, $Number) { return @{ names = @{ apps = @{} }; apimName = '' } }
+function Invoke-StgBicep { return $script:originalNetwork | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable }
+function Invoke-StgFailoverEndpoints { return 'standby-pe' }
+function Get-StgNetworkDnsTargets { return @{ zoneIds = @() } }
+function Get-StgCosmosDnsProblems { return @() }
+function Write-StgEvidence { return '' }
+function Get-StgArm($Id, $Version) {
+    if ($Id.EndsWith('/privateDnsZoneGroups/default')) { return @{ properties = @{ privateDnsZoneConfigs = @(@{ properties = @{ recordSets = @(@{fqdn='private.example';ipAddresses=@('10.0.0.1')}) } }) } } }
+    return @{ name = $Id; properties = @{ privateLinkServiceConnections = @(@{ properties = @{ privateLinkServiceConnectionState = @{ status = 'Approved' } } }) } }
+}
+$result = Invoke-Stage6 -Cfg $c -Apply
+Check ((Get-StgOutputHash $result) -ceq (Get-StgOutputHash $originalNetwork)) 'Adding a standby endpoint must not invalidate published app state or reseed groups'
 Write-Host "Foundry failover: $passed passed"
 Remove-Item -LiteralPath $script:StateDir -Recurse -Force

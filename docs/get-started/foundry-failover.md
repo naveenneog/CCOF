@@ -151,7 +151,10 @@ Gateway logs identify the actual account; usage traces retain the logical backen
   another region. It does not repair shared DNS, network, identity or budget failures.
 - Standard inference is usage billed; a second account alone is not a second APIM unit.
   Additional private endpoints are hourly billed, plus private-link traffic/DNS and model usage.
-  Check your region's prices and [pricing calculator](https://azure.microsoft.com/pricing/calculator/).
+  One extra endpoint is USD 0.01/hour (about 0.24/day or 7.30/month), before traffic and DNS:
+  [Retail Prices API](https://prices.azure.com/api/retail/prices), product `Virtual Network Private Link`,
+  meter `Standard Private Endpoint`, region `Global`, checked 2026-10-27. This is a list price, not
+  your bill; check your agreement and [pricing calculator](https://azure.microsoft.com/pricing/calculator/).
 
 Sources: [APIM circuit breakers and pools](https://learn.microsoft.com/azure/api-management/backends),
 [Private Link properties](https://learn.microsoft.com/azure/private-link/private-endpoint-overview#private-endpoint-properties).

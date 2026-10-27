@@ -428,7 +428,7 @@ function Invoke-Stage6 {
     if ($action -eq 'reuse') {
         $saved = if (@($Cfg.backends | Where-Object failover).Count) { Get-StgFailoverNetworkState $Cfg } else { Get-StgStage $Cfg 6 }
         $out = [ordered]@{}
-        foreach ($key in $saved.Keys) { if ($key -cne 'verify' -and $key -cne 'durationSeconds') { $out[$key] = $saved[$key] } }
+        foreach ($key in $saved.Keys) { if ($key -cnotin @('verify', 'durationSeconds', 'foundryFailoverPrivateEndpointIds')) { $out[$key] = $saved[$key] } }
         Write-Host 'Stage 6 create-mode VNet already exists; skipping the authoritative network deployment.'
     } else {
         $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage6-network.bicep' -Name 'stage6-network' -Apply:$Apply -Parameters $parameters
@@ -472,7 +472,6 @@ function Invoke-Stage6 {
         Assert-Stg ($now.identity.principalId -ieq $s1.apimPrincipalId) 'APIM system-assigned identity changed during VNet integration'
     }
     $failoverEndpoints = @(Invoke-StgFailoverEndpoints -Cfg $Cfg -Network $out -Apply)
-    if ($failoverEndpoints.Count) { $out.foundryFailoverPrivateEndpointIds = $failoverEndpoints }
     $v = [ordered]@{ privateEndpoints = @(); privateDnsLinks = @(); apps = @() }
     if ($integrateApim) { $v.apim = [ordered]@{ name = $s1.apimName; sku = $now.sku.name; virtualNetworkType = $now.properties.virtualNetworkType; subnet = ($now.properties.virtualNetworkConfiguration.subnetResourceId -split '/')[-1]; publicNetworkAccess = $now.properties.publicNetworkAccess; identityUnchanged = $true } }
     $dnsTargets = Get-StgNetworkDnsTargets -Cfg $Cfg -Outputs $out -HasFoundry ([bool]$foundryPrivate.Count)
