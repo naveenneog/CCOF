@@ -61,7 +61,7 @@ autoscale ([Cosmos DB reliability, Cost](https://learn.microsoft.com/azure/relia
 
 ## 3. The failover region
 
-CCOF fails over only Cosmos DB: `stage1.cosmosLocations` lists the regions in failover order, and two or more turn
+By default CCOF fails over only Cosmos DB: `stage1.cosmosLocations` lists the regions in failover order, and two or more turn
 on service-managed failover ([guide 2.6](../STAGED-DEPLOYMENT-GUIDE.md#26-cosmos-db-redundancy)). The other
 resources are in one region.
 
@@ -97,7 +97,7 @@ The stages create no standby for the other parts. If you need one, plan it yours
 | --- | --- | --- |
 | API Management Standard v2 | One region | Multi-region gateways need the Premium (classic) tier ([API Management reliability](https://learn.microsoft.com/azure/reliability/reliability-api-management)); otherwise deploy again in the paired region |
 | Function Apps, storage, Log Analytics | One region | Wait for regional recovery, then verify networking and run Stage 8. A replacement stack in another region creates a new Cosmos DB account; it does not attach to the surviving replica. Data migration, identities, endpoints and client cutover need a separate recovery plan |
-| Foundry account | One account | A second account in another Claude region (for example `swedencentral` for Global Standard), added as another `backends[]` entry that groups name as their backend (`groups[].backendId`, or the backend chosen in the admin console). The gateway does not switch between accounts by itself. Global and Data Zone deployments are affected when their primary region has an interruption ([deployment types](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types)) |
+| Foundry account | One account by default | Opt into a second account and a circuit-breaker priority pool with [Foundry account failover](foundry-failover.md). Groups keep the same backend ID. Global and Data Zone deployments are affected when their primary region has an interruption ([deployment types](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types)) |
 
 ## 4. Outage and a planned failover drill
 

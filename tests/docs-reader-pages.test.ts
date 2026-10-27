@@ -331,3 +331,15 @@ test("a region without Claude, provisioned Cosmos DB cost and the failover regio
   assert.match(guide, /paired region|region pair/i, "guide 2.6 names the paired region");
   assert.match(guide, /residency/i, "guide 2.6 names data residency");
 });
+test("Foundry failover has an upgrade path and a verifiable drill on the reader's route", () => {
+  const page = read("docs/get-started/foundry-failover.md");
+  assert.match(page, /backends\[\]\.failover/);
+  assert.match(page, /Stage 1 is create-only/);
+  assert.match(page, /BackendUrl/);
+  assert.match(page, /429/);
+  assert.match(page, /Retry-After/);
+  assert.match(page, /same subscription/);
+  assert.match(page, /approximate per gateway instance/);
+  assert.match(read("docs/get-started/region-and-failover.md"), /\]\(foundry-failover\.md\)/);
+  assert.match(read("docs/BACKENDS.md"), /\]\(get-started\/foundry-failover\.md\)/);
+});

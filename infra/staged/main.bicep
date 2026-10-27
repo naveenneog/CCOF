@@ -193,6 +193,18 @@ output names object = {
   })
 }
 output apimName string = approveNewPublicApimBootstrap ? apimService!.outputs.name : ''
+module foundryFailover 'foundry-account.bicep' = if (foundry.?failover.?create ?? false) {
+  name: 'stage1-foundry-failover'
+  params: {
+    name: foundry.failover.accountName
+    location: foundry.failover.location
+    tags: tags
+    publicNetworkAccess: foundry.failover.publicNetworkAccess
+    deployments: foundry.failover.deployments
+    modelProviderData: foundry.failover.modelProviderData
+  }
+}
+
 output foundryAccountId string = (foundry.?create ?? false) ? foundryAccount!.outputs.id : ''
 output foundryAnthropicUrl string = (foundry.?create ?? false) ? foundryAccount!.outputs.anthropicUrl : ''
 output completionGate string = 'Services only: separate-team grants, schema/settings/code, and customer network required before runtime acceptance.'

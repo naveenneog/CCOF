@@ -71,11 +71,16 @@ foreach ($name in 'cosmosPublicNetworkAccess', 'storagePublicNetworkAccess', 'fu
 }
 Assert-Contract ($arm.parameters.approveNewPublicApimBootstrap.defaultValue -eq $false) 'Public APIM bootstrap must be explicit opt-in.'
 Assert-Contract ($arm.parameters.includeAdmin.defaultValue -eq $true) 'Separate admin service must be included by default.'
-$foundryModule = @($arm.resources | Where-Object { $_.type -eq 'Microsoft.Resources/deployments' -and @($_.properties.template.resources | Where-Object type -EQ 'Microsoft.CognitiveServices/accounts').Count })
+$foundryModules = @($arm.resources | Where-Object { $_.type -eq 'Microsoft.Resources/deployments' -and @($_.properties.template.resources | Where-Object type -EQ 'Microsoft.CognitiveServices/accounts').Count })
+$foundryModule = @($foundryModules | Where-Object name -CEQ 'stage1-foundry')
 Assert-Contract ($foundryModule.Count -eq 1 -and $foundryModule[0].condition -match 'foundry') 'Foundry account must be an opt-in Stage 1 module.'
 $foundryAccount = @($foundryModule[0].properties.template.resources | Where-Object type -EQ 'Microsoft.CognitiveServices/accounts')[0]
 Assert-Contract ($foundryAccount.properties.disableLocalAuth -eq $true) 'Foundry account must be keyless.'
 Assert-Contract ($foundryModule[0].properties.template.parameters.publicNetworkAccess.defaultValue -ceq 'Disabled') 'Foundry must default to private.'
+$standby = @($foundryModules | Where-Object name -CEQ 'stage1-foundry-failover')
+Assert-Contract ($standby.Count -eq 1 -and $standby[0].condition -match 'failover.*create') 'Standby creation must have its own explicit failover.create opt-in.'
+$standbyAccount = @($standby[0].properties.template.resources | Where-Object type -EQ 'Microsoft.CognitiveServices/accounts')[0]
+Assert-Contract ($standbyAccount.properties.disableLocalAuth -eq $true -and $standby[0].properties.template.parameters.publicNetworkAccess.defaultValue -ceq 'Disabled') 'Standby must also be keyless and private by default.'
 $apim = @($resources | Where-Object type -EQ 'Microsoft.ApiManagement/service')
 $apimModules = @($arm.resources | Where-Object { $_.type -eq 'Microsoft.Resources/deployments' -and @($_.properties.template.resources | Where-Object type -EQ 'Microsoft.ApiManagement/service').Count })
 Assert-Contract ($apim.Count -eq 1 -and $apimModules.Count -eq 1 -and $apimModules[0].condition -match "parameters\('approveNewPublicApimBootstrap'\)") 'APIM must be conditional on approval of NEW public bootstrap.'

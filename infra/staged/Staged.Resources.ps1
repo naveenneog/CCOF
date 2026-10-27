@@ -52,7 +52,8 @@ function Invoke-Stage0 {
         Assert-Stg (-not $missing.Count) "backend $($b.id) lacks deployments: $($missing -join ', ')"
         $report.backends += [ordered]@{ id = $b.id; account = $acct.name; region = $acct.location; publicNetworkAccess = $acct.properties.publicNetworkAccess; deployments = @($b.deploymentInferenceGeo.Keys) }
     }
-    if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports $report.backends }
+    if (@($Cfg.backends | Where-Object failover).Count) { $report.foundryFailover = @(Test-StgFoundryFailover $Cfg) }
+    if (Test-StgApimExisting $Cfg) { $report.apimExisting = Invoke-StgApimExistingCheck -Cfg $Cfg -BackendReports (@($report.backends) + @($report.foundryFailover | Where-Object { $_ })) }
     $me = Get-StgGraph 'me?$select=id,userPrincipalName'
     $report.operator = @{ id = $me.id; upn = $me.userPrincipalName }
     foreach ($g in @($Cfg.groups | Where-Object { $_.groupId })) {
@@ -171,6 +172,7 @@ function New-StgStage1Result {
     $principals = @{}; $clientIds = @{}
     foreach ($a in $Out.functionApps) { $principals[$a.key] = $a.service.principalId; $clientIds[$a.key] = $a.service.clientId }
     $verify = Test-Stage1 -Cfg $Cfg -Out $Out -AllowLaterStageResources:$AllowLaterStageResources
+    if ($Cfg.stage1.foundry.failover.create) { $verify.foundryFailover = Test-StgCreatedFailover $Cfg }
     return @{ names = $Out.names; principals = $principals; clientIds = $clientIds; cosmosEndpoint = $Out.cosmosEndpoint; cosmosAccountId = $Out.cosmosAccountId
         workspaceId = $Out.workspaceId; workspaceCustomerId = $Out.workspaceCustomerId; apimName = $Out.apimName; apimId = $Out.apimId
         apimPrincipalId = $Out.apimPrincipalId; apimGatewayUrl = $Out.apimGatewayUrl; apimStatus = $Out.apimStatus
@@ -375,7 +377,7 @@ function Get-StgNetworkVerifyArguments {
         $arguments.ApimSubnet = ($e.apimSubnetId -split '/')[-1]
         $arguments.ApimResourceId = $Stage1.apimId
     }
-    $foundry = @($Cfg.backends | Where-Object privateEndpoint | ForEach-Object { "/subscriptions/$($_.subscriptionId)/resourceGroups/$($_.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($_.accountName)" } | Select-Object -Unique)
+    $foundry = @(Get-StgFoundryMembers $Cfg | Where-Object privateEndpoint | ForEach-Object { "/subscriptions/$($_.subscriptionId)/resourceGroups/$($_.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($_.accountName)" } | Select-Object -Unique)
     if ($foundry.Count) { $arguments.FoundryResourceId = $foundry }
     return $arguments
 }
@@ -424,9 +426,9 @@ function Invoke-Stage6 {
     }
     $action = Get-StgNetworkAction -Mode $Cfg.network.mode -VnetExists $vnetExists -StageStateExists ([bool]$state.stages['6']) -OwnDeploymentSucceeded $ownDeployment
     if ($action -eq 'reuse') {
-        $saved = Get-StgStage $Cfg 6
+        $saved = if (@($Cfg.backends | Where-Object failover).Count) { Get-StgFailoverNetworkState $Cfg } else { Get-StgStage $Cfg 6 }
         $out = [ordered]@{}
-        foreach ($key in $saved.Keys) { if ($key -cne 'verify' -and $key -cne 'durationSeconds') { $out[$key] = $saved[$key] } }
+        foreach ($key in $saved.Keys) { if ($key -cnotin @('verify', 'durationSeconds', 'foundryFailoverPrivateEndpointIds')) { $out[$key] = $saved[$key] } }
         Write-Host 'Stage 6 create-mode VNet already exists; skipping the authoritative network deployment.'
     } else {
         $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage6-network.bicep' -Name 'stage6-network' -Apply:$Apply -Parameters $parameters
@@ -434,11 +436,15 @@ function Invoke-Stage6 {
     $apps = @($s1.names.apps.Keys | Sort-Object)
     $integrateApim = $s1.apimName -and $Cfg.stage1.apimSku -in 'StandardV2', 'PremiumV2'
     if (-not $Apply) {
-        if ($action -eq 'reuse') { Write-Host 'preview: no network deployment; -Apply verifies and reconciles the remaining Stage 6 integrations.'; return $null }
+        if ($action -eq 'reuse') {
+            $null = Invoke-StgFailoverEndpoints -Cfg $Cfg -Network $out
+            Write-Host 'preview: no network deployment; -Apply verifies and reconciles the remaining Stage 6 integrations.'; return $null
+        }
         Write-Host "then: VNet integration, one app at a time, for $($apps -join ', ') (az functionapp vnet-integration add)."
         if ($integrateApim) { Write-Host "then: APIM $($s1.apimName) outbound VNet integration on the APIM subnet (virtualNetworkType External; ingress stays public)." }
         elseif (Test-StgApimExisting $Cfg) { Write-Host "API Management $($Cfg.apim.existing.name) (apim.existing) is not changed: CCOF does not change the networking of an existing API Management." }
         if ($foundryPrivate.Count) { Write-Host "Foundry private endpoints: $($foundryPrivate -join ', ')" }
+        $null = Invoke-StgFailoverEndpoints -Cfg $Cfg -Network $out
         return $null
     }
     foreach ($k in $apps) {
@@ -465,7 +471,9 @@ function Invoke-Stage6 {
         Assert-Stg ($now.properties.provisioningState -ceq 'Succeeded' -and $now.properties.virtualNetworkType -ceq 'External' -and $now.properties.virtualNetworkConfiguration.subnetResourceId -ieq $out.apimSubnetId) "APIM integration state $($now.properties.provisioningState) $($now.properties.virtualNetworkType)"
         Assert-Stg ($now.identity.principalId -ieq $s1.apimPrincipalId) 'APIM system-assigned identity changed during VNet integration'
     }
+    $failoverEndpoints = @(Invoke-StgFailoverEndpoints -Cfg $Cfg -Network $out -Apply)
     $v = [ordered]@{ privateEndpoints = @(); privateDnsLinks = @(); apps = @() }
+    if (@($Cfg.backends | Where-Object failover).Count) { $v.foundryFailoverBaseNetworkHash = Get-StgFailoverBaseNetworkHash $Cfg }
     if ($integrateApim) { $v.apim = [ordered]@{ name = $s1.apimName; sku = $now.sku.name; virtualNetworkType = $now.properties.virtualNetworkType; subnet = ($now.properties.virtualNetworkConfiguration.subnetResourceId -split '/')[-1]; publicNetworkAccess = $now.properties.publicNetworkAccess; identityUnchanged = $true } }
     $dnsTargets = Get-StgNetworkDnsTargets -Cfg $Cfg -Outputs $out -HasFoundry ([bool]$foundryPrivate.Count)
     foreach ($zoneId in $dnsTargets.zoneIds) {
@@ -474,7 +482,7 @@ function Invoke-Stage6 {
         Assert-Stg ($linked.Count -ge 1) "private DNS zone $(($zoneId -split '/')[-1]) is not linked to VNet $($dnsTargets.vnetId)"
         $v.privateDnsLinks += [ordered]@{ zoneId = $zoneId; vnetId = $dnsTargets.vnetId; linkCount = $linked.Count }
     }
-    foreach ($id in @($out.storagePrivateEndpointIds) + @($out.cosmosPrivateEndpointId) + @($out.foundryPrivateEndpointIds | Where-Object { $_ })) {
+    foreach ($id in @($out.storagePrivateEndpointIds) + @($out.cosmosPrivateEndpointId) + @($out.foundryPrivateEndpointIds | Where-Object { $_ }) + $failoverEndpoints) {
         $pe = Get-StgArm $id '2024-05-01'
         $conn = @($pe.properties.privateLinkServiceConnections)[0].properties.privateLinkServiceConnectionState.status
         $zones = Get-StgArm "$id/privateDnsZoneGroups/default" '2024-05-01'
@@ -540,7 +548,7 @@ function Invoke-Stage3 {
     $params = @{ names = $s1.names; principals = $s1.principals; databaseName = $Cfg.cosmos.databaseName; roleNames = $Cfg.cosmos.roleNames
         syncMode = $Cfg.sync.mode; apimPrincipalId = $apim.principalId; apimResourceId = $apim.id
         chargebackHistoryEnabled = ($null -ne (Get-StgChargebackHistory $Cfg))
-        backends = @($Cfg.backends | ForEach-Object { @{ id = $_.id; subscriptionId = $_.subscriptionId; resourceGroup = $_.resourceGroup; accountName = $_.accountName; assignCognitiveServicesUser = ($_.assignCognitiveServicesUser -ne $false) } }) }
+        backends = @(Get-StgFoundryMembers $Cfg | ForEach-Object { @{ id = $_.id; subscriptionId = $_.subscriptionId; resourceGroup = $_.resourceGroup; accountName = $_.accountName; assignCognitiveServicesUser = ($_.assignCognitiveServicesUser -ne $false) } }) }
     $out = Invoke-StgBicep -Cfg $Cfg -Template 'stage3-grants.bicep' -Name 'stage3-grants' -Apply:$Apply -Parameters $params
     if (-not $Apply) { return $null }
     $v = [ordered]@{ azure = @(); cosmos = @(); foundry = @() }
@@ -573,7 +581,7 @@ function Invoke-Stage3 {
         Assert-Stg ($matches.Count -eq 1) "expected exactly one Cosmos grant $($expected.roleDefinitionId) for $($expected.principalId) at $($expected.scope); found $($matches.Count)"
     }
     $v.cosmos = @($cosmos | ForEach-Object { $p = $_.principalId; $who = @($s1.principals.Keys | Where-Object { $s1.principals[$_] -ieq $p })[0]; "$who -> $($_.scope -replace '^.*/dbs/', 'dbs/')" } | Sort-Object)
-    foreach ($b in $Cfg.backends) {
+    foreach ($b in @(Get-StgFoundryMembers $Cfg)) {
         $scope = "/subscriptions/$($b.subscriptionId)/resourceGroups/$($b.resourceGroup)/providers/Microsoft.CognitiveServices/accounts/$($b.accountName)"
         $ra = @((Get-StgArm "$scope/providers/Microsoft.Authorization/roleAssignments" '2022-04-01').value | Where-Object { $_.properties.principalId -ieq $apim.principalId -and $_.properties.roleDefinitionId -like '*a97b65f3-24c7-4388-baec-2e87135dc908' })
         Assert-Stg ($ra.Count -ge 1) "APIM identity has no Cognitive Services User on $($b.accountName)"

@@ -29,7 +29,7 @@ function Get-StgApimPrivateTargets {
     param($Cfg, $BackendReports = @())
     $targets = [Collections.Generic.List[string]]::new()
     $fd = $Cfg.stage1.foundry
-    foreach ($b in @($Cfg.backends)) {
+    foreach ($b in @(Get-StgFoundryMembers $Cfg)) {
         $createdPrivate = $fd -and $fd.create -and $b.accountName -ceq $fd.accountName -and $fd.publicNetworkAccess -ceq 'Disabled'
         if ($b.privateEndpoint -or $createdPrivate) { $targets.Add("Foundry account $($b.accountName)") }
     }
@@ -66,7 +66,16 @@ function Get-StgApimExistingProblems {
     foreach ($other in @($Facts.apis | Where-Object { $_.name -cne $Cfg.apim.apiId -and $_.properties.path -ieq $Cfg.apim.apiPath })) {
         $problems.Add("apim_existing_path_taken: API $($other.name) on $($e.name) already uses path '$($other.properties.path)'. Set apim.apiPath to a path no other API uses.")
     }
-    foreach ($b in @($Cfg.backends)) {
+    $backendChecks = @(Get-StgFoundryMembers $Cfg)
+    foreach ($b in @($Cfg.backends | Where-Object failover)) {
+        $pool = @($Facts.backends | Where-Object { $_.name -ceq $b.id })[0]
+        if ($pool -and $pool.properties.url -cne $b.url) {
+            $expected = @("$($b.id)-primary", "$($b.id)-failover" | Sort-Object)
+            $actual = @($pool.properties.pool.services | ForEach-Object { ($_.id -split '/')[-1] } | Sort-Object)
+            if ($pool.properties.type -cne 'Pool' -or ($expected -join '|') -cne ($actual -join '|')) { $problems.Add("apim_existing_backend_conflict: backend $($b.id) is not this CCOF pool; choose an unused backend ID.") }
+        }
+    }
+    foreach ($b in $backendChecks) {
         $existing = @($Facts.backends | Where-Object { $_.name -ceq $b.id })[0]
         if ($existing -and $existing.properties.url -cne $b.url) {
             $problems.Add("apim_existing_backend_conflict: $($e.name) already has a backend $($b.id) pointing at $($existing.properties.url); Stage 5 would overwrite it. Rename backends[].id (and the groups' backendId) to an unused name.")
