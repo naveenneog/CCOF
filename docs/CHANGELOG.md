@@ -6,6 +6,8 @@
   the create-only resource stage; the public alternative is explicitly an approved lab decision.
 - The linked admin sign-in section now shows token acquisition and authenticated group/backend reads,
   with reviewed onboarding syntax and a warning never to print tokens.
+- Correct the HA Function plan read-back query: the installed Azure CLI returns `zoneRedundant`
+  under `properties`; the previous query printed null on a verified zonal plan.
 
 ## 2026-10-28 — Deployment-day and developer onboarding
 

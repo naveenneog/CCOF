@@ -10,6 +10,9 @@
   authenticated Azure CLI admin API example linked by the day guide.
 - RED: both new reader contracts failed on the missing decisions/commands. GREEN: 31/31 reader tests;
   both scoped documentation mutations caught, restored baseline green. No runtime change.
+- A later live HA read-back printed null from the documented Function plan query. Failing-first
+  contract and live retry confirm `properties.zoneRedundant` is required; 32/32 reader tests and
+  three scoped mutations pass. First fixes committed in `a01d789`; raw evidence stays private.
 - Council (direct, no nested agents): Architect PASS (existing configuration/API contract);
   Coder PASS (small documentation changes); QA PASS (failing-first reader contracts and mutations);
   UX PASS-WITH-NOTES (live rollout remains conditional); Security PASS (no token printing, shared

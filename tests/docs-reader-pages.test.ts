@@ -181,6 +181,14 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
   }
 });
 
+test("the HA Function plan readback queries the CLI's nested ARM property", () => {
+  const ha = read("docs/get-started/high-availability.md");
+  const command = ha.split(/\r?\n/).find((line) => line.startsWith("az appservice plan show "));
+  assert.ok(command, "the guide supplies a Function plan zone readback");
+  assert.match(command, /--query "\{zones:properties\.zoneRedundant\}"/,
+    "Azure CLI returns zoneRedundant inside properties; a top-level query silently prints null");
+});
+
 test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {
   const regions = read("docs/get-started/region-and-failover.md");
   assert.match(regions, /az cosmosdb failover-priority-change.*southindia=0 centralindia=1/, "AO-8: document a planned Cosmos write-region switch");

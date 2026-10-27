@@ -23,15 +23,20 @@ not been changed. A new admin registration was planned, not yet created.
 | # | Step | Observation | Result | Image |
 | --- | --- | --- | --- | --- |
 | 1 | Stage 1 | `ServiceUnavailable`: high demand for Central India zonal Cosmos accounts | The guide correctly predicts it. Saved creation-failure operations, null endpoint, failed database-list output and absent Stage 1/2 completion. No deletion, downgrade or retry without explicit owner approval. | [fail-01-cosmos-zonal-capacity.png](fail-01-cosmos-zonal-capacity.png) |
-| 2 | Configuration/admin API route | Workstation-to-SCM access was not a decision on the configuration page; linked admin Sign-in lacked executable token/GET instructions | Two reader contracts failed first; the precise guide changes pass all 31 reader checks and both mutations are caught. | [fail-02-reader-decisions.png](fail-02-reader-decisions.png), [fix-02-reader-decisions.png](fix-02-reader-decisions.png) |
+| 2 | Configuration/admin API route | Workstation-to-SCM access was not a decision on the configuration page; linked admin Sign-in lacked executable token/GET instructions | Two reader contracts failed first; the precise guide changes passed all 31 reader checks and both mutations were caught at that checkpoint. | [fail-02-reader-decisions.png](fail-02-reader-decisions.png), [fix-02-reader-decisions.png](fix-02-reader-decisions.png) |
+| 3 | HA read-back command | `az appservice plan show` with `zones:zoneRedundant` printed `null` despite a zonal plan | Correct the query to `zones:properties.zoneRedundant`. Live retry prints `true`; the new reader contract fails first and its mutation is caught. All 32 reader tests pass. | [fail-03-functions-ha-readback.png](fail-03-functions-ha-readback.png), [fix-03-functions-ha-readback.png](fix-03-functions-ha-readback.png) |
 
 ![Initial Cosmos failure](fail-01-cosmos-zonal-capacity.png)
 ![Reader contracts before the documentation fixes](fail-02-reader-decisions.png)
 ![Reader checks after the fixes](fix-02-reader-decisions.png)
+![Original Function plan query](fail-03-functions-ha-readback.png)
+![Corrected Function plan query](fix-03-functions-ha-readback.png)
 
 The Cosmos capture is an excerpt of the initial failed apply log; the complete raw provider error is kept
 privately. The reader RED capture shows the actual two-test run summary and first assertion, not a model
 call or another live deployment failure. Capture commands identify the real execution platform.
+After the unexpected null read-back, the raw CLI/ARM JSON and staged zone-verification source were consulted
+to diagnose it. That was the first deployment-source lookup and is not counted as first-reader knowledge.
 
 ## Stage timings
 
@@ -61,6 +66,9 @@ The group-only console source is merged in this worktree but has not been publis
 - No two-group onboarding/accounting, three-person checks or developer interactive sign-in yet.
 - Installed-client detection found Claude Code and Desktop, not a VS Code extension. No Intune tenant is available.
 - The resource group is intentionally left running; stopping at a failed Cosmos create does not stop other costs.
+- The new client guide exposes a cross-platform documentation-scanner failure in the full root suite:
+  explicitly Windows-only client snippets are scanned as deployer commands. This is separate from the
+  live capacity block; do not treat a failing full suite as a passing release.
 
 ## Rating from a first-time reader
 
