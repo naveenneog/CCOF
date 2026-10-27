@@ -139,10 +139,10 @@ and follow the approved recovery, never mark completion yourself.
 ```text
 preview only: nothing changed
 completed and verified in
-STAGED OK
+HA check:
 ```
 
-These are fragments, not complete logs: preview is not success; `STAGED OK` alone is not the final Stage 8 result.
+These are printed fragments, not complete logs; preview is not success.
 For Stage 7 require a `ccof.sync.run.v1` record with `"outcome":"succeeded"` and `"writeFailures":0`;
 finish only after Stage 8's completion/read-back.
 

@@ -13,7 +13,7 @@ Commands run from the `ccof` checkout in PowerShell 7 (`pwsh`); clone/install st
 Use the admin-generated config with **`signInMethod: azure-cli`**. Install Node.js 22+, PowerShell 7 and Azure CLI.
 From the checkout:
 
-```powershell
+```powershell title="Windows only"
 npm ci --prefix .\client --no-audit --no-fund
 $env:CCOF_CONFIG_FILE = (Resolve-Path '<client-config.json>').Path
 pwsh -NoProfile -File .\scripts\client\Set-ClaudeCodeGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed -UsageStatusLine
@@ -89,7 +89,7 @@ Source: [CLIENTS, section 4](../CLIENTS.md#4-configure-claude-code-and-vs-code).
 are broader; do not mistake those for this repository's tested installer.
 From the checkout, as the developer:
 
-```powershell
+```powershell title="Windows only"
 $env:CCOF_CONFIG_FILE = (Resolve-Path '<client-config.json>').Path
 pwsh -NoProfile -File .\scripts\client\Set-ClaudeDesktopGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed
 ```

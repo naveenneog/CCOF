@@ -43,10 +43,14 @@ test("deployment day quotes only verified script output, not invented success li
   assert.ok(block, "deployment day has a script-output checklist");
   const sources = readdirSync(path.join(root, "infra/staged")).filter((f) => f.endsWith(".ps1"))
     .map((f) => read(`infra/staged/${f}`)).join("\n");
-  const allowed = ["preview only: nothing changed", "completed and verified in", "STAGED OK"];
+  const allowed: Array<[string, RegExp]> = [
+    ["preview only: nothing changed", /Write-Host "[^"\n]*preview only: nothing changed/],
+    ["completed and verified in", /Write-Host "[^"\n]*completed and verified in/],
+    ["HA check:", /Write-Host "HA check:/],
+  ];
   const lines = block.trim().split("\n");
-  assert.deepEqual(lines, allowed, "deployment-day output checklist must use the real printed fragments");
-  for (const line of lines) assert.ok(sources.includes(line), `staged scripts print ${line}`);
+  assert.deepEqual(lines, allowed.map(([line]) => line), "deployment-day output checklist must use the real printed fragments");
+  for (const [line, printed] of allowed) assert.match(sources, printed, `staged scripts print ${line}`);
 });
 
 test("deployment day configuration teaches each decision and validates its complete HA example", () => {
@@ -137,6 +141,10 @@ test("deployment day users distinguishes captured clients from unverified fleet 
   }
   assert.match(users, /macOS.*not supported|not supported.*macOS/i);
   assert.match(users, /per.user.*sign.in|sign.in.*per.user/i);
+  const windows = users.split("### Windows —")[1]?.split("### macOS/Linux")[0] ?? "";
+  const desktop = users.split("## 3. Claude Desktop")[1]?.split("## 4.")[0] ?? "";
+  assert.match(windows, /```powershell title="Windows only"/, "Windows helper commands must be labelled, not presented as portable deployer commands");
+  assert.match(desktop, /```powershell title="Windows only"/, "Windows-only Desktop commands must be labelled");
   for (const block of users.matchAll(/```json\r?\n([\s\S]*?)```/g)) assert.doesNotThrow(() => JSON.parse(block[1]));
 });
 
