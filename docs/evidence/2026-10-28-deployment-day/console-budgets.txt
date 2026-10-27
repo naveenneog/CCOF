@@ -68,10 +68,10 @@ People
 Group or legacy project
 group budget snapshots
 Group / legacy project	Spent	Budget	Used	State	Mode	Completeness	Snapshot	Computed
-fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	$0.00	no cap	
+fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	$0.00	no cap
 —
 	no cap	notify	partial	current	8 min ago
-0b65c63f-4d92-4e52-a492-c5455d71cfda	$0.00	no cap	
+0b65c63f-4d92-4e52-a492-c5455d71cfda	$0.00	no cap
 —
 	no cap	notify	partial	current	8 min ago
 1–2 of 2

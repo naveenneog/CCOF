@@ -64,7 +64,7 @@ Models and rate limits
  Restricted families (Fable, Mythos) are approved for this group
 Token limits for group
 Scope	TPM	Quota	Period
-All Families · Person			
+All Families · Person
 —
 Hourly
 Daily
@@ -72,7 +72,7 @@ Weekly
 Monthly
 Yearly
 
-All Families · Group			
+All Families · Group
 —
 Hourly
 Daily
@@ -80,7 +80,7 @@ Weekly
 Monthly
 Yearly
 
-Haiku · Person			
+Haiku · Person
 —
 Hourly
 Daily
@@ -88,7 +88,7 @@ Weekly
 Monthly
 Yearly
 
-Haiku · Group			
+Haiku · Group
 —
 Hourly
 Daily
