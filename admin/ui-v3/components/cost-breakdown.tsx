@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { int, usd } from "../lib/format.ts";
 import { href } from "../lib/router.ts";
@@ -7,10 +7,7 @@ import { Button, CapabilityNotice, ChoiceInput, ErrorNote, Field, Loading } from
 import { Donut, HBars, topWithOther } from "./charts.tsx";
 import type { DonutItem } from "./charts.tsx";
 import { UserIdentity } from "./user-identity.tsx";
-
-// Month-to-date cost breakdown for the Overview: all groups → one group (a legacy project also splits by
-// classification), with the users and models split for the current level
-// beside the main donut. Tags resolve to projects on the server. Unknown cost is never drawn as zero.
+import { ScopeLink } from "./scope-link.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
 const money = (n: number | null) => usd(n);
@@ -21,15 +18,15 @@ function items(rows: any[], key: (r: any) => string, label: (r: any) => string =
 }
 
 export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
-  const [tags, setTags] = useState<string[]>([]);
-  const [project, setProject] = useState("");
-  const [classification, setClassification] = useState("");
-  const tagParam = tags.join(",");
-  const scope = { period: "month", tags: tagParam, project, classification };
-
-  const registry = useQuery("/api/v2/projects?limit=100");
-  const projects = useQuery(`/api/v3/chargeback/projects${qs({ period: "month", tags: tagParam, limit: 200 })}`);
-  const classes = useQuery(project ? `/api/v3/chargeback/classifications${qs({ period: "month", project, limit: 50 })}` : null);
+  const [group, setGroup] = useState("");
+  const [groupText, setGroupText] = useState("");
+  const chooseGroup = (text: string) => {
+    setGroupText(text);
+    if (!text || isGroupId(text.trim())) setGroup(text.trim().toLowerCase());
+  };
+  const invalid = Boolean(groupText && !isGroupId(groupText.trim()));
+  const scope = { period: "month", group };
+  const groups = useQuery(`/api/v3/chargeback/groups${qs({ ...scope, limit: 200 })}`);
   const totals = useQuery(`/api/v3/chargeback/totals${qs(scope)}`);
   const users = useQuery(`/api/v3/chargeback/developers${qs({ ...scope, limit: 100 })}`);
   const models = useQuery(`/api/v3/chargeback/models${qs({ ...scope, limit: 50 })}`);
@@ -37,79 +34,48 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
-    [registry, projects, classes, totals, users, models].forEach((q) => q.reload());
+    [groups, totals, users, models].forEach((q) => q.reload());
   }, [refresh]);
 
-  const knownTags = useMemo(() => [...new Set<string>((registry.data?.projects ?? []).flatMap((p: any) => p.adminTags ?? []))].sort(), [registry.data]);
-  const projectRows: any[] = ok(projects.data) ? projects.data.data.rows : [];
-  const projectOptions = projectRows.map((r) => String(r.projectLabel));
+  const groupRows: any[] = ok(groups.data) ? groups.data.data.rows : [];
+  const groupOptions = groupRows.filter((r) => isGroupId(r.groupId)).map((r) => String(r.groupId));
   const total = ok(totals.data) ? totals.data.data.rows[0] : null;
-
-  const main = project
-    ? items(ok(classes.data) ? classes.data.data.rows : [], (r) => String(r.classification || "unassigned"))
-    : items(projectRows, (r) => String(r.projectLabel));
+  const main = items(groupRows, (r) => String(r.groupId), (r) => (r.groupNameSnapshots ?? [])[0] ?? String(r.groupId));
   const userSplit = items(ok(users.data) ? users.data.data.rows : [], (r) => String(r.person));
   const modelSplit = items(ok(models.data) ? models.data.data.rows : [], (r) => String(r.model));
-  const mainQ = project ? classes : projects;
-  // A group (its ID is a GUID) has one scope; only a legacy project splits by classification.
-  const group = isGroupId(project);
-
-  const toggleTag = (t: string) => { setTags((cur) => cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t].sort()); setProject(""); setClassification(""); };
-  const reset = () => { setTags([]); setProject(""); setClassification(""); };
-  const drill = (key: string) => {
-    if (!project) { setProject(key); setClassification(""); }
-    else setClassification(classification === key ? "" : key);
-  };
-  const scopeText = classification ? `${project} · ${classification}` : project || (tags.length ? `legacy projects tagged ${tags.join(" + ")}` : "all groups");
-  const chargebackLink = `/chargeback${qs({ project, tags: tagParam })}`;
+  const scopeText = group || "all groups";
 
   return (
-    <section className="panel breakdown" data-help="project-costs" aria-labelledby="breakdown-title">
+    <section className="panel breakdown" data-help="group-costs" aria-labelledby="breakdown-title">
       <div className="panel-head">
         <div><h2 id="breakdown-title">Month-to-date cost breakdown</h2>
-          <p className="section-desc">Select a group to show its cost alone; a legacy project also splits by classification. The users and models split follows the selection.</p></div>
-        <a className="btn btn-quiet btn-small" href={href(chargebackLink)}>Open in chargeback</a>
+          <p className="section-desc">Select a group to show its cost alone. The users and models split follows the selection.</p></div>
+        <a className="btn btn-quiet btn-small" href={href(`/chargeback${qs({ group })}`)}>Open in chargeback</a>
       </div>
-
       <div className="breakdown-filters" role="group" aria-label="Breakdown filters">
-        <div className="field">
-          <span className="field-label" id="bd-tags">Tags</span>
-          {knownTags.length ? <div className="tag-toggles" role="group" aria-labelledby="bd-tags">
-            {knownTags.map((t) => <button key={t} type="button" className="tag-toggle" aria-pressed={tags.includes(t)} onClick={() => toggleTag(t)}>{t}</button>)}
-          </div> : <span className="hint">{registry.loading ? "Loading tags…" : "No tagged legacy projects"}</span>}
-        </div>
-        <Field label="Group">{(id) => <ChoiceInput id={id} value={project} options={projectOptions} emptyLabel="All groups"
-          onChange={(v) => { setProject(v); setClassification(""); }} manualLabel="Enter a group ID…" />}</Field>
-        {project && !group && <Field label="Classification">{(id) => (
-          <select id={id} className="input" value={classification} onChange={(e) => setClassification(e.target.value)}>
-            <option value="">All classifications</option>
-            {main.items.map((i) => <option key={i.key} value={i.key}>{i.key}</option>)}
-          </select>
-        )}</Field>}
-        {(tags.length > 0 || project) && <Button variant="quiet" size="small" onClick={reset}>Clear</Button>}
+        <Field label="Group" error={invalid ? "Object ID (GUID)" : null}>{(id, d) => <ChoiceInput id={id} describedBy={d} value={groupText} options={groupOptions} emptyLabel="All groups"
+          invalid={invalid} onChange={chooseGroup} manualLabel="Enter a group ID…" />}</Field>
+        {groupText && <Button variant="quiet" size="small" onClick={() => chooseGroup("")}>Clear</Button>}
       </div>
-
       <div className="breakdown-summary">
         <span className="breakdown-total" aria-live="polite">{total ? usd(total.knownListUsd) : totals.loading ? "…" : "—"}</span>
         <span className="hint">known list cost for {scopeText}{total?.listUsd === null && total?.knownListUsd !== null ? " · lower bound, some usage is unpriced" : ""}{total ? ` · ${int(total.requests)} requests` : ""}</span>
-        {project && <ol className="crumbs" aria-label="Drill-down">
-          <li>{project ? <button type="button" onClick={() => { setProject(""); setClassification(""); }}>All groups</button> : <span aria-current="location">All groups</span>}</li>
-          {project && <li>{classification ? <button type="button" onClick={() => setClassification("")}>{project}</button> : <span aria-current="location">{project}</span>}</li>}
-          {classification && <li><span aria-current="location">{classification}</span></li>}
+        {group && <ol className="crumbs" aria-label="Drill-down">
+          <li><button type="button" onClick={() => chooseGroup("")}>All groups</button></li>
+          <li><span aria-current="location">{group}</span></li>
         </ol>}
       </div>
-
       <div className="breakdown-grid">
         <div className="breakdown-main">
-          <h3>{project ? (group ? project : `${project} by classification`) : "By group"}</h3>
-          {!mainQ.data && !mainQ.error ? <Loading chart /> : mainQ.error ? <ErrorNote error={mainQ.error} retry={mainQ.reload} />
-            : !ok(mainQ.data) ? <CapabilityNotice cap={mainQ.data} what="Cost breakdown" />
+          <h3>{group || "By group"}</h3>
+          {!groups.data && !groups.error ? <Loading chart /> : groups.error ? <ErrorNote error={groups.error} retry={groups.reload} />
+            : !ok(groups.data) ? <CapabilityNotice cap={groups.data} what="Cost breakdown" />
               : main.items.length === 0 ? <p className="empty-inline">No usage observed for {scopeText} this month. That is no data, not zero cost.</p>
-                : <Donut items={topWithOther(main.items)} format={money} label={project ? `${project} cost by classification` : "Cost by group"}
-                  centerValue={usd(main.items.reduce((s, i) => s + (i.value ?? 0), 0), 0)} centerLabel={project ? (group ? "group" : "project") : "all groups"}
-                  onSelect={drill} selected={project ? classification : undefined} unknownCount={main.unknown} />}
-          {!project && main.items.length > 8 && <p className="hint">The top 7 groups are drawn; the rest are combined. Pick one from Group to see it alone.</p>}
-          {project && <p className="hint"><a href={href(group ? `/groups/${encodeURIComponent(project)}` : `/projects/${encodeURIComponent(project)}`)}>Open {project}</a> for {group ? "its budget, limits and models" : "budgets, limits and onboarding files"}.</p>}
+                : <Donut items={topWithOther(main.items)} format={money} label="Cost by group"
+                  centerValue={usd(main.items.reduce((s, i) => s + (i.value ?? 0), 0), 0)} centerLabel={group ? "group" : "all groups"}
+                  onSelect={(key) => { if (isGroupId(key)) chooseGroup(key.toLowerCase()); }} selected={group || undefined} unknownCount={main.unknown} />}
+          {!group && main.items.length > 8 && <p className="hint">The top 7 groups are drawn; the rest are combined. Pick one from Group to see it alone.</p>}
+          {group && <p className="hint"><ScopeLink id={group}>Open {group}</ScopeLink> for its budget, limits and models.</p>}
         </div>
         <div>
           <h3>Users</h3>
@@ -119,7 +85,7 @@ export function CostBreakdown({ refresh = 0 }: { refresh?: number }) {
                 : <>
                   <HBars label={`Cost by user for ${scopeText}`} format={money}
                     items={userSplit.items.slice(0, 8).map((i) => ({ key: i.key, value: i.value,
-                      label: <a href={href(`/chargeback${qs({ developer: i.key, project })}`)}><UserIdentity objectId={i.key} showPrincipalName={false} /></a> }))} />
+                      label: <a href={href(`/chargeback${qs({ developer: i.key, group })}`)}><UserIdentity objectId={i.key} showPrincipalName={false} /></a> }))} />
                   <p className="hint">{int(userSplit.items.length)} user{userSplit.items.length === 1 ? "" : "s"}{userSplit.items.length > 8 ? ", top 8 shown" : ""}. Current Entra names are looked up separately; accounting and filters use object IDs.</p>
                 </>}
         </div>

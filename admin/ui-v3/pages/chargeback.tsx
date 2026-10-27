@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, qs, useQuery } from "../lib/api.ts";
 import { compact, day, download, human, int, pct, toCsv, usd, when } from "../lib/format.ts";
-import { href, scopePath } from "../lib/router.ts";
+import { ScopeLink } from "../components/scope-link.tsx";
+import { isGroupId } from "../lib/groups.ts";
 import { Button, ChoiceInput, CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Segmented, StatePill, Tabs, useToast } from "../components/ui.tsx";
 import type { Column } from "../components/ui.tsx";
 import { BurnDown, HBars, SplitBar, StackedColumns } from "../components/charts.tsx";
 import { ChartPanel, FAMILIES, TOKEN_CATEGORIES, bucketLabel, trendBuckets } from "../components/panels.tsx";
-import { PagerLite } from "./project-detail.tsx";
-import { useDebounced } from "./projects.tsx";
+import { PagerLite } from "../components/records.tsx";
+import { useDebounced } from "../lib/hooks.ts";
 import { UserIdentity } from "../components/user-identity.tsx";
 import { TagInput } from "../components/tag-input.tsx";
 import { loadedLabel } from "../lib/user-tags.ts";
@@ -16,7 +17,7 @@ const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "par
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // The server refuses any other chargeback filter (src/contracts/group-registration.ts), so it is checked before querying.
 const CHARGEBACK_ID = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,63}$/;
-interface Filters { period: string; from: string; to: string; project: string; group: string; developer: string; model: string; backend: string; family: string; classification: string; chargeback: string; tags: string; interval: string }
+interface Filters { period: string; from: string; to: string; group: string; developer: string; model: string; backend: string; family: string; chargeback: string; interval: string }
 
 const money = (k: string, label = "Known cost"): Column<any> => ({ key: k, label, align: "end", render: (r) => usd(r[k]) });
 const common: Column<any>[] = [
@@ -28,22 +29,20 @@ const common: Column<any>[] = [
   { key: "completeness", label: "Coverage", render: (r) => <StatePill state={r.completeness} /> },
 ];
 const VIEWS: Record<string, { label: string; columns: Column<any>[] }> = {
-  groups: { label: "Groups", columns: [{ key: "groupId", label: "Entra group", render: (r) => <><span>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown name)"}</span><code className="block muted">{r.groupId}</code></> },
-    { key: "groupProjects", label: "Projects", render: (r) => (r.groupProjects ?? []).join(", ") }, ...common] },
+  groups: { label: "Groups", columns: [{ key: "groupId", label: "Entra group", render: (r) => <><ScopeLink id={r.groupId}>{(r.groupNameSnapshots ?? [])[0] ?? r.groupId}</ScopeLink><code className="block muted">{r.groupId}</code></> }, ...common] },
   developers: { label: "Developers", columns: [{ key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> },
     { key: "userTag", label: "User tag", render: (r) => !r.userTag || r.userTag === "(none)" ? <span className="muted">none</span> : <code>{r.userTag}</code> }, ...common] },
   chargebackIds: { label: "User tags", columns: [{ key: "chargebackId", label: "User tag", render: (r) => r.chargebackId === "(none)" ? <span className="muted">none</span> : <code>{r.chargebackId}</code> },
     { key: "person", label: "User / object ID", render: (r) => <UserIdentity objectId={r.person} /> }, ...common] },
   models: { label: "Models", columns: [{ key: "model", label: "Model", render: (r) => <code>{r.model}</code> }, ...common] },
   families: { label: "Families", columns: [{ key: "modelFamily", label: "Family", render: (r) => <span className="cap">{r.modelFamily}</span> }, ...common] },
-  projects: { label: "Projects", columns: [{ key: "projectLabel", label: "Group / legacy project", render: (r) => <a href={href(scopePath(r.projectLabel))}>{r.projectLabel}</a> }, ...common] },
   unpriced: { label: "Unpriced", columns: [
-    { key: "timestamp", label: "When", render: (r) => when(r.timestamp) }, { key: "projectLabel", label: "Project" }, { key: "model", label: "Model", render: (r) => <code>{r.model}</code> },
+    { key: "timestamp", label: "When", render: (r) => when(r.timestamp) }, { key: "projectLabel", label: "Group", render: (r) => <ScopeLink id={r.projectLabel} /> }, { key: "model", label: "Model", render: (r) => <code>{r.model}</code> },
     { key: "pricingReason", label: "Reason", render: (r) => <StatePill state="partial" label={human(r.pricingReason)} /> },
     { key: "inputTokens", label: "Input", align: "end", render: (r) => int(r.inputTokens) }, { key: "outputTokens", label: "Output", align: "end", render: (r) => int(r.outputTokens) },
     { key: "knownListUsd", label: "Cost", align: "end", render: () => <span className="muted" title="Unpriced: blank, not zero">—</span> }] },
   diagnostics: { label: "Diagnostics", columns: [
-    { key: "timestamp", label: "When", render: (r) => when(r.timestamp) }, { key: "projectId", label: "Project" }, { key: "model", label: "Model", render: (r) => <code>{r.model}</code> },
+    { key: "timestamp", label: "When", render: (r) => when(r.timestamp) }, { key: "projectId", label: "Group", render: (r) => <ScopeLink id={r.projectId} /> }, { key: "model", label: "Model", render: (r) => <code>{r.model}</code> },
     { key: "usageSource", label: "Usage source" }, { key: "requestFailed", label: "Failed", render: (r) => r.requestFailed ? <StatePill state="failed" label="failed" /> : "no" },
     { key: "attributionKnown", label: "Attributed", render: (r) => r.attributionKnown ? "yes" : <StatePill state="partial" label="no" /> },
     { key: "gatewayRequestId", label: "Gateway request", render: (r) => <code>{String(r.gatewayRequestId).slice(0, 18)}</code> }] },
@@ -64,28 +63,26 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
   const [f, setF] = useState<Filters>({
     period: query.get("period") ?? "month", from: monthStart, to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString(),
-    project: query.get("project") ?? "", group: "", developer: GUID.test(query.get("developer") ?? "") ? query.get("developer")!.toLowerCase() : "",
-    model: "", backend: "", family: "", classification: (query.get("classification") ?? "").toUpperCase(), chargeback: CHARGEBACK_ID.test(query.get("chargeback") ?? "") ? query.get("chargeback")! : "", tags: query.get("tags") ?? "", interval: "day",
+    group: isGroupId(query.get("group") ?? query.get("project") ?? "") ? (query.get("group") ?? query.get("project"))!.toLowerCase() : "", developer: GUID.test(query.get("developer") ?? "") ? query.get("developer")!.toLowerCase() : "",
+    model: "", backend: "", family: "", chargeback: CHARGEBACK_ID.test(query.get("chargeback") ?? "") ? query.get("chargeback")! : "", interval: "day",
   });
-  const [draftText, setDraftText] = useState({ group: "", developer: f.developer, chargeback: f.chargeback });
+  const [draftText, setDraftText] = useState({ group: f.group, developer: f.developer, chargeback: f.chargeback });
   const fq = useDebounced(f, 250);
-  const tagList = fq.tags.split(",").map((t) => t.trim()).filter(Boolean).join(",");
   const [view, setView] = useState("groups");
-  const [top, setTop] = useState<"groups" | "projects">("groups");
   const [offset, setOffset] = useState(0);
   const filterQs = (extra: Record<string, string | number> = {}) => qs({
     period: fq.period, from: fq.period === "custom" ? fq.from : null, to: fq.period === "custom" ? fq.to : null,
-    project: fq.project, group: fq.group, developer: fq.developer, model: fq.model, backend: fq.backend, family: fq.family,
-    classification: fq.classification, chargeback: fq.chargeback, tags: tagList, ...extra,
+    group: fq.group, developer: fq.developer, model: fq.model, backend: fq.backend, family: fq.family,
+    chargeback: fq.chargeback, ...extra,
   });
   useEffect(() => setOffset(0), [JSON.stringify(f), view]);
   const totals = useQuery(`/api/v3/chargeback/totals${filterQs()}`);
   const coverage = useQuery(`/api/v3/chargeback/coverage${filterQs()}`);
   const trend = useQuery(`/api/v3/chargeback/trend${filterQs({ interval: f.interval })}`);
-  const topQ = useQuery(`/api/v3/chargeback/${top}${filterQs({ limit: 10 })}`);
+  const topQ = useQuery(`/api/v3/chargeback/groups${filterQs({ limit: 10 })}`);
   const table = useQuery(`/api/v3/chargeback/${view}${filterQs({ limit: 50, offset })}`);
-  const budgets = useQuery(`/api/v2/budgets${qs({ projectId: f.project, limit: 500 })}`);
-  const projects = useQuery("/api/v2/projects?limit=100");
+  const budgets = useQuery(`/api/v2/budgets${qs({ projectId: f.group, limit: 500 })}`);
+  const groups = useQuery("/api/groups");
   const catalog = useQuery("/api/v2/catalog");
   const inventory = useQuery("/api/v2/inventory");
   const [exporting, setExporting] = useState(false);
@@ -95,7 +92,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
   const meta = ok(totals.data) ? totals.data.data : null;
   const buckets = ok(trend.data) ? trendBuckets(trend.data.data.rows) : [];
   const models: string[] = catalog.data?.catalog?.models?.map((m: any) => m.model) ?? [];
-  const backends: string[] = [...new Set([...(inventory.data?.data?.backends ?? []).map((b: any) => b.backendId), ...((projects.data?.projects ?? []).map((p: any) => p.backendId))])].sort() as string[];
+  const backends: string[] = [...new Set([...(inventory.data?.data?.backends ?? []).map((b: any) => b.backendId), ...((groups.data?.groups ?? []).map((g: any) => g.backendId))])].sort() as string[];
   const reload = () => [totals, coverage, trend, topQ, table, budgets].forEach((q) => q.reload());
   const capFail = totals.data && !ok(totals.data) ? totals.data : null;
 
@@ -114,7 +111,7 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
     let cum = 0;
     const points = Array.from({ length: elapsed }, (_, i) => { cum += daily.get(i + 1) ?? 0; return { day: i + 1, cumulative: cum }; });
     const groups = ok(budgets.data) ? budgets.data.data.groups : [];
-    const capped = groups.filter((g: any) => g.budgetUsd !== null);
+    const capped = groups.filter((g: any) => isGroupId(g.projectId) && g.budgetUsd !== null);
     const budget = capped.length ? capped.reduce((s: number, g: any) => s + Number(g.budgetUsd), 0) : null;
     return { points, budget, days };
   }, [trend.data, budgets.data, f.period, f.interval]);
@@ -153,15 +150,14 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
           <Field label="From (UTC)">{(id) => <input id={id} className="input" type="datetime-local" value={toLocalInput(f.from)} onChange={(e) => setF({ ...f, from: fromLocalInput(e.target.value) })} />}</Field>
           <Field label="To (UTC, excluded)">{(id) => <input id={id} className="input" type="datetime-local" value={toLocalInput(f.to)} onChange={(e) => setF({ ...f, to: fromLocalInput(e.target.value) })} />}</Field>
         </>}
-        <Field label="Project">{(id) => (
-          <ChoiceInput id={id} value={f.project} options={(projects.data?.projects ?? []).map((p: { projectId: string }) => p.projectId)}
-            onChange={(project) => setF({ ...f, project: project.trim() })} emptyLabel="All projects" manualLabel="Enter a project ID…" />
+        <Field label="Group" error={draftText.group && !isGroupId(draftText.group.trim()) ? "Object ID (GUID)" : null}>{(id, d) => (
+          <ChoiceInput id={id} describedBy={d} value={draftText.group} invalid={Boolean(draftText.group && !isGroupId(draftText.group.trim()))}
+            options={(groups.data?.groups ?? []).map((g: { groupId: string }) => g.groupId)}
+            onChange={(group) => { setDraftText({ ...draftText, group }); if (!group || isGroupId(group.trim())) setF({ ...f, group: group.trim().toLowerCase() }); }} emptyLabel="All groups" manualLabel="Enter a group ID…" />
         )}</Field>
         <Field label={tagLabel} hint="Chargeback ID, for example a WBS element" error={draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback) ? "Letters, digits and . _ / - only, starting with a letter or digit" : null}>{(id, d) => <TagInput id={id} describedBy={d} value={draftText.chargeback}
           invalid={Boolean(draftText.chargeback && !CHARGEBACK_ID.test(draftText.chargeback))}
           onChange={(v) => { setDraftText({ ...draftText, chargeback: v }); if (!v || CHARGEBACK_ID.test(v)) setF({ ...f, chargeback: v }); }} />}</Field>
-        <Field label="Project tags" hint="All must match">{(id, d) => <input id={id} aria-describedby={d} className="input" value={f.tags} placeholder="finance, pilot"
-          onChange={(e) => setF({ ...f, tags: e.target.value })} autoComplete="off" />}</Field>
         <Field label="Foundry backend">{(id) => (
           <select id={id} className="input" value={f.backend} onChange={(e) => setF({ ...f, backend: e.target.value })}>
             <option value="">All backends</option>{backends.map((b) => <option key={b}>{b}</option>)}
@@ -176,10 +172,6 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
           <select id={id} className="input" value={f.model} onChange={(e) => setF({ ...f, model: e.target.value })}>
             <option value="">All models</option>{models.map((m) => <option key={m}>{m}</option>)}
           </select>
-        )}</Field>
-        <Field label="Entra group" error={draftText.group && !GUID.test(draftText.group) ? "Object ID (GUID)" : null}>{(id, d) => (
-          <input id={id} aria-describedby={d} className="input mono" placeholder="Object ID" value={draftText.group}
-            onChange={(e) => { const v = e.target.value.trim(); setDraftText({ ...draftText, group: v }); if (!v || GUID.test(v)) setF({ ...f, group: v.toLowerCase() }); }} />
         )}</Field>
         <Field label="Developer" error={draftText.developer && !GUID.test(draftText.developer) ? "Object ID (GUID)" : null}>{(id, d) => (
           <input id={id} aria-describedby={d} className="input mono" placeholder="Object ID" value={draftText.developer}
@@ -216,17 +208,16 @@ export function Chargeback({ query }: { query: URLSearchParams }) {
               rows={t ? TOKEN_CATEGORIES.map((c) => ({ category: c.label, tokens: t[`${c.key}Tokens`], cost: t[`${c.key}CostUsd`] })) : []}
               footer={t?.knownCacheReadSavingsUsd ? <p className="hint">Cache reads saved {usd(t.knownCacheReadSavingsUsd)} against the uncached input rate.</p> : null}
               columns={[{ key: "category", label: "Category" }, { key: "tokens", label: "Tokens", align: "end", render: (r: any) => int(r.tokens) }, { key: "cost", label: "Known cost", align: "end", render: (r: any) => usd(r.cost) }]} />
-            <ChartPanel title={top === "groups" ? "Top access groups" : "Top projects"} caption="Top 10 by known list cost"
-              actions={<Segmented label="Rank" value={top} onChange={setTop} options={[{ value: "groups", label: "Groups" }, { value: "projects", label: "Projects" }]} />}
+            <ChartPanel title="Top access groups" caption="Top 10 by known list cost"
               chart={topQ.loading && !topQ.data ? <Loading rows={5} /> : !ok(topQ.data) ? <CapabilityNotice cap={topQ.data ?? { state: "unavailable" }} what="Ranking" />
                 : topQ.data.data.rows.length ? <HBars label="Top by cost" format={(n) => usd(n)} items={topQ.data.data.rows.map((r: any) => ({
-                  key: r.groupId ?? r.projectLabel, value: r.knownListUsd === null ? null : Number(r.knownListUsd),
-                  label: top === "groups" ? <>{(r.groupNameSnapshots ?? [])[0] ?? "(unknown)"}</> : <a href={href(scopePath(r.projectLabel))}>{r.projectLabel}</a>,
+                  key: r.groupId, value: r.knownListUsd === null ? null : Number(r.knownListUsd),
+                  label: <ScopeLink id={r.groupId}>{(r.groupNameSnapshots ?? [])[0] ?? r.groupId}</ScopeLink>,
                   note: r.listUsd === null && r.knownListUsd !== null ? "lower bound" : undefined,
                 }))} /> : <p className="empty-inline">No usage in this period.</p>}
-              rows={ok(topQ.data) ? topQ.data.data.rows : []} columns={top === "groups" ? VIEWS.groups.columns : VIEWS.projects.columns} />
+              rows={ok(topQ.data) ? topQ.data.data.rows : []} columns={VIEWS.groups.columns} />
             <ChartPanel title="Budget burn-down" caption="Cumulative known cost against monthly budgets"
-              description={f.project ? `Group budgets of ${f.project}, summed.` : "All capped group budgets, summed. Filter by project for one project."}
+              description={f.group ? `Group budget of ${f.group}.` : "All capped group budgets, summed. Filter by group for one group."}
               chart={f.period === "custom" ? <p className="empty-inline">Burn-down follows calendar months; choose This month or Previous month.</p>
                 : f.interval !== "day" ? <p className="empty-inline">Burn-down uses daily bins; switch the interval to Day.</p>
                   : !burn ? <Loading chart /> : <BurnDown points={burn.points} budget={burn.budget} daysInPeriod={burn.days} format={(n) => usd(n, 0)} label="Budget burn-down" />}

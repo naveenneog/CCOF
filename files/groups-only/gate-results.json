@@ -1,0 +1,24 @@
+{
+  "stage": "packet",
+  "exitCode": 0,
+  "passed": 23,
+  "warned": 2,
+  "failed": 0,
+  "skipped": 1,
+  "checks": {
+    "rootTests": { "command": "npm test", "passed": true, "seconds": 411.4 },
+    "rootTypecheck": { "command": "npx --no-install tsc --noEmit", "passed": true, "seconds": 2.5 },
+    "rootBuild": { "command": "npm run build", "passed": true, "seconds": 2.9 },
+    "requestedTypecheck": { "command": "npx --no-install tsc -p tsconfig.typecheck.json --noEmit", "exitCode": 0 },
+    "adminTests": { "passed": 219, "failed": 0, "skipped": 0 },
+    "adminBuild": { "passed": true },
+    "addedLineLeakScan": { "matches": 0 },
+    "whitespaceDiff": { "passed": true }
+  },
+  "azureCliStateIsolated": true,
+  "warnings": {
+    "fileSize": ["admin/ui/app.js", "admin/ui/v2.jsx", "infra/quickstart/Deploy-Quickstart.ps1", "infra/staged/Staged.Resources.ps1", "infra/staged/Staged.Common.ps1"],
+    "unrelatedOpenUnknowns": ["G-R3", "E2E-01", "CC-01"]
+  },
+  "skipReason": "No lint command is declared in the existing charter"
+}

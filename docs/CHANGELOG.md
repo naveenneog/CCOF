@@ -23,6 +23,20 @@
 - Stage 8 accepts a console-onboarded group's explicit Object ID as `acceptance.expectedGroup`, without
   changing/reseeding the original Stage 4 group list. It remains an assertion against this run's usage traces,
   not a routing or authorization override. Ambiguous names, mixed selectors and wrong/untraced groups still fail.
+## 2026-10-27 — Group-only admin console (G-GROUPS-ONLY)
+
+- Removed Legacy projects navigation, management pages and help; old project
+  bookmarks explain that management moved to Groups.
+- Removed classification drill-downs/columns, project tags, the Projects breakdown
+  and ranking toggle. Group budget selection reads only group registrations;
+  Foundry lists linked groups only.
+- Shared screens link GUID scopes to Groups and retain historical non-GUID IDs as
+  plain text. Actual accounting values, API keys and permission names are unchanged.
+- Demo now seeds valid group registrations and group telemetry. Shared pagination,
+  change rendering, debouncing and limit-patch helpers no longer live in deleted pages.
+- New deployments are group-only; obsolete deployments are separately decommissioned.
+  Server/schema compatibility remains unchanged to avoid a runtime migration here
+  ([ADR-0054](adr/0054-group-only-admin-console.md)).
 
 ## 2026-10-27 — Group navigation in the admin console
 

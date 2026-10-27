@@ -213,7 +213,7 @@ export function CostDefinitions() {
                 { key: "product", label: "Product" }, { key: "meter", label: "Meter" }, { key: "retailPrice", label: "Price", align: "end" }, { key: "unit", label: "Unit" },
               ]} /> : prices.data ? <CapabilityNotice cap={prices.data} what="Retail meters" /> : null}
             </Section>
-            <Section title="Billed cost" description="Azure ActualCost month to date per Foundry account: delayed, and not allocated to projects.">
+            <Section title="Billed cost" description="Azure ActualCost month to date per Foundry account: delayed, and not allocated to groups.">
               {billed.loading && !billed.data ? <Loading rows={3} /> : billed.data?.state === "available" ? <DataTable caption="Billed cost" dense rows={billed.data.data.costs} columns={Object.keys(billed.data.data.costs[0] ?? {}).map((k) => ({ key: k, label: k }))} />
                 : billed.data ? <CapabilityNotice cap={billed.data} what="Billed cost" /> : null}
             </Section>

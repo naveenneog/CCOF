@@ -1,4 +1,17 @@
-# Project admin console and API
+# CCOF admin console and API
+
+The current console is **group-only** at `/api/console-v3`: use Groups to onboard,
+edit and retire Entra security groups. There is no Legacy projects section,
+classification filter/drill-down, project-tag control or Projects chargeback view.
+Old project bookmarks show an explanation and a Groups link. Historical non-GUID
+scope IDs remain visible as text, not links. See [ADMIN-V3.md](ADMIN-V3.md) and
+[ADR-0054](adr/0054-group-only-admin-console.md).
+
+New deployments use groups. Obsolete project-based deployments are separately
+decommissioned; server project APIs, schema and runtime handling remain unchanged
+to avoid a storage/runtime migration in this console packet. The baseline project
+API and older console descriptions below are historical compatibility reference,
+not a second onboarding path for new deployments.
 
 > **v2 release:** see [Admin v2 capabilities, optional permissions and VDI
 > upgrade/rollback](archive/ADMIN-V2.md). The Phase 1 description below documents the
@@ -31,7 +44,25 @@ apps, and their code, settings, identities and permissions, are not changed.
 | New private network for the admin storage, in its own resource group | `infra/admin/admin-network.bicep` |
 | Package build | `admin/Build-AdminPackage.ps1` (build, test, zip; does not deploy) |
 
-## Console
+## Current console
+
+Use `/api/console-v3`. Groups manages budgets, surfaces, models, limits, priority
+and chargeback IDs. Overview and Chargeback select groups without classification
+or project tags; Budgets selects group registrations only for burn-down; Foundry
+lists linked groups only. Group onboarding retains its review step; edits retain
+ETags, server validation and existing `CCOF.Projects.Read` / `CCOF.Projects.Write`
+permissions. This packet does not change write behavior.
+
+Run the group-seeded demo without Azure:
+
+```powershell
+npm ci --prefix admin
+npm run build --prefix admin
+node admin/dev/serve.ts
+# http://127.0.0.1:7171/api/console-v3
+```
+
+## Historical baseline console (/api/console)
 
 The console is designed for an administrator at a desk who adjusts quotas between other work and
 needs confidence before saving.
@@ -74,7 +105,7 @@ Run it locally without Azure, using an in-memory registry and a demo sign-in:
 
 ```powershell
 cd admin; npm ci; npm run build
-npm run demo                       # http://127.0.0.1:7171/api/console  (?as=reader for read-only)
+npm run demo                       # http://127.0.0.1:7171/api/console-v3 (?as=reader for read-only)
 $env:DEMO_REGISTRY='down'; npm run demo    # shows the "registry unreachable" state
 ```
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { qs, useQuery } from "../lib/api.ts";
 import { human, when } from "../lib/format.ts";
-import { href, scopePath } from "../lib/router.ts";
+import { ScopeLink } from "../components/scope-link.tsx";
 import { Button, CapabilityNotice, DataTable, ErrorNote, Field, Loading, PageHeader, Segmented, StatePill } from "../components/ui.tsx";
-import { ChangeList, PagerLite } from "./project-detail.tsx";
+import { ChangeList, PagerLite } from "../components/records.tsx";
 import { UserIdentity } from "../components/user-identity.tsx";
 
 const ok = (cap: any) => cap && (cap.state === "available" || cap.state === "partial");
@@ -34,7 +34,7 @@ export function Audit({ query }: { query: URLSearchParams }) {
         <span className="muted">{source === "changes" ? "Permanent record in Cosmos (adminConfig), written before each change is applied. Refused attempts are not included." : "Admin log lines in Log Analytics, including refused attempts. Kept for the workspace retention period."}</span>
       </div>
       <div className="filter-bar" role="search" aria-label="Audit filters">
-        <Field label="Project">{(id) => <input id={id} className="input" value={f.project} placeholder="Any" onChange={(e) => setF({ ...f, project: e.target.value.trim() })} />}</Field>
+        <Field label="Group">{(id) => <input id={id} className="input" value={f.project} placeholder="Any" onChange={(e) => setF({ ...f, project: e.target.value.trim() })} />}</Field>
         <Field label="Actor" error={actorText && !GUID.test(actorText) ? "Object ID (GUID)" : null}>{(id, d) => <input id={id} aria-describedby={d} className="input mono" placeholder="Object ID" value={actorText} onChange={(e) => { const v = e.target.value.trim(); setActorText(v); if (!v || GUID.test(v)) setF({ ...f, actor: v }); }} />}</Field>
         <Field label="Operation">{(id) => <select id={id} className="input" value={f.operation} onChange={(e) => setF({ ...f, operation: e.target.value })}><option value="">Any</option>{OPERATIONS.map((o) => <option key={o} value={o}>{human(o)}</option>)}</select>}</Field>
         <Field label="Outcome">{(id) => <select id={id} className="input" value={f.outcome} onChange={(e) => setF({ ...f, outcome: e.target.value })}><option value="">Any</option>{OUTCOMES.map((o) => <option key={o} value={o}>{human(o)}</option>)}</select>}</Field>
@@ -49,7 +49,7 @@ export function Audit({ query }: { query: URLSearchParams }) {
               { key: "at", label: "When", render: (r: any) => when(r.at) },
               { key: "operation", label: "Operation", render: (r: any) => human(r.operation) },
               { key: "outcome", label: "Outcome", render: (r: any) => <StatePill state={r.outcome} /> },
-              { key: "projectId", label: "Group / legacy project", render: (r: any) => r.projectId ? <a href={href(scopePath(r.projectId, "activity"))}>{r.projectId}</a> : "—" },
+              { key: "projectId", label: "Group", render: (r: any) => r.projectId ? <ScopeLink id={r.projectId} /> : "—" },
               { key: "actorOid", label: "Actor", render: (r: any) => <UserIdentity objectId={r.actorOid} /> },
               { key: "d", label: "Before → after", render: (r: any) => <ChangeList d={r.d} /> },
               { key: "requestId", label: "Request", render: (r: any) => <code className="muted">{String(r.requestId).slice(0, 8)}</code> },
