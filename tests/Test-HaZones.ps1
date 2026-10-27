@@ -55,7 +55,7 @@ if ($Case -in 'all', 'hash') {
     Check (-not (Get-Stage1Parameters $c).Contains('ha')) 'Absent HA changed Stage 1 parameters'
     $c.ha = @{apim=@{zoneRedundant=$true}}
     foreach ($n in 0..1) { Check ((Get-StgStageInput $c $n) -cne $old[$n]) "HA omitted from Stage $n hash" }
-    Check ((Get-Stage1Parameters $c).ha.apim.zoneRedundant) 'HA omitted from Stage 1 parameters'
+    Check ((Get-Stage1Parameters $c).ha.apim.zoneRedundant -eq $true) 'HA omitted from Stage 1 parameters'
     $d = @{properties=@{parameters=@{}}}
     foreach ($k in (Get-Stage1Parameters $c).Keys) { $d.properties.parameters[$k]=@{value=(Get-Stage1Parameters $c)[$k]} }
     $d = $d | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
@@ -132,10 +132,10 @@ if ($Case -in 'all', 'template') {
     Check ("$($functionModule.properties.parameters.zoneRedundant.value)" -match "parameters\('ha'\).*'functions'.*'zoneRedundant'") 'Functions HA option is not wired from main'
     $apim = Arm 'apim-service.bicep'
     $a = @($apim.resources | Where-Object type -eq 'Microsoft.ApiManagement/service')[0]
-    Check ("$($a.properties)" -match 'zoneRedundant' -or ($a.properties | ConvertTo-Json) -match 'zoneRedundant') 'APIM lacks zoneRedundant'
+    Check ("$($a.properties)" -match "createObject\('zoneRedundant', true\(\)\)") 'APIM lacks zoneRedundant'
     $fn = Arm 'function-service.bicep'
     $p = @($fn.resources | Where-Object type -eq 'Microsoft.Web/serverfarms')[0]
-    Check (($p.properties | ConvertTo-Json) -match 'zoneRedundant') 'Flex plan lacks zoneRedundant'
+    Check ("$($p.properties)" -match "createObject\('zoneRedundant', true\(\)\)") 'Flex plan lacks zoneRedundant'
     Check ($fn.parameters.storageSku.allowedValues -contains 'Standard_GZRS') 'GZRS storage unsupported'
 }
 if ($Case -in 'all', 'existing') {
@@ -161,5 +161,12 @@ if ($Case -in 'all', 'missing-region') {
     function Invoke-StgAzJson { return @() }
     function Get-StgArm { return @{value=@(@{name='centralindia';metadata=@{}})} }
     Refuses { Get-StgHaCheck $c } 'centralindia.*no availability zones'
+}
+if ($Case -in 'all', 'defaults') {
+    $c=Config; $c.ha=@{apim=@{zoneRedundant=$true}}
+    $c.stage1.Remove('apimUnits'); $c.stage1.Remove('storageSku')
+    Assert-StgHaApim $c @{sku=@{capacity=1};properties=@{zoneRedundant=$true}}
+    Assert-StgHaStorage $c @{name='host';sku=@{name='Standard_LRS'}}
+    Check $true 'HA must preserve effective ARM defaults for omitted units/storage SKU'
 }
 Write-Host "HA zones: $passed checks PASS"

@@ -31,9 +31,9 @@ function Get-StgHaCheck {
     $storageConfigured = $Cfg.stage1.storageSku -in 'Standard_ZRS', 'Standard_GZRS'
     $r = [ordered]@{
         region = $Cfg.location
-        apim = @{ region=$Cfg.location; available=$available; configured=$apimConfigured; units=$Cfg.stage1.apimUnits }
+        apim = @{ region=$Cfg.location; available=$available; configured=$apimConfigured; units=($Cfg.stage1.apimUnits ?? 1) }
         functions = @{ available=($flexZones -contains $Cfg.location.ToLowerInvariant()); configured=$functionsConfigured }
-        storage = @{ available=$available; configured=$storageConfigured; sku=$Cfg.stage1.storageSku }
+        storage = @{ available=$available; configured=$storageConfigured; sku=($Cfg.stage1.storageSku ?? 'Standard_LRS') }
         cosmos = @()
     }
     if (Test-StgApimExisting $Cfg) {
@@ -91,7 +91,7 @@ function Assert-StgHaApim {
     param($Cfg, $Apim)
     if ($null -eq $Cfg.ha.apim) { return }
     Assert-Stg ([bool]$Apim.properties.zoneRedundant -eq $Cfg.ha.apim.zoneRedundant) 'APIM zoneRedundant differs from ha.apim.zoneRedundant'
-    Assert-Stg ($Apim.sku.capacity -eq $Cfg.stage1.apimUnits) 'APIM units differ from stage1.apimUnits'
+    Assert-Stg ($Apim.sku.capacity -eq ($Cfg.stage1.apimUnits ?? 1)) 'APIM units differ from stage1.apimUnits'
 }
 
 function Assert-StgHaPlan {
@@ -101,5 +101,5 @@ function Assert-StgHaPlan {
 
 function Assert-StgHaStorage {
     param($Cfg, $Storage)
-    Assert-Stg ($Storage.sku.name -ceq $Cfg.stage1.storageSku) "$($Storage.name) storage SKU differs from stage1.storageSku"
+    Assert-Stg ($Storage.sku.name -ceq ($Cfg.stage1.storageSku ?? 'Standard_LRS')) "$($Storage.name) storage SKU differs from stage1.storageSku"
 }
