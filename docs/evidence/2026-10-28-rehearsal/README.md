@@ -66,9 +66,12 @@ The group-only console source is merged in this worktree but has not been publis
 - No two-group onboarding/accounting, three-person checks or developer interactive sign-in yet.
 - Installed-client detection found Claude Code and Desktop, not a VS Code extension. No Intune tenant is available.
 - The resource group is intentionally left running; stopping at a failed Cosmos create does not stop other costs.
-- The new client guide exposes a cross-platform documentation-scanner failure in the full root suite:
-  explicitly Windows-only client snippets are scanned as deployer commands. This is separate from the
-  live capacity block; do not treat a failing full suite as a passing release.
+- The initial full root suite exposed Windows-only client snippets being scanned as deployer commands.
+  The day-guide author's fix labels those fenced examples explicitly and tests their classification;
+  the scanner was not weakened. After merging it, all 13 cross-platform checks and the final full root
+  suite pass (1,343 Node tests, six existing opt-in live-Azure skips, plus PowerShell suites).
+  Requested typecheck/build and all 219 admin tests pass. The final gate outcome is recorded in the
+  private rehearsal report; offline checks never substitute for the missing live acceptance.
 
 ## Rating from a first-time reader
 

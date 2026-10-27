@@ -20,6 +20,15 @@
 - Live Stage 0 PASS (108 s). Initial Stage 1 refused zonal Cosmos capacity in Central India.
   Stopped at the documented owner-approval boundary; no successful Stage 1 state and no later apply.
   Private chronology and exact failures: session `files/rehearsal/progress.md` and `novice-log.md`.
+- Merged the day-guide author's `836ebad` as `ea829ec`: explicit Windows-only command labels fix
+  the initial full-suite documentation-scanner failure without changing the scanner. Scoped checks:
+  CrossPlatform 13 PASS, reader contracts 32 PASS.
+- Final isolated-profile checks: root `npm test` PASS (1,343 exported Node tests, six existing opt-in
+  live-Azure skips, plus all PowerShell suites); explicit requested typecheck and root build PASS;
+  admin 219/219 PASS. Three reader mutations caught; evidence/leak/whitespace checks PASS.
+- **Live acceptance remains BLOCKED**, not done: new Cosmos capacity or explicit fallback approval
+  is missing. No group onboarding, client request or accounting result is claimed from this new lab.
+  The committed-head packet gate follows this ledger commit; its final result is retained in the private report.
 
 ## Deployment-day readiness (2026-10-27)
 

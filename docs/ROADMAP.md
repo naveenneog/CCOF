@@ -2,6 +2,7 @@
 
 - [ ] G-DAY-REHEARSAL: time a new deployment through two-group accounting, record every novice
   hesitation and validate precise reader fixes; never bypass Cosmos fallback approval.
+  Blocked at initial zonal Cosmos creation pending new capacity/owner decision; offline reader fixes verified.
 
 - [ ] G-DAY: publish a short novice deployment-day guide with measured stage times, advance approvals,
   HA settings and multi-group verification. Prove approved live onboarding where existing identities/models
