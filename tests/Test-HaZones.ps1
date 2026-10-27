@@ -56,6 +56,9 @@ if ($Case -in 'all', 'hash') {
     Refuses { Assert-StgStage1Parameters $d $c } 'stage1_parameters_changed.*ha'
     $c.Remove('ha')
     foreach ($n in 0..8) { Check ((Get-StgStageInput $c $n) -ceq $old[$n]) "Absent HA changed Stage $n hash" }
+    $legacy = [ordered]@{tenantId=$c.tenantId;subscriptionId=$c.subscriptionId;resourceGroup=$c.resourceGroup;location=$c.location;tags=$c.tags;sharedResourceGroup=$c.sharedResourceGroup;stage1=$c.stage1}
+    $canonical = ConvertTo-StgCanonical $legacy | ConvertTo-Json -Depth 100 -Compress
+    Check ((Get-StgStageInput $c 1) -ceq ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($canonical))).ToLowerInvariant())) 'Absent HA changed the legacy Stage 1 hash contract'
 }
 function Invoke-StgAzJson($Arguments) {
     if ($Arguments[0] -eq 'account') { throw 'Region lookup must use target-subscription ARM locations; account list-locations has no --subscription argument' }
@@ -90,6 +93,20 @@ if ($Case -in 'all', 'readback') {
     Assert-StgHaApim $c @{sku=@{capacity=2};properties=@{zoneRedundant=$true}}
     Assert-StgHaPlan $c @{name='resolver';properties=@{zoneRedundant=$true}}
     Assert-StgHaStorage $c @{name='host';sku=@{name='Standard_ZRS'}}
+}
+if ($Case -in 'all', 'wiring') {
+    $c = Config; $c.ha=@{functions=@{zoneRedundant=$true}}; $c.stage1.storageSku='Standard_ZRS'
+    function Read-StgState { return @{stages=@{}} }
+    function Get-StgSite { return @{publicNetworkAccess='Disabled';httpsOnly=$true;runtimeName='node';runtimeVersion='22';ftpsState='Disabled';virtualNetworkSubnetId=''} }
+    function Get-StgAllowedFunctionsSubnets { return @('') }
+    function Invoke-StgAzJson { return @() }
+    function Get-StgArm { return @{name='resolver';properties=@{zoneRedundant=$false}} }
+    $out = @{functionApps=@(@{key='resolver';service=@{name='resolver';planId='/plans/resolver';principalId=$c.tenantId}});names=@{apps=@{}}}
+    Refuses { Test-Stage1 $c $out } 'resolver.*zoneRedundant'
+    $c.ha.functions.zoneRedundant=$false
+    $out.functionApps=@(); $out.names.apps=@{resolver=@{storageAccount='host'}}
+    function Invoke-StgAzJson { return @(@{name='host';sku=@{name='Standard_LRS'}}) }
+    Refuses { Test-Stage1 $c $out } 'host.*storage SKU'
 }
 if ($Case -in 'all', 'template') {
     $bicep = Join-Path $HOME '.azure\bin\bicep.exe'

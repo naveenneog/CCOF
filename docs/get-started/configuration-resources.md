@@ -5,6 +5,10 @@ are shown as complete JSON fragments of the configuration root. All values are h
 `Read-StgConfig` ([Staged.Common.ps1](../../infra/staged/Staged.Common.ps1)) and, against Azure, in Stage 0
 ([Staged.Resources.ps1](../../infra/staged/Staged.Resources.ps1)).
 
+For zone redundancy, costs, create-only settings and read-back commands, see
+[check and add high availability](high-availability.md). The optional root `ha` block controls APIM and Functions;
+`stage1.apimUnits`, `stage1.storageSku` and `stage1.cosmosLocations` remain their resource settings.
+
 ## Foundry and backends
 
 `backends[]` lists the Foundry accounts the gateway calls. `groups[].backendId` names one by `backends[].id`.

@@ -13,6 +13,19 @@ const dir = (d: string) => readdirSync(path.join(root, d)).filter((f) => f.endsW
 const pages = ["README.md", "docs/INDEX.md", "docs/GLOSSARY.md", ...dir("docs/get-started"), ...dir("docs/operate"), ...dir("docs/evidence/2026-10-24-demo")];
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 
+test("high availability guide shows opt-in settings, cost, checks and create-only migration", () => {
+  const ha = read("docs/get-started/high-availability.md");
+  for (const text of ['"ha"', '"zoneRedundant": true', '"storageSku": "Standard_ZRS"', '"apimUnits": 2',
+    '"isZoneRedundant": true', "HA check:", "suggestion:", "Stage 0", "Stage 1", "always-ready",
+    "new prefix", "single-region", "foundry-failover.md"]) assert.ok(ha.includes(text), `HA guide needs ${text}`);
+  assert.match(ha, /re-creat|recreat/i);
+  assert.match(ha, /list-flexconsumption-locations --zone-redundant=true/);
+  assert.match(ha, /learn\.microsoft\.com\/azure\/reliability\/reliability-api-management/);
+  for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md"]) {
+    assert.ok(read(`docs/get-started/${page}`).includes("(high-availability.md)"), `${page} links the HA guide`);
+  }
+});
+
 test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {
   const regions = read("docs/get-started/region-and-failover.md");
   assert.match(regions, /az cosmosdb failover-priority-change.*southindia=0 centralindia=1/, "AO-8: document a planned Cosmos write-region switch");
