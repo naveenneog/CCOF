@@ -101,10 +101,19 @@ The stages create no standby for the other parts. If you need one, plan it yours
 
 ## 4. Outage and a planned failover drill
 
-If a Cosmos read region fails, the SDK can use the next reachable preferred region. If its write region fails,
-service-managed failover promotes another region; writes can fail until it completes. Session consistency does
-not promise zero data loss in an unplanned regional outage
-([Cosmos DB reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db#region-outage-support)).
+If a Cosmos read region fails, the SDK reads from the next reachable preferred region. If the write region fails,
+writes fail until that region is taken offline or service-managed failover completes. Service-managed failover
+"might take one hour or more"; Microsoft recommends a region offline operation
+([forced failover](https://learn.microsoft.com/azure/cosmos-db/how-to-manage-database-account#perform-forced-failover-for-your-azure-cosmos-db-account))
+and not changing the write region during the outage. Without strong consistency, unreplicated writes can be lost
+only if the region suffers permanent data loss
+([Cosmos DB reliability](https://learn.microsoft.com/azure/reliability/reliability-cosmos-db), retrieved 2026-10-27).
+With `isZoneRedundant: false`, Cosmos DB can place a region's replicas in one availability zone, so a single-zone
+issue can make that region unavailable and lead to the same failover.
+Global Standard inference "may be processed in any Azure region"
+([deployment types](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types)); that does not
+help when the Foundry account's own endpoint or the private endpoint path to it is unavailable. A second Foundry
+account (table above) does.
 The gateway and Function Apps are single-region: when their region is unavailable the gateway remains unavailable,
 even if Cosmos survives. Check Azure Service Health; after recovery verify the private network (Stage 6 in `verify`
 mode), then run Stage 8. Do not delete the Cosmos account or assume rerunning Stage 1 moves existing services.

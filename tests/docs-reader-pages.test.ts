@@ -322,6 +322,11 @@ test("a region without Claude, provisioned Cosmos DB cost and the failover regio
   assert.match(page, /South India/, "gives the Central India example");
   assert.match(page, /isZoneRedundant: false/, "a region without availability zones");
   assert.match(page, /prices\.azure\.com[^)]*Cosmos/, "provisioned Cosmos DB cost with its source");
+  const outage = page.split("## 4.")[1] ?? "";
+  assert.match(outage, /one hour or more/, "service-managed failover can take an hour (Learn, region outage table)");
+  assert.match(outage, /region offline operation/, "names the region offline operation as the faster recovery");
+  assert.match(outage, /single availability zone|one availability zone/, "says what isZoneRedundant: false risks");
+  assert.match(outage, /any Azure region/, "Global Standard processing is not account failover");
   const guide = read("docs/STAGED-DEPLOYMENT-GUIDE.md").split("### 2.6")[1].split("\n## ")[0];
   assert.match(guide, /paired region|region pair/i, "guide 2.6 names the paired region");
   assert.match(guide, /residency/i, "guide 2.6 names data residency");
