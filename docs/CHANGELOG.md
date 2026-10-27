@@ -8,6 +8,12 @@
   with reviewed onboarding syntax and a warning never to print tokens.
 - Correct the HA Function plan read-back query: the installed Azure CLI returns `zoneRedundant`
   under `properties`; the previous query printed null on a verified zonal plan.
+- Replace five deployment-day console images/sidecars with the actual group-only rehearsal UI,
+  retaining established pseudonyms and testing every current console sidecar against Legacy navigation.
+- Clarify that generated Azure CLI interactive login is not bounded by the MSAL timeout setting.
+  Record real CLI success and correct attribution without hiding incomplete streamed cache-write pricing.
+- State the existing streamed Claude Code prompt-cache lower bound in the deployment-day accounting step,
+  linked to COST-MODEL and ADR-0038; this is a release-23 expectations fix, not a new runtime defect.
 
 ## 2026-10-28 — Deployment-day and developer onboarding
 

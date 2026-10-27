@@ -26,9 +26,22 @@
 - Final isolated-profile checks: root `npm test` PASS (1,343 exported Node tests, six existing opt-in
   live-Azure skips, plus all PowerShell suites); explicit requested typecheck and root build PASS;
   admin 219/219 PASS. Three reader mutations caught; evidence/leak/whitespace checks PASS.
-- **Live acceptance remains BLOCKED**, not done: new Cosmos capacity or explicit fallback approval
-  is missing. No group onboarding, client request or accounting result is claimed from this new lab.
-  The committed-head packet gate follows this ledger commit; its final result is retained in the private report.
+- New explicit owner/coordinator approval allowed the documented failed-empty-account recovery for
+  the rehearsal RG only. Stage 1 verified after 42m57s from refusal; APIM/Functions zones and ZRS stayed on.
+  Stages 2–8 then passed, including a console-only second-group expectation with actual group/charged-ID proof.
+- Two active groups, fresh complete snapshot, allowed Haiku/Sonnet and group-specific denial, higher-spend
+  no-selector default, distinct cost codes, completely priced API rows and both budgets are proven with one identity.
+  Actual Windows Claude Code returned OK using a disclosed same-owner local cache copy after fresh interactive
+  sign-in could not finish unattended. Desktop correctly refused managed policy; VS Code extension absent.
+- **Known customer-visible financial limit, High for expectations (not a new defect):** 38,218 cache-write tokens in the real
+  Claude Code stream are not included in CCOF's known spend. Correct attribution and partial/lower-bound
+  warnings are proven; complete USD cost is not. COST-MODEL's prompt-cache limit and ADR-0038 already
+  document this; the deployment-day accounting step now explains the lower bound until daily reconciliation/calibration.
+  No runtime fix tonight or claim of three-person/fleet proof.
+- Reader follow-up: all five day-console captures replaced from the actual group-only lab with the existing
+  day pseudonyms; no Legacy projects text, both snapshot links clicked. Failing-first capture/CLI-timeout guards,
+  Reader and scoped mutation checks cover the release-23 plain-language disclosure too.
+  Final full suite/gate will run after the promised main/release merge.
 
 ## Deployment-day readiness (2026-10-27)
 

@@ -1,0 +1,8 @@
+PS /home/alex/repo> ccof-token.cmd login
+2026-10-28 02:41:13 IST: ran the generated scratch-profile ccof-token.cmd login exactly as documented.
+The helper produced no stdout/stderr while waiting for interactive Azure CLI sign-in.
+At 02:45:23 IST it was still running (more than four minutes).
+The imported client configuration says loginTimeoutSeconds=120.
+The generated command wrapper directly delegates az login; this field does not bound that command.
+Stopped only this owned shell/process tree before 02:46:16 IST; interactive sign-in was not completed.
+This is an unattended interaction limit, not a successful fresh sign-in or an Azure error response.

@@ -27,6 +27,8 @@ and `"statusLine":"set"` if no prior status line exists. It backs up previous se
 The generated `ccof-token.cmd login` opens Microsoft sign-in through **its own Azure CLI profile**.
 Expected: `Signed in. Claude Code and Claude Desktop now use this sign-in.` No token is printed.
 Sign in as yourself, not as the deployment admin.
+This needs a person at the sign-in window. Azure CLI login can wait for interaction/MFA; the config's
+`loginTimeoutSeconds` is not a hard deadline for that generated wrapper. Cancel if sign-in cannot complete.
 
 ![Real setup output; Central India novice lab, 2026-10-27; setup not timed](../evidence/2026-10-28-deployment-day/developer-setup.png)
 

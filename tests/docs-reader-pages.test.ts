@@ -124,6 +124,16 @@ test("deployment day illustrates every timed step and inventories every real-run
   assert.match(index, /demo|live/i);
 });
 
+test("committed deployment-day console captures match the group-only navigation", () => {
+  const evidence = "docs/evidence/2026-10-28-deployment-day";
+  const names = readdirSync(path.join(root, evidence)).filter((name) => /^console-.*\.txt$/.test(name));
+  assert.ok(names.length, "the current console capture inventory must not be empty");
+  for (const name of names) {
+    const text = read(`${evidence}/${name}`);
+    assert.doesNotMatch(text, /Legacy projects/i, `${name} capture must come from the group-only console`);
+  }
+});
+
 test("deployment-day network decision covers deployment-machine access before create-only Stage 1", () => {
   const page = read("docs/get-started/deployment-day-config.md");
   const network = page.split("## Network")[1]?.split("\n## ")[0] ?? "";
@@ -176,6 +186,15 @@ test("deployment day users distinguishes captured clients from unverified fleet 
   assert.match(windows, /```powershell title="Windows only"/, "Windows helper commands must be labelled, not presented as portable deployer commands");
   assert.match(desktop, /```powershell title="Windows only"/, "Windows-only Desktop commands must be labelled");
   for (const block of users.matchAll(/```json\r?\n([\s\S]*?)```/g)) assert.doesNotThrow(() => JSON.parse(block[1]));
+});
+
+test("client configuration does not promise a hard deadline for delegated Azure CLI login", () => {
+  const clients = read("docs/CLIENTS.md");
+  const row = clients.split(/\r?\n/).find((line) => line.startsWith("| `loginTimeoutSeconds`"));
+  assert.ok(row);
+  assert.match(row, /MSAL/, "the configured interactive deadline is the MSAL helper's deadline");
+  assert.match(row, /Azure CLI.*not.*bound|Azure CLI.*manual.*cancel/i,
+    "the generated Azure CLI wrapper delegates interactive login without this hard deadline");
 });
 
 test("deployment-day spend comparison discloses the known streamed prompt-cache lower bound", () => {

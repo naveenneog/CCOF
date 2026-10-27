@@ -1,0 +1,4 @@
+PS /home/alex/repo> pwsh -NoProfile -File .env.staged\developer-home\.claude\ccof-usage.ps1
+CCOF budget, group 356f14cc-1d5b-4083-b6b3-cc502aee079c: $0.00 of $1.00 used (0%), $1.00 left, as of 21:18 UTC. Budget pacing applies: up to 3636 tokens/minute; requests may wait even at low recorded spend. Follow the gateway Retry-After; this is separate from your configured token limit.
+CCOF budget, group 51f72f04-35ed-4692-89d2-053928ed1403: $0.00 of $1.00 used (0%), $1.00 left, as of 21:18 UTC. Budget pacing applies: up to 909 tokens/minute; requests may wait even at low recorded spend. Follow the gateway Retry-After; this is separate from your configured token limit.
+Figures are from the last cost run and are a lower bound: newer requests, and the prompt-cache tokens of streamed replies, are not included.

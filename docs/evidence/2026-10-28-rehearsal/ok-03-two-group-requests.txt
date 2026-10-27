@@ -1,0 +1,6 @@
+PS /home/alex/repo> pwsh -NoProfile -File .env.staged\group-checks.ps1 -Mode Probes
+engineering-haiku: HTTP 200; 14.080s; selected=51f72f04-35ed-4692-89d2-053928ed1403; apim-request-id=bf57e0f0-6bd9-4b2a-a7f9-5a8e9ed77008
+engineering-sonnet: HTTP 200; 12.133s; selected=51f72f04-35ed-4692-89d2-053928ed1403; apim-request-id=9a34718a-687a-4d8e-81ab-41db6112a51d
+science-haiku: HTTP 200; 1.787s; selected=356f14cc-1d5b-4083-b6b3-cc502aee079c; apim-request-id=d61cac81-dfb7-4017-ad84-a7409aa3db3e
+science-denied-sonnet: HTTP 403; 0.153s; selected=356f14cc-1d5b-4083-b6b3-cc502aee079c; apim-request-id=
+{"type":"error","error":{"type":"permission_error","message":"Model claude-sonnet-5-5 is not available in group 356f14cc-1d5b-4083-b6b3-cc502aee079c. Allowed models: claude-haiku-5-5. Choose one of them (in Claude Code: /model), or ask your platform team to admit the model. Request id: 425c6a04-e0ef-482b-aec5-0c6791068f86."}}

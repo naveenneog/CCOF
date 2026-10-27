@@ -1,0 +1,8 @@
+Summary from actual client usage + approved rate card + real CCOF export, not another model call.
+Actual scratch Claude Code response: OK
+Input tokens: 2; five-minute cache-write tokens: 38218; output tokens: 4
+Approved global rate-card expected list cost USD: 0.00477945
+CCOF recorded native known-cost increment USD: 0.0000022
+Missing cache-write cost USD: 0.00477725
+Export completeness: partial; listUsd: null; correct Engineering group and cost-code attribution verified.
+List-price comparison, not an Azure invoice. This is not complete native-client chargeback.

@@ -1,82 +1,115 @@
 # Deployment-day novice rehearsal, 2026-10-28
 
-This is a new, isolated live deployment, not a replay of an earlier successful lab.
-Names, paths and GUIDs in these captures are pseudonyms. The real logs remain private.
-**The run stopped at the documented Cosmos capacity/owner-approval boundary. It is not rollout acceptance.**
+A new isolated live deployment, not a replay of earlier labs. Names, paths and GUIDs in these
+terminal captures are pseudonyms. Complete raw evidence remains private.
+**Stages 0–8 and two-group API accounting passed. A real Claude Code reply was attributed correctly,
+but its streamed prompt-cache charges remain incomplete. This is not unconditional rollout acceptance.**
 
 ## Route
 
-README → deployment-day → deployment-day-config → linked prerequisites, HA, Foundry failover and stage
-instructions → group onboarding and developer pages. No deployment source was needed to identify the failure.
-The deployment uses Central India, primary Foundry East US 2, standby Central US and lab network-create mode.
-Both Foundry accounts deploy Haiku and Sonnet version 2 at capacity 2 each after checking free quota.
-The approved lab uses two APIM units rather than the guide's initial four-unit rollout example.
-Public Functions/SCM access was selected from the linked deployment guide because the workstation is not
-connected to the new VNet. Other backends stay private.
+README → deployment-day → deployment-day-config → linked prerequisites, HA, Foundry failover and
+stage instructions → group onboarding → developer setup. Configuration came from the decision page's
+complete example, not a copied lab config. Only approved existing gateway/resolver IDs were reused.
+Their Stage 4 previews explicitly said **no change**; only the new rehearsal admin application was created.
 
-Only the existing gateway/resolver IDs were read from an approved older config; the new configuration was
-filled from the decision page's complete example, not copied from that config. Shared applications have
-not been changed. A new admin registration was planned, not yet created.
+Central India: new zonal Standard v2 APIM (two units), zonal Flex apps, ZRS host/package storage.
+Primary Foundry East US 2 and standby Central US each have Haiku/Sonnet version 2, capacity 2, private
+endpoints and matching deployments. Cosmos initially requested Central India zones plus South India.
+The documented, newly approved fallback kept both regions but removed only Cosmos zone protection.
+The lab's internet-connected workstation required the documented public Functions/SCM option.
+Other backends remain private. Both groups have **USD 1** lab budgets.
 
 ## What failed, and what changed
 
-| # | Step | Observation | Result | Image |
-| --- | --- | --- | --- | --- |
-| 1 | Stage 1 | `ServiceUnavailable`: high demand for Central India zonal Cosmos accounts | The guide correctly predicts it. Saved creation-failure operations, null endpoint, failed database-list output and absent Stage 1/2 completion. No deletion, downgrade or retry without explicit owner approval. | [fail-01-cosmos-zonal-capacity.png](fail-01-cosmos-zonal-capacity.png) |
-| 2 | Configuration/admin API route | Workstation-to-SCM access was not a decision on the configuration page; linked admin Sign-in lacked executable token/GET instructions | Two reader contracts failed first; the precise guide changes passed all 31 reader checks and both mutations were caught at that checkpoint. | [fail-02-reader-decisions.png](fail-02-reader-decisions.png), [fix-02-reader-decisions.png](fix-02-reader-decisions.png) |
-| 3 | HA read-back command | `az appservice plan show` with `zones:zoneRedundant` printed `null` despite a zonal plan | Correct the query to `zones:properties.zoneRedundant`. Live retry prints `true`; the new reader contract fails first and its mutation is caught. All 32 reader tests pass. | [fail-03-functions-ha-readback.png](fail-03-functions-ha-readback.png), [fix-03-functions-ha-readback.png](fix-03-functions-ha-readback.png) |
+| # | Step | Observation and result | Image |
+| --- | --- | --- | --- |
+| 1 | Stage 1 | `ServiceUnavailable`: Central India zonal Cosmos high demand. Preserved initial-creation failure, null endpoint and absent Stage 1/2 completion evidence. Waited for NEW owner approval; deleted only the corroborated failed-empty account; guarded recovery verified with the other HA options unchanged. | [fail-01-cosmos-zonal-capacity.png](fail-01-cosmos-zonal-capacity.png), [fix-01-approved-cosmos-recovery.png](fix-01-approved-cosmos-recovery.png) |
+| 2 | Config/admin API route | Missing workstation-to-SCM decision and executable admin token/GET example. Reader contracts failed first; precise docs now cover them. The real new admin token/GET/POST route worked. | [fail-02-reader-decisions.png](fail-02-reader-decisions.png), [fix-02-reader-decisions.png](fix-02-reader-decisions.png) |
+| 3 | HA read-back | The original Function plan query printed null on a zonal plan. Corrected to `properties.zoneRedundant`; failing reader guard, live retry true and mutation evidence. | [fail-03-functions-ha-readback.png](fail-03-functions-ha-readback.png), [fix-03-functions-ha-readback.png](fix-03-functions-ha-readback.png) |
+| 4 | Interactive sign-in | The generated Azure CLI login waited for human interaction beyond the configured 120 seconds. Stopped the owned process. Docs now distinguish MSAL's deadline from the unbounded Azure CLI wrapper. Fresh interactive sign-in is **not** claimed. | [fail-04-unattended-login.png](fail-04-unattended-login.png) |
+| 5 | Native client accounting | Known limitation, not a new defect: correct Engineering/cost-code attribution, but 38,218 five-minute cache-write tokens absent from known spend. Rate-card cost USD 0.00477945; native known increment USD 0.0000022. Export truthfully says partial/no complete cost. No runtime fix tonight. | [fail-05-partial-native-cost.png](fail-05-partial-native-cost.png) |
+| 6 | Installed Desktop | Setup correctly refused an overriding managed inference policy and changed no registry values. No bypass or native reply claimed. | [fail-06-desktop-managed-policy.png](fail-06-desktop-managed-policy.png) |
 
-![Initial Cosmos failure](fail-01-cosmos-zonal-capacity.png)
-![Reader contracts before the documentation fixes](fail-02-reader-decisions.png)
-![Reader checks after the fixes](fix-02-reader-decisions.png)
-![Original Function plan query](fail-03-functions-ha-readback.png)
-![Corrected Function plan query](fix-03-functions-ha-readback.png)
+![Initial Cosmos refusal](fail-01-cosmos-zonal-capacity.png)
+![Approved guarded recovery](fix-01-approved-cosmos-recovery.png)
+![Reader contracts before fixes](fail-02-reader-decisions.png)
+![Reader checkpoint after fixes](fix-02-reader-decisions.png)
+![Original HA read-back](fail-03-functions-ha-readback.png)
+![Corrected HA read-back](fix-03-functions-ha-readback.png)
+![Unattended login observation](fail-04-unattended-login.png)
+![Actual native partial-cost comparison](fail-05-partial-native-cost.png)
+![Correct Desktop policy refusal](fail-06-desktop-managed-policy.png)
 
-The Cosmos capture is an excerpt of the initial failed apply log; the complete raw provider error is kept
-privately. The reader RED capture shows the actual two-test run summary and first assertion, not a model
-call or another live deployment failure. Capture commands identify the real execution platform.
-After the unexpected null read-back, the raw CLI/ARM JSON and staged zone-verification source were consulted
-to diagnose it. That was the first deployment-source lookup and is not counted as first-reader knowledge.
+The login capture is a timestamped observation of an otherwise silent process, not an invented Azure error.
+The native-cost capture is a derived comparison of actual client usage, the approved global rate card and
+the real export, not another model call or an Azure invoice. Raw source records are retained privately.
+The HA source was first consulted after the unexpected null read-back, not to choose deployment settings.
 
 ## Stage timings
 
-| Step | Measured wall time | Guide allowance |
+| Step | Measured successful apply | Guide allowance |
 | --- | --- | --- |
-| Read/setup/configure, from first brief read | About 3 minutes to first preflight | Advance preparation, outside deployment window |
-| Stage 0 | 110 seconds wall; script reports 108 seconds | 1–3 minutes |
-| Stage 1 preview | 5 seconds | Not separately estimated |
-| Initial Stage 1 apply | 241 seconds, failed | 5–10 minutes for a successful apply; failures extra |
-| Failed-empty-account read-only checks | 12 seconds | Not separately estimated |
-| Stages 2–8, groups and clients | Not reached | Not inferred from earlier labs |
+| Stage 0 | 108 seconds; recovery preflight 137 seconds | 1–3 minutes |
+| Initial Stage 1 failure | 241 seconds, not a successful apply | Failures extra |
+| Refusal through approved verified recovery | 42 minutes 57 seconds, including waiting for the new approval | Approvals/failures outside the window |
+| Stage 1 recovery | 518 seconds | 5–10 minutes |
+| Stage 2 | 258 seconds | About 4 minutes |
+| Stage 3 | 881 seconds | 7–15 minutes |
+| Stage 4 | 71 seconds | About 1 minute |
+| Stage 5 | 130 seconds | About 2 minutes |
+| Stage 6 | 886 seconds | 12–15 minutes |
+| Stage 7 | 1,426 seconds | 20–25 minutes |
+| Stage 8 | 324 seconds initially; 132 seconds for console-only second-group proof | About 5 minutes |
+
+The complete two-group snapshot wrapper took about 170 seconds; its actual Function run took 609 ms.
+Do not confuse that server-only duration with the deployer's total waiting time.
+From first brief read to **two groups with completely priced API requests**: **2 h 12 min 21 s**.
+A real Claude Code reply followed; complete native stream pricing did not.
 
 ## Success run
 
-Stage 0 passed and verified the requested APIM/Functions/storage/Cosmos regional zone support and both
-Foundry offers/quota. This did not reserve Cosmos service capacity:
-
 ![Successful read-only preflight](ok-01-preflight.png)
+![Initial strict Stage 8 acceptance](ok-02-stage8.png)
+![Actual two-group positive and negative requests](ok-03-two-group-requests.png)
+![Actual Claude Code reply, known model-catalog warning retained](ok-04-claude-code.png)
+![Actual model-free usage helper, lower-bound warning retained](ok-05-usage-helper.png)
 
-The failed Stage 1 did create other billable resources, including both Foundry accounts. It never wrote a
-Stage 1 completion. No model request has been sent and no developer/client acceptance is claimed.
-The group-only console source is merged in this worktree but has not been published by Stage 7.
+- Second group onboarding returned **201**; both groups active. A fresh complete-catalog snapshot
+  succeeded with two memberships of **one person**, zero write failures.
+- Engineering Haiku/Sonnet and Science Haiku returned **200**. Science Sonnet returned **403** naming Haiku.
+  Exact request traces identify selected group, actual charged group, `group` scope and distinct cost codes.
+- After reconciliation, higher-spend Science won the no-selector request despite lower priority.
+  Stage 8 then passed against this console-only group with the stricter charged-group proof.
+- The [five deployment-day console captures](../2026-10-28-deployment-day/README.md) were replaced from this
+  actual group-only lab, preserving their established pseudonyms. Both budget snapshot links were clicked.
+  Captures wait for all loading indicators; zero counts seen during an initial loading frame were not
+  misreported as a product defect.
+- Windows setup returned configured/azure-cli, usage skill true and status line set. Real Claude Code
+  returned **OK** in about ten seconds. The model-free usage wrapper displayed both budgets.
 
-## Open items
+## Authentication and open limits
 
-- Explicit approval or approved capacity is still needed for Cosmos recovery; regional support is not capacity.
-- No two-group onboarding/accounting, three-person checks or developer interactive sign-in yet.
-- Installed-client detection found Claude Code and Desktop, not a VS Code extension. No Intune tenant is available.
-- The resource group is intentionally left running; stopping at a failed Cosmos create does not stop other costs.
-- The initial full root suite exposed Windows-only client snippets being scanned as deployer commands.
-  The day-guide author's fix labels those fenced examples explicitly and tests their classification;
-  the scanner was not weakened. After merging it, all 13 cross-platform checks and the final full root
-  suite pass (1,343 Node tests, six existing opt-in live-Azure skips, plus PowerShell suites).
-  Requested typecheck/build and all 219 admin tests pass. The final gate outcome is recorded in the
-  private rehearsal report; offline checks never substitute for the missing live acceptance.
+The fresh interactive login could not finish unattended. For the actual client probe, only the **same owner's**
+approved sign-in cache was copied locally into the isolated helper profile; no other person's cache was used.
+The copy is removed at cleanup. This is explicitly **not new interactive login proof**.
+No token or authorization header is in these captures.
+
+Browser captures use the real deployed UI and real authorized APIs. Only that isolated browser's fetched sign-in
+configuration is changed to demo mode, with the approved own CLI token attached to API reads. No API data is mocked.
+The demo-editor label reflects this substitution, not an interactive MSAL sign-in.
+
+The missing native stream cache categories are an existing known limit ([cost model](../../COST-MODEL.md#where-the-slop-comes-from),
+[ADR-0038](../../adr/0038-budget-admission-acceptance.md)), High for customer expectations, not a new defect.
+Live figures read below the bill until daily reconciliation/calibration; the release-23 day guide now says so.
+No failover drill, three-person acceptance, native interactive `/usage`,
+VS Code extension, Desktop reply or Intune/Office/Cowork pilot was proven. Desktop's managed policy was respected.
+The resource group remains running and billable. Production needs its own Cosmos approval, enterprise quota,
+Graph consent/processing capacity and load evidence; small-pilot success does not establish 25,000-user capacity.
 
 ## Rating from a first-time reader
 
-| Area | Before | After precise reader fixes |
-| --- | --- | --- |
-| Deployment | 7/10: clear stages and honest capacity warning, but live completion remains blocked | 7/10: approval boundary remains deliberately closed |
-| Configuration | 7/10: complete validated example, but workstation access was easy to miss | 8/10: private/public lab decision is at the create-only decision point |
-| User onboarding | Not rated: not exercised | Not rated: prose review cannot substitute for client sign-in |
+| Area | Before fixes | After | Evidence limit |
+| --- | --- | --- | --- |
+| Deployment | 7/10: clear stages/capacity warning | 8/10: real recovery and all stages completed | External approvals, previews and people are outside measured applies |
+| Configuration | 7/10: complete example but SCM choice easy to miss | 8/10: create-only decision and actual HA read-back clarified | Fleet capacity is not inferred from this small lab |
+| User onboarding | 6/10: setup works but timeout promise misleading | 7/10: exact login boundary and safe policy refusal explained | Existing-cache substitution; complete native pricing and interactive login remain unproven |

@@ -12,7 +12,6 @@ Editor
 View as reader
 Overview
 Groups
-Legacy projects
 Chargeback
 User tags
 Budgets
@@ -58,11 +57,11 @@ Optional. For example a WBS element; shown per developer in chargeback and expor
 
 Priority
 
-When a person is in several groups and sends no project header, the group where they have spent the most this month applies; with equal spend, the lower number.
+When a person is in several groups and sends no group selector header, the group where they have spent the most this month applies; with equal spend, the lower number.
 
 Models and rate limits
  Restricted families (Fable, Mythos) are approved for this group
-Token limits for group
+Token limits for this group
 Scope	TPM	Quota	Period
 All Families · Person
 —
@@ -165,12 +164,12 @@ Suggested limits by family
 Family	$/MTok (blend)	Person / month	Person TPM	Group / month	Group TPM
 haiku
 claude-haiku-5-5
-	0.12	20,000,000	5,682	Unchanged	—
+	0.12	400,000	114	Unchanged	—
 
 Conservative per-user sizing:
-expected $2.42
-worst case $50.00
-of $50.00 · rate card 2026-10-11
+expected $0.05
+worst case $1.00
+of $1.00 · rate card 2026-10-11
 
 Apply to the group's limits
 
