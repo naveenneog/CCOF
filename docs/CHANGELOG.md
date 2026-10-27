@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-10-28 — Release 22 (group-only console and deployment day)
+
+- Combine G-GROUPS-ONLY and G-DAY. Council review of `e8d9353..release/22`: security review found no vulnerabilities;
+  code review found no Blocker or High issues and two Low ones, both fixed:
+  - Overview budget alerts keep one row per historical access level (unique key, level shown in parentheses for
+    non-group IDs); a rendering test and a source key check catch all three mutants.
+  - The deployment-day evidence decision is renumbered ADR-0055, so ADR-0054 refers only to the group-only console.
+
 ## 2026-10-28 — Deployment-day and developer onboarding
 
 - Add a linked deployment-day checklist with measured Central India timings, HA/quota/network prerequisites,

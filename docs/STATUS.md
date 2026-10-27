@@ -1,5 +1,12 @@
 # Current work
 
+## Release 22 (2026-10-28)
+
+**Active packet:** R22 — merge G-GROUPS-ONLY and G-DAY into `release/22` from `main` `e8d9353`.
+
+- Council: security review PASS (no findings); code review PASS-WITH-NOTES, two Low findings fixed test-first
+  (Overview historical budget keys, duplicate ADR number, commit `89d3e2b`). Admin tests 221/0; packet gate rerun after the fixes.
+
 ## Deployment-day readiness (2026-10-27)
 
 **Active packet:** G-DAY — novice HA deployment-day checklist and live multi-group rehearsal.
