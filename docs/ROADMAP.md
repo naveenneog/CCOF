@@ -1,9 +1,13 @@
 # Deployment packets
 
+- [ ] G-DAY-REHEARSAL: time a new deployment through two-group accounting, record every novice
+  hesitation and validate precise reader fixes; never bypass Cosmos fallback approval.
+  Approved Cosmos recovery, all stages and two-group API accounting passed; the known native stream-cache
+  lower bound is measured and disclosed for release 23. Rehearsal is not unconditional rollout clearance.
+
 - [x] G-DAY: publish a short novice deployment-day guide with measured stage times, advance approvals,
   HA settings and multi-group verification. Prove approved live onboarding where existing identities/models
   permit it; retain exact private evidence, mutation-check reader contracts and run all required gates.
-
 - [x] G-GROUPS-ONLY: group-only current console, old-bookmark notice, historical IDs
   as text, group-only demo and documentation (ADR-0054). Owner approved minimal
   server/schema compatibility boundary; production decommission is independent.

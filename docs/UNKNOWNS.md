@@ -1,5 +1,14 @@
 # Current deployment unknowns
 
+## Novice deployment-day rehearsal
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| REH-1 | RESOLVED | Stage 1 returned Central India zonal Cosmos ServiceUnavailable as predicted. New explicit coordinator/owner approval permitted deletion of only the corroborated failed-empty new account and nonzonal Central India + South India recovery. The same state verified 42m57s after refusal, with other HA options unchanged. Earlier quota/cost/lab consent was not reused as fallback approval. |
+| REH-2 | RESOLVED | The config decision page omitted deployment-machine access despite private Functions/SCM defaults; the linked deployment guide's lab option is now offered before Stage 1. The admin API sign-in route now supplies the token/header/read commands it prescribed. Two reader mutations caught. |
+| REH-3 | RESEARCHED | Known limitation, not a new defect: the prompt-cache row in COST-MODEL (U-17) and ADR-0038 already document missing streamed cache categories. A real Claude Code reply is correctly attributed: 2 input + 38,218 five-minute cache-write + 4 output tokens implies USD 0.00477945 at the approved global rate; CCOF records USD 0.0000022 and truthfully flags partial/listUsd null. High for customer expectations; no code fix tonight. Release-23 day guidance now explains live lower-bound spend until daily reconciliation/calibration. |
+| REH-4 | RESOLVED | The installed Azure CLI wrapper delegates interactive login without the MSAL loginTimeoutSeconds deadline. Fresh login waited unattended and was stopped; documentation now states the interaction/manual-cancel boundary. An explicitly disclosed same-owner local cache copy enabled the actual client test; the copy is removed at cleanup. |
+
 ## Deployment day (G-DAY)
 
 | ID | State | Question / evidence |

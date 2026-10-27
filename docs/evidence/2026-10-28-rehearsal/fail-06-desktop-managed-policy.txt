@@ -1,0 +1,7 @@
+PS /home/alex/repo> pwsh -NoProfile -File scripts\client\Set-ClaudeDesktopGateway.ps1 -ConfigPath $env:CCOF_CONFIG_FILE -Confirmed
+Exception: C:\Users\alex\ccof\scripts\client\ClientInventory.ps1:82
+Line |
+  82 |              throw 'Managed Desktop inference policy overrides local p …
+     |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Managed Desktop inference policy overrides local profiles. Ask its administrator to change it; no registry
+     | values were modified.

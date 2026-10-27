@@ -11,7 +11,6 @@ Editor
 View as reader
 Overview
 Groups
-Legacy projects
 Chargeback
 User tags
 Budgets
@@ -27,7 +26,7 @@ Budgets
 
 Today's group and person budgets from the reconciler, and each group's burn-down.
 
-Observed 2s ago
+Observed 1s ago
 Refresh
 Group budgets
 2
@@ -46,8 +45,8 @@ Burn-down
 Cumulative known list cost of one access group this month against its group budget.
 
 Access group
-fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9 · group (—)
-0b65c63f-4d92-4e52-a492-c5455d71cfda · group (—)
+fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9 (—)
+0b65c63f-4d92-4e52-a492-c5455d71cfda (—)
 $0
 $0
 $0
@@ -56,7 +55,7 @@ Day 16
 Day 31
 Spent (cumulative)
 
-Reconciler figure: $0.00 spent, computed 5 min ago. The line uses chargeback's known list cost, which can run ahead of the reconciler's last run.
+Reconciler figure: $0.00 spent, computed 7 min ago. The line uses chargeback's known list cost, which can run ahead of the reconciler's last run.
 
 Data table (27 days)
 Snapshots
@@ -65,15 +64,15 @@ The reconciler's latest state per budget, this month. Server-side paging, 50 a p
 
 Groups
 People
-Group or legacy project
+Group
 group budget snapshots
-Group / legacy project	Spent	Budget	Used	State	Mode	Completeness	Snapshot	Computed
+Group	Spent	Budget	Used	State	Mode	Completeness	Snapshot	Computed
 fc1bf3e5-2387-4bf0-9bc2-4e3b5be62ca9	$0.00	no cap
 —
-	no cap	notify	partial	current	5 min ago
+	no cap	notify	complete	current	7 min ago
 0b65c63f-4d92-4e52-a492-c5455d71cfda	$0.00	no cap
 —
-	no cap	notify	partial	current	5 min ago
+	no cap	notify	partial	current	7 min ago
 1–2 of 2
 Previous
 Next

@@ -1,0 +1,4 @@
+PS /home/alex/repo> az appservice plan show -g contoso-rehearsal-rg -n contoso-rehearsal-admin-plan --query "{zones:zoneRedundant}" -o json
+{
+  "zones": null
+}

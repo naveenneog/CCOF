@@ -4,10 +4,9 @@
 **Window:** 2–3 hours **after** advance checks; not a deployment-time or 25,000-developer capacity guarantee.
 Use [stage instructions](03-deploy.md). Keep private config and `.staged-state` together; never commit tokens/real IDs.
 
-**Fill in your configuration:** [choose each option and copy the complete HA example](deployment-day-config.md)
-before running stages. It explains where to find each value and the approved nonzonal Cosmos alternative.
-For terminal, VS Code, Desktop and the unverified bulk/Office paths, use
-[developer and fleet onboarding](deployment-day-users.md).
+**Configuration:** [options and complete HA example](deployment-day-config.md), including value sources and
+the approved nonzonal Cosmos alternative, **before stages**. For terminal, VS Code, Desktop and unverified
+bulk/Office, use [developer/fleet onboarding](deployment-day-users.md).
 
 ## Before the day — finish with the named owner
 
@@ -100,8 +99,8 @@ APIM v2/Functions remain single-region; Foundry endpoint failover does not rescu
 
 ## On the day — reserve 80–100 minutes for stages, then people and retries
 
-Successful applies in the Central India labs on **2026-10-26/27** took about **73 minutes**.
-Allow 80–100 minutes with previews/variation; failures and approvals are extra. Measured times appear below.
+Successful Central India lab applies (**2026-10-26/27**) took about **73 minutes**.
+Allow 80–100 minutes with previews/variation; failures and approvals are extra.
 
 | Stage | What happens | Allow | Check before continuing |
 | --- | --- | --- | --- |
@@ -197,11 +196,12 @@ Real 2026-10-27 HA logs; previews not timed. [Sources and proof limits](../evide
 4. **Negative test:** request a model admitted by the first group but not the second, selecting the second.
    Expected: **403**, with that group's allowed models. Both groups must also have at least one working model.
    If only one deployment exists, record the missing differential-model coverage; do not invent a deployed model.
-5. **Account for it:** after reconciliation, `GET <gateway>/anthropic/ccof/me/usage` returns **200** and both
-   budgets; [developer `/usage` and the local usage helper](05-developer-setup.md#4-check-your-own-budget-usage)
-   show the same figures. Check **Chargeback → by group**, then the Usage CSV or Log Analytics usage trace:
-   each successful request's correlation ID must identify its selected group and cost code.
-   [Chargeback checks](../operate/chargeback-and-tags.md) explain token costs and reporting lag.
+5. **Account for it:** after a reconciler run, `GET <gateway>/anthropic/ccof/me/usage` returns **200** and both
+   budgets (`not_computed`: wait for it); [developer `/usage`/local helper](05-developer-setup.md#4-check-your-own-budget-usage) must match.
+   Check **Chargeback → by group** and Usage CSV/Log Analytics: each correlation ID must match its group
+   and cost code ([checks](../operate/chargeback-and-tags.md)). Streamed Claude Code spend excludes prompt-cache
+   writes and reads, so it reads lower than the bill until daily reconciliation ([cost model](../COST-MODEL.md#where-the-slop-comes-from),
+   [ADR-0038](../adr/0038-budget-admission-acceptance.md)).
 6. **Console:** Groups lists both; **Budgets → Snapshots** for each opens that **group's** page, not Legacy
    projects; Chargeback by group shows both after telemetry arrives. Repeat successful calls and accounting
    with the other **two developers' own sign-ins**. Three calls by one developer are not three developers.

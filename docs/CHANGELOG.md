@@ -1,5 +1,29 @@
 # Change log
 
+## 2026-10-28 — Release 23 review fixes
+
+- Council review of `main..test/rehearsal`: security review found no vulnerabilities; code review found one Medium and one
+  Low issue, both fixed test-first (three mutants caught, 36 reader tests loaded):
+  - Deployment day step 5 checks `/ccof/me/usage` after a reconciler run; `not_computed` means wait, not failure.
+  - The HA Function plan zone readback reads ARM with `az rest`, so the result no longer depends on whether the
+    installed Azure CLI nests or flattens `zoneRedundant`.
+- Recorded (Low, not fixed): the Budgets burn-down axis labels all read `$0` when spend is below one cent.
+
+## 2026-10-28 — Rehearsal reader fixes
+
+- Configuration asks whether the deployment machine can reach private SCM/admin endpoints before
+  the create-only resource stage; the public alternative is explicitly an approved lab decision.
+- The linked admin sign-in section now shows token acquisition and authenticated group/backend reads,
+  with reviewed onboarding syntax and a warning never to print tokens.
+- Correct the HA Function plan read-back query: the installed Azure CLI returns `zoneRedundant`
+  under `properties`; the previous query printed null on a verified zonal plan.
+- Replace five deployment-day console images/sidecars with the actual group-only rehearsal UI,
+  retaining established pseudonyms and testing every current console sidecar against Legacy navigation.
+- Clarify that generated Azure CLI interactive login is not bounded by the MSAL timeout setting.
+  Record real CLI success and correct attribution without hiding incomplete streamed cache-write pricing.
+- State the existing streamed Claude Code prompt-cache lower bound in the deployment-day accounting step,
+  linked to COST-MODEL and ADR-0038; this is a release-23 expectations fix, not a new runtime defect.
+
 ## 2026-10-28 — Release 22 (group-only console and deployment day)
 
 - Combine G-GROUPS-ONLY and G-DAY. Council review of `e8d9353..release/22`: security review found no vulnerabilities;

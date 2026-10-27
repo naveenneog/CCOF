@@ -325,6 +325,29 @@ other API permissions**.
 If any required value is missing, the API returns 503 and the console shows its setup screen
 (fails closed).
 
+**Scripted group onboarding (PowerShell 7).** Use your own Azure CLI sign-in in the deployment tenant.
+The deployment must preauthorize Azure CLI (`admin.extraAllowedClientIds`) and assign you the admin
+Read/Write role; do not copy a browser token. Get the **CCOF Admin** Application (client) ID from
+Entra → App registrations → Overview (not the gateway or resolver ID), and the admin host from Stage 1.
+
+```powershell
+$adminClientId = '<admin-app-client-id>'
+$adminBase = 'https://<admin-app>.azurewebsites.net'
+$token = az account get-access-token --scope "api://$adminClientId/Projects.Manage" --query accessToken -o tsv
+if ($LASTEXITCODE -ne 0) { throw 'Admin token acquisition failed; stop before calling the API' }
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Uri "$adminBase/api/groups" -Headers $headers
+Invoke-RestMethod -Uri "$adminBase/api/groups/backends" -Headers $headers
+# After reviewing the group body against the contract above:
+# Invoke-RestMethod -Method Post -Uri "$adminBase/api/groups" -Headers $headers `
+#     -ContentType 'application/json' -Body (Get-Content '<private-group-body.json>' -Raw)
+Remove-Variable token, headers
+```
+
+Expected: GET **200** and the current catalog; a new POST **201** (an existing registration returns **409**).
+Never print the token or save authorization headers in logs. A new role may need a fresh token as below.
+Use the returned registered group IDs for the [complete membership snapshot](operate/users-and-groups.md#snapshot-mode-after-console-changes).
+
 **Role changes apply at the next token.** The roles are claims in the access token, so a role added, changed or
 removed on CCOF Admin takes effect only when the caller gets a new token. Entra gives an access token a lifetime
 of 60-90 minutes by default

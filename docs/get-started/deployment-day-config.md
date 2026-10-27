@@ -1,13 +1,13 @@
 # Fill in your configuration
 
-Copy into private `staged.config.json`; replace hypothetical values; keep `.staged-state`.
+Private `staged.config.json`: replace hypothetical values; keep `.staged-state`.
 **Merge objects; replace arrays; never duplicate keys.**
 [Checklist](deployment-day.md) · [reference](configuration.md).
 
 ## Region — where may resources and prompts run?
 
-Source: resource group/Foundry → Overview; `az cognitiveservices model list -l eastus2`.
-**Central India/East US 2** or **another approved pair**:
+Resource group/Foundry → Overview; `az cognitiveservices model list -l eastus2`.
+**Central India/East US 2** or **approved pair**:
 
 ```json
 {"location":"centralindia","stage1":{"foundry":{"location":"eastus2"}}}
@@ -20,24 +20,24 @@ Claude requires approved inference outside India. [Regions](region-and-failover.
 
 ## API Management — new or existing?
 
-**New:** publisher from service owner; approve public bootstrap:
+**New:** approved publisher/bootstrap:
 
 ```json
 {"stage1":{"approveNewPublicApimBootstrap":true,"apimPublisherEmail":"alex.admin@contoso.com","apimPublisherName":"Contoso AI","apimSku":"StandardV2","apimUnits":4},"apim":{"existing":null}}
 ```
 
-**Existing:** IDs: APIM → Overview/JSON view. Owner manages HA/network; **remove `ha.apim`**:
+**Existing:** IDs: APIM → JSON view. Owner manages HA/network; **remove `ha.apim`**:
 
 ```json
 {"stage1":{"approveNewPublicApimBootstrap":false},"apim":{"existing":{"name":"contoso-apim","subscriptionId":"00000000-0000-4000-8000-000000000002","resourceGroup":"gateway-rg"}}}
 ```
 
-Keep other `apim` fields. [Approvals](existing-api-management.md).
+Keep `apim` fields. [Approvals](existing-api-management.md).
 
 ## Network — who builds private paths?
 
 **Verify (production):** owner builds paths. **Existing:** CCOF adds endpoints/integrations.
-Keep example IDs; source: Virtual networks → Subnets / Private DNS zones → JSON view:
+IDs: Virtual networks → Subnets / Private DNS zones → JSON view:
 
 ```json
 {"network":{"mode":"verify"}}
@@ -46,17 +46,30 @@ Keep example IDs; source: Virtual networks → Subnets / Private DNS zones → J
 {"network":{"mode":"existing"}}
 ```
 
-**Create (lab only):** replace `network`; owner supplies non-overlapping CIDRs:
+**Create (lab):** replace `network`; approved non-overlapping CIDRs:
 
 ```json
 {"network":{"mode":"create","create":{"vnetName":"ccofday-vnet","addressSpace":"10.64.0.0/16","apimNsgName":"ccofday-apim-nsg","subnets":{"apim":{"name":"snet-apim","prefix":"10.64.1.0/24"},"privateEndpoints":{"name":"snet-private-endpoints","prefix":"10.64.2.0/24"},"functions":{"name":"snet-functions","prefix":"10.64.3.0/24"}}}}}
 ```
 
-Deployer needs VNet/SCM access. [Network](configuration-resources.md#network).
+**Workstation on the VNet?** Decide before Stage 1 (create-only). Private SCM/admin:
+
+```json
+{"stage1":{"functionsPublicNetworkAccess":"Disabled"}}
+```
+
+Approved public **lab** only (Functions/SCM/admin; still authenticated):
+
+```json
+{"stage1":{"functionsPublicNetworkAccess":"Enabled"}}
+```
+
+`create` does not connect your workstation. Keep backends private.
+[Network](configuration-resources.md#network).
 
 ## Cosmos — zonal capacity granted or not?
 
-Source: <https://aka.ms/cosmosdbquota> approval. **Granted:**
+<https://aka.ms/cosmosdbquota> approval. **Granted:**
 
 ```json
 {"stage1":{"cosmosLocations":[{"locationName":"centralindia","isZoneRedundant":true},{"locationName":"southindia","isZoneRedundant":false}]}}
@@ -86,14 +99,14 @@ Central India outage stops the gateway.
 
 ## Standby — another Foundry endpoint?
 
-**Yes:** use example's `backends[0].failover`/`circuitBreaker`; source: Foundry → Overview/Deployments.
+**Yes:** example's `backends[0].failover`/`circuitBreaker`; source: Foundry → Overview/Deployments.
 Prefer another subscription/region, same tenant; approve quota/grants/network.
 **No:** remove both fields. Same-subscription quota is shared.
 [Creating standby instead](foundry-failover.md#2-add-the-configuration).
 
 ## Audit — raw archive, daily totals, both or neither?
 
-Source: compliance/cost owner. **Both on**:
+Compliance/cost owner: **both on**:
 
 ```json
 {"audit":{"archive":{"enabled":true,"retentionDays":2555,"immutabilityDays":null,"storageSku":"Standard_ZRS"},"chargebackHistory":{"enabled":true,"closeAfterDays":2,"ttlDays":null}},"reconciler":{"timerEnabled":true}}
@@ -111,13 +124,13 @@ Source: compliance/cost owner. **Both on**:
 {"audit":{"archive":{"enabled":false},"chargebackHistory":{"enabled":true}},"reconciler":{"timerEnabled":true}}
 ```
 
-Keep retention fields. Dollar budgets need the reconciler.
+Keep retention; budgets need the reconciler.
 [Archive](../operate/audit-archive.md) · [history](../operate/chargeback-history.md).
 
 ## Groups — which teams, models and budgets?
 
-Source: Entra ID → Groups → **Object ID**; owner approves budget/models/cost code.
-Use example's entries; one: remove second; more: duplicate with unique ID. **Automatic** (large groups) or **snapshot** (pilot/approved transport):
+Entra → Groups → **Object ID**; approve budget/models/cost code.
+One: remove second; more: add unique IDs. **Automatic** (large groups) or **snapshot** (pilot/approved transport):
 
 ```json
 {"sync":{"mode":"application-permission"},"syncTimerEnabled":true}
@@ -130,7 +143,7 @@ Use example's entries; one: remove second; more: duplicate with unique ID. **Aut
 
 ## Developer sign-in — Windows only or also macOS?
 
-**Azure CLI (both)** or **MSAL (Windows)**. IDs: Entra ID → App registrations → Overview, owner-approved.
+**Azure CLI (both)** or **MSAL (Windows)**. Approved IDs: Entra → App registrations → Overview.
 
 ```json
 {"client":{"signInMethod":"azure-cli"},"entra":{"allowAzureCliClient":true}}
@@ -143,8 +156,8 @@ Use example's entries; one: remove second; more: duplicate with unique ID. **Aut
 
 ## Complete HA example
 
-Replace IDs/names/legal attestation/budgets; network owner supplies IDs. Primary: new East US 2; standby: existing
-Central US. Capacities are **not enterprise sizing**. Workbook ID: `[guid]::NewGuid()`.
+Replace IDs/names/attestation/budgets/network IDs. Primary: new East US 2; standby: existing Central US.
+Capacities are **not enterprise sizing**. Workbook ID: `[guid]::NewGuid()`.
 
 ```json
 {

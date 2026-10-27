@@ -12,7 +12,6 @@ Editor
 View as reader
 Overview
 Groups
-Legacy projects
 Chargeback
 User tags
 Budgets

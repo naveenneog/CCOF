@@ -1,0 +1,5 @@
+PS /home/alex/repo> pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 1 -ConfigPath .env.staged\staged.config.json -Apply
+  Modify   contoso-rehearsal-rg/providers/Microsoft.Web/sites/contoso-rehearsal-sync/providers/Microsoft.Insights/diagnosticSettings/ccof-function-logs
+guarded preview: 26 existing resources; no unrelated Modify or Delete.
+deployed stage1-services (PT5M54.3953415S)
+stage 1 completed and verified in 518 s; outputs in C:\Users\alex\ccof\.env.staged\.staged-state\state.json

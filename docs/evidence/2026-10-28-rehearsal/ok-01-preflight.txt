@@ -1,0 +1,7 @@
+PS /home/alex/repo> pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 0 -ConfigPath .env.staged\staged.config.json
+  "operator": {
+    "id": "b591b360-45f6-48fb-bd52-d9cd2f39b7d3",
+    "upn": "alex_contoso.com#EXT#@contoso.onmicrosoft.com"
+  }
+}
+stage 0 completed and verified in 108 s; outputs in C:\Users\alex\ccof\.env.staged\.staged-state\state.json

@@ -1,5 +1,60 @@
 # Current work
 
+## Release 23 (2026-10-28)
+
+**Active packet:** R23 — publish the rehearsal reader fixes (`test/rehearsal`) on top of release 22 (`30b1a9b`).
+
+- Council: security review PASS (no findings); code review PASS-WITH-NOTES, Medium (usage check before the reconciler
+  runs) and Low (CLI-version-dependent zone query) fixed test-first; 36/36 reader tests, three mutants caught.
+
+## Novice deployment-day rehearsal (2026-10-28)
+
+**Active packet:** G-DAY-REHEARSAL — isolated deployment from the decision-led guide.
+
+- Acceptance: new lab, preserved HA settings, two registered groups and one developer request charged
+  correctly; report missing three-person/native-client coverage rather than infer it.
+- Reader fixes: ask about deployment-machine SCM access before create-only Stage 1; provide the
+  authenticated Azure CLI admin API example linked by the day guide.
+- RED: both new reader contracts failed on the missing decisions/commands. GREEN: 31/31 reader tests;
+  both scoped documentation mutations caught, restored baseline green. No runtime change.
+- A later live HA read-back printed null from the documented Function plan query. Failing-first
+  contract and live retry confirm `properties.zoneRedundant` is required; 32/32 reader tests and
+  three scoped mutations pass. First fixes committed in `a01d789`; raw evidence stays private.
+- Council (direct, no nested agents): Architect PASS (existing configuration/API contract);
+  Coder PASS (small documentation changes); QA PASS (failing-first reader contracts and mutations);
+  UX PASS-WITH-NOTES (live rollout remains conditional); Security PASS (no token printing, shared
+  registration changes or weakened authentication; public Functions option labelled lab-only).
+- Initial checkpoint: Stage 0 PASS (108 s), then Stage 1 refused zonal Cosmos capacity in Central India.
+  Stopped at the documented owner-approval boundary; the later approved recovery is recorded below.
+  Private chronology and exact failures: session `files/rehearsal/progress.md` and `novice-log.md`.
+- Merged the day-guide author's `836ebad` as `ea829ec`: explicit Windows-only command labels fix
+  the initial full-suite documentation-scanner failure without changing the scanner. Scoped checks:
+  CrossPlatform 13 PASS, reader contracts 32 PASS.
+- Final isolated-profile checks: root `npm test` PASS (1,343 exported Node tests, six existing opt-in
+  live-Azure skips, plus all PowerShell suites); explicit requested typecheck and root build PASS;
+  admin 219/219 PASS. Three reader mutations caught; evidence/leak/whitespace checks PASS.
+- New explicit owner/coordinator approval allowed the documented failed-empty-account recovery for
+  the rehearsal RG only. Stage 1 verified after 42m57s from refusal; APIM/Functions zones and ZRS stayed on.
+  Stages 2–8 then passed, including a console-only second-group expectation with actual group/charged-ID proof.
+- Two active groups, fresh complete snapshot, allowed Haiku/Sonnet and group-specific denial, higher-spend
+  no-selector default, distinct cost codes, completely priced API rows and both budgets are proven with one identity.
+  Actual Windows Claude Code returned OK using a disclosed same-owner local cache copy after fresh interactive
+  sign-in could not finish unattended. Desktop correctly refused managed policy; VS Code extension absent.
+- **Known customer-visible financial limit, High for expectations (not a new defect):** 38,218 cache-write tokens in the real
+  Claude Code stream are not included in CCOF's known spend. Correct attribution and partial/lower-bound
+  warnings are proven; complete USD cost is not. COST-MODEL's prompt-cache limit and ADR-0038 already
+  document this; the deployment-day accounting step now explains the lower bound until daily reconciliation/calibration.
+  No runtime fix tonight or claim of three-person/fleet proof.
+- Reader follow-up: all five day-console captures replaced from the actual group-only lab with the existing
+  day pseudonyms; no Legacy projects text, both snapshot links clicked. Failing-first capture/CLI-timeout guards,
+  Reader and scoped mutation checks cover the release-23 plain-language disclosure too.
+  Verified `main` and `release/22` both at `30b1a9b` before the final merge; the evidence ADR is now
+  ADR-0055 and no old filename references remain. Reader 35/35 and merged admin 220/220 pass.
+- Final live console images follow an admin-only build/publish from the merged release-22 source;
+  no seeding, directory/grant/config changes or other runtime package publish. Both group links still pass;
+  partial native pricing and the actual retained User tags sidebar remain visible.
+  Final committed-head full gate follows.
+
 ## Release 22 (2026-10-28)
 
 **Active packet:** R22 — merge G-GROUPS-ONLY and G-DAY into `release/22` from `main` `e8d9353`.

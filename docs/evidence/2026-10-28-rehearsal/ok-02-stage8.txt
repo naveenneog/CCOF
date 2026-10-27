@@ -1,0 +1,3 @@
+PS /home/alex/repo> pwsh -File infra\staged\Invoke-StagedDeployment.ps1 -Stage 8 -ConfigPath .env.staged\staged.config.json -Apply
+== stage 8 (apply) subscription d87ff28a-a543-43a7-9ab2-a599fa48bc5b RG contoso-rehearsal-rg; state C:\Users\alex\ccof\.env.staged\.staged-state
+stage 8 completed and verified in 324 s; outputs in C:\Users\alex\ccof\.env.staged\.staged-state\state.json

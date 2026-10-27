@@ -124,6 +124,36 @@ test("deployment day illustrates every timed step and inventories every real-run
   assert.match(index, /demo|live/i);
 });
 
+test("committed deployment-day console captures match the group-only navigation", () => {
+  const evidence = "docs/evidence/2026-10-28-deployment-day";
+  const names = readdirSync(path.join(root, evidence)).filter((name) => /^console-.*\.txt$/.test(name));
+  assert.ok(names.length, "the current console capture inventory must not be empty");
+  for (const name of names) {
+    const text = read(`${evidence}/${name}`);
+    assert.doesNotMatch(text, /Legacy projects/i, `${name} capture must come from the group-only console`);
+  }
+});
+
+test("deployment-day network decision covers deployment-machine access before create-only Stage 1", () => {
+  const page = read("docs/get-started/deployment-day-config.md");
+  const network = page.split("## Network")[1]?.split("\n## ")[0] ?? "";
+  assert.match(network, /functionsPublicNetworkAccess/, "the network decision must ask whether the deployment machine can reach SCM");
+  assert.match(network, /"functionsPublicNetworkAccess"\s*:\s*"Disabled"/);
+  assert.match(network, /"functionsPublicNetworkAccess"\s*:\s*"Enabled"/);
+  assert.match(network, /before Stage 1/i);
+  assert.match(network, /SCM/);
+  assert.match(network, /public.*admin|admin.*public/i);
+});
+
+test("scripted two-group onboarding links to executable admin sign-in and authenticated call", () => {
+  const signin = read("docs/ADMIN-API.md").split("## Sign-in")[1]?.split("\n## ")[0] ?? "";
+  assert.match(signin, /az account get-access-token[\s\S]*?--scope/);
+  assert.match(signin, /Projects\.Manage/);
+  assert.match(signin, /Invoke-RestMethod[\s\S]*?\/api\/groups/);
+  assert.match(signin, /Authorization\s*=\s*"Bearer \$token"/);
+  assert.match(signin, /never print|do not print/i);
+});
+
 test("deployment day users distinguishes captured clients from unverified fleet and Office routes", () => {
   const users = read("docs/get-started/deployment-day-users.md");
   assert.match(read("README.md"), /\]\(docs\/get-started\/deployment-day-users\.md\)/);
@@ -158,6 +188,26 @@ test("deployment day users distinguishes captured clients from unverified fleet 
   for (const block of users.matchAll(/```json\r?\n([\s\S]*?)```/g)) assert.doesNotThrow(() => JSON.parse(block[1]));
 });
 
+test("client configuration does not promise a hard deadline for delegated Azure CLI login", () => {
+  const clients = read("docs/CLIENTS.md");
+  const row = clients.split(/\r?\n/).find((line) => line.startsWith("| `loginTimeoutSeconds`"));
+  assert.ok(row);
+  assert.match(row, /MSAL/, "the configured interactive deadline is the MSAL helper's deadline");
+  assert.match(row, /Azure CLI.*not.*bound|Azure CLI.*manual.*cancel/i,
+    "the generated Azure CLI wrapper delegates interactive login without this hard deadline");
+});
+
+test("deployment-day spend comparison discloses the known streamed prompt-cache lower bound", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  const accounting = (day.split("5. **Account for it:**")[1]?.split("\n6.")[0] ?? "").replace(/\s+/g, " ");
+  assert.match(accounting, /streamed Claude Code|Claude Code.*streamed/i);
+  assert.match(accounting, /excludes prompt-cache writes and reads/i);
+  assert.match(accounting, /lower than the bill/i);
+  assert.match(accounting, /daily (?:billing )?reconciliation/i);
+  assert.match(accounting, /\]\(\.\.\/COST-MODEL\.md(?:#[^)]+)?\)/);
+  assert.match(accounting, /\]\(\.\.\/adr\/0038-budget-admission-acceptance\.md\)/);
+});
+
 test("high availability guide shows opt-in settings, cost, checks and create-only migration", () => {
   const ha = read("docs/get-started/high-availability.md");
   for (const text of ['"ha"', '"zoneRedundant": true', '"storageSku": "Standard_ZRS"', '"apimUnits": 2',
@@ -177,6 +227,25 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
   for (const key of ["ha.apim.zoneRedundant", "ha.functions.zoneRedundant"]) {
     assert.ok(read("docs/get-started/configuration-reference.md").includes(key), `configuration reference needs ${key}`);
   }
+});
+
+test("the HA Function plan readback reads ARM directly, independent of the Azure CLI output shape", () => {
+  const ha = read("docs/get-started/high-availability.md");
+  const lines = ha.split(/\r?\n/);
+  const command = lines.find((line) => line.startsWith("az rest ") && line.includes("/providers/Microsoft.Web/serverfarms/"));
+  assert.ok(command, "the guide supplies a Function plan zone readback through ARM");
+  assert.match(command, /--query "\{zones:properties\.zoneRedundant\}"/,
+    "ARM returns zoneRedundant inside properties");
+  assert.ok(!lines.some((line) => line.startsWith("az appservice plan show ") && line.includes("zoneRedundant")),
+    "az appservice plan show nests or flattens zoneRedundant depending on CLI version");
+});
+
+test("the deployment-day usage check waits for a reconciler run", () => {
+  const day = read("docs/get-started/deployment-day.md");
+  const step = day.split(/\r?\n(?=\d+\. \*\*)/).find((s) => s.includes("/ccof/me/usage"));
+  assert.ok(step, "step 5 checks /ccof/me/usage");
+  assert.match(step, /after a reconciler run/i, "budgets exist only after the reconciler writes budget state");
+  assert.ok(step.includes("not_computed"), "the reader must know not_computed means wait, not failure");
 });
 
 test("regional outage guidance includes a reversible Cosmos drill and single-region service recovery", () => {

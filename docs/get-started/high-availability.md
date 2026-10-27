@@ -142,7 +142,7 @@ Replace the placeholders with names from your Stage 1 state. These commands only
 
 ```powershell
 az rest --method get --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ApiManagement/service/<apim-name>?api-version=2025-03-01-preview" --query "{zones:properties.zoneRedundant,units:sku.capacity}"
-az appservice plan show -g '<resource-group>' -n '<function-plan-name>' --query "{zones:zoneRedundant}"
+az rest --method get --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/serverfarms/<function-plan-name>?api-version=2025-03-01" --query "{zones:properties.zoneRedundant}"
 az storage account show -g '<resource-group>' -n '<host-storage-name>' --query sku.name
 az cosmosdb show -g '<resource-group>' -n '<cosmos-name>' --query "locations[].{region:locationName,zones:isZoneRedundant}"
 ```

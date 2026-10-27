@@ -105,7 +105,7 @@ depend on the terminal environment.
 | `gatewayUrl` | HTTPS API **base**, without `/v1` or `/v1/messages`, credentials, query or fragment |
 | `helperTtlSeconds` | Cached-helper lifetime used by both Claude clients |
 | `minimumTokenLifetimeSeconds` | Must exceed helper TTL; refuse a token with less lifetime, after one silent forced-refresh attempt |
-| `loginTimeoutSeconds` | Bound for an interactive attempt; also the CLI smoke-check deadline |
+| `loginTimeoutSeconds` | MSAL interactive deadline; also the CLI smoke-check deadline. The generated Azure CLI interactive login is not bounded by this setting; cancel it manually if sign-in cannot be completed |
 | `tokenTimeoutSeconds` | Bound per silent acquisition and cache-lock wait; Desktop helper timeout is three times this, at most 600 seconds |
 | `disableNonessentialTraffic` | Explicit Claude Code traffic decision; `true` in the pilot example |
 | `models.default`, `opus`, `sonnet`, `haiku` | **Deployment names**, not guessed model IDs; every name must occur in `available` |
