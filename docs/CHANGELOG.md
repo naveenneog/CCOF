@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-10-27 — Deployment configuration breaker ranges
+
+- Accept whole-number circuit-breaker status ranges read from JSON. PowerShell's JSON reader returns
+  64-bit integers; explicit valid `statusCodeRanges` previously failed Stage 0 even though equivalent
+  in-memory ranges and omitted/default ranges worked. Strings, fractions and ranges outside 400–599 remain refused.
+
 ## 2026-10-27 — Group navigation in the admin console
 
 - Budgets and Reconciler snapshots, Overview alerts/activity, Audit and Chargeback now open group records in

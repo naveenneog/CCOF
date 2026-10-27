@@ -1,5 +1,14 @@
 # Current deployment unknowns
 
+## Deployment day (G-DAY)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| DAY-1 | ASSUMED | Stage durations are planning ranges, not a 2–3 hour service guarantee. Prior Central India labs took about 73–80 minutes of successful applies; quota, consent, retries and people add time. Approvals must precede deployment day. |
+| DAY-2 | RESEARCHED | Four gateway units for 25,000 typical developers is a starting estimate, not validated capacity: [sizing](operate/sizing.md). One-unit measurements do not establish linear scale or successful-stream load at 25,000 developers. |
+| DAY-3 | ASSUMED | The approved live lab has one signed-in developer and one deployed model. Check second-group membership and model coverage live; report absent identities/models as proof limits rather than fabricating requests. |
+| DAY-4 | RESOLVED | The complete HA JSON example exposed valid explicit circuit-breaker ranges being refused: `ConvertFrom-Json -AsHashtable` reads JSON integers as Int64, while the range guard only accepted Int32. Accept both integral types, consistent with the other breaker fields; keep numeric bounds and negative tests. |
+
 ## Admin group navigation (G-ADMIN-NAV)
 
 | ID | State | Question / evidence |

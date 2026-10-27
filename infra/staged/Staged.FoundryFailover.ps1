@@ -74,7 +74,10 @@ function Get-StgFailoverProblems {
             if ($r.Contains('acceptRetryAfter') -and $r.acceptRetryAfter -isnot [bool]) { "backend $($b.id).circuitBreaker.acceptRetryAfter must be a boolean" }
             if ($r.Contains('statusCodeRanges')) {
                 $ranges = @($r.statusCodeRanges)
-                $bad = @($ranges | Where-Object { $_ -isnot [Collections.IDictionary] -or $_.min -isnot [int] -or $_.max -isnot [int] -or $_.min -lt 400 -or $_.max -gt 599 -or $_.min -gt $_.max })
+                $bad = @($ranges | Where-Object { $_ -isnot [Collections.IDictionary] -or
+                    -not ($_.min -is [int] -or $_.min -is [long]) -or
+                    -not ($_.max -is [int] -or $_.max -is [long]) -or
+                    $_.min -lt 400 -or $_.max -gt 599 -or $_.min -gt $_.max })
                 if (-not $ranges.Count -or $bad.Count) { "backend $($b.id).circuitBreaker.statusCodeRanges needs nonempty integer min/max ranges within 400-599" }
             }
         }
