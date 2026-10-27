@@ -6,6 +6,18 @@ Part of the [configuration reference](configuration.md). Every key of these sect
 [Staged.Common.ps1](../../infra/staged/Staged.Common.ps1); `main.bicep` is [infra/staged/main.bicep](../../infra/staged/main.bicep).
 Stage 1 keys are create-only ([deploy](03-deploy.md#before-stage-0-get-the-code-and-write-the-configuration)).
 
+For examples, costs and recovery, [check and add high availability](high-availability.md).
+
+## Optional zone redundancy
+
+| Key | Req | Template | Allowed values and effect | Read by |
+| --- | --- | --- | --- | --- |
+| `ha.apim.zoneRedundant` | No | Absent (off) | JSON boolean; new StandardV2/PremiumV2 only; automatic zone placement. Recommend `stage1.apimUnits: 2` | Stage 0, Stage 1 |
+| `ha.functions.zoneRedundant` | No | Absent (off) | JSON boolean; every Flex hosting plan. Requires ZRS/GZRS storage and a supported region; Azure bills a minimum of two always-ready instances per scaling function/group | Stage 0, Stage 1 |
+
+These are create-only, like `stage1`. Leave `ha` absent to retain existing hashes. Cosmos zones remain per-region
+in `stage1.cosmosLocations`; storage redundancy remains `stage1.storageSku`.
+
 ## Target
 
 | Key | Req | Template | Allowed values and effect | Read by |
@@ -32,15 +44,15 @@ Stage 1 keys are create-only ([deploy](03-deploy.md#before-stage-0-get-the-code-
 | `stage1.cosmosPublicNetworkAccess` | No | `Disabled` | `Disabled` or `Enabled` | `main.bicep` |
 | `stage1.storagePublicNetworkAccess` | No | `Disabled` | `Disabled` or `Enabled` | `main.bicep` |
 | `stage1.functionsPublicNetworkAccess` | No | `Disabled` | `Disabled` or `Enabled`; `Disabled` also closes the deployment (SCM) endpoint | `main.bicep` |
-| `stage1.storageSku` | No | `Standard_LRS` | `Standard_LRS` or `Standard_ZRS` | `main.bicep` |
+| `stage1.storageSku` | No | `Standard_LRS` | `Standard_LRS`, `Standard_ZRS` or `Standard_GZRS`; ZRS/GZRS required with Functions zones | `main.bicep` |
 | `stage1.retentionInDays` | No | `30` | 30-730; log retention | `main.bicep` |
 | `stage1.maximumInstanceCount` | No | `40` | 40-1000; Function App instances | `main.bicep` |
 | `stage1.instanceMemoryMB` | No | `2048` | `512`, `2048` or `4096` | `main.bicep` |
 | `stage1.approveNewPublicApimBootstrap` | Yes | `false` | `true` creates API Management; `false` needs `apim.existing` | `Read-StgConfig` |
 | `stage1.apimPublisherEmail` | If new APIM | empty | Publisher e-mail | `main.bicep` |
 | `stage1.apimPublisherName` | If new APIM | empty | Publisher name | `main.bicep` |
-| `stage1.apimSku` | No | `StandardV2` | `BasicV2` or `StandardV2` | `main.bicep` |
-| `stage1.apimUnits` | No | `1` | 1 or more | `main.bicep` |
+| `stage1.apimSku` | No | `StandardV2` | `BasicV2`, `StandardV2` or `PremiumV2`; zones require StandardV2/PremiumV2 | `main.bicep` |
+| `stage1.apimUnits` | No | `1` | 1 or more; at least 2 recommended for zone-surviving capacity | `main.bicep` |
 | `stage1.foundry.create` | Yes | `false` | `true` creates the account | `Read-StgConfig` |
 | `stage1.foundry.accountName` | If create | `REPLACE-...` | 3-64 lowercase letters, digits, `-`; equals `backends[].accountName` | `Read-StgConfig` |
 | `stage1.foundry.location` | No | absent (`location`) | ARM region name of the new account, for example `eastus2` when `location` offers no Claude models (Central India); Stage 0 checks models, quota and soft-deleted accounts there | `Read-StgConfig`, Stage 0, `main.bicep` |

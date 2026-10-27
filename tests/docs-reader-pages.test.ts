@@ -26,8 +26,11 @@ test("high availability guide shows opt-in settings, cost, checks and create-onl
   assert.match(ha, /documentEndpoint/, "Failed-account recovery must explain how to corroborate no initialized data endpoint when database listing is refused");
   assert.match(ha, /list-flexconsumption-locations --zone-redundant=true/);
   assert.match(ha, /learn\.microsoft\.com\/azure\/reliability\/reliability-api-management/);
-  for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md"]) {
+  for (const page of ["02-prerequisites.md", "region-and-failover.md", "configuration-resources.md", "configuration.md", "configuration-reference.md"]) {
     assert.ok(read(`docs/get-started/${page}`).includes("(high-availability.md)"), `${page} links the HA guide`);
+  }
+  for (const key of ["ha.apim.zoneRedundant", "ha.functions.zoneRedundant"]) {
+    assert.ok(read("docs/get-started/configuration-reference.md").includes(key), `configuration reference needs ${key}`);
   }
 });
 
