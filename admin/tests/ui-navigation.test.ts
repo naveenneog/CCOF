@@ -172,7 +172,8 @@ test("Chargeback historical group scopes render as text, never management links"
     "/api/v3/chargeback/groups": cap([{ ...costs[1], groupId: LEGACY, groupNameSnapshots: ["Historical scope"] }]),
   });
   assert.ok(html.includes(LEGACY));
-  assert.ok(!html.includes(`href="#/groups/${LEGACY}`) && !html.includes('href="#/projects/'));
+  assert.doesNotMatch(html, /href="#\/(?:groups|projects)\/project01/i, "historical scope stays unlinked regardless of casing");
+  assert.ok(!html.includes('href="#/projects/'));
 });
 
 test("Budgets uses the group registration API and group ID for the burn-down", () => {

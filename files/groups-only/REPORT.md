@@ -1,79 +1,120 @@
-# G-GROUPS-ONLY — paused inventory
+# G-GROUPS-ONLY
 
-## Status
+Branch: `feature/groups-only-console`, base `e8d9353`.
+No push, merge, main-worktree changes, Azure operations or production deployment.
 
-Branch `feature/groups-only-console`, base `e8d9353`, isolated worktree.
-Paused immediately on owner's expanded group-only migration decision.
-Only the navigation test harness/tests and draft ADR/ledger changed.
-No production UI, demo, source/runtime/server, Azure resource or deployment changed.
-No files removed/moved. No push or merge.
+## Commits and RED evidence
 
-Focused RED run: 13 tests loaded, 2 pass, 11 fail, zero skipped/cancelled.
-Failures explicitly reproduce legacy destinations, navigation, controls and selection.
-Root/admin npm ci succeeded; both report two existing high dependency findings.
-Mutation/browser/full build/typecheck/root/admin suite/final packet gate are not run.
+- `7b94b88` — `test(admin): checkpoint RED group-only contract before migration pause`.
+  All 13 tests loaded: 2 passed, 11 failed. Messages included
+  "Budgets must not link to removed pages", corresponding Reconciler/Overview/Audit
+  failures, "Chargeback must link to the group, not a legacy project", and
+  `/projects/PROJECT01/activity` versus expected null. Owner requested a pause;
+  work was cleanly committed with no production edits.
+- `2683aef` — `feat(admin): make the current console group-only`.
+  Owner explicitly resumed; 31 focused tests and all 219 admin tests passed.
+- `8c08ca2` — `fix(admin): preserve draft text while entering group IDs`.
+  Browser RED: manual GUID entry returned an empty value instead of the typed GUID.
+  Draft/validated state separation fixed Overview and Chargeback. Admin build,
+  navigation tests and 27 browser checks passed.
+- Final evidence commit records mutations, council, checks and completion.
 
-## Remaining legacy UI surfaces found
+All commits have the required Copilot trailers. ADR-0054 records the accepted
+minimal scope and separately coordinated decommission of obsolete deployments.
+Active application/network deployments remain untouched.
 
-- `admin/ui-v3/lib/nav.ts`, `main.tsx`: Legacy projects navigation and all project
-  list/create/detail/subtab routes.
-- Exclusive legacy modules: `pages/projects.tsx`, `project-detail.tsx`,
-  `new-project.tsx`, `components/onboarding.tsx`; related HELP topics and
-  `components/shell.tsx` helpKey/breadcrumb cases.
-- Shared helpers must move before deletion: PagerLite, ChangeList and applyPatch
-  from project-detail (applyPatch is used by group-fields); useDebounced from projects.
-- `components/cost-breakdown.tsx`: legacy registry/tag toggles, project cost query,
-  classification drill-down and legacy management destinations.
-- `pages/budgets.tsx`: mixed-scope links, conditional Legacy classification column,
-  project/classification burn-down selector and legacy registration fallback.
-- `pages/chargeback.tsx`: Projects breakdown, Groups/Projects rank toggle, Project
-  filter, Project tags, legacy registry query, project-only labels and filters.
-- Overview/Audit shared links, Reconciler filter state and snapshot table; Foundry's
-  legacy list request/linked scopes; health/help/cost-definition wording;
-  LimitsEditor retains legacy classification branching.
-- `admin/dev/serve.ts` and `demo-data.ts` seed or shape legacy projects.
-- Existing legacy UI assertions in `ui-v3.test.ts`, `v3-bug-bash.test.ts` require
-  deliberate behavior replacements; they have not been edited yet.
-- Console docs ADMIN-V3/ADMIN-API and onboarding/operations guidance remain unchanged.
+## Removed files and extracted helpers
 
-## Remaining API/source/deployment surfaces found (inventory, not deletion list)
+Removed:
 
-- `admin/src/function-app.ts` registers GET/POST `/api/projects`, GET
-  `/api/projects/{projectId}`, classification part updates, settings PUT and retire
-  POST. Their handlers/validation/storage/client exports live in `api.ts`,
-  `validation.ts`, `cosmos-store.ts`, `client-config.ts`, `export.ts`.
-- `admin/src/v2.ts`: paged/filterable project listing.
-  `admin/src/v3.ts`: project/classification read/shaping and project-tag resolution.
-  `chargeback.ts`, history/change-log and operations also carry project-era scopes.
-  Some of these are shared with groups: their identifiers alone do not prove they
-  can be deleted.
-- `src/sync/projects.ts`, registry-seed, membership, plan/types/run/telemetry
-  retain legacy document and classification paths.
-- `src/resolver/decide.ts`, select-membership, HTTP/refusal/freshness/my-usage paths
-  retain project/classification scope semantics.
-- `src/reconciler/registry.ts`, documents, ledger, reconciliation/price rows,
-  history, Azure/run/telemetry retain project/classification accounting.
-- `src/contracts` includes shared model-family and group-registration contracts;
-  these and Cosmos schema/gateway policy need an explicit migration contract.
-- `infra/staged/Staged.Application.ps1`, `Staged.Groups.ps1`, archived
-  `infra/quickstart/Deploy-Quickstart.ps1`: project selection/seeding and client
-  projectId paths remain.
-- `analytics` KQL/workbooks/alerts retain project/classification dimensions.
+- `admin/ui-v3/pages/projects.tsx`
+- `admin/ui-v3/pages/project-detail.tsx`
+- `admin/ui-v3/pages/new-project.tsx`
+- `admin/ui-v3/components/onboarding.tsx`
 
-## Tests replaced and why (draft only)
+Moved without duplication:
 
-The navigation harness's previous assertions that historical IDs link to project
-pages, legacy classifications remain editable, legacy budgets read classifications,
-and Foundry includes projects were replaced with the opposite group-only behavior
-specified in the original brief. Server compatibility tests were not touched.
-New tests add old-bookmark notice/navigation, no removed-page imports/controls,
-GUID-only scope destinations and group-only fixtures.
+- PagerLite and ChangeList → `admin/ui-v3/components/records.tsx`
+- useDebounced → `admin/ui-v3/lib/hooks.ts`
+- applyPatch → `admin/ui-v3/lib/limits-patch.ts` (still used by group-fields)
 
-## Resume prerequisites
+Added shared ScopeLink: GUID IDs link to Groups; historical non-GUID IDs render as
+plain text. Removed legacy nav/help/breadcrumb cases, management routes, classification
+controls/columns/drill-down, project tags, Projects chargeback breakdown/rank toggle
+and project labels. Old bookmarks show a short explanation with a Groups link.
+Budgets selects only groups and reads `/api/groups/{id}`; Foundry lists linked groups
+only. Demo seeds 26 validated group registrations and derives group telemetry.
 
-Coordinator defines the expanded decommission and migration contract and explicitly
-authorizes resuming. ADR-0054 is a paused proposal; GO-3 is open. Do not delete Azure
-resource groups, alter production, or remove enforcement based on this inventory.
-On resume finish/review RED fixtures, implement the authorized packet, replace
-remaining obsolete UI assertions, mutation-check guards with full test counts,
-run Edge demo navigation and all requested checks; then hold five-role council.
+## Tests replaced and why
+
+- `ui-navigation.test.ts`: replaced intentional legacy destinations, classification
+  preservation, legacy burn-down lookup and Foundry legacy links with group-only
+  assertions and plain historical text. Added bookmark/nav/help, mixed/group-only
+  fixtures, group deep links, obsolete query-filter rejection and valid demo seeds.
+  Test artifacts now use a project-local directory, not the system temporary directory.
+- The previous no-Group-heading assertion protected against classification being
+  relabelled "Group". The new table legitimately labels its scope identifier Group;
+  it now asserts exactly one Group heading and no classification heading/value.
+- `ui-v3.test.ts`: replaced Legacy projects sidebar/help expectations and the old
+  conditional project route with group-only navigation/ScopeLink assertions.
+  Restricted-family approval is still required; no classification escape remains.
+- `v3-bug-bash.test.ts`: dropdown checks now inspect groups/group-onboard/group-detail
+  rather than deleted project pages, plus Chargeback.
+- No server compatibility tests were removed, skipped or weakened.
+
+## Mutation checks
+
+Six mutations caught, zero survivors, zero load-failure credit.
+Every run loaded all 219 admin tests; each failed its named assertion(s):
+
+| Guard removed/reversed | Failures |
+| --- | --- |
+| GUID-only routing | scope paths; historical Chargeback text (2) |
+| Group-only burn-down selection | Budgets excludes historical records (1) |
+| Foundry backend isolation | Foundry linked groups only (1) |
+| Legacy nav removal | bookmark/nav; sidebar/help (2) |
+| Bookmark explanation | bookmark/nav; sidebar/help (2) |
+| Ignore old classification URL filter | Chargeback deep-link/filter contract (1) |
+
+Production mutations were restored; final baseline 219/219 passed. Detailed names
+and counts: `mutation-results.json`. Routing was rerun after strengthening the
+case-insensitive historical destination assertion; it is counted once.
+
+## Microsoft Edge browser
+
+`browser-check.cjs` uses playwright-core supplied via PLAYWRIGHT_DIR and the local
+demo on port 7179. Browser checks use only synthetic data and no real directory.
+
+- All 12 sidebar pages load without page errors, Classification/Legacy projects
+  controls or project destinations.
+- Seven real group-link paths open editable group detail: Groups, Overview, Budgets,
+  Reconciler, Chargeback, Foundry and Audit telemetry.
+- Overview and Chargeback accept a manually typed GUID and query that group.
+- All seven Chargeback breakdown tabs load; no Projects tab or Rank toggle.
+- Five old bookmark forms (list, new, detail, budgets, activity) show the explanation
+  and lead to Groups.
+- 27 checks, zero page errors, zero legacy project/classification API reads.
+- Demo process stopped; port 7179 verified not listening.
+
+Evidence: `browser-results.json`.
+
+## Checks
+
+- Root/admin npm ci succeeded; missing dependencies restored without manifest changes.
+- Admin tests: 219 passed, 0 failed/skipped.
+- Focused rendering/UI tests: 31 passed; navigation harness: 16 passed.
+- Admin build: passed.
+- Root typecheck/tests and packet gate: final result recorded below on completion.
+- Added-line leak scan and git whitespace checks: final result recorded below.
+- Five-role direct council: Architect/Coder/QA/UX PASS; Security PASS-WITH-NOTES for
+  existing dependency audit findings. No additional agents launched.
+
+## Follow-up only
+
+Coordinator handles identified obsolete deployment decommission; active deployments
+stay untouched. Server/schema compatibility is intentionally retained to avoid a
+runtime rewrite: project APIs, sync/resolver/reconciler legacy handling, staged project
+selection, shared contracts, Cosmos schema, gateway policy and KQL were not changed.
+Any future removal needs the separately approved data/runtime migration plan
+(G-LEGACY-SERVER-MIGRATION). Existing two high-severity dependency findings are tracked
+as G-DEPENDENCY-AUDIT; existing file-size/open-unknown gate debt is outside this packet.

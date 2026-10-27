@@ -162,8 +162,8 @@ All belong to the **admin Function App managed identity**; none are granted by t
 | Override reaches the sync (3.2.0) | **Sync** identity: Cosmos DB Built-in Data Reader on `adminConfig`; sync setting `SYNC_LIMITS_CONTAINER=adminConfig` | The sync uses its app settings |
 
 People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need `CCOF.Projects.Write`
-(or `ADMIN_EDITOR_IDS`). Every write keeps the field-level review and If-Match ETag, emits one
-`ccof.admin.audit.v1` line and, with `ADMIN_CONFIG_CONTAINER`, one change-record document.
+(or `ADMIN_EDITOR_IDS`). Existing review steps, ETag protections and audit behavior are
+unchanged: group onboarding has a review step, and group detail saves use If-Match.
 
 ## New API
 
@@ -178,7 +178,7 @@ People: reading needs `CCOF.Projects.Read` (or `ADMIN_READER_IDS`); changes need
 | `GET /api/v3/audit/changes` | Same parameters; reads the change record. Outcomes: `created`, `updated`, `retired`, `refused` (ETag race or conflict; not applied), `unconfirmed` (the write raised an error such as a timeout; it may have been applied, so check the item), `pending` (the result was never recorded) |
 | `GET /api/v3/sync/removal-limits` | Reader. The override (`enabled`, `maxRemovalsPerRun`, `maxRemovalFraction` text with ≤ 6 decimals, `expiresAt`, `reason`, `updatedAt`, `updatedBy`), its ETag and state: `none`, `disabled`, `expired`, `in_effect`, `invalid` |
 | `PUT /api/v3/sync/removal-limits` | Editor. Body: the five editable fields only. First save needs `If-None-Match: *`, later saves `If-Match`. Validated with the sync's own rules plus expiry in the future and ≤ 90 days; 422 `invalid_removal_limits` with `problems` |
-| `POST /api/projects/{id}/retire` | Editor, `If-Match`, body exactly `{"confirmProjectId":"<id>"}`. 409 when already retired. One-way in the console |
+| `POST /api/projects/{id}/retire` | Editor, `If-Match`, body exactly `{"confirmProjectId":"<id>"}`. 409 when already retired. Retained legacy API; no current console control |
 | `GET /api/v3/plan` | In-force models by family, geography multipliers, rate card version and source |
 | `POST /api/v3/plan` | Budget assistant: `monthlyBudget {amount, currency USD/CCU}`, `members`, `geography`, `sizing`, `mix`, `families[{family, model?, budgetPercent}]`, working days/hours, burst. Pure; no writes. 422 with `detail` on invalid input. |
 | `POST /api/v3/rate-card/review` | Validates a candidate rate card with the reconciler's parser and the history rules (version must change, recorded entries unchanged, new or closed entries not in the past) and returns added/closed/unchanged. Saving stays `PUT /api/v2/catalog` with If-Match. |
@@ -210,13 +210,13 @@ The shorter V3 migration outline follows [ADMIN-V2.md](archive/ADMIN-V2.md) "VDI
 
 - **To V2 only:** set `ADMIN_V3_ENABLED` to `false` (or remove it). V3 routes return 404; V2 is untouched.
   No redeploy, no data change.
-- **To the 2.0.x package:** publish the retained ZIP with `config-zip`. V3 writes nothing V2 doesn't
-  understand: projects and catalog documents keep the V2 schema.
-- A project or catalog change made in V3 is a real change; reverse it through a reviewed, ETag-guarded
-  edit in either console, never by restoring the database.
-- A retired project stays retired. Admin 3.1.0 and earlier refuse edits to it (`retiredAt:invalid`,
-  `admin/src/validation.ts`). Change-record and removal-limit documents stay in `adminConfig`; older
-  packages ignore them.
+- **To a previous group-capable package:** publish its retained ZIP with `config-zip`.
+  This console-only packet does not change group documents, server contracts or schema.
+  Do not assume a pre-group 2.0.x package can manage group registrations.
+- Group and catalog writes are real changes. Reverse them through their supported,
+  ETag-guarded API or console, never by restoring the database. A retired group stays retired.
+- Retained legacy API/document handling remains server-side only; this rollback
+  guidance does not reintroduce a legacy console management workflow.
 
 ## Local demo
 

@@ -23,6 +23,16 @@ controls from admin/ui-v3, retaining legacy server enforcement (ADR-0054).
   entry works, seven chargeback tabs load and five old bookmark forms lead to
   Groups. 27 checks, zero page errors, no legacy project/classification API reads.
 - Commits: RED contract checkpoint `7b94b88`; first GREEN implementation `2683aef`.
+- Mutation verification: six guards caught with all 219 admin tests loaded each
+  time; no suite-load failure counted. Restored baseline passes 219/219.
+- Council (direct review; owner forbids additional agents): Architect PASS (shared
+  helpers extracted, ADR boundary and unchanged server/schema); Coder PASS (no
+  deleted-page imports, shared scope links); QA PASS (RED evidence, mixed/group-only
+  fixtures, negative scope checks and six full-suite mutations); UX PASS (12 nav
+  pages, old-bookmark notice, manual-entry regression fixed, preserved accessible
+  labels and empty/error/loading states); Security PASS-WITH-NOTES (GUID guards,
+  React escaping and existing authorization unchanged; existing dependency findings
+  tracked as G-DEPENDENCY-AUDIT, no new dependencies).
 
 ## Admin group navigation (2026-10-27)
 

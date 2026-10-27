@@ -10,6 +10,8 @@
 - [ ] G-OBSOLETE-DEPLOYMENTS: coordinator identifies and decommissions only obsolete
   test/validation/quickstart/manual/staged deployments; leave active application
   and network deployments untouched. No Azure operations in G-GROUPS-ONLY.
+- [ ] G-DEPENDENCY-AUDIT: assess the existing two high-severity dependency findings
+  reported by root/admin npm ci; no manifest or lockfile change in G-GROUPS-ONLY.
 
 - [x] G-ADMIN-NAV: route shared console links and budget lookups to group or legacy project records; cover mixed-data navigation.
 

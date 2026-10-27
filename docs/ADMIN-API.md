@@ -49,8 +49,9 @@ apps, and their code, settings, identities and permissions, are not changed.
 Use `/api/console-v3`. Groups manages budgets, surfaces, models, limits, priority
 and chargeback IDs. Overview and Chargeback select groups without classification
 or project tags; Budgets selects group registrations only for burn-down; Foundry
-lists linked groups only. Saves retain field-level review, ETags, server validation,
-and existing `CCOF.Projects.Read` / `CCOF.Projects.Write` permissions.
+lists linked groups only. Group onboarding retains its review step; edits retain
+ETags, server validation and existing `CCOF.Projects.Read` / `CCOF.Projects.Write`
+permissions. This packet does not change write behavior.
 
 Run the group-seeded demo without Azure:
 
