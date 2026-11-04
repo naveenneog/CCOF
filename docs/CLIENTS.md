@@ -16,7 +16,9 @@ remains available for testing.
 The standalone `client/` Node package contains
 `ccof-token`. Its dependencies are separate from the gateway's server dependencies.
 The PowerShell workstation scripts target Windows; the Claude Code setup also runs on macOS and Linux
-([macOS and Linux](#macos-and-linux)).
+([macOS and Linux](#macos-and-linux)). On Windows, `scripts/client/Install-ClaudeCodeAzureCli.ps1` sets up Claude Code
+for `azure-cli` without Node.js, Git or PowerShell 7
+([developer setup with the Azure CLI only](get-started/developer-setup-azure-cli.md)).
 
 ## macOS and Linux
 

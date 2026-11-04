@@ -11,6 +11,8 @@ Commands run from the `ccof` checkout in PowerShell 7 (`pwsh`); clone/install st
 ### Windows — about 5 minutes; setup capture not timed
 
 Use the admin-generated config with **`signInMethod: azure-cli`**. Install Node.js 22+, PowerShell 7 and Azure CLI.
+Where Node.js, Git, Python or PowerShell 7 cannot be installed, use
+[developer setup with the Azure CLI only](developer-setup-azure-cli.md) instead (no `/usage` command).
 From the checkout:
 
 ```powershell title="Windows only"

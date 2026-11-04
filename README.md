@@ -30,7 +30,7 @@ Then [set up developers and plan bulk onboarding](docs/get-started/deployment-da
 | 2 | [Prerequisites checklist](docs/get-started/02-prerequisites.md) | Platform, Entra and network owners |
 | 3 | [Deploy in nine stages](docs/get-started/03-deploy.md), each with the expected output | Platform engineer |
 | 4 | [Onboard an Entra group](docs/get-started/04-onboard-a-group.md) | Admin |
-| 5 | [Developer setup](docs/get-started/05-developer-setup.md) | Developers |
+| 5 | [Developer setup](docs/get-started/05-developer-setup.md); Windows without Node.js: [Azure CLI only](docs/get-started/developer-setup-azure-cli.md) | Developers |
 
 Then: [users and groups](docs/operate/users-and-groups.md) · [budgets](docs/operate/budgets-and-guard.md) ·
 [chargeback](docs/operate/chargeback-and-tags.md) · [regions and failover](docs/get-started/region-and-failover.md) · [troubleshooting](docs/operate/troubleshooting.md) ·

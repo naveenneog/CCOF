@@ -7,6 +7,10 @@ configuration file that Stage 7 generated (`client-config.json`), handed over th
 
 Full details, Claude Desktop and VS Code: [CLIENTS.md](../CLIENTS.md).
 
+**Windows machines that cannot install Node.js, Git, Python or PowerShell 7:** with an `azure-cli` configuration,
+[developer setup with the Azure CLI only](developer-setup-azure-cli.md) needs only Claude Code and the Azure CLI
+(no `/usage` command).
+
 **Windows, macOS or Linux.** Every command runs in PowerShell 7 (`pwsh`; on macOS and Linux 7.4 or later). On a Mac
 or Linux the setup needs a configuration with `signInMethod: azure-cli` and the Azure CLI (macOS:
 `brew install azure-cli`, [Learn](https://learn.microsoft.com/cli/azure/install-azure-cli-macos)); with another

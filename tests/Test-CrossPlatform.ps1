@@ -84,9 +84,9 @@ foreach ($name in 'Set-ClaudeCodeGateway.ps1', 'Restore-ClaudeCodeGateway.ps1', 
 
 # 4. The deployer's pages are followed in pwsh on macOS too. A native command (node, npm, az) gets its arguments
 #    unchanged, so a .\ or backslash path fails there; Windows-only folders and drive letters do not exist.
-#    05-developer-setup.md is Windows-only by statement and excluded.
+#    05-developer-setup.md and developer-setup-azure-cli.md are Windows-only by statement and excluded.
 $pages = @('README.md', 'docs/STAGED-DEPLOYMENT-GUIDE.md') + @(Get-ChildItem (Join-Path $root 'docs/get-started'), (Join-Path $root 'docs/operate') -Filter '*.md' |
-    Where-Object Name -ne '05-developer-setup.md' | ForEach-Object { $_.FullName.Substring($root.Length + 1) })
+    Where-Object Name -notin '05-developer-setup.md', 'developer-setup-azure-cli.md' | ForEach-Object { $_.FullName.Substring($root.Length + 1) })
 $windowsOnly = foreach ($page in $pages) {
     $text = Get-Content -LiteralPath (Join-Path $root $page) -Raw
     foreach ($block in [regex]::Matches($text, '(?ms)^```(?:powershell|pwsh)\s*$(.*?)^```')) {

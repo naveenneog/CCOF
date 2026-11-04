@@ -13,6 +13,7 @@ Pages are grouped by who reads them. The **Get started** pages are the current p
 | 3b | [Use an existing API Management](get-started/existing-api-management.md): requirements, the owner's approvals, what CCOF adds | Platform engineer, API Management owner |
 | 4 | [Onboard an Entra group](get-started/04-onboard-a-group.md) | Admin console editor |
 | 5 | [Developer setup](get-started/05-developer-setup.md) | Developers |
+| 5a | [Developer setup with the Azure CLI only](get-started/developer-setup-azure-cli.md): Windows, no Node.js, Git, Python or PowerShell 7 | Developers |
 
 ## Operate
 

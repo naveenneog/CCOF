@@ -1,5 +1,23 @@
 # Change log
 
+## 2026-11-04 — Developer setup with the Azure CLI only (Windows)
+
+- New `scripts/client/Install-ClaudeCodeAzureCli.ps1`: sets up Claude Code for `signInMethod: azure-cli` in Windows
+  PowerShell 5.1 with only the Azure CLI and Claude Code. No Node.js, npm, Git, Python, Build Tools or PowerShell 7.
+  Writes the same helper, `settings.json` and VS Code environment as `Set-ClaudeCodeGateway.ps1`, with backup,
+  rollback and `-Restore`; `-Login` and `-Test` sign in and send one request. Refuses a `gatewayUrl` ending in `/v1`
+  or `/v1/messages` and prints the corrected value. `Install-ClaudeCodeAzureCli.cmd` runs it by double-click with
+  `client-config.json` from the same folder. `/usage` and Claude Desktop are not included.
+- Reason: customer developer machines on 2026-11-04: `npm ci` needed Build Tools and Python because `keytar`'s
+  prebuilt download failed behind TLS inspection; `winget` could not install Git or Python; Claude Desktop was blocked;
+  one `client-config.json` had the `/v1/messages` endpoint as `gatewayUrl`.
+- `scripts/client/tests/Test-ClaudeCodeAzureCliOnly.ps1`: 14 tests under Windows PowerShell 5.1, 17 under PowerShell 7
+  (parity with `New-ClientAzureCliTokenShim`, `New-CcofCodeEnvironment` and `validate-config.mjs`); four mutants caught.
+  Code review found two Medium issues, both fixed test-first: a commented VS Code `settings.json` stopped setup under
+  5.1, and `"schemaVersion": "1"` or a string `models.available` passed where the Node validator refuses them.
+- Docs: [developer setup with the Azure CLI only](get-started/developer-setup-azure-cli.md), linked from developer
+  setup, deployment day, CLIENTS, INDEX and README.
+
 ## 2026-10-28 — Release 23 review fixes
 
 - Council review of `main..test/rehearsal`: security review found no vulnerabilities; code review found one Medium and one
