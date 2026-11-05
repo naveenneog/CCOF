@@ -22,6 +22,17 @@
   before its new negative case was fixed. Scoped resolver/discovery tests and strict typecheck pass.
 - Independent vendor JSON Schema check passes; its invalid-refresh negative control is rejected.
   The local real-client probe correctly refuses existing HKLM Code policy. No policy or customer change.
+- Native Code 2.1.272 on disposable Ubuntu passed the actual protocol probe (CI run 42083263553):
+  `/v1/models` fetched on both runs, backend-only new model cached and used for stub inference.
+  Bootstrap-enabled/disabled output also passes the vendor schema. This is not Foundry or Desktop evidence.
+- Security council PASS, no findings. Coder/QA found tied-group selection errors masked as 503; new tests
+  reproduced the actual C# failure and cover the 400 recovery. Seventeen focused tests pass and all four
+  scoped mutants are caught while the full test count still loads.
+- Final council: Architect PASS; Coder PASS; QA PASS-WITH-NOTES; UX PASS-WITH-NOTES; Security PASS.
+  Notes require real native Desktop/Cowork and Entra/APIM/Foundry acceptance before merge.
+- Initial full packet gate PASS: `npm test` 417.6 s, default typecheck 2.5 s, build 3.2 s, no failures.
+  The combined one-file registry handoff and reviewed error-mapping fix then pass 59 scoped/regression
+  tests and explicit strict typecheck. Final committed-head gate/CI follow; the branch remains unmerged.
 
 ## Release 23 (2026-10-28)
 

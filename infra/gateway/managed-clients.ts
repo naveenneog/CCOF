@@ -69,13 +69,28 @@ ${guards}
 <set-variable name="ccofDiscoveryStatus" value="@{
   if ((string)context.Variables.GetValueOrDefault&lt;object&gt;("ccofDiscoveryBody", "") != "") { return 200; }
   var response = context.Variables.ContainsKey("ccofResolverResponse") ? context.Variables["ccofResolverResponse"] as IResponse : null;
+  if (response != null &amp;&amp; response.StatusCode == 400) {
+    try { if ((string)response.Body.As&lt;JObject&gt;()["error"] == "project_selection_required") { return 400; } }
+    catch { return 503; }
+  }
   return response != null &amp;&amp; response.StatusCode == 403 ? 403 : 503;
+}" />
+<set-variable name="ccofDiscoveryPublicBody" value="@{
+  var status = Convert.ToInt32(context.Variables["ccofDiscoveryStatus"]);
+  if (status == 200) { return (string)context.Variables["ccofDiscoveryBody"]; }
+  var selection = status == 400;
+  var message = selection ? "Your groups require a selection. Ask your platform team to set distinct group priorities, or select an approved group using the configured project header."
+    : "Client configuration is unavailable or not authorized. Contact your platform team.";
+  var body = new JObject(new JProperty("type", "error"), new JProperty("error", new JObject(
+    new JProperty("type", selection ? "invalid_request_error" : status == 403 ? "permission_error" : "api_error"), new JProperty("message", message))));
+  if (selection) { body["code"] = "project_selection_required"; }
+  return body.ToString(Newtonsoft.Json.Formatting.None);
 }" />
 <return-response>
   <set-status code="@((int)context.Variables["ccofDiscoveryStatus"])" reason="@((int)context.Variables["ccofDiscoveryStatus"] == 200 ? "OK" : "Client configuration unavailable")" />
   <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
   <set-header name="Cache-Control" exists-action="override"><value>no-store</value></set-header>
-  <set-body>@((int)context.Variables["ccofDiscoveryStatus"] == 200 ? (string)context.Variables["ccofDiscoveryBody"] : "${errorBody.replace(/"/g, '\\"')}")</set-body>
+  <set-body>@((string)context.Variables["ccofDiscoveryPublicBody"])</set-body>
 </return-response>
 </inbound><backend><return-response><set-status code="404" reason="Not Found" /></return-response></backend><outbound />
 <on-error><return-response>
@@ -99,8 +114,10 @@ export function renderManagedClientResources(gateway: GatewayConfig, input: unkn
     || !gateway.entra.delegatedClientAppIds.some((id) => id.toLowerCase() === config.clientId)
     || config.scope !== `${config.clientId}/${gateway.entra.delegatedScope}`) throw new Error("managed_client_gateway_binding_invalid");
   const guards = identityElements(renderPolicy(gateway).usagePolicyXml);
+  const registry = registryBootstrap(config);
+  const codeRegistry = registryCodeDiscovery(config);
   return {
-    registry: registryBootstrap(config), codeRegistry: registryCodeDiscovery(config), config,
+    registry, codeRegistry, combinedRegistry: registry + codeRegistry.split("\r\n").slice(1).join("\r\n"), config,
     operations: [
       { name: "get-client-bootstrap", method: "GET", urlTemplate: "/ccof/client/bootstrap", policyXml: operationPolicy(gateway, "bootstrap", guards) },
       { name: "get-client-models", method: "GET", urlTemplate: "/v1/models", policyXml: operationPolicy(gateway, "models", guards) },
@@ -113,6 +130,7 @@ export function writeManagedClientBundle(gateway: GatewayConfig, input: unknown,
   // regedit expects UTF-16LE with a BOM. No registry is changed by this generator.
   writeFileSync(path.join(out, "desktop-bootstrap.reg"), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(result.registry, "utf16le")]));
   writeFileSync(path.join(out, "code-discovery.reg"), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(result.codeRegistry, "utf16le")]));
+  writeFileSync(path.join(out, "managed-clients.reg"), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(result.combinedRegistry, "utf16le")]));
   writeFileSync(path.join(out, "resolver-settings.json"), JSON.stringify({ CCOF_MANAGED_CLIENT_CONFIG: JSON.stringify(result.config) }, null, 2));
   writeFileSync(path.join(out, "apim.parameters.json"), JSON.stringify({
     $schema: "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#", contentVersion: "1.0.0.0",

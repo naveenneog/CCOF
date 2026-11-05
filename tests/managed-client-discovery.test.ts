@@ -127,6 +127,17 @@ test("revoked membership and deployments with no admitted intersection fail clos
   assert.equal(response.jsonBody.document, undefined);
 });
 
+test("tied memberships require an explicit selection rather than silently choosing or denying a valid user", async () => {
+  const f = fixture();
+  f.entitlement.projectMemberships.push({ ...structuredClone(f.membership), projectId: OTHER, classificationGroupId: OTHER });
+  const ambiguous = await handleClientDiscoveryRequest(f.request(), f.runtime, config());
+  assert.equal(ambiguous.status, 400);
+  assert.equal(ambiguous.jsonBody.error, "project_selection_required");
+  assert.equal(ambiguous.jsonBody.document, undefined);
+  const selected = await handleClientDiscoveryRequest({ ...f.request(), body: { ...f.request().body, projectId: GROUP } }, f.runtime, config());
+  assert.equal(selected.status, 200);
+});
+
 test("malformed requests are refused and a registry read failure is explicit", async () => {
   const f = fixture();
   for (const body of [null, {}, { personId: PERSON, representation: "anything" }, { ...f.request().body, token: "do-not-log" }]) {

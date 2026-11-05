@@ -13,6 +13,12 @@
   Bicep compilation; independent vendor JSON Schema validation and negative control.
 - Local native Code and Desktop testing is blocked by existing HKLM policy, which is not overridden.
   A pinned-client disposable-runner protocol probe is separate from real Entra/APIM/Foundry or Desktop acceptance.
+- The disposable-runner Code 2.1.272 probe passed: a server-only test-model addition reached the actual client's
+  discovery cache and inference request without changing registry artifacts. A combined `managed-clients.reg`
+  is available alongside the per-product files.
+- Council found one Medium selection-error bug: tied groups' `400 project_selection_required` was converted to
+  a misleading 503. Reproduced and fixed test-first; the public error now gives server-side priority/selector
+  recovery without disclosing other groups. Security review: PASS, no findings.
 
 ## 2026-10-28 — Release 23 review fixes
 

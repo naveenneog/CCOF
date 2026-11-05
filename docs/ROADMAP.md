@@ -3,6 +3,8 @@
 - [ ] G-MANAGED-DISCOVERY: isolated vendor-contract experiment for a stable Windows `.reg` bootstrap,
   dynamic authorized model discovery and Chat/Cowork settings. Keep unmerged until native-client evidence
   establishes backend-only updates; never override existing machine-managed policy to obtain that evidence.
+  Prototype implemented; real Code discovery/selection passes on a disposable runner. Native Desktop/Cowork
+  and real Entra/APIM/Foundry acceptance remain prerequisites to merge.
 
 - [ ] G-DAY-REHEARSAL: time a new deployment through two-group accounting, record every novice
   hesitation and validate precise reader fixes; never bypass Cosmos fallback approval.

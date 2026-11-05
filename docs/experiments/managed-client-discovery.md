@@ -71,6 +71,7 @@ Output:
 
 | File | Purpose |
 | --- | --- |
+| `managed-clients.reg` | Single-file handoff containing both Desktop and Code policy sections |
 | `desktop-bootstrap.reg` | Stable Desktop trust anchor; no models or feature toggles |
 | `code-discovery.reg` | Code's opt-in discovery and existing-helper reference; no model allowlist |
 | `resolver-settings.json` | Server-side model metadata and feature settings |
@@ -114,6 +115,11 @@ gateway model discovery. Opaque deployment IDs without `claude` or `anthropic` a
 Old cached picker entries can remain during an outage. They never grant inference access: the existing
 gateway still checks the exact requested model against the selected group's current cached decision.
 
+If a person's groups have equal current spend and equal selection priority, discovery returns HTTP 400
+`project_selection_required`, not a temporary outage. The platform owner can set distinct group priorities
+server-side and wait for sync, avoiding a client policy change. An approved explicit group selector also
+resolves the ambiguity; the endpoint does not disclose other group IDs in the error.
+
 ## Evidence and remaining acceptance
 
 - Unit and loopback HTTP tests exercise backend-only addition/removal and capability changes with unchanged
@@ -126,6 +132,10 @@ gateway still checks the exact requested model against the selected group's curr
 - `scripts/client/Test-ManagedClientDiscovery.ts` runs a real installed Code executable against a local stub
   using a disposable profile and fake credential. It refuses to run over existing Code managed policy.
   The dedicated experimental CI job uses a pinned native client on a disposable Linux runner instead.
+- [Native Code probe run 42083263553](https://github.com/naveenneog/CCOF/actions/runs/42083263553) passed with
+  Code 2.1.272: both sessions fetched `/v1/models`; the second session cached and requested the added
+  `claude-haiku-4-5-ccof-rollout` test ID. Both returned the local stub's `gateway OK`, with unchanged registry
+  hashes. This proves Code's discovery/selection protocol, not a real Foundry model deployment.
 - A loopback server and schema validation do **not** prove Entra, APIM runtime, Foundry, native Desktop Chat,
   Desktop Code or Cowork. Real Desktop sign-in, model refresh after a backend-only change, Chat and Cowork
   inference and correct group chargeback remain required on an authorized isolated client before merge.

@@ -26,6 +26,13 @@ test("experimental APIM operations are generated separately and preserve current
   const { gateway, managed } = fixture();
   const before = renderPolicy(gateway).policyXml;
   const result = renderManagedClientResources(gateway, managed);
+  assert.equal((result.combinedRegistry.match(/Windows Registry Editor Version 5\.00/g) ?? []).length, 1);
+  assert.match(result.combinedRegistry, /HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Claude\]/);
+  assert.match(result.combinedRegistry, /HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\ClaudeCode\]/);
+  const updated = structuredClone(managed);
+  updated.deployments.push({ ...updated.deployments[0], id: "model-b" });
+  updated.desktop.cowork = false;
+  assert.equal(renderManagedClientResources(gateway, updated).combinedRegistry, result.combinedRegistry);
   assert.equal(renderPolicy(gateway).policyXml, before);
   assert.deepEqual(result.operations.map((o) => [o.name, o.method, o.urlTemplate]), [
     ["get-client-bootstrap", "GET", "/ccof/client/bootstrap"], ["get-client-models", "GET", "/v1/models"],
@@ -86,10 +93,19 @@ test("compiled response guards refuse malformed success and preserve unauthorize
     { label: "no document", method: "Guard", vars: { ccofResolverResponse: { status: 200, body: { schema: body.schema } } }, expected: "" },
     { label: "empty document", method: "Guard", vars: { ccofResolverResponse: { status: 200, body: { ...body, document: {} } } }, expected: "" },
     { label: "refused", method: "Status", vars: { ccofResolverResponse: { status: 403, body: {} }, ccofDiscoveryBody: "" }, expected: 403 },
+    { label: "group selection required", method: "Status", vars: { ccofResolverResponse: { status: 400, body: { error: "project_selection_required" } }, ccofDiscoveryBody: "" }, expected: 400 },
+    { label: "other internal 400", method: "Status", vars: { ccofResolverResponse: { status: 400, body: { error: "invalid_request" } }, ccofDiscoveryBody: "" }, expected: 503 },
     { label: "absent", method: "Status", vars: { ccofDiscoveryBody: "" }, expected: 503 },
   ];
   const results = runExpressions({ Guard: attribute("ccofDiscoveryBody"), Status: attribute("ccofDiscoveryStatus") }, vectors);
   vectors.forEach((vector, i) => assert.deepEqual(results[i], vector.expected, vector.label));
+  const [publicSelection] = runExpressions({ Body: attribute("ccofDiscoveryPublicBody") }, [
+    { label: "selection guidance", method: "Body", vars: { ccofDiscoveryStatus: 400 }, expected: null, json: true },
+  ]);
+  assert.ok(publicSelection && typeof publicSelection === "object");
+  assert.equal((publicSelection as { code: string }).code, "project_selection_required");
+  assert.match(JSON.stringify(publicSelection), /distinct group priorities/);
+  assert.doesNotMatch(JSON.stringify(publicSelection), /projectId|backendId|personId/);
 });
 test("the Functions route and standalone operation module wire opt-in discovery without default deployment changes", () => {
   const app = readFileSync(new URL("../src/resolver/function-app.ts", import.meta.url), "utf8");
