@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { fixture, settings } from "../../tests/helpers/managed-client-fixtures.ts";
 import { handleConfiguredClientDiscoveryRequest } from "../../src/managed-clients/handler.ts";
 import { readManagedClientConfig, codeDiscoverySettings, registryBootstrap, registryCodeDiscovery } from "../../src/managed-clients/config.ts";
@@ -35,11 +35,12 @@ const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const desktopReg = registryBootstrap(readManagedClientConfig(state));
 const codeReg = registryCodeDiscovery(readManagedClientConfig(state));
 const requests: { path: string; phase: number; model?: string }[] = [];
+const localCredential = randomBytes(32).toString("hex");
 let phase = 1;
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url!, "http://localhost");
-    const authorized = req.headers.authorization === "Bearer local-fixture";
+    const authorized = req.headers.authorization === `Bearer ${localCredential}`;
     requests.push({ path: url.pathname, phase });
     const result = await handleConfiguredClientDiscoveryRequest({
       ...f.request(url.pathname.endsWith("/v1/models") ? "models" : "bootstrap"), authenticatedPrincipal: authorized,
@@ -88,8 +89,8 @@ const base = `http://127.0.0.1:${address.port}`;
 const policy = codeDiscoverySettings(readManagedClientConfig(state));
 // Local fake credential replaces the helper only in this isolated protocol probe, never in the generated bundle.
 const env = { ...process.env, ...policy.env, CLAUDE_CONFIG_DIR: profile, ANTHROPIC_BASE_URL: base,
-  ANTHROPIC_AUTH_TOKEN: "local-fixture", CI: "1", AZURE_CONFIG_DIR: path.join(scratch, "az-logged-out") };
-writeFileSync(path.join(profile, "settings.json"), JSON.stringify({ env: { ...policy.env, ANTHROPIC_BASE_URL: base, ANTHROPIC_AUTH_TOKEN: "local-fixture" } }));
+  ANTHROPIC_AUTH_TOKEN: localCredential, CI: "1", AZURE_CONFIG_DIR: path.join(scratch, "az-logged-out") };
+writeFileSync(path.join(profile, "settings.json"), JSON.stringify({ env: { ...policy.env, ANTHROPIC_BASE_URL: base, ANTHROPIC_AUTH_TOKEN: localCredential } }));
 async function run(model: string) {
   const child = spawn(executable, [...prefix, "-p", "Reply with exactly: gateway OK",
     "--model", model, "--output-format", "json", "--max-turns", "1", "--no-session-persistence"], {
@@ -119,9 +120,9 @@ try {
   assert.ok(after.discoveryRequests > 0);
   const cache = readFileSync(path.join(profile, "cache", "gateway-models.json"), "utf8");
   assert.ok(cache.includes(newModel), "the real client's discovery cache must contain the newly offered model");
-  const bootstrap = await fetch(`${base}/ccof/client/bootstrap`, { headers: { authorization: "Bearer local-fixture" } }).then((r) => r.json());
+  const bootstrap = await fetch(`${base}/ccof/client/bootstrap`, { headers: { authorization: `Bearer ${localCredential}` } }).then((r) => r.json());
   state.desktop.cowork = false;
-  const disabled = await fetch(`${base}/ccof/client/bootstrap`, { headers: { authorization: "Bearer local-fixture" } }).then((r) => r.json());
+  const disabled = await fetch(`${base}/ccof/client/bootstrap`, { headers: { authorization: `Bearer ${localCredential}` } }).then((r) => r.json());
   assert.equal(bootstrap.desktopHome, "standard");
   assert.equal(disabled.desktopHome, "off");
   assert.equal(registryBootstrap(readManagedClientConfig(state)), desktopReg);

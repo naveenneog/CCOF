@@ -19,6 +19,8 @@
 - Council found one Medium selection-error bug: tied groups' `400 project_selection_required` was converted to
   a misleading 503. Reproduced and fixed test-first; the public error now gives server-side priority/selector
   recovery without disclosing other groups. Security review: PASS, no findings.
+- The committed runtime passes the full packet gate. The standalone client probe generates an ephemeral
+  local credential instead of a fixed dummy literal, so no credential-scanner exemption is needed.
 
 ## 2026-10-28 — Release 23 review fixes
 

@@ -32,7 +32,13 @@
   Notes require real native Desktop/Cowork and Entra/APIM/Foundry acceptance before merge.
 - Initial full packet gate PASS: `npm test` 417.6 s, default typecheck 2.5 s, build 3.2 s, no failures.
   The combined one-file registry handoff and reviewed error-mapping fix then pass 59 scoped/regression
-  tests and explicit strict typecheck. Final committed-head gate/CI follow; the branch remains unmerged.
+  tests and explicit strict typecheck.
+- Committed runtime `59cb569`: final packet gate PASS (`npm test` 374.8 s, typecheck 3.0 s, build 3.1 s).
+  The probe's fixed dummy credential triggered the existing credential-shape warning; it now generates an
+  ephemeral local credential instead, with no scanner exemption. All other warnings are existing size/open-
+  unknown debt. Public source CI and the disposable native probe run on branch pushes.
+- **Result:** experimental implementation and Code protocol validation are complete. Native Desktop/Cowork
+  and real Entra/APIM/Foundry acceptance remain unproven; do not merge or modify managed client policy.
 
 ## Release 23 (2026-10-28)
 
