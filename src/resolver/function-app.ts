@@ -20,6 +20,7 @@ import {
   isPlatformAuthEnabled,
 } from "./http-handler.ts";
 import type { ResolverReadiness, ResolverRequestContext, ResolverRuntime } from "./http-handler.ts";
+import { handleConfiguredClientDiscoveryRequest } from "../managed-clients/handler.ts";
 
 // Read once per host instance; an app-settings change restarts the host.
 // Invalid settings leave the resolver unready, and it refuses every request.
@@ -79,6 +80,17 @@ app.http("myUsage", {
   authLevel: "anonymous",
   route: "me/usage",
   handler: myUsageHandler,
+});
+
+app.http("clientDiscovery", {
+  methods: ["POST"],
+  authLevel: "anonymous",
+  route: "me/client-config",
+  handler: async (request, context) => {
+    let body: unknown;
+    try { body = await request.json(); } catch { body = undefined; }
+    return handleConfiguredClientDiscoveryRequest(requestContext(request, body), runtimeFor(context), process.env.CCOF_MANAGED_CLIENT_CONFIG);
+  },
 });
 
 app.http("resolve", {

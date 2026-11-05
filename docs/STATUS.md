@@ -14,6 +14,14 @@
   has an HKLM bootstrap policy; this is a native-client test boundary, not permission to override it.
 - Initial packet audit passes with existing oversized-file and open-unknown warnings. Native Chat/Cowork
   compatibility remains unproven until an isolated client can exercise the vendor contract.
+- Research: the vendor flat bootstrap schema and Code model discovery are supported independent contracts.
+  Do not set `forceLoginMethod: gateway` without the gateway's actual session protocol.
+- Implemented: opt-in private resolver handler, standalone APIM operation generator/Bicep, stable Desktop
+  and Code registry outputs, group/backend model intersection, explicit Desktop-home and Code-tab settings.
+- RED: imports failed before the new modules existed; the compiled guard accepted an empty upstream document
+  before its new negative case was fixed. Scoped resolver/discovery tests and strict typecheck pass.
+- Independent vendor JSON Schema check passes; its invalid-refresh negative control is rejected.
+  The local real-client probe correctly refuses existing HKLM Code policy. No policy or customer change.
 
 ## Release 23 (2026-10-28)
 

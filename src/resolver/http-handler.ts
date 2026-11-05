@@ -13,7 +13,7 @@
 // to the log as one JSON event with reason codes and ids only, for alerts.
 
 import type { ConfigProblem } from "./config.ts";
-import type { ResolveDependencies, ResolveInput, ResolveResult } from "./decide.ts";
+import type { ResolveDependencies, ResolveInput, ResolveResult, ResolveSuccess } from "./decide.ts";
 import { refusalStatus, resolveRequest } from "./decide.ts";
 import type { BudgetEnforcement } from "./freshness.ts";
 import { readMyUsage, UsageReadError } from "./my-usage.ts";
@@ -212,6 +212,7 @@ function parseResolveBody(body: unknown): ResolveInput | null {
 export async function handleResolveRequest(
   request: ResolverRequestContext,
   runtime: ResolverRuntime,
+  document?: (result: ResolveSuccess) => Record<string, unknown>,
 ): Promise<HandlerResponse> {
   const gate = openGate(request, runtime);
   if (!gate.open) return refuseByGuard(gate.failure, runtime);
@@ -265,7 +266,7 @@ export async function handleResolveRequest(
   if (result.degraded) {
     logEvent(runtime, { event: "degraded", reasons: result.degradedReasons, ...ids, projectId: result.projectId });
   }
-  return { status: 200, jsonBody: { ...result, resolverOutcome: result.degraded ? "degraded" : "success" } };
+  return { status: 200, jsonBody: document ? document(result) : { ...result, resolverOutcome: result.degraded ? "degraded" : "success" } };
 }
 
 // POST /api/me/usage (src/resolver/my-usage.ts): the caller's own budget figures. APIM sends only the

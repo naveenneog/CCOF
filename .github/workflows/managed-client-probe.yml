@@ -1,0 +1,36 @@
+name: managed-client-protocol-probe
+on:
+  push:
+    branches: ['experiment/managed-client-discovery']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  code-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CCOF_LIVE_TESTS: '0'
+      AZURE_CORE_COLLECT_TELEMETRY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Install repository dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install pinned native client in the disposable runner
+        run: npm install --prefix "$RUNNER_TEMP/ccof-native-client" --ignore-scripts --no-audit --no-fund @anthropic-ai/claude-code-linux-x64@2.1.272
+      - name: Observe actual client discovery and model rollout against a local stub
+        run: |
+          client="$RUNNER_TEMP/ccof-native-client/node_modules/@anthropic-ai/claude-code-linux-x64/claude"
+          test -x "$client"
+          node scripts/client/Test-ManagedClientDiscovery.ts "$client" "$RUNNER_TEMP/ccof-probe-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: managed-client-protocol-evidence
+          path: ${{ runner.temp }}/ccof-probe-evidence
+          if-no-files-found: warn

@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-11-05 — Managed client discovery experiment (unmerged)
+
+- Added opt-in authorized Desktop bootstrap and Anthropic-format model discovery behind the existing resolver.
+  Models intersect the selected group's synced policy and its backend's explicit deployment metadata.
+- A separate APIM operation overlay reuses existing JWT guards; inference policy, quota and chargeback paths
+  are unchanged. The generator emits secret-free Desktop/Code registry files without importing them.
+- Desktop home is enabled only with both Chat and Cowork permissions; standalone Code uses gateway discovery,
+  not a fabricated apps-gateway sign-in protocol. Client relaunch, version and one-time pin-migration limits
+  are explicit in [the experiment guide](experiments/managed-client-discovery.md) and ADR-0056.
+- Initial validation: backend-only model/feature tests with unchanged registry artifacts; compiled C# guards;
+  Bicep compilation; independent vendor JSON Schema validation and negative control.
+- Local native Code and Desktop testing is blocked by existing HKLM policy, which is not overridden.
+  A pinned-client disposable-runner protocol probe is separate from real Entra/APIM/Foundry or Desktop acceptance.
+
 ## 2026-10-28 — Release 23 review fixes
 
 - Council review of `main..test/rehearsal`: security review found no vulnerabilities; code review found one Medium and one
