@@ -1,5 +1,20 @@
 # Current work
 
+## Managed client discovery experiment (2026-11-05)
+
+**Active packet:** G-MANAGED-DISCOVERY on `experiment/managed-client-discovery`, based on `main`.
+
+- Acceptance: one stable, secret-free Windows policy bootstrap; backend model and Chat/Cowork configuration
+  changes appear through vendor-supported discovery without changing that policy file.
+- Research the actual vendor wire contract before implementing it. Reuse CCOF admission, identity and
+  backend selection; do not turn a client-visible capability into an authorization grant.
+- Test unauthorized, malformed and cross-group discovery, model additions/removals and feature changes
+  with unchanged registry bytes. Existing inference budgets, chargeback and clients stay unchanged.
+- No customer deployment, tenant registration or local managed-policy modification. The installed Desktop
+  has an HKLM bootstrap policy; this is a native-client test boundary, not permission to override it.
+- Initial packet audit passes with existing oversized-file and open-unknown warnings. Native Chat/Cowork
+  compatibility remains unproven until an isolated client can exercise the vendor contract.
+
 ## Release 23 (2026-10-28)
 
 **Active packet:** R23 — publish the rehearsal reader fixes (`test/rehearsal`) on top of release 22 (`30b1a9b`).

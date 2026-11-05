@@ -1,5 +1,14 @@
 # Current deployment unknowns
 
+## Managed client discovery (G-MANAGED-DISCOVERY)
+
+| ID | State | Question / evidence |
+| --- | --- | --- |
+| MD-1 | OPEN | Which Windows registry values and bootstrap/catalog endpoints do current Claude Desktop and Claude Code actually support? Public vendor research in progress; installed Desktop 4.29.0 exposes bootstrapUrl, bootstrapOidc, configRecheckIntervalMinutes, modelCatalogUrl, modelDiscoveryEnabled, chatTabEnabled, coworkTabEnabled and inferenceGatewayManagedClaudeCode in its schema. Schema presence alone is not runtime compatibility proof. |
+| MD-2 | OPEN | Can Entra-authenticated discovery update models and capabilities without client policy changes while keeping per-person/group admission? Establish exact bootstrap response and authentication contract before implementing it. |
+| MD-3 | ASSUMED | The machine's existing HKLM Claude bootstrapUrl is an IT-managed policy. Read-only schema/policy-name inspection is allowed; do not change, delete, bypass or supersede it. Native Desktop/Cowork acceptance may require a separate unmanaged test machine. |
+| MD-4 | OPEN | How do standalone Claude Code and Desktop-embedded Code refresh models and settings? Do not infer standalone dynamic support from Desktop bootstrap settings or a passing HTTP stub. |
+
 ## Novice deployment-day rehearsal
 
 | ID | State | Question / evidence |
